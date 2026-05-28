@@ -1,0 +1,160 @@
+# CS Learning OS
+
+A personal computer science learning system built around searchable knowledge nodes, a quiz bank, and future review workflows.
+
+This project is not just a notes folder. It is a small local knowledge app:
+
+- Markdown is the source of truth.
+- SQLite provides indexing and full-text search.
+- FastAPI serves the data.
+- React provides the reading, navigation, and practice UI.
+- Local runtime data stays local so the GitHub repository remains lightweight.
+
+## Current Features
+
+- Knowledge nodes for algorithms, projects, abilities, and CS fundamentals.
+- Global search backed by SQLite FTS5 with safe fallback search.
+- React reading UI with Markdown rendering, code blocks, links, and focus mode.
+- Separate quiz-bank layer for exam-style practice questions.
+- Linked review: quiz items can point back to the knowledge nodes they test.
+- Content standards for future additions:
+  - `Standard A`: bilingual practical exam note.
+  - `Standard Q`: quiz-bank item.
+
+## Project Structure
+
+```text
+app/                 React + Vite frontend
+backend/             FastAPI API, SQLite schema, Markdown ingest
+content/             Markdown source content
+content/nodes/       Knowledge nodes
+content/quizzes/     Quiz-bank items
+docs/                Design notes, implementation log, standards
+scripts/             Utility scripts
+skill/               Local skill instructions and references
+var/                 Local SQLite database, ignored by Git
+generated/           QA screenshots and generated artifacts, ignored by Git
+.venv/               Project Python virtual environment, ignored by Git
+```
+
+## Local Setup
+
+Use a project-level Python virtual environment.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+```
+
+Install frontend dependencies from the `app` folder.
+
+```powershell
+cd app
+npm install
+```
+
+## Rebuild The Database
+
+Markdown files are ingested into SQLite.
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os
+.\.venv\Scripts\python.exe -m backend.ingest --content content --db var\knowledge.db
+```
+
+Expected output looks like:
+
+```text
+Ingested 13 nodes and 1 quizzes into ...\var\knowledge.db
+```
+
+## Run Locally
+
+Start the backend:
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os
+.\.venv\Scripts\python.exe -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
+```
+
+Start the frontend in another terminal:
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os\app
+npm run dev
+```
+
+Open the Vite URL, usually:
+
+```text
+http://127.0.0.1:5173
+```
+
+If port `8000` is already occupied, find and stop the old Python process before restarting the API.
+
+## Verification
+
+Backend smoke test:
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os
+.\.venv\Scripts\python.exe backend\smoke_test.py
+```
+
+Frontend checks:
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os\app
+npm run lint
+npm run build
+npm run test:smoke
+```
+
+The smoke test captures QA screenshots under `generated/qa/`, which is intentionally ignored by Git.
+
+## Content Workflow
+
+When adding content, choose a standard first.
+
+Use `Standard A` for concept notes, command explanations, GDB/C topics, and bilingual tutorial-style exam notes.
+
+Use `Standard Q` for fixed practice questions, exam screenshots, and future daily review candidates.
+
+Knowledge nodes and quiz items should stay separate:
+
+- Knowledge nodes teach concepts.
+- Quiz items test whether the learner can apply concepts.
+- Quiz items link back to knowledge nodes through `linked_nodes`.
+
+## Git And Data Policy
+
+The repository should stay small and portable.
+
+Tracked:
+
+- Source code.
+- Markdown content.
+- Documentation.
+- Package lockfiles.
+- Skill/reference files.
+
+Ignored:
+
+- `.venv/`
+- `app/node_modules/`
+- `app/dist/`
+- `var/`
+- `generated/`
+- `__pycache__/`
+- local raw captures and downloads
+
+This keeps GitHub clean while allowing large local databases, screenshots, downloaded references, and generated artifacts to live on the machine.
+
+## Roadmap
+
+- Add more Standard Q quiz items from exam screenshots.
+- Add hide/show answer interaction.
+- Add quiz attempts and correctness history.
+- Add daily review queue with weights and due dates.
+- Improve related-knowledge recommendations.
+- Add richer search filters across nodes and quizzes.
