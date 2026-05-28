@@ -1,0 +1,26 @@
+# Dependencies and build output
+node_modules/
+.venv/
+dist/
+build/
+.vite/
+__pycache__/
+*.py[cod]
+
+# Generated indexes and caches
+generated/
+var/
+*.cache.json
+*.search.json
+
+# Local-only large source material
+local-library/
+raw/
+captures/
+downloads/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

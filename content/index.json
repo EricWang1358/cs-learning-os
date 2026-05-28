@@ -1,0 +1,91 @@
+{
+  "nodes": [
+    {
+      "title": "Debugging Loop",
+      "path": "nodes/abilities/debugging-loop.md",
+      "area": "abilities",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "debugging",
+        "testing",
+        "reasoning"
+      ],
+      "summary": "A repeatable loop for turning a vague bug into a small reproducible cause.",
+      "related": [
+        "project-crud-app"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Binary Search",
+      "path": "nodes/algorithms/binary-search.md",
+      "area": "algorithms",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "search",
+        "monotonicity",
+        "optimization"
+      ],
+      "summary": "Use a monotonic condition to locate a boundary in logarithmic time.",
+      "related": [
+        "graph-traversal"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Graph Traversal",
+      "path": "nodes/algorithms/graph-traversal.md",
+      "area": "algorithms",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "graph",
+        "bfs",
+        "dfs"
+      ],
+      "summary": "Visit graph states systematically with BFS or DFS to reveal reachability and structure.",
+      "related": [
+        "binary-search"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "HTTP Lifecycle",
+      "path": "nodes/cs-fundamentals/http-lifecycle.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "support",
+      "tags": [
+        "networking",
+        "web",
+        "backend"
+      ],
+      "summary": "The path from a client request through routing, server logic, data access, and response.",
+      "related": [
+        "project-crud-app"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Project Pattern: CRUD App",
+      "path": "nodes/projects/project-crud-app.md",
+      "area": "projects",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "backend",
+        "frontend",
+        "database",
+        "product"
+      ],
+      "summary": "A basic full-stack pattern for creating, reading, updating, and deleting domain objects.",
+      "related": [
+        "http-lifecycle",
+        "debugging-loop"
+      ],
+      "prerequisites": []
+    }
+  ]
+}

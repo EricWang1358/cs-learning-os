@@ -1,0 +1,4 @@
+interface:
+  display_name: "Personal Knowledge Map"
+  short_description: "Maintain a searchable CS learning map."
+  default_prompt: "Use $personal-knowledge-map to organize my CS learning notes into a searchable, linked knowledge map."

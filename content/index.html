@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personal CS Knowledge Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18211f;
+      --muted: #63706b;
+      --paper: #f7f4ed;
+      --line: #d9d1c3;
+      --core: #0f766e;
+      --support: #315f8c;
+      --archive: #8a6f2a;
+    }
+    body {
+      margin: 0;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 40px auto;
+    }
+    h1 {
+      font-size: 34px;
+      margin: 0 0 8px;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 28px;
+    }
+    section {
+      border-top: 1px solid var(--line);
+      padding: 24px 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      text-transform: capitalize;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .node {
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--support);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .node.core { border-left-color: var(--core); }
+    .node.archive { border-left-color: var(--archive); }
+    a {
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta span, .meta strong {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: rgba(255, 255, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Personal CS Knowledge Map</h1>
+    <p class="lead">Generated from Markdown nodes. Markdown stays the source of truth.</p>
+    
+            <section>
+              <h2>abilities</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/abilities/debugging-loop.md">Debugging Loop</a>
+                  <p>A repeatable loop for turning a vague bug into a small reproducible cause.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>debugging</span> <span>testing</span> <span>reasoning</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>algorithms</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/algorithms/binary-search.md">Binary Search</a>
+                  <p>Use a monotonic condition to locate a boundary in logarithmic time.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>search</span> <span>monotonicity</span> <span>optimization</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/algorithms/graph-traversal.md">Graph Traversal</a>
+                  <p>Visit graph states systematically with BFS or DFS to reveal reachability and structure.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>graph</span> <span>bfs</span> <span>dfs</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>cs-fundamentals</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/http-lifecycle.md">HTTP Lifecycle</a>
+                  <p>The path from a client request through routing, server logic, data access, and response.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>networking</span> <span>web</span> <span>backend</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>projects</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/projects/project-crud-app.md">Project Pattern: CRUD App</a>
+                  <p>A basic full-stack pattern for creating, reading, updating, and deleting domain objects.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>backend</span> <span>frontend</span> <span>database</span> <span>product</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+  </main>
+</body>
+</html>

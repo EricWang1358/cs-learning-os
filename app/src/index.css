@@ -1,0 +1,40 @@
+:root {
+  --surface: #faf8f2;
+  --ink: #24312e;
+  --ink-strong: #101816;
+  --muted: #66736e;
+  --line: #d8d3c7;
+  --accent: #0f766e;
+  --accent-strong: #0b5f59;
+  --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --sans: "Aptos", "Segoe UI", sans-serif;
+
+  color: var(--ink);
+  background: var(--surface);
+  font-family: var(--sans);
+  font-synthesis: none;
+  line-height: 1.45;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.18);
+  outline-offset: 2px;
+}
