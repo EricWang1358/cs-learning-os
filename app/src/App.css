@@ -23,9 +23,9 @@
 
 .workspace-shell.focus-mode .detail-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: 220px minmax(0, 1fr) 320px;
   gap: 22px;
-  max-width: 1180px;
+  max-width: 1420px;
   width: 100%;
   margin: 0 auto;
   border-inline: 1px solid var(--line);
@@ -38,8 +38,12 @@
 }
 
 .workspace-shell.focus-mode .detail-main {
-  grid-column: 1;
+  grid-column: 2;
   align-self: start;
+}
+
+.workspace-shell.focus-mode .reader-question-panel {
+  grid-column: 3;
 }
 
 .sidebar,
@@ -310,6 +314,53 @@
   min-width: 0;
 }
 
+.focus-toc {
+  position: sticky;
+  top: 24px;
+  grid-column: 1;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.08), transparent 46%),
+    rgba(255, 253, 250, 0.82);
+  padding: 16px;
+}
+
+.focus-toc nav {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.focus-toc a {
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  padding: 7px 8px;
+  text-decoration: none;
+}
+
+.focus-toc a:hover {
+  border-left-color: var(--accent);
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--accent-strong);
+}
+
+.focus-toc .toc-level-2 {
+  padding-left: 18px;
+}
+
+.focus-toc .toc-level-3 {
+  padding-left: 30px;
+  font-size: 12px;
+}
+
 .detail-toolbar {
   display: flex;
   align-items: center;
@@ -444,6 +495,7 @@
 .markdown-body h3 {
   color: var(--ink-strong);
   line-height: 1.18;
+  scroll-margin-top: 24px;
 }
 
 .markdown-body h1 {
@@ -649,6 +701,12 @@
 
   .workspace-shell.focus-mode .detail-panel {
     display: block;
+  }
+
+  .focus-toc {
+    position: static;
+    max-height: none;
+    margin-bottom: 18px;
   }
 
   .detail-panel {

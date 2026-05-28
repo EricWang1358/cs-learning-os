@@ -7,7 +7,7 @@ Decision: keep the learning system in one project directory.
 ```text
 cs-learning-os/
   skill/     LLM rules and workflow instructions
-  content/   Markdown knowledge nodes and source material
+  content-demo/  small demo Markdown knowledge nodes
   app/       React knowledge website
   scripts/   indexing, validation, and generation tools
   docs/      design decisions and project notes
@@ -40,9 +40,9 @@ Reasoning:
 
 Decision: use a three-layer storage policy.
 
-- GitHub stores code, Markdown nodes, skill rules, scripts, docs, and lightweight metadata.
+- GitHub stores code, demo Markdown nodes, skill rules, scripts, docs, and lightweight metadata.
 - Generated files are recreated when possible and committed only when deployment or sharing needs them.
-- Large source material stays local by default.
+- Private content and large source material stay local by default.
 
 Reasoning:
 - GitHub has practical and documented limits around large files and repository size.
@@ -79,9 +79,10 @@ Reasoning:
 Data flow:
 
 ```text
-content/**/*.md
+content-demo/**/*.md
+or an external content root selected by CS_LEARNING_CONTENT
   -> ingest script
-  -> var/knowledge.db
+  -> var/knowledge.db or a database selected by CS_LEARNING_DB
   -> FastAPI
   -> React
 ```
@@ -125,7 +126,7 @@ Workflow rule:
 Decision: build the backend data loop before the React app.
 
 First backend loop:
-- Ingest Markdown nodes from `content/`.
+- Ingest Markdown nodes from a configured content root.
 - Store searchable data in SQLite.
 - Serve `GET /api/nodes`.
 - Serve `GET /api/search`.

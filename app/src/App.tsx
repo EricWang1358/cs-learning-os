@@ -102,6 +102,17 @@ type MarkdownBlock =
   | { kind: 'paragraph'; text: string }
   | { kind: 'list'; items: string[] }
 
+type TocItem = {
+  id: string
+  level: 1 | 2 | 3
+  text: string
+}
+
+type RenderMarkdownBlock = {
+  block: MarkdownBlock
+  id: string
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 
 const areaLabels: Record<string, string> = {
@@ -131,6 +142,34 @@ function slugTitle(slug: string) {
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+function plainMarkdownText(text: string) {
+  return text.replace(/`([^`]+)`/g, '$1').replace(/\*\*([^*]+?)\*\*/g, '$1')
+}
+
+function headingId(text: string, index: number) {
+  const base = plainMarkdownText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `section-${base || 'heading'}-${index}`
+}
+
+function withHeadingIds(blocks: MarkdownBlock[]): RenderMarkdownBlock[] {
+  const renderBlocks: RenderMarkdownBlock[] = []
+  let headingIndex = 0
+
+  for (const block of blocks) {
+    if (block.kind === 'heading') {
+      renderBlocks.push({ block, id: headingId(block.text, headingIndex) })
+      headingIndex += 1
+    } else {
+      renderBlocks.push({ block, id: '' })
+    }
+  }
+
+  return renderBlocks
 }
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -249,15 +288,23 @@ function parseMarkdownBlocks(body: string): MarkdownBlock[] {
 }
 
 function InlineMarkdown({ text }: { text: string }) {
-  const parts = text.split(/(`[^`]+`)/g)
+  const codeParts = text.split(/(`[^`]+`)/g)
+  const renderStrongText = (value: string, partIndex: number) =>
+    value.split(/(\*\*[^*]+?\*\*)/g).map((part, index) =>
+      part.startsWith('**') && part.endsWith('**') ? (
+        <strong key={`strong-${partIndex}-${index}`}>{part.slice(2, -2)}</strong>
+      ) : (
+        <span key={`text-${partIndex}-${index}`}>{part}</span>
+      ),
+    )
 
   return (
     <>
-      {parts.map((part, index) =>
+      {codeParts.map((part, index) =>
         part.startsWith('`') && part.endsWith('`') ? (
           <code key={`${part}-${index}`}>{part.slice(1, -1)}</code>
         ) : (
-          <span key={`${part}-${index}`}>{part}</span>
+          renderStrongText(part, index)
         ),
       )}
     </>
@@ -266,10 +313,11 @@ function InlineMarkdown({ text }: { text: string }) {
 
 function MarkdownView({ body }: { body: string }) {
   const blocks = parseMarkdownBlocks(body)
+  const renderBlocks = withHeadingIds(blocks)
 
   return (
     <div className="markdown-body">
-      {blocks.map((block, index) => {
+      {renderBlocks.map(({ block, id }, index) => {
         const content =
           block.kind === 'code'
             ? block.code
@@ -289,9 +337,25 @@ function MarkdownView({ body }: { body: string }) {
           )
         }
         if (block.kind === 'heading') {
-          if (block.level === 1) return <h1 key={key}>{block.text}</h1>
-          if (block.level === 2) return <h2 key={key}>{block.text}</h2>
-          return <h3 key={key}>{block.text}</h3>
+          if (block.level === 1) {
+            return (
+              <h1 id={id} key={key}>
+                <InlineMarkdown text={block.text} />
+              </h1>
+            )
+          }
+          if (block.level === 2) {
+            return (
+              <h2 id={id} key={key}>
+                <InlineMarkdown text={block.text} />
+              </h2>
+            )
+          }
+          return (
+            <h3 id={id} key={key}>
+              <InlineMarkdown text={block.text} />
+            </h3>
+          )
         }
         if (block.kind === 'list') {
           return (
@@ -311,6 +375,41 @@ function MarkdownView({ body }: { body: string }) {
         )
       })}
     </div>
+  )
+}
+
+function buildTableOfContents(body: string): TocItem[] {
+  let headingIndex = 0
+  return parseMarkdownBlocks(body).flatMap((block) => {
+    if (block.kind !== 'heading') return []
+    const item = {
+      id: headingId(block.text, headingIndex),
+      level: block.level,
+      text: plainMarkdownText(block.text),
+    }
+    headingIndex += 1
+    return [item]
+  })
+}
+
+function MarkdownToc({ body }: { body: string }) {
+  const items = buildTableOfContents(body)
+
+  if (!items.length) {
+    return null
+  }
+
+  return (
+    <aside className="focus-toc" aria-label="Markdown table of contents">
+      <p className="eyebrow">On this page</p>
+      <nav>
+        {items.map((item) => (
+          <a className={`toc-level-${item.level}`} href={`#${item.id}`} key={item.id}>
+            {item.text}
+          </a>
+        ))}
+      </nav>
+    </aside>
   )
 }
 
@@ -888,6 +987,7 @@ function App() {
           </div>
         ) : viewMode === 'quizzes' && selectedQuiz ? (
           <>
+            {isFocusMode && !isEditMode && <MarkdownToc body={selectedQuiz.body} />}
             <div className="detail-main">
               <div className="detail-heading">
                 <div className="detail-toolbar">
@@ -1042,6 +1142,7 @@ function App() {
           </>
         ) : viewMode === 'nodes' && selectedNode ? (
           <>
+            {isFocusMode && !isEditMode && <MarkdownToc body={selectedNode.body} />}
             <div className="detail-main">
               <div className="detail-heading">
                 <div className="detail-toolbar">

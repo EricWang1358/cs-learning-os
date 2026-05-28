@@ -1,6 +1,8 @@
 param(
     [int]$ApiPort = 8000,
     [int]$FrontendPort = 5173,
+    [string]$ContentDir = "",
+    [string]$DbPath = "",
     [switch]$NoIngest,
     [switch]$NoBrowser
 )
@@ -11,6 +13,11 @@ $Root = Split-Path -Parent $PSScriptRoot
 $AppDir = Join-Path $Root "app"
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 $Npm = (Get-Command "npm.cmd" -ErrorAction Stop).Source
+$DefaultDataRoot = (Resolve-Path (Join-Path $Root "..\\cs-learning-data") -ErrorAction SilentlyContinue)
+$DefaultContentDir = if ($DefaultDataRoot) { Join-Path $DefaultDataRoot.Path "content" } else { Join-Path $Root "content-demo" }
+$DefaultDbPath = if ($DefaultDataRoot) { Join-Path $DefaultDataRoot.Path "knowledge.db" } else { Join-Path $Root "var\knowledge.db" }
+$ResolvedContentDir = if ($ContentDir) { (Resolve-Path $ContentDir).Path } else { $DefaultContentDir }
+$ResolvedDbPath = if ($DbPath) { $DbPath } else { $DefaultDbPath }
 $GeneratedDir = Join-Path $Root "generated\dev"
 $ApiOutLog = Join-Path $GeneratedDir "api-$ApiPort.out.log"
 $ApiErrLog = Join-Path $GeneratedDir "api-$ApiPort.err.log"
@@ -54,10 +61,14 @@ Stop-PortOwner -Port $FrontendPort
 
 if (-not $NoIngest) {
     Write-Host "Rebuilding SQLite index..."
-    & $Python -m backend.ingest --content (Join-Path $Root "content") --db (Join-Path $Root "var\knowledge.db")
+    & $Python -m backend.ingest --content $ResolvedContentDir --db $ResolvedDbPath
 }
 
 Write-Host "Starting API on http://127.0.0.1:$ApiPort"
+$PreviousContentEnv = $env:CS_LEARNING_CONTENT
+$PreviousDbEnv = $env:CS_LEARNING_DB
+$env:CS_LEARNING_CONTENT = $ResolvedContentDir
+$env:CS_LEARNING_DB = $ResolvedDbPath
 $api = Start-Process `
     -WindowStyle Hidden `
     -FilePath $Python `
@@ -66,6 +77,8 @@ $api = Start-Process `
     -RedirectStandardOutput $ApiOutLog `
     -RedirectStandardError $ApiErrLog `
     -PassThru
+$env:CS_LEARNING_CONTENT = $PreviousContentEnv
+$env:CS_LEARNING_DB = $PreviousDbEnv
 
 Start-Sleep -Seconds 2
 
@@ -83,6 +96,8 @@ Write-Host ""
 Write-Host "CS Learning OS is starting:"
 Write-Host "  API:      http://127.0.0.1:$ApiPort"
 Write-Host "  Frontend: http://127.0.0.1:$FrontendPort"
+Write-Host "  Content:  $ResolvedContentDir"
+Write-Host "  DB:       $ResolvedDbPath"
 Write-Host "  API logs: $ApiOutLog"
 Write-Host "            $ApiErrLog"
 Write-Host "  UI logs:  $FrontendOutLog"

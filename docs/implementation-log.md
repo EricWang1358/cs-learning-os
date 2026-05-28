@@ -520,3 +520,79 @@ Verified:
 
 Notes:
 - Smoke tests should verify queue behavior without leaving open questions behind.
+
+## 2026-05-29: App Shell and User Data Separation
+
+Completed:
+- Made FastAPI runtime paths configurable:
+  - `CS_LEARNING_CONTENT`
+  - `CS_LEARNING_DB`
+- Updated `scripts/dev.ps1` to accept:
+  - `-ContentDir`
+  - `-DbPath`
+- Updated README and data policy to describe app shell vs user data.
+- Removed generated `content/index.html` and `content/index.json` from Git tracking.
+- Added generated content index files to `.gitignore`.
+
+Verified:
+- Backend smoke test passes with default paths.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- The next migration step is to move real personal content into a private data directory or private content repository, leaving only demo/seed content in the app repository.
+
+## 2026-05-29: Private Data Directory Migration
+
+Completed:
+- Copied the current real `content/` directory to `../cs-learning-data/content`.
+- Copied the current local SQLite database to `../cs-learning-data/knowledge.db`.
+- Added `content-demo/` as the Git-tracked demo content layer.
+- Reduced `content-demo/` to a tiny synthetic sample instead of a second knowledge base.
+- Changed backend default content path to `content-demo/`.
+- Changed ingest default content path to `content-demo/`.
+- Updated `scripts/dev.ps1` so this machine automatically prefers `../cs-learning-data` when present.
+- Added `content/` to `.gitignore`.
+- Removed real `content/` from Git tracking while keeping it on disk.
+
+Verified:
+- Demo content ingests with 2 nodes and 1 quiz, and backend smoke test passes.
+- Private data re-ingests to `../cs-learning-data/knowledge.db` with 21 nodes and 2 quizzes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- The app repository is now closer to an app shell. Personal knowledge lives in the external data layer.
+- `knowledge.db` is treated as a local generated/user-data file, not a shared repository artifact.
+- Removing `content/` from the current tree does not remove it from old Git commits; keep the repository private or rewrite history before public sharing.
+
+## 2026-05-29: Markdown Bold Rendering
+
+Completed:
+- Added inline Markdown support for `**bold**` text.
+- Applied inline rendering to headings as well as paragraphs and list items.
+- Added a tiny demo heading `## **作用**` to cover the failure mode.
+- Reworked frontend smoke coverage so it runs against the minimal `content-demo/` data set.
+
+Verified:
+- Demo content ingests with 2 nodes and 1 quiz.
+- Backend smoke test passes.
+- Frontend smoke test passes in a real browser.
+- `npm run lint`
+- `npm run build`
+
+## 2026-05-29: Focus Mode Markdown TOC
+
+Completed:
+- Added a focus-mode table of contents generated from parsed Markdown headings.
+- Reused the frontend Markdown parser and generated stable heading anchors.
+- Added left-side sticky TOC layout for desktop focus reading.
+- Kept TOC hidden in edit mode to avoid focus/edit UI conflicts.
+- Added responsive fallback so the TOC stacks above content on narrower screens.
+
+Verified:
+- Frontend smoke test checks that the TOC appears in focus mode and hides in edit mode.
+- Frontend smoke test checks bold headings such as `**作用**` appear correctly in the TOC.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`

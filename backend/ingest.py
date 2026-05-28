@@ -304,7 +304,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ingest Markdown knowledge nodes into SQLite.")
-    parser.add_argument("--content", default="content", help="Path to the content directory.")
+    parser.add_argument("--content", default="content-demo", help="Path to the content directory.")
     parser.add_argument("--db", default="var/knowledge.db", help="Path to the SQLite database.")
     args = parser.parse_args()
 

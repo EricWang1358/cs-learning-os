@@ -8,7 +8,7 @@ Knowledge nodes explain concepts. Quiz items test whether the learner can apply 
 
 ## Current Shape
 
-- Source files live under `content/quizzes/<area>/`.
+- Source files live under `<content-root>/quizzes/<area>/`.
 - SQLite stores quiz metadata, body, tags, linked review nodes, sources, and FTS rows.
 - React exposes a `Practice / Quiz Bank` mode.
 - Quiz items link back to knowledge nodes through `linked_nodes`.

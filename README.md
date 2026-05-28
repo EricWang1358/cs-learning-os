@@ -9,6 +9,7 @@ This project is not just a notes folder. It is a small local knowledge app:
 - FastAPI serves the data.
 - React provides the reading, navigation, and practice UI.
 - Local runtime data stays local so the GitHub repository remains lightweight.
+- The app shell and the personal knowledge database are designed to be separable.
 
 ## Current Features
 
@@ -26,9 +27,10 @@ This project is not just a notes folder. It is a small local knowledge app:
 ```text
 app/                 React + Vite frontend
 backend/             FastAPI API, SQLite schema, Markdown ingest
-content/             Markdown source content
-content/nodes/       Knowledge nodes
-content/quizzes/     Quiz-bank items
+content-demo/        Small demo Markdown content tracked by Git
+content/             Local/private Markdown content, ignored by Git when present
+content/nodes/       Local/private knowledge nodes
+content/quizzes/     Local/private quiz-bank items
 docs/                Design notes, implementation log, standards
 scripts/             Utility scripts
 skill/               Local skill instructions and references
@@ -59,13 +61,19 @@ Markdown files are ingested into SQLite.
 
 ```powershell
 cd D:\A\1CMU\26Summer\cs-learning-os
-.\.venv\Scripts\python.exe -m backend.ingest --content content --db var\knowledge.db
+.\.venv\Scripts\python.exe -m backend.ingest --content content-demo --db var\knowledge.db
+```
+
+For private user data, point ingest at the external content directory:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.ingest --content ..\cs-learning-data\content --db ..\cs-learning-data\knowledge.db
 ```
 
 Expected output looks like:
 
 ```text
-Ingested 13 nodes and 1 quizzes into ...\var\knowledge.db
+Ingested 2 nodes and 1 quizzes into ...\var\knowledge.db
 ```
 
 ## Run Locally
@@ -85,6 +93,19 @@ This script:
 - starts Vite on `127.0.0.1:5173`
 - writes logs under `generated/dev/`
 - opens the frontend in the browser
+
+On this machine, `dev.ps1` will automatically prefer a sibling private data directory if it exists:
+
+```text
+..\cs-learning-data\content
+..\cs-learning-data\knowledge.db
+```
+
+To run the same app shell against another user's content and database explicitly:
+
+```powershell
+.\scripts\dev.ps1 -ContentDir D:\path\to\their-content -DbPath D:\path\to\their-knowledge.db
+```
 
 To only stop the local dev servers:
 
@@ -170,10 +191,19 @@ Reader questions are tracked through the `Q Queue`:
 
 The repository should stay small and portable.
 
+Architecture principle:
+
+- Frontend and backend code are the app shell.
+- `content-demo/` is tiny synthetic demo data, not a real knowledge base.
+- `content/` and SQLite are user data.
+- Different users should be able to run the same app against different content directories and databases.
+- FastAPI reads `CS_LEARNING_CONTENT` and `CS_LEARNING_DB` when provided.
+- Removing private content from the current Git tree does not erase it from old commits. Keep the repository private or rewrite history before treating earlier personal content as fully removed.
+
 Tracked:
 
 - Source code.
-- Markdown content.
+- Demo or intentionally shared Markdown content.
 - Documentation.
 - Package lockfiles.
 - Skill/reference files.
@@ -187,6 +217,7 @@ Ignored:
 - `generated/`
 - `__pycache__/`
 - local raw captures and downloads
+- private or bulky content libraries
 
 This keeps GitHub clean while allowing large local databases, screenshots, downloaded references, and generated artifacts to live on the machine.
 

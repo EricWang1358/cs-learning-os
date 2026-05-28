@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import re
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -17,7 +18,8 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "var" / "knowledge.db"
+CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")).resolve()
+DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -208,7 +210,7 @@ def update_node_body(slug: str, payload: BodyUpdate) -> dict:
         if not row:
             raise HTTPException(status_code=404, detail="Node not found")
 
-        content_path = ROOT / "content" / row["path"]
+        content_path = CONTENT_ROOT / row["path"]
         if not content_path.is_file():
             raise HTTPException(status_code=404, detail="Node source file not found")
 
@@ -405,7 +407,7 @@ def update_quiz_body(quiz_id: str, payload: BodyUpdate) -> dict:
         if not row:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
-        content_path = ROOT / "content" / row["path"]
+        content_path = CONTENT_ROOT / row["path"]
         if not content_path.is_file():
             raise HTTPException(status_code=404, detail="Quiz source file not found")
 
