@@ -1,6 +1,8 @@
 ---
 title: "GDB stepi / GDB 单条机器指令执行"
 area: cs-fundamentals
+track: gdb-debugging
+order: 40
 status: seed
 visibility: core
 tags: [gdb, stepi, assembly, debugging]

@@ -1,6 +1,8 @@
 ---
 title: "C Memory Basics / C 语言内存基础"
 area: cs-fundamentals
+track: c-and-memory
+order: 20
 status: seed
 visibility: core
 tags: [c, memory, pointer, stack, gdb]

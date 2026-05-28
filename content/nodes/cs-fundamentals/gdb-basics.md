@@ -1,6 +1,8 @@
 ---
 title: "GDB Basics / GDB 基础"
 area: cs-fundamentals
+track: gdb-debugging
+order: 20
 status: seed
 visibility: core
 tags: [gdb, debugging, c, cli]

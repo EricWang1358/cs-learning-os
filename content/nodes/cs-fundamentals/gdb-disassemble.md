@@ -1,11 +1,13 @@
 ---
 title: "GDB disassemble / GDB 反汇编"
 area: cs-fundamentals
+track: gdb-debugging
+order: 30
 status: seed
 visibility: core
 tags: [gdb, disassembly, assembly, c, debugging]
 prerequisites: [gdb-basics, c-language-characteristics, c-memory-basics]
-related: [gdb-stepi, gdb-examine-memory, debugging-levels-vscode-python-vs-gdb]
+related: [gdb-stepi, gdb-examine-memory, debugging-levels-vscode-python-vs-gdb, x86-64-instruction-cheatsheet, bomb-lab-debugging-workflow]
 sources:
   - https://sourceware.org/gdb/current/onlinedocs/gdb.html/Machine-Code.html
 summary: "Use `disassemble` to view the CPU instructions generated from compiled C code."
@@ -74,16 +76,17 @@ English: It does not run the program. It only shows the instructions already sto
 
 Question: You said "`disassemble` shows CPU instructions." What kinds of instructions are those?
 
-Answer: Common instruction categories include data movement, arithmetic, comparison, jumps, calls, returns, stack operations, and memory access.
+Answer: Common instruction categories include data movement, arithmetic, comparison, jumps, calls, returns, stack operations, memory access, and address calculation.
 
 问题：你说 `disassemble` 显示 CPU 实际执行的指令，那“指令”都有哪些？
 
-回答：常见指令类型包括：数据搬运、算术运算、比较、跳转、函数调用、返回、栈操作、内存访问。
+回答：常见指令类型包括：数据搬运、算术运算、比较、跳转、函数调用、返回、栈操作、内存访问、地址计算。
 
 Examples you may see on x86-64:
 
 ```asm
 mov    %edi,-0x14(%rbp)   ; move data / 搬运数据
+leaq   (%rcx,%rcx),%rdx   ; address arithmetic / 地址形式的算术
 add    %edx,%eax          ; add numbers / 做加法
 cmp    $0x0,-0x4(%rbp)    ; compare / 比较
 je     0x401150           ; jump if equal / 条件跳转
@@ -118,4 +121,4 @@ English: `disassemble` means "show me the compiled instructions."
 
 ## Suggested Next / 下一步
 
-Use `gdb-stepi` next: after you can see the instructions, learn how to execute them one at a time.
+Use `x86-64-instruction-cheatsheet` next if the instruction names feel unfamiliar. Use `gdb-stepi` after that to execute the instructions one at a time. For Bomb Lab-style work, follow `bomb-lab-debugging-workflow`.

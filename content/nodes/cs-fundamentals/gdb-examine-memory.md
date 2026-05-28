@@ -1,6 +1,8 @@
 ---
 title: "GDB examine memory / GDB 查看内存"
 area: cs-fundamentals
+track: gdb-debugging
+order: 50
 status: seed
 visibility: core
 tags: [gdb, memory, x-command, c, debugging]

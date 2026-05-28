@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     slug TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     area TEXT NOT NULL,
+    track TEXT NOT NULL DEFAULT 'general',
+    display_order INTEGER NOT NULL DEFAULT 1000,
     status TEXT NOT NULL,
     visibility TEXT NOT NULL,
     summary TEXT NOT NULL,
@@ -107,4 +109,11 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def initialize(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    existing_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()
+    }
+    if "track" not in existing_columns:
+        conn.execute("ALTER TABLE nodes ADD COLUMN track TEXT NOT NULL DEFAULT 'general'")
+    if "display_order" not in existing_columns:
+        conn.execute("ALTER TABLE nodes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
     conn.commit()

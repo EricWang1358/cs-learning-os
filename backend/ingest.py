@@ -21,6 +21,8 @@ class Node:
     slug: str
     title: str
     area: str
+    track: str
+    display_order: int
     status: str
     visibility: str
     summary: str
@@ -116,6 +118,8 @@ def read_nodes(content_root: Path) -> list[Node]:
                 slug=slug,
                 title=title,
                 area=area,
+                track=str(meta.get("track") or "general"),
+                display_order=int(meta.get("order") or meta.get("display_order") or 1000),
                 status=str(meta.get("status") or "seed"),
                 visibility=str(meta.get("visibility") or "support"),
                 summary=str(meta.get("summary") or ""),
@@ -187,13 +191,15 @@ def ingest(content_root: Path, db_path: Path) -> int:
             conn.execute(
                 """
                 INSERT INTO nodes (
-                    slug, title, area, status, visibility, summary, body, path, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    slug, title, area, track, display_order, status, visibility, summary, body, path, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node.slug,
                     node.title,
                     node.area,
+                    node.track,
+                    node.display_order,
                     node.status,
                     node.visibility,
                     node.summary,

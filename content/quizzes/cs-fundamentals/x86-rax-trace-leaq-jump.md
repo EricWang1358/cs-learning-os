@@ -7,7 +7,7 @@ visibility: practice
 difficulty: medium
 weight: 1
 tags: [assembly, x86-64, registers, leaq, cmp, jump]
-linked_nodes: [gdb-disassemble, gdb-stepi, c-memory-basics]
+linked_nodes: [x86-64-registers, x86-64-addressing-and-leaq, x86-64-cmp-and-jumps, x86-64-instruction-cheatsheet, gdb-stepi]
 sources:
   - local-exam-screenshot-2026-05-28
 summary: "Practice computing the final value of `%rax` by tracing x86-64 register updates."
@@ -93,6 +93,8 @@ English: For AT&T syntax, `cmpq A, B` sets flags as if it computed `B - A`. Then
 
 ## Linked Review
 
-- Review `gdb-disassemble` if instruction syntax feels unfamiliar.
+- Review `x86-64-registers` if `%rax`, `%rcx`, `%rdx`, and `%r12` are not automatic yet.
+- Review `x86-64-addressing-and-leaq` if `1(,%rcx,2)` or `(%rdx,%rbx,4)` feels weird.
+- Review `x86-64-cmp-and-jumps` if `cmpq $0x430, %rdx; jg .L2` is easy to read backwards.
+- Review `x86-64-instruction-cheatsheet` for the minimum instruction vocabulary.
 - Review `gdb-stepi` if you want to simulate this one machine instruction at a time.
-- Review `c-memory-basics` if register and memory roles are blending together.

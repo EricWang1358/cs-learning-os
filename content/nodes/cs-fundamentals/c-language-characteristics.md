@@ -1,6 +1,8 @@
 ---
 title: "C Language Characteristics / C 语言代码特点"
 area: cs-fundamentals
+track: c-and-memory
+order: 10
 status: seed
 visibility: core
 tags: [c, compiled-language, memory, pointer, systems]

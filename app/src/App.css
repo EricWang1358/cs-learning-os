@@ -197,6 +197,61 @@
   padding: 10px 12px;
 }
 
+.track-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.1), transparent),
+    rgba(255, 253, 250, 0.78);
+  padding: 14px;
+}
+
+.track-panel strong {
+  color: var(--ink-strong);
+}
+
+.track-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.track-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.track-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fffdfa;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+.track-list button:hover,
+.track-list button.active {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  box-shadow: 0 8px 20px rgba(20, 71, 96, 0.08);
+}
+
+.track-list button strong {
+  color: inherit;
+  font-size: 12px;
+}
+
 .node-list {
   display: grid;
   gap: 12px;

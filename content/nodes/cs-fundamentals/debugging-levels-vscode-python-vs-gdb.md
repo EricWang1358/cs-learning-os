@@ -1,6 +1,8 @@
 ---
 title: "Debugging Levels: VSCode Python vs GDB / 调试层级：VSCode Python 断点 vs GDB"
 area: cs-fundamentals
+track: gdb-debugging
+order: 10
 status: seed
 visibility: core
 tags: [debugging, python, gdb, vscode, c, abstraction]

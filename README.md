@@ -70,6 +70,30 @@ Ingested 13 nodes and 1 quizzes into ...\var\knowledge.db
 
 ## Run Locally
 
+Recommended Windows one-command workflow:
+
+```powershell
+cd D:\A\1CMU\26Summer\cs-learning-os
+.\scripts\dev.ps1
+```
+
+This script:
+
+- stops existing listeners on ports `8000` and `5173`
+- rebuilds the SQLite index
+- starts FastAPI on `127.0.0.1:8000`
+- starts Vite on `127.0.0.1:5173`
+- writes logs under `generated/dev/`
+- opens the frontend in the browser
+
+To only stop the local dev servers:
+
+```powershell
+.\scripts\stop-dev.ps1
+```
+
+Manual startup is also supported.
+
 Start the backend:
 
 ```powershell

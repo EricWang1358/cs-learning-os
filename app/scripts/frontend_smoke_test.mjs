@@ -24,6 +24,13 @@ await page.getByRole('button', { name: /Projects/ }).click()
 await page.getByText('Project Pattern: CRUD App').waitFor()
 await page.screenshot({ path: screenshotPath('desktop-projects.png'), fullPage: false })
 
+await page.getByRole('button', { name: /CS fundamentals/ }).click()
+await page.getByText('Reading tracks').waitFor()
+await page.getByRole('button', { name: /x86-64 assembly/ }).click()
+await page.getByRole('button', { name: /x86-64 Registers/ }).waitFor()
+await page.getByRole('button', { name: /x86-64 Addressing and leaq/ }).waitFor()
+await page.screenshot({ path: screenshotPath('desktop-cs-tracks.png'), fullPage: false })
+
 await page.getByRole('button', { name: /Archive/ }).click()
 await page.getByText(/visible of .* indexed nodes/).waitFor()
 

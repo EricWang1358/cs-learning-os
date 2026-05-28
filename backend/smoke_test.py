@@ -24,9 +24,17 @@ def main() -> int:
     assert detail.status_code == 200, detail.text
     payload = detail.json()["node"]
     assert payload["slug"] == "binary-search"
+    assert "track" in payload
+    assert "display_order" in payload
     assert "body" in payload
     assert "tags" in payload
     assert "sources" in payload
+
+    tracks = client.get("/api/areas/cs-fundamentals/tracks")
+    assert tracks.status_code == 200, tracks.text
+    track_names = {track["track"] for track in tracks.json()["tracks"]}
+    assert "x86-64-assembly" in track_names
+    assert "bomb-lab" in track_names
 
     quizzes = client.get("/api/quizzes")
     assert quizzes.status_code == 200, quizzes.text
@@ -41,7 +49,9 @@ def main() -> int:
     assert quiz_payload["id"] == "x86-rax-trace-leaq-jump"
     assert "body" in quiz_payload
     assert "linked_nodes" in quiz_payload
-    assert any(link["slug"] == "gdb-disassemble" for link in quiz_payload["linked_nodes"])
+    linked_slugs = {link["slug"] for link in quiz_payload["linked_nodes"]}
+    assert "x86-64-addressing-and-leaq" in linked_slugs
+    assert "x86-64-cmp-and-jumps" in linked_slugs
 
     quiz_search = client.get("/api/quiz-search", params={"q": "%rax"})
     assert quiz_search.status_code == 200, quiz_search.text

@@ -1,6 +1,8 @@
 ---
 title: "HTTP Lifecycle"
 area: cs-fundamentals
+track: networking
+order: 10
 status: seed
 visibility: support
 tags: [networking, web, backend]

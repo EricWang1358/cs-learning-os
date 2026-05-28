@@ -5,6 +5,8 @@ type NodeSummary = {
   slug: string
   title: string
   area: string
+  track: string
+  display_order: number
   status: string
   visibility: string
   summary: string
@@ -55,6 +57,18 @@ type ApiQuizResponse = {
   quiz: QuizDetail
 }
 
+type TrackSummary = {
+  track: string
+  label: string
+  node_count: number
+  first_order: number
+}
+
+type ApiTracksResponse = {
+  area: string
+  tracks: TrackSummary[]
+}
+
 type ViewMode = 'nodes' | 'quizzes'
 
 type MarkdownBlock =
@@ -77,6 +91,15 @@ const areaLabels: Record<string, string> = {
 }
 
 const stableAreas = ['abilities', 'algorithms', 'cs-fundamentals', 'projects', 'tools', 'questions']
+
+const trackLabels: Record<string, string> = {
+  general: 'General',
+  'c-and-memory': 'C and memory',
+  'gdb-debugging': 'GDB debugging',
+  'x86-64-assembly': 'x86-64 assembly',
+  'bomb-lab': 'Bomb Lab',
+  networking: 'Networking',
+}
 
 function slugTitle(slug: string) {
   return slug
@@ -246,11 +269,13 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('nodes')
   const [nodes, setNodes] = useState<NodeSummary[]>([])
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([])
+  const [tracks, setTracks] = useState<TrackSummary[]>([])
   const [selectedSlug, setSelectedSlug] = useState<string>('')
   const [selectedQuizId, setSelectedQuizId] = useState<string>('')
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
   const [selectedQuiz, setSelectedQuiz] = useState<QuizDetail | null>(null)
   const [activeArea, setActiveArea] = useState('all')
+  const [activeTrack, setActiveTrack] = useState('all')
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
@@ -307,6 +332,37 @@ function App() {
       isActive = false
     }
   }, [deferredQuery, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'nodes' || activeArea === 'all' || activeArea === 'archive') {
+      return
+    }
+
+    let isActive = true
+
+    async function loadTracks() {
+      try {
+        const data = await fetchJson<ApiTracksResponse>(`/api/areas/${activeArea}/tracks`)
+        if (!isActive) return
+        setTracks(data.tracks)
+        setActiveTrack((current) =>
+          current === 'all' || data.tracks.some((track) => track.track === current)
+            ? current
+            : 'all',
+        )
+      } catch (loadError) {
+        if (isActive) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load tracks')
+        }
+      }
+    }
+
+    loadTracks()
+
+    return () => {
+      isActive = false
+    }
+  }, [activeArea, viewMode])
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -367,7 +423,11 @@ function App() {
   const filteredNodes = nodes.filter((node) => {
     if (activeArea === 'archive') return node.visibility === 'archive'
     if (activeArea === 'all') return node.visibility !== 'archive'
-    return node.area === activeArea && node.visibility !== 'archive'
+    return (
+      node.area === activeArea &&
+      node.visibility !== 'archive' &&
+      (activeTrack === 'all' || node.track === activeTrack)
+    )
   })
 
   const filteredQuizzes = quizzes.filter((quiz) => {
@@ -378,6 +438,8 @@ function App() {
 
   const visibleCount = viewMode === 'quizzes' ? filteredQuizzes.length : filteredNodes.length
   const totalCount = viewMode === 'quizzes' ? quizzes.length : nodes.length
+  const visibleTracks =
+    viewMode === 'nodes' && activeArea !== 'all' && activeArea !== 'archive' ? tracks : []
 
   return (
     <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''}`}>
@@ -396,6 +458,7 @@ function App() {
               onClick={() => {
                 setViewMode('nodes')
                 setActiveArea(area)
+                setActiveTrack('all')
                 setQuery('')
               }}
             >
@@ -419,6 +482,7 @@ function App() {
             onClick={() => {
               setViewMode('quizzes')
               setActiveArea('all')
+              setActiveTrack('all')
               setQuery('')
             }}
           >
@@ -458,6 +522,39 @@ function App() {
 
         {error && <p className="error-banner">{error}</p>}
 
+        {viewMode === 'nodes' && visibleTracks.length > 0 && (
+          <section className="track-panel" aria-label="Reading tracks">
+            <div>
+              <p className="eyebrow">Reading tracks</p>
+              <strong>{areaLabels[activeArea] ?? activeArea}</strong>
+            </div>
+            <div className="track-list">
+              <button
+                type="button"
+                className={activeTrack === 'all' ? 'active' : ''}
+                onClick={() => setActiveTrack('all')}
+              >
+                All tracks
+              </button>
+              {visibleTracks.map((track) => (
+                <button
+                  key={track.track}
+                  type="button"
+                  className={activeTrack === track.track ? 'active' : ''}
+                  onClick={() => setActiveTrack(track.track)}
+                >
+                  <span>{trackLabels[track.track] ?? track.label}</span>
+                  <strong>{track.node_count}</strong>
+                </button>
+              ))}
+            </div>
+            <p>
+              Ordered by frontmatter <code>track</code> and <code>order</code>, so the path can change
+              without editing React.
+            </p>
+          </section>
+        )}
+
         <div className="node-list">
           {viewMode === 'quizzes'
             ? filteredQuizzes.map((quiz) => (
@@ -482,7 +579,8 @@ function App() {
                   onClick={() => setSelectedSlug(node.slug)}
                 >
                   <span className="node-meta">
-                    {areaLabels[node.area] ?? node.area} / {node.visibility}
+                    {areaLabels[node.area] ?? node.area} / {trackLabels[node.track] ?? node.track} /{' '}
+                    #{node.display_order}
                   </span>
                   <strong>{node.title}</strong>
                   <span>{node.summary}</span>

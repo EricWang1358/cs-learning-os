@@ -38,6 +38,8 @@ def row_to_node(row: sqlite3.Row) -> dict:
         "slug": row["slug"],
         "title": row["title"],
         "area": row["area"],
+        "track": row["track"],
+        "display_order": row["display_order"],
         "status": row["status"],
         "visibility": row["visibility"],
         "summary": row["summary"],
@@ -59,6 +61,10 @@ def row_to_quiz(row: sqlite3.Row) -> dict:
         "weight": row["weight"],
         "updated_at": row["updated_at"],
     }
+
+
+def slug_title(value: str) -> str:
+    return " ".join(part.capitalize() for part in value.replace("_", "-").split("-"))
 
 
 def build_fts_query(term: str) -> str:
@@ -89,7 +95,7 @@ def list_nodes(
     if visibility:
         query += " AND visibility = ?"
         params.append(visibility)
-    query += " ORDER BY area, title"
+    query += " ORDER BY area, track, display_order, title"
 
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -176,10 +182,42 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
                 ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM nodes ORDER BY area, title LIMIT 50"
+                "SELECT * FROM nodes ORDER BY area, track, display_order, title LIMIT 50"
             ).fetchall()
 
     return {"nodes": [row_to_node(row) for row in rows]}
+
+
+@app.get("/api/areas/{area}/tracks")
+def list_area_tracks(area: str) -> dict:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                track,
+                COUNT(*) AS node_count,
+                MIN(display_order) AS first_order
+            FROM nodes
+            WHERE area = ?
+              AND visibility != 'archive'
+            GROUP BY track
+            ORDER BY first_order, track
+            """,
+            (area,),
+        ).fetchall()
+
+    return {
+        "area": area,
+        "tracks": [
+            {
+                "track": row["track"],
+                "label": slug_title(row["track"]),
+                "node_count": row["node_count"],
+                "first_order": row["first_order"],
+            }
+            for row in rows
+        ],
+    }
 
 
 @app.get("/api/quizzes")

@@ -1,6 +1,8 @@
 ---
 title: "GDB examine stack string / GDB 查看栈上字符串"
 area: cs-fundamentals
+track: gdb-debugging
+order: 60
 status: seed
 visibility: core
 tags: [gdb, stack, string, memory, c]

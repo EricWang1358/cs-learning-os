@@ -229,3 +229,85 @@ Pending verification:
 
 Notes:
 - The quiz-bank layer is intentionally separate from knowledge nodes so future daily review, weights, and attempt history can attach to quiz IDs.
+
+## 2026-05-28: GDB and x86-64 Reading Expansion
+
+Completed:
+- Expanded the GDB/assembly learning path beyond basic commands.
+- Added quiz-required x86-64 nodes:
+  - `x86-64-registers`
+  - `x86-64-addressing-and-leaq`
+  - `x86-64-cmp-and-jumps`
+  - `x86-64-instruction-cheatsheet`
+- Added `bomb-lab-debugging-workflow` as a method-focused Bomb Lab guide.
+- Updated `gdb-disassemble` to point toward the new instruction-reading path.
+- Updated the `%rax` tracing quiz to link to the exact prerequisite nodes it tests.
+- Re-ingested Markdown into SQLite.
+
+Verified:
+- Database ingest reports 18 nodes and 1 quiz.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Bomb Lab coverage should focus on a repeatable reverse-engineering workflow and official/course references, not answer dumping.
+
+## 2026-05-28: Bomb Lab Answer Shapes
+
+Completed:
+- Added `bomb-lab-answer-shapes` as a pattern-oriented reference for what solved Bomb Lab answers commonly look like.
+- Included common phase shapes:
+  - exact string
+  - six-number sequence
+  - switch/jump-table index-value pair
+  - recursive target
+  - character mapping
+  - linked-list permutation
+  - secret-phase tree path
+- Linked the answer-shape node from the Bomb Lab workflow and CS fundamentals index.
+
+Notes:
+- These examples are pattern references, not guaranteed answers for a specific personalized bomb binary.
+
+## 2026-05-28: Data-Driven Track Navigation
+
+Completed:
+- Added `track` and `order` frontmatter support for knowledge nodes.
+- Added SQLite columns `track` and `display_order` with lightweight migration support.
+- Added `GET /api/areas/{area}/tracks`.
+- Updated CS fundamentals nodes into reader-facing tracks:
+  - `c-and-memory`
+  - `gdb-debugging`
+  - `x86-64-assembly`
+  - `bomb-lab`
+  - `networking`
+- Added React track pills that appear for selected areas and filter nodes by track.
+- Added `docs/navigation-design.md`.
+
+Verified:
+- Re-ingested SQLite: 19 nodes and 1 quiz.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Reading order is now content metadata, not React hardcoding.
+
+## 2026-05-28: Shark Tank Passcode Quiz
+
+Completed:
+- Added `shark-tank-passcode-calling-convention` as a Standard Q quiz item.
+- Added `x86-64-calling-convention` to explain register-based argument passing and return values.
+- Updated `x86-64-cmp-and-jumps` with the `sete` plus `movzbl` boolean-return pattern.
+- Updated `x86-64-instruction-cheatsheet` with `sete`, `setne`, and `movzbl`.
+- Re-ingested Markdown into SQLite.
+
+Verified:
+- Database ingest reports 20 nodes and 2 quizzes.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- The passcode derivation is `2 * code + 0x137 = 0x7a69`, so `code = 0x3c99` (`15513` decimal).
