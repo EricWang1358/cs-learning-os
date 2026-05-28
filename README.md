@@ -150,6 +150,22 @@ Knowledge nodes and quiz items should stay separate:
 - Quiz items test whether the learner can apply concepts.
 - Quiz items link back to knowledge nodes through `linked_nodes`.
 
+The browser UI also supports local Markdown body edits:
+
+- Open a node or quiz.
+- Click `Edit mode`.
+- Edit the Markdown body.
+- Click `Save Markdown` and confirm.
+
+The first version preserves frontmatter and only edits the body text. Use files directly when you need to change metadata such as `track`, `order`, `tags`, or `linked_nodes`.
+
+Reader questions are tracked through the `Q Queue`:
+
+- In focus reading, use `Q to be solved` to save unclear points.
+- Use the sidebar `Q Queue` entry to see all open questions directly.
+- The queue reads from `reader_questions`, so agents do not need to scan all nodes or tags.
+- Test-created questions should be resolved by smoke tests and should not remain in the open queue.
+
 ## Git And Data Policy
 
 The repository should stay small and portable.

@@ -52,6 +52,251 @@
       "prerequisites": []
     },
     {
+      "title": "Bomb Lab Answer Shapes / Bomb Lab 答案形态",
+      "path": "nodes/cs-fundamentals/bomb-lab-answer-shapes.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "support",
+      "tags": [
+        "bomb-lab",
+        "answers",
+        "patterns",
+        "x86-64",
+        "reverse-engineering"
+      ],
+      "summary": "Recognize what Bomb Lab answers usually look like without assuming one answer key fits every bomb.",
+      "related": [
+        "x86-64-addressing-and-leaq",
+        "x86-64-registers",
+        "gdb-examine-memory"
+      ],
+      "prerequisites": [
+        "bomb-lab-debugging-workflow",
+        "x86-64-instruction-cheatsheet",
+        "x86-64-cmp-and-jumps"
+      ]
+    },
+    {
+      "title": "Bomb Lab Debugging Workflow / Bomb Lab 调试工作流",
+      "path": "nodes/cs-fundamentals/bomb-lab-debugging-workflow.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "bomb-lab",
+        "gdb",
+        "assembly",
+        "x86-64",
+        "csapp",
+        "debugging"
+      ],
+      "summary": "A safe repeatable workflow for reading Bomb Lab phases with GDB and x86-64 assembly.",
+      "related": [
+        "bomb-lab-answer-shapes",
+        "x86-64-cmp-and-jumps",
+        "x86-64-addressing-and-leaq",
+        "x86-64-registers"
+      ],
+      "prerequisites": [
+        "gdb-basics",
+        "gdb-disassemble",
+        "gdb-stepi",
+        "gdb-examine-memory",
+        "x86-64-instruction-cheatsheet"
+      ]
+    },
+    {
+      "title": "C Language Characteristics / C 语言代码特点",
+      "path": "nodes/cs-fundamentals/c-language-characteristics.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "c",
+        "compiled-language",
+        "memory",
+        "pointer",
+        "systems"
+      ],
+      "summary": "C is a compiled, close-to-hardware language where addresses, memory layout, types, and manual control matter.",
+      "related": [
+        "c-memory-basics",
+        "gdb-basics",
+        "debugging-levels-vscode-python-vs-gdb"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "C Memory Basics / C 语言内存基础",
+      "path": "nodes/cs-fundamentals/c-memory-basics.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "c",
+        "memory",
+        "pointer",
+        "stack",
+        "gdb"
+      ],
+      "summary": "Understand addresses, pointers, stack memory, and byte-level layout before using GDB memory commands.",
+      "related": [
+        "gdb-basics",
+        "gdb-examine-memory",
+        "gdb-examine-stack-string",
+        "debugging-levels-vscode-python-vs-gdb"
+      ],
+      "prerequisites": [
+        "c-language-characteristics"
+      ]
+    },
+    {
+      "title": "Debugging Levels: VSCode Python vs GDB / 调试层级：VSCode Python 断点 vs GDB",
+      "path": "nodes/cs-fundamentals/debugging-levels-vscode-python-vs-gdb.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "debugging",
+        "python",
+        "gdb",
+        "vscode",
+        "c",
+        "abstraction"
+      ],
+      "summary": "Compare high-level Python breakpoint debugging with low-level GDB debugging of compiled C programs.",
+      "related": [
+        "gdb-basics",
+        "gdb-disassemble",
+        "gdb-stepi",
+        "c-memory-basics"
+      ],
+      "prerequisites": [
+        "c-language-characteristics"
+      ]
+    },
+    {
+      "title": "GDB Basics / GDB 基础",
+      "path": "nodes/cs-fundamentals/gdb-basics.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "gdb",
+        "debugging",
+        "c",
+        "cli"
+      ],
+      "summary": "Use GDB to inspect a running C program, including code, registers, memory, and execution steps.",
+      "related": [
+        "debugging-levels-vscode-python-vs-gdb",
+        "gdb-disassemble",
+        "gdb-stepi",
+        "gdb-examine-memory"
+      ],
+      "prerequisites": [
+        "c-language-characteristics",
+        "c-memory-basics"
+      ]
+    },
+    {
+      "title": "GDB disassemble / GDB 反汇编",
+      "path": "nodes/cs-fundamentals/gdb-disassemble.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "gdb",
+        "disassembly",
+        "assembly",
+        "c",
+        "debugging"
+      ],
+      "summary": "Use `disassemble` to view the CPU instructions generated from compiled C code.",
+      "related": [
+        "gdb-stepi",
+        "gdb-examine-memory",
+        "debugging-levels-vscode-python-vs-gdb",
+        "x86-64-instruction-cheatsheet",
+        "bomb-lab-debugging-workflow"
+      ],
+      "prerequisites": [
+        "gdb-basics",
+        "c-language-characteristics",
+        "c-memory-basics"
+      ]
+    },
+    {
+      "title": "GDB examine memory / GDB 查看内存",
+      "path": "nodes/cs-fundamentals/gdb-examine-memory.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "gdb",
+        "memory",
+        "x-command",
+        "c",
+        "debugging"
+      ],
+      "summary": "Use GDB's `x/nfu address` command to examine memory with a count, format, unit size, and start address.",
+      "related": [
+        "gdb-examine-stack-string",
+        "gdb-disassemble",
+        "gdb-stepi"
+      ],
+      "prerequisites": [
+        "c-memory-basics",
+        "gdb-basics"
+      ]
+    },
+    {
+      "title": "GDB examine stack string / GDB 查看栈上字符串",
+      "path": "nodes/cs-fundamentals/gdb-examine-stack-string.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "gdb",
+        "stack",
+        "string",
+        "memory",
+        "c"
+      ],
+      "summary": "Use `x/s` with pointer arithmetic to examine a C string stored at an offset from the stack pointer.",
+      "related": [
+        "gdb-examine-memory",
+        "gdb-basics"
+      ],
+      "prerequisites": [
+        "c-memory-basics",
+        "gdb-examine-memory"
+      ]
+    },
+    {
+      "title": "GDB stepi / GDB 单条机器指令执行",
+      "path": "nodes/cs-fundamentals/gdb-stepi.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "gdb",
+        "stepi",
+        "assembly",
+        "debugging"
+      ],
+      "summary": "Use `stepi` to execute exactly one machine instruction at the current program counter.",
+      "related": [
+        "gdb-disassemble",
+        "gdb-examine-memory",
+        "debugging-levels-vscode-python-vs-gdb"
+      ],
+      "prerequisites": [
+        "gdb-basics",
+        "gdb-disassemble"
+      ]
+    },
+    {
       "title": "HTTP Lifecycle",
       "path": "nodes/cs-fundamentals/http-lifecycle.md",
       "area": "cs-fundamentals",
@@ -67,6 +312,153 @@
         "project-crud-app"
       ],
       "prerequisites": []
+    },
+    {
+      "title": "x86-64 Addressing and leaq / x86-64 寻址与 leaq",
+      "path": "nodes/cs-fundamentals/x86-64-addressing-and-leaq.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "addressing",
+        "leaq",
+        "registers"
+      ],
+      "summary": "Read x86-64 address expressions and understand why `leaq` often means arithmetic.",
+      "related": [
+        "x86-64-cmp-and-jumps",
+        "gdb-disassemble",
+        "gdb-stepi"
+      ],
+      "prerequisites": [
+        "x86-64-registers",
+        "c-memory-basics"
+      ]
+    },
+    {
+      "title": "x86-64 Calling Convention / x86-64 函数调用约定",
+      "path": "nodes/cs-fundamentals/x86-64-calling-convention.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "calling-convention",
+        "registers",
+        "functions"
+      ],
+      "summary": "Understand how x86-64 passes function arguments and returns values through registers.",
+      "related": [
+        "x86-64-instruction-cheatsheet",
+        "gdb-stepi",
+        "gdb-disassemble"
+      ],
+      "prerequisites": [
+        "x86-64-registers"
+      ]
+    },
+    {
+      "title": "x86-64 cmp and Conditional Jumps / x86-64 比较与条件跳转",
+      "path": "nodes/cs-fundamentals/x86-64-cmp-and-jumps.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "cmp",
+        "jumps",
+        "condition-codes",
+        "bomb-lab"
+      ],
+      "summary": "Read `cmp`, flags, and conditional jumps without reversing the comparison.",
+      "related": [
+        "gdb-stepi",
+        "gdb-disassemble",
+        "bomb-lab-debugging-workflow"
+      ],
+      "prerequisites": [
+        "x86-64-registers",
+        "x86-64-addressing-and-leaq"
+      ]
+    },
+    {
+      "title": "x86-64 Instruction Cheatsheet / x86-64 指令速查",
+      "path": "nodes/cs-fundamentals/x86-64-instruction-cheatsheet.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "instructions",
+        "cheatsheet",
+        "bomb-lab"
+      ],
+      "summary": "A compact guide to the x86-64 instructions most often needed for quizzes and Bomb Lab.",
+      "related": [
+        "gdb-disassemble",
+        "gdb-stepi",
+        "bomb-lab-debugging-workflow"
+      ],
+      "prerequisites": [
+        "x86-64-registers",
+        "x86-64-mov-and-suffixes",
+        "x86-64-addressing-and-leaq",
+        "x86-64-cmp-and-jumps"
+      ]
+    },
+    {
+      "title": "x86-64 mov and Instruction Suffixes / x86-64 mov 与指令后缀",
+      "path": "nodes/cs-fundamentals/x86-64-mov-and-suffixes.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "mov",
+        "suffixes",
+        "registers",
+        "memory"
+      ],
+      "summary": "Understand `movq`, operand sizes, and what kinds of values can be copied in x86-64 assembly.",
+      "related": [
+        "x86-64-addressing-and-leaq",
+        "x86-64-calling-convention",
+        "x86-64-instruction-cheatsheet"
+      ],
+      "prerequisites": [
+        "x86-64-registers",
+        "c-memory-basics"
+      ]
+    },
+    {
+      "title": "x86-64 Registers / x86-64 寄存器",
+      "path": "nodes/cs-fundamentals/x86-64-registers.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "registers",
+        "gdb",
+        "c"
+      ],
+      "summary": "Learn the register names you must recognize before tracing x86-64 assembly.",
+      "related": [
+        "x86-64-mov-and-suffixes",
+        "x86-64-addressing-and-leaq",
+        "x86-64-cmp-and-jumps",
+        "gdb-stepi"
+      ],
+      "prerequisites": [
+        "c-memory-basics"
+      ]
     },
     {
       "title": "Project Pattern: CRUD App",

@@ -311,3 +311,212 @@ Verified:
 
 Notes:
 - The passcode derivation is `2 * code + 0x137 = 0x7a69`, so `code = 0x3c99` (`15513` decimal).
+
+## 2026-05-29: Quiz Explanation Depth
+
+Completed:
+- Updated Standard Q to require non-skipping explanations:
+  - line-by-line state changes
+  - mental translation
+  - operand-direction notes
+  - branch decisions
+  - hex arithmetic
+- Expanded `x86-rax-trace-leaq-jump` with a full walkthrough for both functions.
+- Expanded `shark-tank-passcode-calling-convention` with a full walkthrough covering calling convention, loop noise, `cmp`, `sete`, `movzbl`, and equation solving.
+- Re-ingested Markdown into SQLite.
+
+Verified:
+- Database ingest reports 20 nodes and 2 quizzes.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Future quiz additions should optimize for teaching the reasoning path, not just producing the final answer.
+
+## 2026-05-29: x86-64 Register and mov Foundations
+
+Completed:
+- Expanded `x86-64-registers` with:
+  - accumulator explanation
+  - general-purpose registers
+  - argument registers
+  - stack registers
+  - instruction pointer
+  - register families such as `%rax/%eax/%ax/%al`
+  - examples of what registers may represent in C-level reasoning
+- Added `x86-64-mov-and-suffixes` for:
+  - `movq = move quad-word`
+  - suffixes `b/w/l/q`
+  - source and destination operand types
+  - immediate/register/memory examples
+  - common beginner mistakes
+- Linked the new node from quizzes and the instruction cheatsheet.
+- Re-ingested Markdown into SQLite.
+
+Verified:
+- Database ingest reports 21 nodes and 2 quizzes.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Basic instruction vocabulary belongs in knowledge nodes, not only inside quiz explanations.
+
+## 2026-05-29: Detail Navigation Back Stack
+
+Completed:
+- Added a lightweight frontend history stack for detail-page jumps.
+- Added a `Back` button next to `Focus reading` / `Show map`.
+- Link clicks from node details and quiz linked reviews now push the current detail view before navigating.
+- Back restores the previous node or quiz view.
+- Updated frontend smoke test coverage for quiz-to-node link navigation and Back.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- This is intentionally app-level navigation history, not full browser routing yet.
+
+## 2026-05-29: Reader Question Inbox
+
+Completed:
+- Added `reader_questions` SQLite table for local reading annotations and unresolved questions.
+- Added backend APIs:
+  - `GET /api/reader-questions`
+  - `POST /api/reader-questions`
+  - `POST /api/reader-questions/{question_id}/resolve`
+- Node and quiz detail responses now include `open_question_count`.
+- Added focus-reading question panel in the React detail view.
+- Added `Q to be solved` status pill when a node or quiz has open reader questions.
+- Updated frontend smoke test to cover saving a reader question in focus reading.
+
+Verified:
+- Database ingest reports 21 nodes and 2 quizzes.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Reader questions are stored separately from Markdown so they can later drive LLM revisions without immediately polluting source content.
+
+## 2026-05-29: Browser Markdown Edit Mode
+
+Completed:
+- Added backend body-save endpoints:
+  - `PUT /api/nodes/{slug}/body`
+  - `PUT /api/quizzes/{quiz_id}/body`
+- Save endpoints preserve Markdown frontmatter and replace only the body.
+- Save endpoints update SQLite rows and FTS indexes immediately after writing the source file.
+- Added `Edit mode` to node and quiz detail toolbars.
+- Added Markdown textarea editor with `Save Markdown` and `Cancel`.
+- Save asks for browser confirmation before writing to disk.
+- Updated README with browser edit workflow.
+- Updated frontend smoke test to cover entering and canceling edit mode.
+
+Verified:
+- Database ingest reports 21 nodes and 2 quizzes.
+- Backend smoke test passes, including temporary edit and restore.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Frontmatter editing remains file-only for now to avoid accidental metadata damage.
+
+## 2026-05-29: Focus Edit Layout Compatibility
+
+Completed:
+- Fixed focus reading plus edit mode layout conflict.
+- Edit mode now hides the reader-question side panel.
+- Entering edit mode automatically opens focus mode.
+- Focus edit mode uses a single-column wide editor layout.
+- Updated frontend smoke test to assert the reader-question panel is hidden while editing.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Reading mode keeps the two-column detail plus question panel layout; edit mode prioritizes Markdown editing space.
+
+## 2026-05-29: Edit Mode Navigation State Fix
+
+Completed:
+- Added explicit `Exit edit mode` behavior.
+- Added shared edit-exit logic for toolbar exit, cancel, Back, card selection, and link navigation.
+- Link navigation now exits edit mode before changing the selected node or quiz.
+- Unsaved edit drafts prompt for confirmation before being discarded.
+- Updated frontend smoke test to cover exiting edit mode and link navigation out of edit mode.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Edit mode is now treated as transient local UI state, never as the state of the selected node itself.
+
+## 2026-05-29: Focus Tag Pill Stretch Fix
+
+Completed:
+- Fixed a focus/edit transition layout bug where tag pills could stretch into tall vertical capsules.
+- Added explicit flex alignment and self-alignment to `.tag-row` and `.tag-row span`.
+- Added `align-self: start` to focus-mode detail grid children.
+- Reworked detail layout to use a stable `.detail-main` left column plus an independent reader-question side panel.
+- Removed the reader-question panel's multi-row grid span so it cannot stretch unrelated rows.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- The bug reproduced after entering edit mode from a long node, navigating by link, and exiting edit mode. The fix avoids splitting heading, tags, and body into separate grid rows that can inherit stale row height.
+
+## 2026-05-29: Sticky Reader Question Panel
+
+Completed:
+- Made the focus-mode reader question panel remain sticky while reading long content.
+- Changed focus-mode detail panel overflow to `visible` so sticky positioning can work reliably.
+- Added `max-height` and internal scrolling to the question panel.
+- Kept the panel static on narrow/mobile layouts to avoid covering the reading content.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- If sticky is still blocked by an unexpected scroll container, the next fallback is a fixed mini dock for `Q to be solved`.
+
+## 2026-05-29: Q Queue Entry
+
+Completed:
+- Added `Q Queue` as a first-class frontend mode.
+- Queue loads directly from `reader_questions` via `/api/reader-questions?status=open`.
+- Open questions can be selected to jump directly to their source node or quiz in focus mode.
+- Added queue card styling and smoke test coverage for loading the queue.
+
+Verified:
+- Local SQLite currently has open questions, including `project-crud-app -> more detailed.`
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- The queue avoids scanning all nodes/tags and gives future LLM workflows a direct unresolved-question inbox.
+
+## 2026-05-29: Queue Cleanup and User Manual
+
+Completed:
+- Removed smoke-test-created open reader questions from the local SQLite queue.
+- Updated backend smoke test to resolve its temporary reader question after verification.
+- Updated frontend smoke test to resolve its temporary reader question after verification.
+- Added `docs/使用说明书.md` with daily usage guidance and AI operating instructions.
+- Updated README with Q Queue behavior.
+
+Verified:
+- Open reader question queue now contains only the user's real `project-crud-app -> more detailed.` item.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+Notes:
+- Smoke tests should verify queue behavior without leaving open questions behind.

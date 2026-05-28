@@ -10,7 +10,7 @@ sources: []
 summary: "A basic full-stack pattern for creating, reading, updating, and deleting domain objects."
 ---
 
-# Project Pattern: CRUD App
+# Project Pattern: CRUD
 
 ## Why It Matters
 

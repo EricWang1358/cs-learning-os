@@ -7,7 +7,7 @@ visibility: practice
 difficulty: medium
 weight: 1
 tags: [assembly, x86-64, registers, leaq, cmp, jump]
-linked_nodes: [x86-64-registers, x86-64-addressing-and-leaq, x86-64-cmp-and-jumps, x86-64-instruction-cheatsheet, gdb-stepi]
+linked_nodes: [x86-64-registers, x86-64-mov-and-suffixes, x86-64-addressing-and-leaq, x86-64-cmp-and-jumps, x86-64-instruction-cheatsheet, gdb-stepi]
 sources:
   - local-exam-screenshot-2026-05-28
 summary: "Practice computing the final value of `%rax` by tracing x86-64 register updates."
@@ -49,30 +49,286 @@ Function 2:
 
 ## Explanation
 
-Function 1:
+### How To Think
+
+Before calculating, translate the instruction vocabulary:
+
+```text
+movq src, dst        copy src into dst
+leaq expr, dst       compute expr as arithmetic, store it in dst
+cmpq A, B            set flags as if computing B - A
+jg label             jump if B > A, signed, after the cmp
+ret                  return; for these questions, we care what %rax holds
+```
+
+The safest habit is to keep a small register table and update only the register touched by the current instruction.
+
+### Function 1 Walkthrough
+
+```text
+Start:
+%rcx = unknown, %rdx = unknown, %rax = unknown
+```
+
+Step 1:
+
+```asm
+movq $0x213, %rcx
+```
+
+Mental translation:
+
+```text
+Put the immediate constant 0x213 into %rcx.
+```
+
+State:
 
 ```text
 %rcx = 0x213
-%rdx = %rcx + %rcx = 0x426
-compare %rdx with 0x430
-0x426 is not greater than 0x430, so jg is not taken
-%rcx = %rcx + 8 = 0x21b
-%rax = %rcx = 0x21b
 ```
 
-Careful: the tempting wrong answer is `%rax = 0x213`. That happens if you assume `jg .L2` is taken and skip `leaq 8(%rcx), %rcx`. Under standard AT&T syntax, `cmpq $0x430, %rdx` checks the signed relation between `%rdx` and `0x430`; since `0x426` is not greater than `0x430`, the jump is not taken.
+Step 2:
 
-Function 2:
+```asm
+leaq (%rcx,%rcx), %rdx
+```
+
+Address-expression rule:
+
+```text
+D(base,index,scale) = D + base + index * scale
+```
+
+Here there is no displacement and no explicit scale, so scale defaults to 1:
+
+```text
+(%rcx,%rcx) = %rcx + %rcx = 0x213 + 0x213
+```
+
+Hex arithmetic:
+
+```text
+0x213 + 0x213 = 0x426
+```
+
+State:
+
+```text
+%rcx = 0x213
+%rdx = 0x426
+```
+
+Step 3:
+
+```asm
+cmpq $0x430, %rdx
+```
+
+AT&T comparison rule:
+
+```text
+cmpq A, B sets flags as if computing B - A.
+```
+
+So this compares:
+
+```text
+%rdx ? 0x430
+0x426 ? 0x430
+```
+
+Since:
+
+```text
+0x426 < 0x430
+```
+
+the relation `%rdx > 0x430` is false.
+
+Step 4:
+
+```asm
+jg .L2
+```
+
+`jg` means signed "jump if greater" based on the previous `cmp`.
+
+Because `%rdx` is not greater than `0x430`, the jump is not taken. Execution continues to the next line instead of skipping to `.L2`.
+
+Step 5:
+
+```asm
+leaq 8(%rcx), %rcx
+```
+
+Translate:
+
+```text
+%rcx = 8 + %rcx
+```
+
+Hex arithmetic:
+
+```text
+0x213 + 0x8 = 0x21b
+```
+
+State:
+
+```text
+%rcx = 0x21b
+%rdx = 0x426
+```
+
+Step 6:
+
+```asm
+movq %rcx, %rax
+```
+
+Copy `%rcx` into `%rax`:
+
+```text
+%rax = 0x21b
+```
+
+So Function 1 returns:
+
+```text
+%rax = 0x21b
+```
+
+Careful: the tempting wrong answer is `%rax = 0x213`. That happens if you assume `jg .L2` is taken and skip `leaq 8(%rcx), %rcx`.
+
+### Function 2 Walkthrough
+
+```text
+Start:
+%rcx = unknown, %rdx = unknown, %rbx = unknown, %r12 = unknown, %rax = unknown
+```
+
+Step 1:
+
+```asm
+movq $0x33, %rcx
+```
+
+State:
 
 ```text
 %rcx = 0x33
-%rdx = 1 + %rcx * 2 = 1 + 0x66 = 0x67
+```
+
+Step 2:
+
+```asm
+leaq 1(,%rcx,2), %rdx
+```
+
+Read the expression carefully:
+
+```text
+D(base,index,scale)
+```
+
+Here:
+
+```text
+D = 1
+base = omitted
+index = %rcx
+scale = 2
+```
+
+So:
+
+```text
+%rdx = 1 + %rcx * 2
+```
+
+Hex arithmetic:
+
+```text
+%rcx = 0x33
+0x33 * 2 = 0x66
+1 + 0x66 = 0x67
+```
+
+State:
+
+```text
+%rcx = 0x33
+%rdx = 0x67
+```
+
+Step 3:
+
+```asm
+movq $0x64, %rbx
+```
+
+State:
+
+```text
 %rbx = 0x64
-%r12 = %rdx + %rbx * 4 = 0x67 + 0x190 = 0x1f7
+```
+
+Step 4:
+
+```asm
+leaq (%rdx,%rbx,4), %r12
+```
+
+Again use:
+
+```text
+D + base + index * scale
+```
+
+Here:
+
+```text
+D = 0
+base = %rdx = 0x67
+index = %rbx = 0x64
+scale = 4
+```
+
+Hex arithmetic:
+
+```text
+0x64 * 4 = 0x190
+0x67 + 0x190 = 0x1f7
+```
+
+State:
+
+```text
+%r12 = 0x1f7
+```
+
+Step 5:
+
+```asm
+leaq (%r12), %rax
+```
+
+This can look suspicious because of the parentheses, but `leaq` still does not read memory. It computes the expression `%r12` and stores that value in `%rax`.
+
+State:
+
+```text
 %rax = %r12 = 0x1f7
 ```
 
-The tempting wrong move is to treat `leaq` as loading memory. Here it does not read memory; it only computes the expression and writes the numeric result.
+So Function 2 returns:
+
+```text
+%rax = 0x1f7
+```
+
+The tempting wrong move is to treat `leaq` as loading memory. In these instructions, `leaq` only computes the expression and writes the numeric result.
 
 ## Plain Explanation
 
@@ -94,6 +350,7 @@ English: For AT&T syntax, `cmpq A, B` sets flags as if it computed `B - A`. Then
 ## Linked Review
 
 - Review `x86-64-registers` if `%rax`, `%rcx`, `%rdx`, and `%r12` are not automatic yet.
+- Review `x86-64-mov-and-suffixes` if `movq $0x213, %rcx` does not immediately read as "copy this 64-bit value into `%rcx`."
 - Review `x86-64-addressing-and-leaq` if `1(,%rcx,2)` or `(%rdx,%rbx,4)` feels weird.
 - Review `x86-64-cmp-and-jumps` if `cmpq $0x430, %rdx; jg .L2` is easy to read backwards.
 - Review `x86-64-instruction-cheatsheet` for the minimum instruction vocabulary.

@@ -22,10 +22,24 @@
 }
 
 .workspace-shell.focus-mode .detail-panel {
-  max-width: 1040px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  max-width: 1180px;
   width: 100%;
   margin: 0 auto;
   border-inline: 1px solid var(--line);
+  overflow: visible;
+}
+
+.workspace-shell.focus-mode.editing-mode .detail-panel {
+  display: block;
+  max-width: 1120px;
+}
+
+.workspace-shell.focus-mode .detail-main {
+  grid-column: 1;
+  align-self: start;
 }
 
 .sidebar,
@@ -274,6 +288,13 @@
   line-height: 1.48;
 }
 
+.question-card {
+  border-color: rgba(217, 119, 6, 0.45);
+  background:
+    linear-gradient(135deg, rgba(217, 119, 6, 0.1), transparent 42%),
+    rgba(255, 255, 255, 0.72);
+}
+
 .detail-panel {
   padding: 28px;
   overflow: auto;
@@ -285,11 +306,22 @@
   border-bottom: 1px solid var(--line);
 }
 
+.detail-main {
+  min-width: 0;
+}
+
 .detail-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .focus-toggle {
@@ -304,6 +336,15 @@
 
 .focus-toggle:hover {
   border-color: var(--accent);
+}
+
+.focus-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.focus-toggle:disabled:hover {
+  border-color: var(--line);
 }
 
 .detail-heading h2 {
@@ -321,19 +362,32 @@
 
 .tag-row {
   display: flex;
+  align-items: center;
+  align-self: start;
   flex-wrap: wrap;
   gap: 8px;
   margin: 18px 0;
 }
 
 .tag-row span {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(15, 118, 110, 0.08);
   color: var(--accent-strong);
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.2;
+  min-height: 0;
   padding: 5px 9px;
+}
+
+.tag-row .needs-review {
+  border-color: #d97706;
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .detail-section {
@@ -351,6 +405,38 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.62);
   padding: 18px 20px;
+}
+
+.markdown-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.markdown-editor textarea {
+  min-height: 520px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdfa;
+  color: var(--ink);
+  font: 14px/1.65 var(--mono);
+  padding: 16px;
+  tab-size: 2;
+}
+
+.workspace-shell.focus-mode.editing-mode .markdown-editor textarea {
+  min-height: calc(100vh - 330px);
+}
+
+.markdown-editor textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid rgba(15, 118, 110, 0.16);
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .markdown-body h1,
@@ -465,6 +551,70 @@
   color: var(--muted);
 }
 
+.reader-question-panel {
+  position: sticky;
+  top: 18px;
+  grid-column: 2;
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(217, 119, 6, 0.1), transparent 48%),
+    rgba(255, 253, 250, 0.92);
+  padding: 16px;
+  box-shadow: 0 16px 40px rgba(20, 71, 96, 0.08);
+}
+
+.reader-question-panel h3 {
+  margin: 6px 0;
+  color: var(--ink-strong);
+}
+
+.reader-question-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.reader-question-panel textarea {
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdfa;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.reader-question-panel textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid rgba(15, 118, 110, 0.16);
+}
+
+.reader-question-list {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.reader-question-list strong {
+  color: var(--ink-strong);
+  font-size: 13px;
+}
+
+.reader-question-list p {
+  border-left: 3px solid #d97706;
+  padding-left: 9px;
+}
+
 .split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -494,6 +644,10 @@
   }
 
   .workspace-shell.focus-mode {
+    display: block;
+  }
+
+  .workspace-shell.focus-mode .detail-panel {
     display: block;
   }
 
@@ -535,5 +689,12 @@
   .detail-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .reader-question-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    margin-top: 18px;
   }
 }

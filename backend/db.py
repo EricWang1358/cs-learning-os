@@ -96,6 +96,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS quiz_fts USING fts5(
     body,
     tags
 );
+
+CREATE TABLE IF NOT EXISTS reader_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_type TEXT NOT NULL CHECK(target_type IN ('node', 'quiz')),
+    target_id TEXT NOT NULL,
+    question TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL,
+    resolved_at TEXT NOT NULL DEFAULT '',
+    resolution_note TEXT NOT NULL DEFAULT ''
+);
 """
 
 

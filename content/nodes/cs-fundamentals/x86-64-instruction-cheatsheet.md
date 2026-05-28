@@ -6,7 +6,7 @@ order: 40
 status: seed
 visibility: core
 tags: [assembly, x86-64, instructions, cheatsheet, bomb-lab]
-prerequisites: [x86-64-registers, x86-64-addressing-and-leaq, x86-64-cmp-and-jumps]
+prerequisites: [x86-64-registers, x86-64-mov-and-suffixes, x86-64-addressing-and-leaq, x86-64-cmp-and-jumps]
 related: [gdb-disassemble, gdb-stepi, bomb-lab-debugging-workflow]
 sources:
   - https://web.stanford.edu/class/archive/cs/cs107/cs107.1254/guide/x86-64.html
@@ -123,3 +123,5 @@ English: Classify first: move, compute, compare, jump, call, return.
 ## Suggested Next / 下一步
 
 Use this page beside `bomb-lab-debugging-workflow` as a working checklist while reading phases.
+
+If `movq`, operand suffixes, or immediate/register/memory operands are still unclear, review `x86-64-mov-and-suffixes` before using this cheatsheet.

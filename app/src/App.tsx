@@ -19,6 +19,7 @@ type NodeDetail = NodeSummary & {
   tags: string[]
   links: Array<{ target: string; kind: string }>
   sources: Array<{ source: string; source_type: string; note: string }>
+  open_question_count: number
 }
 
 type ApiNodesResponse = {
@@ -47,6 +48,7 @@ type QuizDetail = QuizSummary & {
   tags: string[]
   linked_nodes: Array<{ slug: string; kind: string; title: string }>
   sources: Array<{ source: string; source_type: string; note: string }>
+  open_question_count: number
 }
 
 type ApiQuizzesResponse = {
@@ -69,7 +71,30 @@ type ApiTracksResponse = {
   tracks: TrackSummary[]
 }
 
-type ViewMode = 'nodes' | 'quizzes'
+type ReaderQuestion = {
+  id: number
+  target_type: 'node' | 'quiz'
+  target_id: string
+  question: string
+  status: string
+  created_at: string
+  resolved_at: string
+  resolution_note: string
+}
+
+type ApiReaderQuestionsResponse = {
+  questions: ReaderQuestion[]
+}
+
+type ApiReaderQuestionResponse = {
+  question: ReaderQuestion
+}
+
+type ViewMode = 'nodes' | 'quizzes' | 'question-queue'
+
+type HistoryEntry =
+  | { viewMode: 'nodes'; selectedSlug: string; activeArea: string; activeTrack: string }
+  | { viewMode: 'quizzes'; selectedQuizId: string; activeArea: string; activeTrack: string }
 
 type MarkdownBlock =
   | { kind: 'code'; code: string; language: string }
@@ -110,6 +135,30 @@ function slugTitle(slug: string) {
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`)
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+  return response.json() as Promise<T>
+}
+
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+  return response.json() as Promise<T>
+}
+
+async function putJson<T>(path: string, payload: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`)
   }
@@ -281,6 +330,13 @@ function App() {
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isFocusMode, setIsFocusMode] = useState(false)
   const [error, setError] = useState('')
+  const [historyStack, setHistoryStack] = useState<HistoryEntry[]>([])
+  const [readerQuestions, setReaderQuestions] = useState<ReaderQuestion[]>([])
+  const [questionDraft, setQuestionDraft] = useState('')
+  const [isQuestionSaving, setIsQuestionSaving] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editDraft, setEditDraft] = useState('')
+  const [isEditSaving, setIsEditSaving] = useState(false)
 
   const deferredQuery = useDeferredValue(query)
 
@@ -303,6 +359,14 @@ function App() {
           startTransition(() => {
             setQuizzes(data.quizzes)
             setSelectedQuizId((current) => current || data.quizzes[0]?.id || '')
+          })
+        } else if (viewMode === 'question-queue') {
+          const data = await fetchJson<ApiReaderQuestionsResponse>('/api/reader-questions?status=open')
+
+          if (!isActive) return
+
+          startTransition(() => {
+            setReaderQuestions(data.questions)
           })
         } else {
           const data = deferredQuery.trim()
@@ -420,6 +484,41 @@ function App() {
     }
   }, [selectedQuizId])
 
+  useEffect(() => {
+    if (viewMode === 'question-queue') return
+
+    const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
+    const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
+    if (!targetId) {
+      return
+    }
+
+    let isActive = true
+
+    async function loadReaderQuestions() {
+      try {
+        const data = await fetchJson<ApiReaderQuestionsResponse>(
+          `/api/reader-questions?target_type=${targetType}&target_id=${encodeURIComponent(
+            targetId,
+          )}&status=open`,
+        )
+        if (isActive) setReaderQuestions(data.questions)
+      } catch (loadError) {
+        if (isActive) {
+          setError(
+            loadError instanceof Error ? loadError.message : 'Unable to load reader questions',
+          )
+        }
+      }
+    }
+
+    loadReaderQuestions()
+
+    return () => {
+      isActive = false
+    }
+  }, [selectedQuizId, selectedSlug, viewMode])
+
   const filteredNodes = nodes.filter((node) => {
     if (activeArea === 'archive') return node.visibility === 'archive'
     if (activeArea === 'all') return node.visibility !== 'archive'
@@ -436,13 +535,161 @@ function App() {
     return quiz.area === activeArea && quiz.visibility !== 'archive'
   })
 
-  const visibleCount = viewMode === 'quizzes' ? filteredQuizzes.length : filteredNodes.length
-  const totalCount = viewMode === 'quizzes' ? quizzes.length : nodes.length
+  const visibleCount =
+    viewMode === 'question-queue'
+      ? readerQuestions.length
+      : viewMode === 'quizzes'
+        ? filteredQuizzes.length
+        : filteredNodes.length
+  const totalCount =
+    viewMode === 'question-queue'
+      ? readerQuestions.length
+      : viewMode === 'quizzes'
+        ? quizzes.length
+        : nodes.length
   const visibleTracks =
     viewMode === 'nodes' && activeArea !== 'all' && activeArea !== 'archive' ? tracks : []
 
+  const currentHistoryEntry =
+    viewMode === 'quizzes'
+      ? selectedQuizId
+        ? { viewMode, selectedQuizId, activeArea, activeTrack }
+        : null
+      : viewMode === 'nodes' && selectedSlug
+        ? { viewMode, selectedSlug, activeArea, activeTrack }
+        : null
+
+  const exitEditMode = (shouldConfirm = true) => {
+    if (!isEditMode) return true
+    if (shouldConfirm && editDraft.trim() && !window.confirm('Discard unsaved Markdown edits?')) {
+      return false
+    }
+    setIsEditMode(false)
+    setEditDraft('')
+    return true
+  }
+
+  const pushCurrentHistory = () => {
+    if (!currentHistoryEntry) return
+    setHistoryStack((current) => [...current, currentHistoryEntry])
+  }
+
+  const openQuestionTarget = (item: ReaderQuestion) => {
+    exitEditMode(false)
+    if (item.target_type === 'node') {
+      setViewMode('nodes')
+      setSelectedSlug(item.target_id)
+      setIsFocusMode(true)
+    } else {
+      setViewMode('quizzes')
+      setSelectedQuizId(item.target_id)
+      setIsFocusMode(true)
+    }
+  }
+
+  const goBack = () => {
+    if (!exitEditMode()) return
+    setHistoryStack((current) => {
+      const previous = current.at(-1)
+      if (!previous) return current
+
+      if (previous.viewMode === 'nodes') {
+        setViewMode('nodes')
+        setActiveArea(previous.activeArea)
+        setActiveTrack(previous.activeTrack)
+        setSelectedSlug(previous.selectedSlug)
+      } else {
+        setViewMode('quizzes')
+        setActiveArea(previous.activeArea)
+        setActiveTrack(previous.activeTrack)
+        setSelectedQuizId(previous.selectedQuizId)
+      }
+
+      return current.slice(0, -1)
+    })
+  }
+
+  const submitReaderQuestion = async () => {
+    const question = questionDraft.trim()
+    const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
+    const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
+    if (!question || !targetId) return
+
+    try {
+      setIsQuestionSaving(true)
+      const data = await postJson<ApiReaderQuestionResponse>('/api/reader-questions', {
+        target_type: targetType,
+        target_id: targetId,
+        question,
+      })
+      setReaderQuestions((current) => [data.question, ...current])
+      setQuestionDraft('')
+      if (targetType === 'node') {
+        setSelectedNode((current) =>
+          current
+            ? { ...current, open_question_count: current.open_question_count + 1 }
+            : current,
+        )
+      } else {
+        setSelectedQuiz((current) =>
+          current
+            ? { ...current, open_question_count: current.open_question_count + 1 }
+            : current,
+        )
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save reader question')
+    } finally {
+      setIsQuestionSaving(false)
+    }
+  }
+
+  const startEditMode = () => {
+    const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
+    if (!body) return
+    setEditDraft(body)
+    setIsFocusMode(true)
+    setIsEditMode(true)
+  }
+
+  const cancelEditMode = () => {
+    exitEditMode()
+  }
+
+  const saveEditMode = async () => {
+    const body = editDraft.trim()
+    if (!body) return
+    if (!window.confirm('Save these Markdown changes to the local source file?')) return
+
+    try {
+      setIsEditSaving(true)
+      if (viewMode === 'quizzes' && selectedQuizId) {
+        const data = await putJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}/body`, {
+          body,
+        })
+        setSelectedQuiz(data.quiz)
+      } else if (selectedSlug) {
+        const data = await putJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}/body`, {
+          body,
+        })
+        setSelectedNode(data.node)
+      }
+      exitEditMode(false)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save Markdown')
+    } finally {
+      setIsEditSaving(false)
+    }
+  }
+
+  const openQuestionCount =
+    viewMode === 'quizzes'
+      ? selectedQuiz?.open_question_count ?? 0
+      : selectedNode?.open_question_count ?? 0
+  const visibleReaderQuestions = currentHistoryEntry ? readerQuestions : []
+
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -488,6 +735,19 @@ function App() {
           >
             Practice / Quiz Bank
           </button>
+          <button
+            type="button"
+            className={viewMode === 'question-queue' ? 'active' : ''}
+            onClick={() => {
+              exitEditMode(false)
+              setViewMode('question-queue')
+              setActiveArea('all')
+              setActiveTrack('all')
+              setQuery('')
+            }}
+          >
+            Q Queue
+          </button>
         </section>
 
         <section className="system-note">
@@ -499,14 +759,20 @@ function App() {
       <section className="node-column" aria-label="Knowledge nodes">
         <header className="search-header">
           <label htmlFor="node-search">
-            {viewMode === 'quizzes' ? 'Quiz search' : 'Global search'}
+            {viewMode === 'question-queue'
+              ? 'Question queue'
+              : viewMode === 'quizzes'
+                ? 'Quiz search'
+                : 'Global search'}
           </label>
           <input
             id="node-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              viewMode === 'quizzes'
+              viewMode === 'question-queue'
+                ? 'Open questions are loaded directly...'
+                : viewMode === 'quizzes'
                 ? 'Search quiz prompts, tags, answers...'
                 : 'Search concepts, tags, summaries...'
             }
@@ -515,7 +781,11 @@ function App() {
             {isLoading
               ? 'Loading index...'
               : `${visibleCount} visible of ${totalCount} indexed ${
-                  viewMode === 'quizzes' ? 'quizzes' : 'nodes'
+                  viewMode === 'question-queue'
+                    ? 'open questions'
+                    : viewMode === 'quizzes'
+                      ? 'quizzes'
+                      : 'nodes'
                 }`}
           </p>
         </header>
@@ -556,13 +826,31 @@ function App() {
         )}
 
         <div className="node-list">
-          {viewMode === 'quizzes'
+          {viewMode === 'question-queue'
+            ? readerQuestions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="node-card question-card"
+                  onClick={() => openQuestionTarget(item)}
+                >
+                  <span className="node-meta">
+                    {item.target_type} / {item.target_id} / #{item.id}
+                  </span>
+                  <strong>{item.question}</strong>
+                  <span>Open target and resolve this question in the tutorial.</span>
+                </button>
+              ))
+            : viewMode === 'quizzes'
             ? filteredQuizzes.map((quiz) => (
                 <button
                   key={quiz.id}
                   type="button"
                   className={`node-card ${quiz.id === selectedQuizId ? 'selected' : ''}`}
-                  onClick={() => setSelectedQuizId(quiz.id)}
+                  onClick={() => {
+                    if (!exitEditMode()) return
+                    setSelectedQuizId(quiz.id)
+                  }}
                 >
                   <span className="node-meta">
                     {areaLabels[quiz.area] ?? quiz.area} / {quiz.difficulty} / weight {quiz.weight}
@@ -576,7 +864,10 @@ function App() {
                   key={node.slug}
                   type="button"
                   className={`node-card ${node.slug === selectedSlug ? 'selected' : ''}`}
-                  onClick={() => setSelectedSlug(node.slug)}
+                  onClick={() => {
+                    if (!exitEditMode()) return
+                    setSelectedSlug(node.slug)
+                  }}
                 >
                   <span className="node-meta">
                     {areaLabels[node.area] ?? node.area} / {trackLabels[node.track] ?? node.track} /{' '}
@@ -590,143 +881,316 @@ function App() {
       </section>
 
       <aside className="detail-panel" aria-label="Node detail">
-        {viewMode === 'quizzes' && selectedQuiz ? (
+        {viewMode === 'question-queue' ? (
+          <div className="empty-state">
+            <h2>Q to be solved</h2>
+            <p>Select a question from the queue to open its source node or quiz.</p>
+          </div>
+        ) : viewMode === 'quizzes' && selectedQuiz ? (
           <>
-            <div className="detail-heading">
-              <div className="detail-toolbar">
-                <p className="eyebrow">{selectedQuiz.area} / quiz</p>
+            <div className="detail-main">
+              <div className="detail-heading">
+                <div className="detail-toolbar">
+                  <p className="eyebrow">{selectedQuiz.area} / quiz</p>
+                  <div className="toolbar-actions">
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      onClick={() => {
+                        if (isEditMode) {
+                          exitEditMode()
+                        } else {
+                          startEditMode()
+                        }
+                      }}
+                    >
+                      {isEditMode ? 'Exit edit mode' : 'Edit mode'}
+                    </button>
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      disabled={!historyStack.length}
+                      onClick={goBack}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      onClick={() => setIsFocusMode((current) => !current)}
+                    >
+                      {isFocusMode ? 'Show map' : 'Focus reading'}
+                    </button>
+                  </div>
+                </div>
+                <h2>{selectedQuiz.title}</h2>
+                <p>{selectedQuiz.summary}</p>
+              </div>
+
+              <div className="tag-row">
+                {selectedQuiz.open_question_count > 0 && (
+                  <span className="needs-review">Q to be solved: {selectedQuiz.open_question_count}</span>
+                )}
+                <span>{selectedQuiz.difficulty}</span>
+                {selectedQuiz.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+
+              <section className="detail-section">
+                <h3>Quiz body</h3>
+                {isEditMode ? (
+                  <div className="markdown-editor">
+                    <textarea
+                      value={editDraft}
+                      onChange={(event) => setEditDraft(event.target.value)}
+                      aria-label="Markdown editor"
+                    />
+                    <div className="editor-actions">
+                      <button
+                        type="button"
+                        className="focus-toggle"
+                        disabled={!editDraft.trim() || isEditSaving}
+                        onClick={saveEditMode}
+                      >
+                        {isEditSaving ? 'Saving...' : 'Save Markdown'}
+                      </button>
+                      <button type="button" className="focus-toggle" onClick={cancelEditMode}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <MarkdownView body={selectedQuiz.body} />
+                )}
+              </section>
+
+              <section className="detail-section split">
+                <div>
+                  <h3>Linked review</h3>
+                  {selectedQuiz.linked_nodes.length ? (
+                    <ul>
+                      {selectedQuiz.linked_nodes.map((link) => (
+                        <li key={`${link.kind}-${link.slug}`}>
+                          <button
+                            type="button"
+                            className="text-link"
+                            onClick={() => {
+                              if (!exitEditMode()) return
+                              pushCurrentHistory()
+                              setViewMode('nodes')
+                              setSelectedSlug(link.slug)
+                              setIsFocusMode(true)
+                            }}
+                          >
+                            {link.kind}: {link.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No linked review nodes yet.</p>
+                  )}
+                </div>
+                <div>
+                  <h3>Sources</h3>
+                  {selectedQuiz.sources.length ? (
+                    <ul>
+                      {selectedQuiz.sources.map((source) => (
+                        <li key={source.source}>{source.source}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No sources recorded.</p>
+                  )}
+                </div>
+              </section>
+
+              {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
+            </div>
+            {isFocusMode && !isEditMode && (
+              <aside className="reader-question-panel" aria-label="Reader questions">
+                <div>
+                  <p className="eyebrow">Q to be solved</p>
+                  <h3>What is unclear?</h3>
+                  <p>
+                    Save questions while reading. Later, ask the LLM to fold them back into the
+                    tutorial.
+                  </p>
+                </div>
+                <textarea
+                  value={questionDraft}
+                  onChange={(event) => setQuestionDraft(event.target.value)}
+                  placeholder="Example: Why does sete write only %al here?"
+                />
                 <button
                   type="button"
                   className="focus-toggle"
-                  onClick={() => setIsFocusMode((current) => !current)}
+                  disabled={!questionDraft.trim() || isQuestionSaving}
+                  onClick={submitReaderQuestion}
                 >
-                  {isFocusMode ? 'Show map' : 'Focus reading'}
+                  {isQuestionSaving ? 'Saving...' : 'Save question'}
                 </button>
-              </div>
-              <h2>{selectedQuiz.title}</h2>
-              <p>{selectedQuiz.summary}</p>
-            </div>
-
-            <div className="tag-row">
-              <span>{selectedQuiz.difficulty}</span>
-              {selectedQuiz.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
-            </div>
-
-            <section className="detail-section">
-              <h3>Quiz body</h3>
-              <MarkdownView body={selectedQuiz.body} />
-            </section>
-
-            <section className="detail-section split">
-              <div>
-                <h3>Linked review</h3>
-                {selectedQuiz.linked_nodes.length ? (
-                  <ul>
-                    {selectedQuiz.linked_nodes.map((link) => (
-                      <li key={`${link.kind}-${link.slug}`}>
-                        <button
-                          type="button"
-                          className="text-link"
-                          onClick={() => {
-                            setViewMode('nodes')
-                            setSelectedSlug(link.slug)
-                            setIsFocusMode(true)
-                          }}
-                        >
-                          {link.kind}: {link.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No linked review nodes yet.</p>
-                )}
-              </div>
-              <div>
-                <h3>Sources</h3>
-                {selectedQuiz.sources.length ? (
-                  <ul>
-                    {selectedQuiz.sources.map((source) => (
-                      <li key={source.source}>{source.source}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No sources recorded.</p>
-                )}
-              </div>
-            </section>
-
-            {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
+                <div className="reader-question-list">
+                  <strong>{openQuestionCount} open</strong>
+                  {visibleReaderQuestions.map((item) => (
+                    <p key={item.id}>{item.question}</p>
+                  ))}
+                </div>
+              </aside>
+            )}
           </>
         ) : viewMode === 'nodes' && selectedNode ? (
           <>
-            <div className="detail-heading">
-              <div className="detail-toolbar">
-                <p className="eyebrow">{selectedNode.area}</p>
+            <div className="detail-main">
+              <div className="detail-heading">
+                <div className="detail-toolbar">
+                  <p className="eyebrow">{selectedNode.area}</p>
+                  <div className="toolbar-actions">
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      onClick={() => {
+                        if (isEditMode) {
+                          exitEditMode()
+                        } else {
+                          startEditMode()
+                        }
+                      }}
+                    >
+                      {isEditMode ? 'Exit edit mode' : 'Edit mode'}
+                    </button>
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      disabled={!historyStack.length}
+                      onClick={goBack}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      className="focus-toggle"
+                      onClick={() => setIsFocusMode((current) => !current)}
+                    >
+                      {isFocusMode ? 'Show map' : 'Focus reading'}
+                    </button>
+                  </div>
+                </div>
+                <h2>{selectedNode.title}</h2>
+                <p>{selectedNode.summary}</p>
+              </div>
+
+              <div className="tag-row">
+                {selectedNode.open_question_count > 0 && (
+                  <span className="needs-review">Q to be solved: {selectedNode.open_question_count}</span>
+                )}
+                {selectedNode.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+
+              <section className="detail-section">
+                <h3>Note body</h3>
+                {isEditMode ? (
+                  <div className="markdown-editor">
+                    <textarea
+                      value={editDraft}
+                      onChange={(event) => setEditDraft(event.target.value)}
+                      aria-label="Markdown editor"
+                    />
+                    <div className="editor-actions">
+                      <button
+                        type="button"
+                        className="focus-toggle"
+                        disabled={!editDraft.trim() || isEditSaving}
+                        onClick={saveEditMode}
+                      >
+                        {isEditSaving ? 'Saving...' : 'Save Markdown'}
+                      </button>
+                      <button type="button" className="focus-toggle" onClick={cancelEditMode}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <MarkdownView body={selectedNode.body} />
+                )}
+              </section>
+
+              <section className="detail-section split">
+                <div>
+                  <h3>Links</h3>
+                  {selectedNode.links.length ? (
+                    <ul>
+                      {selectedNode.links.map((link) => (
+                        <li key={`${link.kind}-${link.target}`}>
+                          <button
+                            type="button"
+                            className="text-link"
+                            onClick={() => {
+                              if (!exitEditMode()) return
+                              pushCurrentHistory()
+                              setSelectedSlug(link.target)
+                              setIsFocusMode(true)
+                            }}
+                          >
+                            {link.kind}: {slugTitle(link.target)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No linked nodes yet.</p>
+                  )}
+                </div>
+                <div>
+                  <h3>Sources</h3>
+                  {selectedNode.sources.length ? (
+                    <ul>
+                      {selectedNode.sources.map((source) => (
+                        <li key={source.source}>{source.source}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No sources recorded.</p>
+                  )}
+                </div>
+              </section>
+
+              {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
+            </div>
+            {isFocusMode && !isEditMode && (
+              <aside className="reader-question-panel" aria-label="Reader questions">
+                <div>
+                  <p className="eyebrow">Q to be solved</p>
+                  <h3>What is unclear?</h3>
+                  <p>
+                    Save questions while reading. Later, ask the LLM to fold them back into the
+                    tutorial.
+                  </p>
+                </div>
+                <textarea
+                  value={questionDraft}
+                  onChange={(event) => setQuestionDraft(event.target.value)}
+                  placeholder="Example: This explanation skips why %eax changes here."
+                />
                 <button
                   type="button"
                   className="focus-toggle"
-                  onClick={() => setIsFocusMode((current) => !current)}
+                  disabled={!questionDraft.trim() || isQuestionSaving}
+                  onClick={submitReaderQuestion}
                 >
-                  {isFocusMode ? 'Show map' : 'Focus reading'}
+                  {isQuestionSaving ? 'Saving...' : 'Save question'}
                 </button>
-              </div>
-              <h2>{selectedNode.title}</h2>
-              <p>{selectedNode.summary}</p>
-            </div>
-
-            <div className="tag-row">
-              {selectedNode.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
-            </div>
-
-            <section className="detail-section">
-              <h3>Note body</h3>
-              <MarkdownView body={selectedNode.body} />
-            </section>
-
-            <section className="detail-section split">
-              <div>
-                <h3>Links</h3>
-                {selectedNode.links.length ? (
-                  <ul>
-                    {selectedNode.links.map((link) => (
-                      <li key={`${link.kind}-${link.target}`}>
-                        <button
-                          type="button"
-                          className="text-link"
-                          onClick={() => {
-                            setSelectedSlug(link.target)
-                            setIsFocusMode(true)
-                          }}
-                        >
-                          {link.kind}: {slugTitle(link.target)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No linked nodes yet.</p>
-                )}
-              </div>
-              <div>
-                <h3>Sources</h3>
-                {selectedNode.sources.length ? (
-                  <ul>
-                    {selectedNode.sources.map((source) => (
-                      <li key={source.source}>{source.source}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No sources recorded.</p>
-                )}
-              </div>
-            </section>
-
-            {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
+                <div className="reader-question-list">
+                  <strong>{openQuestionCount} open</strong>
+                  {visibleReaderQuestions.map((item) => (
+                    <p key={item.id}>{item.question}</p>
+                  ))}
+                </div>
+              </aside>
+            )}
           </>
         ) : (
           <div className="empty-state">

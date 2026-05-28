@@ -14,6 +14,7 @@ Use this area for computer architecture, operating systems, networking, database
 - [GDB Examine Memory](gdb-examine-memory.md)
 - [GDB Examine Stack String](gdb-examine-stack-string.md)
 - [x86-64 Registers](x86-64-registers.md)
+- [x86-64 mov and Instruction Suffixes](x86-64-mov-and-suffixes.md)
 - [x86-64 Addressing and leaq](x86-64-addressing-and-leaq.md)
 - [x86-64 cmp and Conditional Jumps](x86-64-cmp-and-jumps.md)
 - [x86-64 Instruction Cheatsheet](x86-64-instruction-cheatsheet.md)

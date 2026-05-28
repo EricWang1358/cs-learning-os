@@ -114,3 +114,5 @@ Quality rules:
 - Include tempting wrong answers when they teach a useful distinction.
 - If an answer is uncertain from the screenshot, mark the quiz as needing confirmation instead of inventing certainty.
 - Keep the prompt reproducible without needing the original image.
+- Do not jump steps in explanations. For assembly quizzes, include line-by-line state updates, operand-direction notes, branch decisions, and hex arithmetic when relevant.
+- Add a "How To Think" or equivalent walkthrough when the solution depends on recognizing noise, calling convention, or a non-obvious instruction pattern.

@@ -38,6 +38,7 @@ Requirements:
 - Store under `content/quizzes/<area>/`.
 - Keep quiz items separate from knowledge nodes.
 - Include `Prompt`, `Answer`, `Explanation`, `Plain Explanation`, `What This Tests`, and `Linked Review`.
+- Explanations must not skip reasoning steps; show the line-by-line state change, the mental translation, and the arithmetic.
 - Link to knowledge nodes through `linked_nodes`.
 - Use `difficulty` and `weight` now so future daily review can sample by importance and weakness.
 

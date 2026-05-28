@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const baseUrl = process.env.FRONTEND_BASE_URL ?? 'http://127.0.0.1:5173'
+const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:8000'
 const outputDir = new URL('../../generated/qa/', import.meta.url)
 const screenshotPath = (name) => fileURLToPath(new URL(name, outputDir))
 
@@ -34,20 +35,45 @@ await page.screenshot({ path: screenshotPath('desktop-cs-tracks.png'), fullPage:
 await page.getByRole('button', { name: /Archive/ }).click()
 await page.getByText(/visible of .* indexed nodes/).waitFor()
 
+await page.getByRole('button', { name: 'Q Queue' }).click()
+await page.getByText(/indexed open questions/).waitFor()
+await page.getByText(/Open target and resolve this question/).first().waitFor()
+
 await page.getByRole('button', { name: 'Practice / Quiz Bank' }).click()
 await page.getByText(/indexed quizzes/).waitFor()
 await page.getByRole('button', { name: /Trace %rax through x86-64 instructions/ }).click()
 await page.getByText('Quiz body').waitFor()
 await page.locator('.markdown-body').getByText('Function 1:').waitFor()
 await page.locator('.code-block').first().waitFor()
-await page.getByRole('button', { name: /tests: GDB disassemble/ }).waitFor()
+await page.getByRole('button', { name: /tests: x86-64 Registers/ }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage: false })
+await page.getByRole('button', { name: /tests: x86-64 Registers/ }).click()
+await page.getByLabel('Node detail').getByRole('heading', { name: /x86-64 Registers/ }).waitFor()
+await page.getByRole('button', { name: 'Back' }).click()
+await page.getByLabel('Node detail').getByRole('heading', { name: /Trace %rax/ }).waitFor()
 
 await page.getByRole('button', { name: /All nodes/ }).click()
 await page.getByRole('button', { name: /Debugging Loop/ }).click()
 await page.getByRole('button', { name: 'Focus reading' }).click()
 await page.locator('.markdown-body h1', { hasText: 'Debugging Loop' }).waitFor()
 await page.locator('.markdown-body h2', { hasText: 'Why It Matters' }).waitFor()
+await page.getByRole('button', { name: 'Edit mode' }).click()
+await page.getByLabel('Markdown editor').waitFor()
+await page.getByLabel('Reader questions').waitFor({ state: 'hidden' })
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Exit edit mode' }).click()
+await page.locator('.markdown-body h2', { hasText: 'Why It Matters' }).waitFor()
+await page.getByRole('button', { name: 'Edit mode' }).click()
+await page.getByLabel('Markdown editor').waitFor()
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Cancel' }).click()
+await page.locator('.markdown-body h2', { hasText: 'Why It Matters' }).waitFor()
+await page.getByRole('button', { name: 'Edit mode' }).click()
+await page.getByLabel('Markdown editor').waitFor()
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: /related: Project Crud App/ }).click()
+await page.getByLabel('Markdown editor').waitFor({ state: 'hidden' })
+await page.getByLabel('Node detail').getByRole('heading', { name: /Project Pattern: CRUD App/ }).waitFor()
 const malformedHeadingCount = await page.locator('.markdown-body h1, .markdown-body h2, .markdown-body h3').evaluateAll((headings) =>
   headings.filter((heading) => heading.textContent?.includes('##') || heading.textContent?.includes('- ')).length,
 )
@@ -81,6 +107,21 @@ if (await focusButton.isVisible()) {
 }
 await page.getByRole('button', { name: 'Show map' }).waitFor()
 await page.locator('.code-block').first().waitFor()
+await page.getByLabel('Reader questions').getByPlaceholder(/This explanation skips/).fill('Why does stepi stop after one machine instruction?')
+await page.getByRole('button', { name: 'Save question' }).click()
+await page.getByText(/Q to be solved:/).waitFor()
+const smokeQuestions = await page.request.get(
+  `${apiBaseUrl}/api/reader-questions?target_type=node&target_id=gdb-stepi&status=open`,
+)
+const smokePayload = await smokeQuestions.json()
+const smokeQuestion = smokePayload.questions.find((item) =>
+  item.question.includes('Why does stepi stop after one machine instruction?'),
+)
+if (smokeQuestion) {
+  await page.request.post(`${apiBaseUrl}/api/reader-questions/${smokeQuestion.id}/resolve`, {
+    data: { resolution_note: 'Frontend smoke test cleanup' },
+  })
+}
 await page.screenshot({ path: screenshotPath('desktop-focus-reading.png'), fullPage: false })
 await page.getByRole('button', { name: 'Show map' }).click()
 await page.getByRole('button', { name: 'Focus reading' }).waitFor()
