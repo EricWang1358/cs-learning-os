@@ -1,13 +1,21 @@
 :root {
-  --surface: #faf8f2;
-  --ink: #24312e;
-  --ink-strong: #101816;
-  --muted: #66736e;
-  --line: #d8d3c7;
-  --accent: #0f766e;
-  --accent-strong: #0b5f59;
-  --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-  --sans: "Aptos", "Segoe UI", sans-serif;
+  --surface: #0b0e11;
+  --surface-soft: #181a20;
+  --surface-card: #1e2329;
+  --surface-elevated: #2b3139;
+  --ink: #eaecef;
+  --ink-strong: #ffffff;
+  --muted: #929aa5;
+  --line: #2b3139;
+  --line-strong: #3f4854;
+  --accent: #fcd535;
+  --accent-strong: #f0b90b;
+  --accent-soft: rgba(252, 213, 53, 0.12);
+  --danger: #f6465d;
+  --success: #0ecb81;
+  --shadow: rgba(0, 0, 0, 0.32);
+  --mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --sans: "BinanceNova", "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
 
   color: var(--ink);
   background: var(--surface);
@@ -35,6 +43,6 @@ input {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid rgba(15, 118, 110, 0.18);
+  outline: 3px solid rgba(252, 213, 53, 0.28);
   outline-offset: 2px;
 }
