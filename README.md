@@ -180,11 +180,51 @@ The browser UI also supports local Markdown body edits:
 
 The first version preserves frontmatter and only edits the body text. Use files directly when you need to change metadata such as `track`, `order`, `tags`, or `linked_nodes`.
 
+Optional AI-assisted revision is available through the local FastAPI backend.
+
+By default, the app uses the local Codex CLI so it can reuse your Codex configuration:
+
+- Install Codex CLI with `npm install -g @openai/codex`.
+- The backend looks for `D:\Program Files\nodejs\node_global\codex.cmd` first.
+- Override with `CS_LEARNING_CODEX_CLI` if your path is different.
+- The Codex CLI model defaults to `gpt-5.4-mini`; override with `CS_LEARNING_CODEX_MODEL`.
+- In focus reading, add or select `Q to be solved`, then click `Resolve with AI`.
+- The request is persisted as an AI job in `Q Queue`; no page refresh is needed.
+- The AI draft waits in `Q Queue` until you click `Review draft`; it does not save automatically.
+- Review the Markdown, then click `Save Markdown` to write the local source file.
+- Questions that the AI draft directly answers are marked resolved only after you save.
+- Failed jobs keep a short readable error summary and can be retried from `Q Queue`.
+
+Example:
+
+```powershell
+$env:CS_LEARNING_AI_PROVIDER="codex-cli"
+$env:CS_LEARNING_CODEX_CLI="D:\Program Files\nodejs\node_global\codex.cmd"
+$env:CS_LEARNING_CODEX_MODEL="gpt-5.4-mini"
+.\scripts\dev.ps1
+```
+
+To use the OpenAI API directly instead:
+
+- Set `OPENAI_API_KEY` in the terminal that starts `.\scripts\dev.ps1`.
+- Set `CS_LEARNING_AI_PROVIDER` to `openai-api`.
+- Optionally set `CS_LEARNING_OPENAI_MODEL`; default is `gpt-5.4-mini`.
+
+Example:
+
+```powershell
+$env:OPENAI_API_KEY="sk-..."
+$env:CS_LEARNING_AI_PROVIDER="openai-api"
+$env:CS_LEARNING_OPENAI_MODEL="gpt-5.4-mini"
+.\scripts\dev.ps1
+```
+
 Reader questions are tracked through the `Q Queue`:
 
 - In focus reading, use `Q to be solved` to save unclear points.
-- Use the sidebar `Q Queue` entry to see all open questions directly.
+- Use the sidebar `Q Queue` entry to see open questions and persisted AI jobs in one list.
 - The queue reads from `reader_questions`, so agents do not need to scan all nodes or tags.
+- AI jobs are separate durable records; queued, solving, draft-ready, and failed states are visible.
 - Test-created questions should be resolved by smoke tests and should not remain in the open queue.
 
 ## Git And Data Policy

@@ -336,6 +336,37 @@
     var(--surface-card);
 }
 
+.question-card-main {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.question-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.job-card {
+  border-color: rgba(240, 185, 11, 0.62);
+  background:
+    linear-gradient(135deg, rgba(240, 185, 11, 0.16), transparent 44%),
+    var(--surface-card);
+}
+
+.danger-link {
+  color: var(--danger);
+}
+
 .detail-panel {
   padding: 28px;
   overflow: auto;
@@ -665,6 +696,117 @@
 .reader-question-list p {
   border-left: 3px solid var(--accent);
   padding-left: 9px;
+}
+
+.queue-detail {
+  display: grid;
+  gap: 18px;
+  max-width: 920px;
+}
+
+.queue-detail h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 34px;
+}
+
+.queue-detail > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.job-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-action {
+  background: var(--accent);
+  color: #181a20;
+}
+
+.ai-action:hover {
+  background: var(--accent-strong);
+}
+
+.ai-revision-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(252, 213, 53, 0.42);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(252, 213, 53, 0.12), transparent 46%),
+    var(--surface-card);
+  color: var(--ink);
+  padding: 16px;
+}
+
+.ai-revision-card h3 {
+  margin: 0;
+  color: var(--ink-strong);
+}
+
+.ai-revision-card p,
+.ai-revision-card ul {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.ai-revision-card ul {
+  padding-left: 18px;
+}
+
+.compact-card {
+  border-color: var(--line);
+  background: var(--surface-card);
+}
+
+.danger-button {
+  border-color: rgba(246, 70, 93, 0.5);
+  color: #ff99a6;
+}
+
+.ai-status {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(252, 213, 53, 0.34);
+  border-radius: 10px;
+  background: rgba(252, 213, 53, 0.08);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.ai-status.running::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  content: "";
+  animation: ai-progress-sweep 1.6s ease-in-out infinite;
+}
+
+.ai-status.error {
+  border-color: rgba(246, 70, 93, 0.5);
+  background: rgba(246, 70, 93, 0.1);
+  color: #ff99a6;
+  overflow-wrap: anywhere;
+}
+
+@keyframes ai-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .split {

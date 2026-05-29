@@ -3,11 +3,17 @@ from __future__ import annotations
 import sqlite3
 import re
 import os
+import json
+import logging
+import shutil
+import subprocess
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -20,6 +26,8 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")).resolve()
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
+logger = logging.getLogger("cs_learning.api")
+DEFAULT_CODEX_CLI = Path(r"D:\Program Files\nodejs\node_global\codex.cmd")
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -43,6 +51,23 @@ class ReaderQuestionResolve(BaseModel):
 
 class BodyUpdate(BaseModel):
     body: str
+
+
+class AiReviseRequest(BaseModel):
+    target_type: str = Field(pattern="^(node|quiz)$")
+    target_id: str = Field(min_length=1)
+    question_ids: list[int] = []
+    instruction: str = ""
+    draft_body: str = ""
+
+
+class AiJobCreate(BaseModel):
+    target_type: str = Field(pattern="^(node|quiz)$")
+    target_id: str = Field(min_length=1)
+    question_ids: list[int] = []
+    question: str = ""
+    instruction: str = ""
+    draft_body: str = ""
 
 
 def get_conn() -> sqlite3.Connection:
@@ -94,6 +119,66 @@ def row_to_reader_question(row: sqlite3.Row) -> dict:
     }
 
 
+def summarize_ai_error(error: str | None) -> str:
+    if not error:
+        return ""
+
+    text = error.strip()
+    lower_text = text.lower()
+    if "high demand" in lower_text:
+        return (
+            "Codex CLI failed because the model provider reported high demand. "
+            "The job is safe to retry; it did not change your Markdown."
+        )
+    if "timed out" in lower_text:
+        return "Codex CLI timed out before returning a draft. The job is safe to retry."
+    if "openai_api_key" in lower_text or "api key" in lower_text:
+        return "AI provider is not configured with the required API key."
+    if "returned non-json" in lower_text:
+        return "Codex CLI returned output that was not valid JSON, so the draft could not be parsed."
+
+    for marker in ["\n--------\nuser", "\nuser\n", "Original Markdown body:"]:
+        marker_index = text.find(marker)
+        if marker_index != -1:
+            text = text[:marker_index].strip()
+
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "WARN codex_core" in stripped or "ERROR: Reconnecting" in stripped:
+            continue
+        lines.append(stripped)
+        if len(" ".join(lines)) > 700:
+            break
+
+    summary = " ".join(lines).strip()
+    return summary[:900] + ("..." if len(summary) > 900 else "")
+
+
+def row_to_ai_job(row: sqlite3.Row) -> dict:
+    result = json.loads(row["result_json"] or "{}")
+    error = row["error"] or ""
+    return {
+        "id": row["id"],
+        "target_type": row["target_type"],
+        "target_id": row["target_id"],
+        "question_ids": json.loads(row["question_ids"] or "[]"),
+        "provider": row["provider"],
+        "model": row["model"],
+        "status": row["status"],
+        "stage": row["stage"],
+        "instruction": row["instruction"],
+        "error": error,
+        "error_summary": summarize_ai_error(error),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "completed_at": row["completed_at"],
+        "revision": result.get("revision"),
+    }
+
+
 def slug_title(value: str) -> str:
     return " ".join(part.capitalize() for part in value.replace("_", "-").split("-"))
 
@@ -122,9 +207,800 @@ def like_term(term: str) -> str:
     return f"%{escaped}%"
 
 
+def openai_model_name() -> str:
+    return os.environ.get("CS_LEARNING_OPENAI_MODEL", "gpt-5.4-mini")
+
+
+def codex_model_name() -> str:
+    return os.environ.get("CS_LEARNING_CODEX_MODEL", "gpt-5.4-mini")
+
+
+def ai_provider_name() -> str:
+    return os.environ.get("CS_LEARNING_AI_PROVIDER", "codex-cli").strip().lower()
+
+
+def openai_is_configured() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY"))
+
+
+def codex_cli_path() -> str:
+    configured = os.environ.get("CS_LEARNING_CODEX_CLI")
+    if configured:
+        return configured
+    if DEFAULT_CODEX_CLI.is_file():
+        return str(DEFAULT_CODEX_CLI)
+    found = shutil.which("codex.cmd") or shutil.which("codex")
+    return found or ""
+
+
+def codex_is_configured() -> bool:
+    return bool(codex_cli_path())
+
+
+def extract_response_text(response: object) -> str:
+    output_text = getattr(response, "output_text", "")
+    if output_text:
+        return output_text
+    output = getattr(response, "output", [])
+    chunks: list[str] = []
+    for item in output or []:
+        for content in getattr(item, "content", []) or []:
+            text = getattr(content, "text", "")
+            if text:
+                chunks.append(text)
+    return "\n".join(chunks)
+
+
+def ai_revision_schema() -> dict:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "revised_body": {
+                "type": "string",
+                "description": "Full replacement Markdown body only, without YAML frontmatter.",
+            },
+            "summary": {
+                "type": "string",
+                "description": "One short sentence explaining the main improvement.",
+            },
+            "rationale": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Why these changes answer the learner's confusion.",
+            },
+            "changed_sections": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Markdown section headings or areas that changed.",
+            },
+            "resolved_question_ids": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "Reader question IDs that the revised body directly answers.",
+            },
+            "suggested_new_nodes": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Reusable prerequisite ideas that deserve separate future nodes.",
+            },
+        },
+        "required": [
+            "revised_body",
+            "summary",
+            "rationale",
+            "changed_sections",
+            "resolved_question_ids",
+            "suggested_new_nodes",
+        ],
+    }
+
+
+def revision_response(
+    result: dict,
+    reader_questions: list[dict],
+    model: str,
+    provider: str,
+) -> dict:
+    revised_body = result.get("revised_body", "").strip()
+    if not revised_body:
+        logger.error("AI revision returned an empty body: %s", result)
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI revision returned an empty body. Raw result: {json.dumps(result, ensure_ascii=False)[:1000]}",
+        )
+
+    known_question_ids = {item["id"] for item in reader_questions}
+    resolved_question_ids = [
+        question_id
+        for question_id in result.get("resolved_question_ids", [])
+        if question_id in known_question_ids
+    ]
+
+    return {
+        "revision": {
+            "revised_body": revised_body,
+            "summary": result.get("summary", ""),
+            "rationale": result.get("rationale", []),
+            "changed_sections": result.get("changed_sections", []),
+            "resolved_question_ids": resolved_question_ids,
+            "suggested_new_nodes": result.get("suggested_new_nodes", []),
+            "model": model,
+            "provider": provider,
+        }
+    }
+
+
+def load_ai_target(
+    conn: sqlite3.Connection,
+    target_type: str,
+    target_id: str,
+    question_ids: list[int],
+) -> tuple[dict, list[dict]]:
+    if target_type == "node":
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (target_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        tags = [
+            item["tag_name"]
+            for item in conn.execute(
+                "SELECT tag_name FROM node_tags WHERE node_slug = ? ORDER BY tag_name",
+                (target_id,),
+            ).fetchall()
+        ]
+        links = [
+            {"target": item["target_slug"], "kind": item["kind"]}
+            for item in conn.execute(
+                "SELECT target_slug, kind FROM links WHERE source_slug = ? ORDER BY kind, target_slug",
+                (target_id,),
+            ).fetchall()
+        ]
+        target = row_to_node(row) | {"body": row["body"], "tags": tags, "links": links}
+    else:
+        row = conn.execute("SELECT * FROM quizzes WHERE id = ?", (target_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        tags = [
+            item["tag_name"]
+            for item in conn.execute(
+                "SELECT tag_name FROM quiz_tags WHERE quiz_id = ? ORDER BY tag_name",
+                (target_id,),
+            ).fetchall()
+        ]
+        linked_nodes = [
+            {"slug": item["node_slug"], "kind": item["kind"], "title": item["title"]}
+            for item in conn.execute(
+                """
+                SELECT ql.node_slug, ql.kind, COALESCE(n.title, ql.node_slug) AS title
+                FROM quiz_links ql
+                LEFT JOIN nodes n ON n.slug = ql.node_slug
+                WHERE ql.quiz_id = ?
+                ORDER BY ql.kind, ql.node_slug
+                """,
+                (target_id,),
+            ).fetchall()
+        ]
+        target = row_to_quiz(row) | {"body": row["body"], "tags": tags, "linked_nodes": linked_nodes}
+
+    params: list[object] = [target_type, target_id]
+    query = """
+        SELECT *
+        FROM reader_questions
+        WHERE target_type = ?
+          AND target_id = ?
+    """
+    if question_ids:
+        placeholders = ",".join("?" for _ in question_ids)
+        query += f" AND id IN ({placeholders})"
+        params.extend(question_ids)
+    else:
+        query += " AND status IN ('open', 'queued', 'solving', 'draft_ready')"
+    query += " ORDER BY created_at DESC, id DESC"
+    rows = conn.execute(query, params).fetchall()
+    return target, [row_to_reader_question(item) for item in rows]
+
+
+def build_ai_revision_prompt(
+    target: dict,
+    target_type: str,
+    reader_questions: list[dict],
+    instruction: str,
+    draft_body: str,
+) -> str:
+    content_standard = """
+Standard A: bilingual practical exam note. Use a patient tutorial tone, aligned English and Chinese,
+concrete command/code examples, plain explanation, common mistakes, quick recall, and deliberate links.
+When a reader question is local to the current node, fold the answer into this body. If it reveals a
+reusable prerequisite, mention it in suggested_new_nodes instead of bloating this body.
+
+Standard Q: quiz-bank item. Keep prompt, answer, explanation, plain explanation, what this tests, and
+linked review. Do not skip reasoning steps; show line-by-line state changes and arithmetic when relevant.
+"""
+    payload = {
+        "target_type": target_type,
+        "target": target,
+        "reader_questions": reader_questions,
+        "extra_instruction": instruction.strip(),
+        "draft_body_override": draft_body.strip(),
+        "content_standard": content_standard.strip(),
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def build_ai_revision_instruction(context_json: str) -> str:
+    context = json.loads(context_json)
+    target = context["target"]
+    reader_questions = context["reader_questions"]
+    original_body = context["draft_body_override"] or target["body"]
+    questions_text = "\n".join(
+        f"- #{item['id']}: {item['question']}" for item in reader_questions
+    ) or "- No saved reader questions; use the extra instruction."
+    return f"""
+You are revising a personal CS learning knowledge base from a local web app.
+
+Return a JSON object matching the provided schema. Do not wrap it in Markdown.
+Rules:
+- revised_body must be the complete replacement Markdown body only, without YAML frontmatter.
+- revised_body must never be empty. If no useful edit is needed, return the original body unchanged.
+- Preserve the useful structure of the original body.
+- Improve clarity, fill missing reasoning steps, and keep explanations tutorial-like.
+- If target_type is node, prefer Standard A.
+- If target_type is quiz, prefer Standard Q.
+- Do not invent external sources.
+- resolved_question_ids may include only reader questions directly answered in revised_body.
+
+Target:
+- type: {context["target_type"]}
+- id: {target.get("slug") or target.get("id")}
+- title: {target.get("title")}
+- summary: {target.get("summary")}
+- tags: {", ".join(target.get("tags", []))}
+
+Extra instruction:
+{context["extra_instruction"] or "Improve clarity for the saved reader questions."}
+
+Reader questions:
+{questions_text}
+
+Content standard:
+{context["content_standard"]}
+
+Original Markdown body:
+```markdown
+{original_body}
+```
+""".strip()
+
+
+def run_codex_revision(context_json: str, reader_questions: list[dict]) -> dict:
+    executable = codex_cli_path()
+    if not executable:
+        raise HTTPException(
+            status_code=503,
+            detail="Codex CLI is not configured. Set CS_LEARNING_CODEX_CLI or install @openai/codex.",
+        )
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as schema_file:
+        json.dump(ai_revision_schema(), schema_file, ensure_ascii=False)
+        schema_path = schema_file.name
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as output_file:
+        output_path = output_file.name
+
+    try:
+        model = codex_model_name()
+        command = [
+            executable,
+            "--ask-for-approval",
+            "never",
+            "-m",
+            model,
+            "exec",
+            "--ephemeral",
+            "--ignore-rules",
+            "-C",
+            str(ROOT),
+            "--sandbox",
+            "read-only",
+            "--output-schema",
+            schema_path,
+            "--output-last-message",
+            output_path,
+            "-",
+        ]
+        logger.info("Starting Codex CLI revision with executable=%s model=%s", executable, model)
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            input=build_ai_revision_instruction(context_json),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=int(os.environ.get("CS_LEARNING_CODEX_TIMEOUT", "180")),
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.exception("Codex CLI revision timed out")
+        raise HTTPException(status_code=504, detail="Codex CLI revision timed out") from exc
+    finally:
+        try:
+            Path(schema_path).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not delete temporary Codex schema file: %s", schema_path)
+
+    output = ""
+    output_file_path = Path(output_path)
+    if output_file_path.is_file():
+        output = output_file_path.read_text(encoding="utf-8").strip()
+    if not output:
+        output = (completed.stdout or "").strip()
+    try:
+        output_file_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not delete temporary Codex output file: %s", output_path)
+
+    diagnostics = (completed.stderr or "").strip()
+    if completed.returncode != 0:
+        logger.error(
+            "Codex CLI revision failed returncode=%s stderr=%s stdout=%s",
+            completed.returncode,
+            diagnostics[-2000:],
+            output[-2000:],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Codex CLI revision failed: {summarize_ai_error(diagnostics or output or str(completed.returncode))}",
+        )
+
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError as exc:
+        logger.error("Codex CLI returned non-JSON output: %s", output[-2000:])
+        raise HTTPException(status_code=502, detail="Codex CLI returned non-JSON output") from exc
+
+    logger.info("Codex CLI revision finished")
+    return revision_response(result, reader_questions, codex_model_name(), "codex-cli")
+
+
+def run_openai_revision(context_json: str, reader_questions: list[dict]) -> dict:
+    if not openai_is_configured():
+        logger.warning("AI revision rejected because OPENAI_API_KEY is not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured for the local API process",
+        )
+
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        logger.exception("AI revision failed because the OpenAI package is missing")
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI Python package is not installed. Run pip install -r backend/requirements.txt",
+        ) from exc
+
+    client = OpenAI()
+    system_prompt = """
+You revise a personal CS learning knowledge base. Return only valid JSON matching the schema.
+Do not invent external sources. Preserve Markdown. Preserve the learner's useful structure.
+Improve clarity, fill missing reasoning steps, and keep the body suitable for direct saving.
+If the target is a node, prefer Standard A. If the target is a quiz, prefer Standard Q.
+Resolve only question IDs that are directly answered in the revised body.
+"""
+
+    try:
+        response = client.responses.create(
+            model=openai_model_name(),
+            input=[
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": context_json},
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "cs_learning_revision",
+                    "schema": ai_revision_schema(),
+                    "strict": True,
+                }
+            },
+        )
+        raw_text = extract_response_text(response)
+        result = json.loads(raw_text)
+    except Exception as exc:
+        logger.exception("OpenAI API revision failed during model call or response parsing")
+        raise HTTPException(status_code=502, detail=f"OpenAI API revision failed: {exc}") from exc
+
+    return revision_response(result, reader_questions, openai_model_name(), "openai-api")
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def update_ai_job(job_id: int, **fields: object) -> None:
+    if not fields:
+        return
+    fields["updated_at"] = utc_now()
+    assignments = ", ".join(f"{name} = ?" for name in fields)
+    values = list(fields.values())
+    values.append(job_id)
+    with get_conn() as conn:
+        conn.execute(f"UPDATE ai_jobs SET {assignments} WHERE id = ?", values)
+        conn.commit()
+
+
+def get_ai_job_or_404(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row:
+    row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="AI job not found")
+    return row
+
+
+def run_ai_job(job_id: int) -> None:
+    try:
+        update_ai_job(job_id, status="solving", stage="context_built")
+        with get_conn() as conn:
+            row = get_ai_job_or_404(conn, job_id)
+            question_ids = json.loads(row["question_ids"] or "[]")
+            if question_ids:
+                placeholders = ",".join("?" for _ in question_ids)
+                conn.execute(
+                    f"UPDATE reader_questions SET status = 'solving' WHERE id IN ({placeholders})",
+                    question_ids,
+                )
+                conn.commit()
+            target, reader_questions = load_ai_target(
+                conn,
+                row["target_type"],
+                row["target_id"],
+                question_ids,
+            )
+            if row["draft_body"].strip():
+                target["body"] = row["draft_body"].strip()
+            context_json = build_ai_revision_prompt(
+                target,
+                row["target_type"],
+                reader_questions,
+                row["instruction"],
+                row["draft_body"],
+            )
+
+        provider = ai_provider_name()
+        update_ai_job(job_id, provider=provider, stage="codex_running" if provider == "codex-cli" else "model_running")
+        if provider == "codex-cli":
+            response = run_codex_revision(context_json, reader_questions)
+        elif provider == "openai-api":
+            response = run_openai_revision(context_json, reader_questions)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="CS_LEARNING_AI_PROVIDER must be codex-cli or openai-api",
+            )
+
+        revision = response["revision"]
+        draft_question_ids = list(dict.fromkeys([*question_ids, *revision["resolved_question_ids"]]))
+        if draft_question_ids:
+            with get_conn() as conn:
+                placeholders = ",".join("?" for _ in draft_question_ids)
+                conn.execute(
+                    f"UPDATE reader_questions SET status = 'draft_ready' WHERE id IN ({placeholders})",
+                    draft_question_ids,
+                )
+                conn.commit()
+        update_ai_job(
+            job_id,
+            status="draft_ready",
+            stage="draft_ready",
+            provider=revision["provider"],
+            model=revision["model"],
+            result_json=json.dumps(response, ensure_ascii=False),
+            completed_at=utc_now(),
+        )
+    except Exception as exc:
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        logger.exception("AI job %s failed", job_id)
+        try:
+            with get_conn() as conn:
+                row = conn.execute("SELECT question_ids FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+                question_ids = json.loads(row["question_ids"] or "[]") if row else []
+                if question_ids:
+                    placeholders = ",".join("?" for _ in question_ids)
+                    conn.execute(
+                        f"UPDATE reader_questions SET status = 'open' WHERE id IN ({placeholders})",
+                        question_ids,
+                    )
+                    conn.commit()
+        except Exception:
+            logger.exception("Could not restore reader question status after failed AI job")
+        update_ai_job(
+            job_id,
+            status="failed",
+            stage="failed",
+            error=str(detail),
+            completed_at=utc_now(),
+        )
+
+
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True}
+    return {
+        "ok": True,
+        "ai": {
+            "provider": ai_provider_name(),
+            "configured": codex_is_configured() if ai_provider_name() == "codex-cli" else openai_is_configured(),
+            "model": codex_model_name() if ai_provider_name() == "codex-cli" else openai_model_name(),
+            "codex_cli": codex_cli_path(),
+        },
+    }
+
+
+@app.post("/api/ai/revise")
+def revise_with_ai(payload: AiReviseRequest) -> dict:
+    provider = ai_provider_name()
+    logger.info(
+        "AI revision requested provider=%s target_type=%s target_id=%s question_ids=%s",
+        provider,
+        payload.target_type,
+        payload.target_id,
+        payload.question_ids,
+    )
+
+    with get_conn() as conn:
+        target, reader_questions = load_ai_target(
+            conn,
+            payload.target_type,
+            payload.target_id,
+            payload.question_ids,
+        )
+    logger.info("AI revision context loaded with %s open reader questions", len(reader_questions))
+
+    if payload.draft_body.strip():
+        target["body"] = payload.draft_body.strip()
+
+    context_json = build_ai_revision_prompt(
+        target,
+        payload.target_type,
+        reader_questions,
+        payload.instruction,
+        payload.draft_body,
+    )
+    if provider == "codex-cli":
+        response = run_codex_revision(context_json, reader_questions)
+    elif provider == "openai-api":
+        response = run_openai_revision(context_json, reader_questions)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="CS_LEARNING_AI_PROVIDER must be codex-cli or openai-api",
+        )
+
+    resolved_question_ids = response["revision"]["resolved_question_ids"]
+    logger.info(
+        "AI revision succeeded provider=%s target_type=%s target_id=%s resolved_question_ids=%s",
+        provider,
+        payload.target_type,
+        payload.target_id,
+        resolved_question_ids,
+    )
+    return response
+
+
+@app.post("/api/ai/jobs")
+def create_ai_job(payload: AiJobCreate, background_tasks: BackgroundTasks) -> dict:
+    question_ids = list(dict.fromkeys(payload.question_ids))
+    now = utc_now()
+
+    with get_conn() as conn:
+        if payload.target_type == "node":
+            exists = conn.execute("SELECT 1 FROM nodes WHERE slug = ?", (payload.target_id,)).fetchone()
+        else:
+            exists = conn.execute("SELECT 1 FROM quizzes WHERE id = ?", (payload.target_id,)).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail="target not found")
+
+        question = payload.question.strip()
+        if question:
+            cursor = conn.execute(
+                """
+                INSERT INTO reader_questions (target_type, target_id, question, status, created_at)
+                VALUES (?, ?, ?, 'queued', ?)
+                """,
+                (payload.target_type, payload.target_id, question, now),
+            )
+            question_ids.append(cursor.lastrowid)
+
+        if question_ids:
+            placeholders = ",".join("?" for _ in question_ids)
+            conn.execute(
+                f"""
+                UPDATE reader_questions
+                SET status = 'queued'
+                WHERE target_type = ?
+                  AND target_id = ?
+                  AND id IN ({placeholders})
+                """,
+                [payload.target_type, payload.target_id, *question_ids],
+            )
+
+        cursor = conn.execute(
+            """
+            INSERT INTO ai_jobs (
+                target_type, target_id, question_ids, provider, model, status, stage,
+                instruction, draft_body, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?)
+            """,
+            (
+                payload.target_type,
+                payload.target_id,
+                json.dumps(question_ids),
+                ai_provider_name(),
+                codex_model_name() if ai_provider_name() == "codex-cli" else openai_model_name(),
+                payload.instruction,
+                payload.draft_body,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()
+
+    background_tasks.add_task(run_ai_job, row["id"])
+    return {"job": row_to_ai_job(row)}
+
+
+@app.get("/api/ai/jobs")
+def list_ai_jobs(
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> dict:
+    query = "SELECT * FROM ai_jobs WHERE 1 = 1"
+    params: list[str] = []
+    if target_type:
+        if target_type not in {"node", "quiz"}:
+            raise HTTPException(status_code=400, detail="target_type must be node or quiz")
+        query += " AND target_type = ?"
+        params.append(target_type)
+    if target_id:
+        query += " AND target_id = ?"
+        params.append(target_id)
+    if status == "active":
+        query += " AND status IN ('queued', 'solving', 'draft_ready', 'failed')"
+    elif status:
+        query += " AND status = ?"
+        params.append(status)
+    query += " ORDER BY updated_at DESC, id DESC LIMIT 50"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return {"jobs": [row_to_ai_job(row) for row in rows]}
+
+
+@app.get("/api/ai/jobs/{job_id}")
+def get_ai_job(job_id: int) -> dict:
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+    return {"job": row_to_ai_job(row)}
+
+
+@app.post("/api/ai/jobs/{job_id}/apply")
+def apply_ai_job(job_id: int) -> dict:
+    now = utc_now()
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+        if row["status"] != "draft_ready":
+            raise HTTPException(status_code=400, detail="AI job is not draft_ready")
+        question_ids = json.loads(row["question_ids"] or "[]")
+        if question_ids:
+            placeholders = ",".join("?" for _ in question_ids)
+            conn.execute(
+                f"""
+                UPDATE reader_questions
+                SET status = 'resolved',
+                    resolved_at = ?,
+                    resolution_note = ?
+                WHERE id IN ({placeholders})
+                """,
+                [now, "Resolved by applied AI job", *question_ids],
+            )
+        conn.execute(
+            """
+            UPDATE ai_jobs
+            SET status = 'applied',
+                stage = 'applied',
+                updated_at = ?,
+                completed_at = ?
+            WHERE id = ?
+            """,
+            (now, now, job_id),
+        )
+        conn.commit()
+        updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    return {"job": row_to_ai_job(updated)}
+
+
+@app.post("/api/ai/jobs/{job_id}/cancel")
+def cancel_ai_job(job_id: int) -> dict:
+    now = utc_now()
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+        if row["status"] in {"draft_ready", "failed", "cancelled", "applied"}:
+            raise HTTPException(status_code=400, detail=f"cannot cancel {row['status']} job")
+        question_ids = json.loads(row["question_ids"] or "[]")
+        if question_ids:
+            placeholders = ",".join("?" for _ in question_ids)
+            conn.execute(
+                f"UPDATE reader_questions SET status = 'open' WHERE id IN ({placeholders})",
+                question_ids,
+            )
+        conn.execute(
+            """
+            UPDATE ai_jobs
+            SET status = 'cancelled',
+                stage = 'cancelled',
+                updated_at = ?,
+                completed_at = ?
+            WHERE id = ?
+            """,
+            (now, now, job_id),
+        )
+        conn.commit()
+        updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    return {"job": row_to_ai_job(updated)}
+
+
+@app.post("/api/ai/jobs/{job_id}/retry")
+def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
+    now = utc_now()
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+        if row["status"] != "failed":
+            raise HTTPException(status_code=400, detail=f"cannot retry {row['status']} job")
+
+        question_ids = json.loads(row["question_ids"] or "[]")
+        if question_ids:
+            placeholders = ",".join("?" for _ in question_ids)
+            conn.execute(
+                f"UPDATE reader_questions SET status = 'queued' WHERE id IN ({placeholders})",
+                question_ids,
+            )
+        conn.execute(
+            """
+            UPDATE ai_jobs
+            SET status = 'retried',
+                stage = 'retried',
+                updated_at = ?,
+                completed_at = ?
+            WHERE id = ?
+            """,
+            (now, now, job_id),
+        )
+
+        cursor = conn.execute(
+            """
+            INSERT INTO ai_jobs (
+                target_type, target_id, question_ids, provider, model, status, stage,
+                instruction, draft_body, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?)
+            """,
+            (
+                row["target_type"],
+                row["target_id"],
+                row["question_ids"],
+                ai_provider_name(),
+                codex_model_name() if ai_provider_name() == "codex-cli" else openai_model_name(),
+                row["instruction"],
+                row["draft_body"],
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        new_row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()
+
+    background_tasks.add_task(run_ai_job, new_row["id"])
+    return {"job": row_to_ai_job(new_row)}
 
 
 @app.get("/api/nodes")
@@ -499,7 +1375,9 @@ def list_reader_questions(
     if target_id:
         query += " AND target_id = ?"
         params.append(target_id)
-    if status:
+    if status == "active":
+        query += " AND status IN ('open', 'queued', 'solving', 'draft_ready', 'failed')"
+    elif status:
         query += " AND status = ?"
         params.append(status)
     query += " ORDER BY created_at DESC, id DESC"
@@ -569,3 +1447,44 @@ def resolve_reader_question(question_id: int, payload: ReaderQuestionResolve) ->
         ).fetchone()
 
     return {"question": row_to_reader_question(updated)}
+
+
+@app.post("/api/reader-questions/{question_id}/dismiss")
+def dismiss_reader_question(question_id: int, payload: ReaderQuestionResolve) -> dict:
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM reader_questions WHERE id = ?", (question_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="reader question not found")
+
+        conn.execute(
+            """
+            UPDATE reader_questions
+            SET status = 'dismissed',
+                resolved_at = ?,
+                resolution_note = ?
+            WHERE id = ?
+            """,
+            (now, payload.resolution_note, question_id),
+        )
+        conn.commit()
+        updated = conn.execute(
+            "SELECT * FROM reader_questions WHERE id = ?", (question_id,)
+        ).fetchone()
+
+    return {"question": row_to_reader_question(updated)}
+
+
+@app.delete("/api/reader-questions/{question_id}")
+def delete_reader_question(question_id: int) -> dict:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM reader_questions WHERE id = ?", (question_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="reader question not found")
+        conn.execute("DELETE FROM reader_questions WHERE id = ?", (question_id,))
+        conn.commit()
+    return {"ok": True}

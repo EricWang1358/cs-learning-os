@@ -91,6 +91,47 @@ type ApiReaderQuestionResponse = {
   question: ReaderQuestion
 }
 
+type AiRevision = {
+  revised_body: string
+  summary: string
+  rationale: string[]
+  changed_sections: string[]
+  resolved_question_ids: number[]
+  suggested_new_nodes: string[]
+  model: string
+  provider: string
+}
+
+type AiJob = {
+  id: number
+  target_type: 'node' | 'quiz'
+  target_id: string
+  question_ids: number[]
+  provider: string
+  model: string
+  status: string
+  stage: string
+  instruction: string
+  error: string
+  error_summary: string
+  created_at: string
+  updated_at: string
+  completed_at: string
+  revision?: AiRevision
+}
+
+type ApiAiJobResponse = {
+  job: AiJob
+}
+
+type ApiAiJobsResponse = {
+  jobs: AiJob[]
+}
+
+type ApiErrorBody = {
+  detail?: string
+}
+
 type ViewMode = 'nodes' | 'quizzes' | 'question-queue'
 
 type MarkdownBlock =
@@ -205,7 +246,7 @@ function withHeadingIds(blocks: MarkdownBlock[]): RenderMarkdownBlock[] {
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`)
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`)
+    throw new Error(await responseErrorMessage(response))
   }
   return response.json() as Promise<T>
 }
@@ -217,7 +258,7 @@ async function postJson<T>(path: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   })
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`)
+    throw new Error(await responseErrorMessage(response))
   }
   return response.json() as Promise<T>
 }
@@ -229,9 +270,31 @@ async function putJson<T>(path: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   })
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`)
+    throw new Error(await responseErrorMessage(response))
   }
   return response.json() as Promise<T>
+}
+
+async function deleteJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error(await responseErrorMessage(response))
+  }
+  return response.json() as Promise<T>
+}
+
+async function responseErrorMessage(response: Response) {
+  try {
+    const body = (await response.json()) as ApiErrorBody
+    if (body.detail) {
+      return `Request failed ${response.status}: ${body.detail}`
+    }
+  } catch {
+    // Fall through to the generic message when the backend did not return JSON.
+  }
+  return `Request failed: ${response.status} ${response.statusText}`.trim()
 }
 
 function parseMarkdownBlocks(body: string): MarkdownBlock[] {
@@ -495,11 +558,17 @@ function App() {
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [error, setError] = useState('')
   const [readerQuestions, setReaderQuestions] = useState<ReaderQuestion[]>([])
+  const [aiJobs, setAiJobs] = useState<AiJob[]>([])
   const [questionDraft, setQuestionDraft] = useState('')
   const [isQuestionSaving, setIsQuestionSaving] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   const [isEditSaving, setIsEditSaving] = useState(false)
+  const [isAiRevising, setIsAiRevising] = useState(false)
+  const [aiRevision, setAiRevision] = useState<AiRevision | null>(null)
+  const [aiStatus, setAiStatus] = useState('')
+  const [aiElapsedSeconds, setAiElapsedSeconds] = useState(0)
+  const [activeAiJob, setActiveAiJob] = useState<AiJob | null>(null)
 
   const deferredQuery = useDeferredValue(query)
 
@@ -580,12 +649,16 @@ function App() {
             }
           })
         } else if (viewMode === 'question-queue') {
-          const data = await fetchJson<ApiReaderQuestionsResponse>('/api/reader-questions?status=open')
+          const [questionsData, jobsData] = await Promise.all([
+            fetchJson<ApiReaderQuestionsResponse>('/api/reader-questions?status=active'),
+            fetchJson<ApiAiJobsResponse>('/api/ai/jobs?status=active'),
+          ])
 
           if (!isActive) return
 
           startTransition(() => {
-            setReaderQuestions(data.questions)
+            setReaderQuestions(questionsData.questions)
+            setAiJobs(jobsData.jobs)
           })
         } else {
           const data = deferredQuery.trim()
@@ -759,6 +832,49 @@ function App() {
   }, [selectedQuizId, selectedSlug, viewMode])
 
   useEffect(() => {
+    if (viewMode === 'question-queue') return
+
+    const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
+    const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
+    if (!targetId) return
+
+    let isActive = true
+
+    async function loadActiveJob() {
+      try {
+        const data = await fetchJson<ApiAiJobsResponse>(
+          `/api/ai/jobs?target_type=${targetType}&target_id=${encodeURIComponent(targetId)}`,
+        )
+        if (!isActive) return
+        const job = data.jobs.find((item) =>
+          ['queued', 'solving', 'draft_ready', 'failed'].includes(item.status),
+        )
+        setActiveAiJob(job ?? null)
+        if (job?.status === 'draft_ready' && job.revision) {
+          setAiStatus(`Job #${job.id}: draft_ready. Open Q Queue to review/apply.`)
+        } else if (job?.status === 'failed') {
+          setAiStatus(job.error_summary || job.error || 'AI job failed')
+        } else if (job) {
+          setAiStatus(`Job #${job.id}: ${job.stage}`)
+        } else {
+          setAiStatus('')
+          setAiRevision(null)
+        }
+      } catch (loadError) {
+        if (isActive) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load AI jobs')
+        }
+      }
+    }
+
+    loadActiveJob()
+
+    return () => {
+      isActive = false
+    }
+  }, [selectedQuizId, selectedSlug, viewMode])
+
+  useEffect(() => {
     const hasLoadedBody =
       viewMode === 'nodes'
         ? selectedNode?.slug === selectedSlug && Boolean(selectedNode.body)
@@ -807,6 +923,53 @@ function App() {
     viewMode,
   ])
 
+  useEffect(() => {
+    if (!activeAiJob || !['queued', 'solving'].includes(activeAiJob.status)) {
+      return
+    }
+
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setAiElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [activeAiJob])
+
+  useEffect(() => {
+    const activeJobId = activeAiJob?.id
+    const activeJobStatus = activeAiJob?.status
+    if (!activeJobId || !activeJobStatus || !['queued', 'solving'].includes(activeJobStatus)) return
+
+    let isActive = true
+    const poll = async () => {
+      try {
+        const data = await fetchJson<ApiAiJobResponse>(`/api/ai/jobs/${activeJobId}`)
+        if (!isActive) return
+        setActiveAiJob(data.job)
+        if (data.job.status === 'draft_ready' && data.job.revision) {
+          setAiStatus(`Job #${data.job.id}: draft_ready. Open Q Queue to review/apply.`)
+        } else if (data.job.status === 'failed') {
+          setAiStatus(data.job.error_summary || data.job.error || 'AI job failed')
+        } else {
+          setAiStatus(`Job #${data.job.id}: ${data.job.stage}`)
+        }
+      } catch (pollError) {
+        if (isActive) {
+          setAiStatus(pollError instanceof Error ? pollError.message : 'Unable to poll AI job')
+        }
+      }
+    }
+
+    poll()
+    const timer = window.setInterval(poll, 2500)
+
+    return () => {
+      isActive = false
+      window.clearInterval(timer)
+    }
+  }, [activeAiJob?.id, activeAiJob?.status])
+
   const filteredNodes = nodes.filter((node) => {
     if (activeArea === 'archive') return node.visibility === 'archive'
     if (activeArea === 'all') return node.visibility !== 'archive'
@@ -823,20 +986,54 @@ function App() {
     return quiz.area === activeArea && quiz.visibility !== 'archive'
   })
 
+  const activeAiJobs = aiJobs.filter((job) =>
+    ['queued', 'solving', 'draft_ready', 'failed'].includes(job.status),
+  )
+  const totalQueueItems = readerQuestions.length + activeAiJobs.length
+  const queueSearch = query.trim().toLowerCase()
+  const queueItems = [
+    ...readerQuestions.map((question) => ({
+      kind: 'question' as const,
+      id: `question-${question.id}`,
+      sort: question.created_at,
+      question,
+    })),
+    ...activeAiJobs.map((job) => ({
+      kind: 'job' as const,
+      id: `job-${job.id}`,
+      sort: job.updated_at || job.created_at,
+      job,
+    })),
+  ]
+    .filter((item) => {
+      if (!queueSearch) return true
+      const text =
+        item.kind === 'question'
+          ? `${item.question.target_type} ${item.question.target_id} ${item.question.status} ${item.question.question}`
+          : `${item.job.target_type} ${item.job.target_id} ${item.job.status} ${item.job.stage} ${item.job.instruction} ${item.job.error_summary}`
+      return text.toLowerCase().includes(queueSearch)
+    })
+    .sort((left, right) => right.sort.localeCompare(left.sort))
+
   const visibleCount =
     viewMode === 'question-queue'
-      ? readerQuestions.length
+      ? queueItems.length
       : viewMode === 'quizzes'
         ? filteredQuizzes.length
         : filteredNodes.length
   const totalCount =
     viewMode === 'question-queue'
-      ? readerQuestions.length
+      ? totalQueueItems
       : viewMode === 'quizzes'
         ? quizzes.length
         : nodes.length
   const visibleTracks =
     viewMode === 'nodes' && activeArea !== 'all' && activeArea !== 'archive' ? tracks : []
+  const isAiJobRunning = Boolean(activeAiJob && ['queued', 'solving'].includes(activeAiJob.status))
+  const aiStatusText = isAiJobRunning
+    ? `${aiStatus} ${aiElapsedSeconds}s elapsed. Job #${activeAiJob?.id} is persisted; no refresh needed. Open Q Queue when the draft is ready.`
+    : aiStatus
+  const aiStatusClass = isAiJobRunning ? 'ai-status running' : 'ai-status error'
 
   const exitEditMode = (shouldConfirm = true) => {
     if (!isEditMode) return true
@@ -845,6 +1042,9 @@ function App() {
     }
     setIsEditMode(false)
     setEditDraft('')
+    setAiRevision(null)
+    setAiStatus('')
+    setAiElapsedSeconds(0)
     return true
   }
 
@@ -857,9 +1057,74 @@ function App() {
     }
   }
 
+  const openJobTarget = (job: AiJob) => {
+    exitEditMode(false)
+    if (job.target_type === 'node') {
+      navigateToNode(job.target_id, { focus: true })
+    } else {
+      navigateToQuiz(job.target_id, { focus: true })
+    }
+  }
+
   const goBack = () => {
     if (!exitEditMode()) return
     navigate(-1)
+  }
+
+  const dismissReaderQuestion = async (item: ReaderQuestion) => {
+    try {
+      await postJson<ApiReaderQuestionResponse>(`/api/reader-questions/${item.id}/dismiss`, {
+        resolution_note: 'Dismissed from Q Queue',
+      })
+      setReaderQuestions((current) => current.filter((question) => question.id !== item.id))
+    } catch (dismissError) {
+      setError(dismissError instanceof Error ? dismissError.message : 'Unable to dismiss question')
+    }
+  }
+
+  const deleteReaderQuestion = async (item: ReaderQuestion) => {
+    if (!window.confirm(`Delete Q #${item.id}?`)) return
+    try {
+      await deleteJson<{ ok: boolean }>(`/api/reader-questions/${item.id}`)
+      setReaderQuestions((current) => current.filter((question) => question.id !== item.id))
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete question')
+    }
+  }
+
+  const reviewAiJob = (job: AiJob) => {
+    if (!job.revision) return
+    setActiveAiJob(job)
+    setAiRevision(job.revision)
+    setEditDraft(job.revision.revised_body)
+    setIsEditMode(true)
+    if (job.target_type === 'node') {
+      navigateToNode(job.target_id, { focus: true })
+    } else {
+      navigateToQuiz(job.target_id, { focus: true })
+    }
+  }
+
+  const cancelAiJob = async (job: AiJob) => {
+    try {
+      const data = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${job.id}/cancel`, {})
+      setAiJobs((current) => current.map((item) => (item.id === job.id ? data.job : item)))
+      if (activeAiJob?.id === job.id) setActiveAiJob(data.job)
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : 'Unable to cancel AI job')
+    }
+  }
+
+  const retryAiJob = async (job: AiJob) => {
+    try {
+      setAiStatus(`Retrying job #${job.id}...`)
+      const data = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${job.id}/retry`, {})
+      setAiJobs((current) => [data.job, ...current.filter((item) => item.id !== job.id)])
+      setActiveAiJob(data.job)
+      setAiElapsedSeconds(0)
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : 'Unable to retry AI job')
+    }
   }
 
   const submitReaderQuestion = async () => {
@@ -897,10 +1162,53 @@ function App() {
     }
   }
 
+  const requestAiRevision = async () => {
+    const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
+    const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
+    const currentBody = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
+    if (!targetId || !currentBody || isAiRevising || isAiJobRunning) return
+
+    const questionIds = visibleReaderQuestions.map((item) => item.id)
+    const instruction =
+      questionDraft.trim() ||
+      'Fold the open reader questions into the tutorial. Keep the Markdown body concise, bilingual where appropriate, and more step-by-step.'
+
+    try {
+      setIsAiRevising(true)
+      setError('')
+      setAiRevision(null)
+      setAiElapsedSeconds(0)
+      setAiStatus(`Creating AI job for ${targetType} "${targetId}"...`)
+      const data = await postJson<ApiAiJobResponse>('/api/ai/jobs', {
+        target_type: targetType,
+        target_id: targetId,
+        question_ids: questionIds,
+        question: questionDraft.trim(),
+        instruction,
+        draft_body: isEditMode ? editDraft : currentBody,
+      })
+      setActiveAiJob(data.job)
+      setQuestionDraft('')
+      setReaderQuestions((current) =>
+        current.filter((item) => !data.job.question_ids.includes(item.id)),
+      )
+      setAiStatus(`Job #${data.job.id}: ${data.job.stage}`)
+    } catch (revisionError) {
+      const message =
+        revisionError instanceof Error ? revisionError.message : 'Unable to generate AI revision'
+      setAiStatus(message)
+      setError(message)
+    } finally {
+      setIsAiRevising(false)
+    }
+  }
+
   const startEditMode = () => {
     const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
     if (!body) return
     setEditDraft(body)
+    setAiRevision(null)
+    setAiStatus('')
     if (!isFocusMode) {
       toggleFocusRoute()
     }
@@ -928,6 +1236,27 @@ function App() {
           body,
         })
         setSelectedNode(data.node)
+      }
+      if (activeAiJob?.status === 'draft_ready') {
+        const applied = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${activeAiJob.id}/apply`, {})
+        setAiJobs((current) =>
+          current.map((item) => (item.id === activeAiJob.id ? applied.job : item)),
+        )
+        setReaderQuestions((current) =>
+          current.filter((item) => !activeAiJob.question_ids.includes(item.id)),
+        )
+        setActiveAiJob(null)
+      } else if (aiRevision?.resolved_question_ids.length) {
+        await Promise.all(
+          aiRevision.resolved_question_ids.map((questionId) =>
+            postJson<ApiReaderQuestionResponse>(`/api/reader-questions/${questionId}/resolve`, {
+              resolution_note: aiRevision.summary || 'Resolved by AI-assisted Markdown revision',
+            }),
+          ),
+        )
+        setReaderQuestions((current) =>
+          current.filter((item) => !aiRevision.resolved_question_ids.includes(item.id)),
+        )
       }
       exitEditMode(false)
     } catch (saveError) {
@@ -1110,20 +1439,85 @@ function App() {
 
         <div className="node-list">
           {viewMode === 'question-queue'
-            ? readerQuestions.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="node-card question-card"
-                  onClick={() => openQuestionTarget(item)}
-                >
-                  <span className="node-meta">
-                    {item.target_type} / {item.target_id} / #{item.id}
-                  </span>
-                  <strong>{item.question}</strong>
-                  <span>Open target and resolve this question in the tutorial.</span>
-                </button>
-              ))
+            ? queueItems.map((item) => {
+                if (item.kind === 'question') {
+                  return (
+                    <article key={item.id} className="node-card question-card">
+                      <button
+                        type="button"
+                        className="question-card-main"
+                        onClick={() => openQuestionTarget(item.question)}
+                      >
+                        <span className="node-meta">
+                          Q #{item.question.id} / {item.question.target_type} / {item.question.target_id} /{' '}
+                          {item.question.status}
+                        </span>
+                        <strong>{item.question.question}</strong>
+                        <span>Open target and resolve this question in the tutorial.</span>
+                      </button>
+                      <div className="question-card-actions">
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() => dismissReaderQuestion(item.question)}
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          type="button"
+                          className="text-link danger-link"
+                          onClick={() => deleteReaderQuestion(item.question)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  )
+                }
+
+                const jobError = item.job.error_summary || item.job.error
+                return (
+                  <article key={item.id} className="node-card question-card job-card">
+                    <button
+                      type="button"
+                      className="question-card-main"
+                      onClick={() =>
+                        item.job.status === 'draft_ready' && item.job.revision
+                          ? reviewAiJob(item.job)
+                          : openJobTarget(item.job)
+                      }
+                    >
+                      <span className="node-meta">
+                        Job #{item.job.id} / {item.job.target_type} / {item.job.target_id} / {item.job.status}
+                      </span>
+                      <strong>{item.job.status === 'failed' ? 'AI job needs attention' : item.job.stage}</strong>
+                      <span>
+                        {item.job.revision?.summary ||
+                          jobError ||
+                          item.job.instruction ||
+                          'AI job is queued for this target.'}
+                      </span>
+                    </button>
+                    <div className="question-card-actions">
+                      {item.job.status === 'draft_ready' && item.job.revision && (
+                        <button type="button" className="text-link" onClick={() => reviewAiJob(item.job)}>
+                          Review draft
+                        </button>
+                      )}
+                      {item.job.status === 'failed' && (
+                        <button type="button" className="text-link" onClick={() => retryAiJob(item.job)}>
+                          Retry
+                        </button>
+                      )}
+                      {['queued', 'solving'].includes(item.job.status) && (
+                        <button type="button" className="text-link danger-link" onClick={() => cancelAiJob(item.job)}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                )
+              })
             : viewMode === 'quizzes'
             ? filteredQuizzes.map((quiz) => (
                 <button
@@ -1165,9 +1559,81 @@ function App() {
 
       <aside className="detail-panel" aria-label="Node detail">
         {viewMode === 'question-queue' ? (
-          <div className="empty-state">
-            <h2>Q to be solved</h2>
-            <p>Select a question from the queue to open its source node or quiz.</p>
+          <div className="queue-detail">
+            <h2>Q Queue</h2>
+            <p>
+              Track open questions and AI jobs together. Drafts wait here until you explicitly review and
+              save them.
+            </p>
+            <section className="detail-section">
+              <h3>Open questions</h3>
+              {readerQuestions.length ? (
+                <div className="job-list">
+                  {readerQuestions.map((item) => (
+                    <article className="ai-revision-card compact-card" key={item.id}>
+                      <p className="eyebrow">
+                        Q #{item.id} / {item.target_type} / {item.target_id} / {item.status}
+                      </p>
+                      <h3>{item.question}</h3>
+                      <div className="question-card-actions">
+                        <button type="button" className="focus-toggle" onClick={() => openQuestionTarget(item)}>
+                          Open target
+                        </button>
+                        <button type="button" className="focus-toggle" onClick={() => dismissReaderQuestion(item)}>
+                          Dismiss
+                        </button>
+                        <button type="button" className="focus-toggle danger-button" onClick={() => deleteReaderQuestion(item)}>
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>No open reader questions.</p>
+              )}
+            </section>
+            <section className="detail-section">
+              <h3>AI jobs</h3>
+              {activeAiJobs.length ? (
+                <div className="job-list">
+                  {activeAiJobs.map((job) => (
+                    <article className="ai-revision-card" key={job.id}>
+                      <p className="eyebrow">
+                        Job #{job.id} / {job.target_type} / {job.target_id}
+                      </p>
+                      <h3>{job.status}: {job.stage}</h3>
+                      {job.revision?.summary && <p>{job.revision.summary}</p>}
+                      {(job.error_summary || job.error) && (
+                        <p className="ai-status error">{job.error_summary || job.error}</p>
+                      )}
+                      <div className="question-card-actions">
+                        {job.status === 'draft_ready' && job.revision && (
+                          <button type="button" className="focus-toggle ai-action" onClick={() => reviewAiJob(job)}>
+                            Review draft
+                          </button>
+                        )}
+                        <button type="button" className="focus-toggle" onClick={() => openJobTarget(job)}>
+                          Open target
+                        </button>
+                        {job.status === 'failed' && (
+                          <button type="button" className="focus-toggle ai-action" onClick={() => retryAiJob(job)}>
+                            Retry
+                          </button>
+                        )}
+                        {['queued', 'solving'].includes(job.status) && (
+                          <button type="button" className="focus-toggle" onClick={() => cancelAiJob(job)}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>No AI jobs yet.</p>
+              )}
+            </section>
           </div>
         ) : viewMode === 'quizzes' && selectedQuiz?.id === selectedQuizId ? (
           <>
@@ -1242,6 +1708,31 @@ function App() {
                         Cancel
                       </button>
                     </div>
+                    {aiRevision && (
+                      <section className="ai-revision-card" aria-label="AI revision preview">
+                        <p className="eyebrow">
+                          AI draft / {aiRevision.provider} / {aiRevision.model}
+                        </p>
+                        <h3>{aiRevision.summary || 'Revision ready for review'}</h3>
+                        {aiRevision.rationale.length > 0 && (
+                          <ul>
+                            {aiRevision.rationale.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {aiRevision.changed_sections.length > 0 && (
+                          <p>Changed: {aiRevision.changed_sections.join(', ')}</p>
+                        )}
+                        {aiRevision.resolved_question_ids.length > 0 && (
+                          <p>Will resolve Q #{aiRevision.resolved_question_ids.join(', #')} after save.</p>
+                        )}
+                        {aiRevision.suggested_new_nodes.length > 0 && (
+                          <p>Suggested new nodes: {aiRevision.suggested_new_nodes.join(', ')}</p>
+                        )}
+                      </section>
+                    )}
+                    {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
                   <MarkdownView body={selectedQuiz.body} />
@@ -1311,6 +1802,15 @@ function App() {
                 >
                   {isQuestionSaving ? 'Saving...' : 'Save question'}
                 </button>
+                <button
+                  type="button"
+                  className="focus-toggle ai-action"
+                  disabled={isAiRevising || (!visibleReaderQuestions.length && !questionDraft.trim())}
+                  onClick={requestAiRevision}
+                >
+                  {isAiRevising ? 'Drafting...' : 'Resolve with AI'}
+                </button>
+                {aiStatus && <p className={aiStatusClass}>{aiStatusText}</p>}
                 <div className="reader-question-list">
                   <strong>{openQuestionCount} open</strong>
                   {visibleReaderQuestions.map((item) => (
@@ -1392,6 +1892,31 @@ function App() {
                         Cancel
                       </button>
                     </div>
+                    {aiRevision && (
+                      <section className="ai-revision-card" aria-label="AI revision preview">
+                        <p className="eyebrow">
+                          AI draft / {aiRevision.provider} / {aiRevision.model}
+                        </p>
+                        <h3>{aiRevision.summary || 'Revision ready for review'}</h3>
+                        {aiRevision.rationale.length > 0 && (
+                          <ul>
+                            {aiRevision.rationale.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {aiRevision.changed_sections.length > 0 && (
+                          <p>Changed: {aiRevision.changed_sections.join(', ')}</p>
+                        )}
+                        {aiRevision.resolved_question_ids.length > 0 && (
+                          <p>Will resolve Q #{aiRevision.resolved_question_ids.join(', #')} after save.</p>
+                        )}
+                        {aiRevision.suggested_new_nodes.length > 0 && (
+                          <p>Suggested new nodes: {aiRevision.suggested_new_nodes.join(', ')}</p>
+                        )}
+                      </section>
+                    )}
+                    {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
                   <MarkdownView body={selectedNode.body} />
@@ -1461,6 +1986,15 @@ function App() {
                 >
                   {isQuestionSaving ? 'Saving...' : 'Save question'}
                 </button>
+                <button
+                  type="button"
+                  className="focus-toggle ai-action"
+                  disabled={isAiRevising || (!visibleReaderQuestions.length && !questionDraft.trim())}
+                  onClick={requestAiRevision}
+                >
+                  {isAiRevising ? 'Drafting...' : 'Resolve with AI'}
+                </button>
+                {aiStatus && <p className={aiStatusClass}>{aiStatusText}</p>}
                 <div className="reader-question-list">
                   <strong>{openQuestionCount} open</strong>
                   {visibleReaderQuestions.map((item) => (

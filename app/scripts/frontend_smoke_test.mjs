@@ -119,16 +119,24 @@ await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.getByLabel('Reader questions').getByPlaceholder(/This explanation skips/).fill('Smoke test temporary reader question.')
 await page.getByRole('button', { name: 'Save question' }).click()
 await page.getByText(/Q to be solved:/).waitFor()
+await page.goto(`${baseUrl}/queue`, { waitUntil: 'networkidle' })
+await page.getByLabel('Question queue').waitFor()
+await page.getByText('Smoke test temporary reader question.').first().waitFor()
+await page.screenshot({ path: screenshotPath('desktop-q-queue.png'), fullPage: false })
 const smokeQuestions = await page.request.get(
   `${apiBaseUrl}/api/reader-questions?target_type=node&target_id=binary-search&status=open`,
 )
 const smokePayload = await smokeQuestions.json()
-const smokeQuestion = smokePayload.questions.find((item) => item.question.includes('Smoke test temporary reader question.'))
-if (smokeQuestion) {
+const smokeQuestionCleanup = smokePayload.questions.filter((item) =>
+  item.question.includes('Smoke test temporary reader question.'),
+)
+for (const smokeQuestion of smokeQuestionCleanup) {
   await page.request.post(`${apiBaseUrl}/api/reader-questions/${smokeQuestion.id}/resolve`, {
     data: { resolution_note: 'Frontend smoke test cleanup' },
   })
 }
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-focus-reading.png'), fullPage: false })
 
 await page.getByRole('button', { name: 'Show map' }).click()

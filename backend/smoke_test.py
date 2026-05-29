@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
+
 from fastapi.testclient import TestClient
+
+os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
+os.environ.pop("OPENAI_API_KEY", None)
 
 from api import app
 
@@ -11,6 +16,7 @@ def main() -> int:
     health = client.get("/api/health")
     assert health.status_code == 200, health.text
     assert health.json()["ok"] is True
+    assert "ai" in health.json()
 
     nodes = client.get("/api/nodes")
     assert nodes.status_code == 200, nodes.text
@@ -57,6 +63,36 @@ def main() -> int:
     assert resolve_question.status_code == 200, resolve_question.text
     assert resolve_question.json()["question"]["status"] == "resolved"
 
+    dismissed_question = client.post(
+        "/api/reader-questions",
+        json={
+            "target_type": "node",
+            "target_id": "binary-search",
+            "question": "Dismiss me",
+        },
+    )
+    assert dismissed_question.status_code == 200, dismissed_question.text
+    dismissed_id = dismissed_question.json()["question"]["id"]
+    dismiss = client.post(
+        f"/api/reader-questions/{dismissed_id}/dismiss",
+        json={"resolution_note": "Smoke test dismiss"},
+    )
+    assert dismiss.status_code == 200, dismiss.text
+    assert dismiss.json()["question"]["status"] == "dismissed"
+
+    deleted_question = client.post(
+        "/api/reader-questions",
+        json={
+            "target_type": "node",
+            "target_id": "binary-search",
+            "question": "Delete me",
+        },
+    )
+    assert deleted_question.status_code == 200, deleted_question.text
+    deleted_id = deleted_question.json()["question"]["id"]
+    delete = client.delete(f"/api/reader-questions/{deleted_id}")
+    assert delete.status_code == 200, delete.text
+
     original_body = payload["body"]
     edited_body = original_body + "\n\n## Smoke Test Edit\nThis temporary edit verifies browser save support."
     update = client.put("/api/nodes/binary-search/body", json={"body": edited_body})
@@ -94,6 +130,43 @@ def main() -> int:
         quiz["id"] == "x86-rax-trace-leaq-jump"
         for quiz in quiz_search.json()["quizzes"]
     )
+
+    ai_revision = client.post(
+        "/api/ai/revise",
+        json={
+            "target_type": "node",
+            "target_id": "binary-search",
+            "question_ids": [],
+            "instruction": "Clarify the loop invariant.",
+        },
+    )
+    assert ai_revision.status_code in {200, 503}, ai_revision.text
+
+    ai_job = client.post(
+        "/api/ai/jobs",
+        json={
+            "target_type": "node",
+            "target_id": "binary-search",
+            "question": "Queued smoke test question",
+            "instruction": "Clarify the midpoint.",
+        },
+    )
+    assert ai_job.status_code == 200, ai_job.text
+    job_payload = ai_job.json()["job"]
+    assert job_payload["status"] in {"queued", "solving", "failed"}
+    job_detail = client.get(f"/api/ai/jobs/{job_payload['id']}")
+    assert job_detail.status_code == 200, job_detail.text
+    job_detail_payload = job_detail.json()["job"]
+    assert "error_summary" in job_detail_payload
+    if job_detail_payload["status"] == "failed":
+        retry_job = client.post(f"/api/ai/jobs/{job_payload['id']}/retry")
+        assert retry_job.status_code == 200, retry_job.text
+        retry_payload = retry_job.json()["job"]
+        assert retry_payload["status"] in {"queued", "solving", "failed"}
+        assert retry_payload["question_ids"] == job_payload["question_ids"]
+    for question_id in job_payload["question_ids"]:
+        cleanup = client.delete(f"/api/reader-questions/{question_id}")
+        assert cleanup.status_code == 200, cleanup.text
 
     print("API smoke test passed")
     return 0

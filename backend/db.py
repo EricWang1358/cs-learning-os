@@ -107,6 +107,24 @@ CREATE TABLE IF NOT EXISTS reader_questions (
     resolved_at TEXT NOT NULL DEFAULT '',
     resolution_note TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS ai_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_type TEXT NOT NULL CHECK(target_type IN ('node', 'quiz')),
+    target_id TEXT NOT NULL,
+    question_ids TEXT NOT NULL DEFAULT '[]',
+    provider TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'queued',
+    stage TEXT NOT NULL DEFAULT 'created',
+    instruction TEXT NOT NULL DEFAULT '',
+    draft_body TEXT NOT NULL DEFAULT '',
+    result_json TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL DEFAULT ''
+);
 """
 
 

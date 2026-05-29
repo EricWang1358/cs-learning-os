@@ -631,3 +631,17 @@ Verified:
 - Backend smoke test passes.
 - `npm run lint`
 - `npm run build`
+
+## 2026-05-29: Q Queue Job Robustness
+
+Completed:
+- Unified `Q Queue` into one inbox-style surface for open reader questions and durable AI jobs.
+- Added failed-job retry support through `POST /api/ai/jobs/{job_id}/retry`.
+- Added compact AI error summaries so high-demand or CLI failures do not flood the UI with full stderr logs.
+- Switched the default Codex CLI model from config inheritance to `CS_LEARNING_CODEX_MODEL`, defaulting to `gpt-5.4-mini`.
+- Fixed AI job prompt construction so queued/solving questions are still passed into the revision prompt by explicit question id.
+- Marked all questions attached to a successful AI job as `draft_ready`, then resolved them only after the draft is applied.
+
+Notes:
+- The app still cannot disable internal Codex CLI provider retries directly; it now avoids adding its own retry loop and keeps failures retryable from the queue.
+- Failed jobs remain visible until retried; retry creates a new queued job and marks the old one as `retried`.
