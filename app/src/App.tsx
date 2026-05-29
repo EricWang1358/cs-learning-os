@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useState, useDeferredValue } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 
 type NodeSummary = {
@@ -92,10 +93,6 @@ type ApiReaderQuestionResponse = {
 
 type ViewMode = 'nodes' | 'quizzes' | 'question-queue'
 
-type HistoryEntry =
-  | { viewMode: 'nodes'; selectedSlug: string; activeArea: string; activeTrack: string }
-  | { viewMode: 'quizzes'; selectedQuizId: string; activeArea: string; activeTrack: string }
-
 type MarkdownBlock =
   | { kind: 'code'; code: string; language: string }
   | { kind: 'heading'; level: 1 | 2 | 3; text: string }
@@ -135,6 +132,39 @@ const trackLabels: Record<string, string> = {
   'x86-64-assembly': 'x86-64 assembly',
   'bomb-lab': 'Bomb Lab',
   networking: 'Networking',
+}
+
+function routeFromLocation(pathname: string, search: string) {
+  const params = new URLSearchParams(search)
+  const nodeMatch = pathname.match(/^\/nodes\/([^/]+)$/)
+  const quizMatch = pathname.match(/^\/quizzes\/([^/]+)$/)
+  const isQuizList = pathname === '/quizzes'
+  const isQueue = pathname === '/queue'
+
+  return {
+    viewMode: isQueue ? 'question-queue' as ViewMode : quizMatch || isQuizList ? 'quizzes' as ViewMode : 'nodes' as ViewMode,
+    selectedSlug: nodeMatch ? decodeURIComponent(nodeMatch[1]) : '',
+    selectedQuizId: quizMatch ? decodeURIComponent(quizMatch[1]) : '',
+    activeArea: params.get('area') || 'all',
+    activeTrack: params.get('track') || 'all',
+    query: params.get('q') || '',
+    isFocusMode: params.get('focus') === '1',
+  }
+}
+
+function routeSearch(options: {
+  activeArea?: string
+  activeTrack?: string
+  query?: string
+  isFocusMode?: boolean
+}) {
+  const params = new URLSearchParams()
+  if (options.activeArea && options.activeArea !== 'all') params.set('area', options.activeArea)
+  if (options.activeTrack && options.activeTrack !== 'all') params.set('track', options.activeTrack)
+  if (options.query) params.set('q', options.query)
+  if (options.isFocusMode) params.set('focus', '1')
+  const value = params.toString()
+  return value ? `?${value}` : ''
 }
 
 function slugTitle(slug: string) {
@@ -413,23 +443,57 @@ function MarkdownToc({ body }: { body: string }) {
   )
 }
 
+function clearLocationHash() {
+  if (window.location.hash) {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+  }
+}
+
+function clearStaleHeadingHash() {
+  const hash = window.location.hash
+  if (!hash.startsWith('#section-')) return
+
+  const target = document.getElementById(decodeURIComponent(hash.slice(1)))
+  if (!target) {
+    clearLocationHash()
+  }
+}
+
+function scrollDetailToTop() {
+  document.querySelector('.detail-panel')?.scrollTo({ top: 0, behavior: 'auto' })
+  window.scrollTo({ top: 0, behavior: 'auto' })
+}
+
+function scrollToLocationHash() {
+  const hash = window.location.hash
+  if (!hash.startsWith('#section-')) return false
+
+  const target = document.getElementById(decodeURIComponent(hash.slice(1)))
+  if (!target) return false
+
+  target.scrollIntoView({ behavior: 'auto', block: 'start' })
+  return true
+}
+
 function App() {
-  const [viewMode, setViewMode] = useState<ViewMode>('nodes')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const routeState = routeFromLocation(location.pathname, location.search)
+  const viewMode = routeState.viewMode
+  const selectedSlug = routeState.selectedSlug
+  const selectedQuizId = routeState.selectedQuizId
+  const activeArea = routeState.activeArea
+  const activeTrack = routeState.activeTrack
+  const query = routeState.query
+  const isFocusMode = routeState.isFocusMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([])
   const [tracks, setTracks] = useState<TrackSummary[]>([])
-  const [selectedSlug, setSelectedSlug] = useState<string>('')
-  const [selectedQuizId, setSelectedQuizId] = useState<string>('')
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
   const [selectedQuiz, setSelectedQuiz] = useState<QuizDetail | null>(null)
-  const [activeArea, setActiveArea] = useState('all')
-  const [activeTrack, setActiveTrack] = useState('all')
-  const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
-  const [isFocusMode, setIsFocusMode] = useState(false)
   const [error, setError] = useState('')
-  const [historyStack, setHistoryStack] = useState<HistoryEntry[]>([])
   const [readerQuestions, setReaderQuestions] = useState<ReaderQuestion[]>([])
   const [questionDraft, setQuestionDraft] = useState('')
   const [isQuestionSaving, setIsQuestionSaving] = useState(false)
@@ -438,6 +502,52 @@ function App() {
   const [isEditSaving, setIsEditSaving] = useState(false)
 
   const deferredQuery = useDeferredValue(query)
+
+  const navigateToNode = (slug: string, options: { focus?: boolean; replace?: boolean } = {}) => {
+    navigate(
+      `/nodes/${encodeURIComponent(slug)}${routeSearch({
+        activeArea,
+        activeTrack,
+        query,
+        isFocusMode: options.focus ?? isFocusMode,
+      })}`,
+      { replace: options.replace },
+    )
+  }
+
+  const navigateToQuiz = (quizId: string, options: { focus?: boolean; replace?: boolean } = {}) => {
+    navigate(
+      `/quizzes/${encodeURIComponent(quizId)}${routeSearch({
+        activeArea,
+        activeTrack,
+        query,
+        isFocusMode: options.focus ?? isFocusMode,
+      })}`,
+      { replace: options.replace },
+    )
+  }
+
+  const navigateToQueue = () => {
+    navigate(`/queue${routeSearch({ query })}`)
+  }
+
+  const navigateToArea = (area: string) => {
+    const targetSlug = selectedSlug || nodes[0]?.slug
+    if (targetSlug) {
+      navigate(`/nodes/${encodeURIComponent(targetSlug)}${routeSearch({ activeArea: area })}`)
+    } else {
+      navigate(`/nodes${routeSearch({ activeArea: area })}`)
+    }
+  }
+
+  const toggleFocusRoute = () => {
+    const nextFocus = !isFocusMode
+    if (viewMode === 'quizzes' && selectedQuizId) {
+      navigateToQuiz(selectedQuizId, { focus: nextFocus, replace: true })
+    } else if (viewMode === 'nodes' && selectedSlug) {
+      navigateToNode(selectedSlug, { focus: nextFocus, replace: true })
+    }
+  }
 
   useEffect(() => {
     let isActive = true
@@ -457,7 +567,17 @@ function App() {
 
           startTransition(() => {
             setQuizzes(data.quizzes)
-            setSelectedQuizId((current) => current || data.quizzes[0]?.id || '')
+            if (location.pathname === '/quizzes' && data.quizzes[0]?.id) {
+              navigate(
+                `/quizzes/${encodeURIComponent(data.quizzes[0].id)}${routeSearch({
+                  activeArea,
+                  activeTrack,
+                  query,
+                  isFocusMode,
+                })}`,
+                { replace: true },
+              )
+            }
           })
         } else if (viewMode === 'question-queue') {
           const data = await fetchJson<ApiReaderQuestionsResponse>('/api/reader-questions?status=open')
@@ -478,7 +598,17 @@ function App() {
 
           startTransition(() => {
             setNodes(data.nodes)
-            setSelectedSlug((current) => current || data.nodes[0]?.slug || '')
+            if ((location.pathname === '/' || location.pathname === '/nodes') && data.nodes[0]?.slug) {
+              navigate(
+                `/nodes/${encodeURIComponent(data.nodes[0].slug)}${routeSearch({
+                  activeArea,
+                  activeTrack,
+                  query,
+                  isFocusMode,
+                })}`,
+                { replace: true },
+              )
+            }
           })
         }
       } catch (loadError) {
@@ -494,7 +624,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [deferredQuery, viewMode])
+  }, [activeArea, activeTrack, deferredQuery, isFocusMode, location.pathname, navigate, query, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'nodes' || activeArea === 'all' || activeArea === 'archive') {
@@ -508,11 +638,19 @@ function App() {
         const data = await fetchJson<ApiTracksResponse>(`/api/areas/${activeArea}/tracks`)
         if (!isActive) return
         setTracks(data.tracks)
-        setActiveTrack((current) =>
-          current === 'all' || data.tracks.some((track) => track.track === current)
-            ? current
-            : 'all',
-        )
+        if (activeTrack !== 'all' && !data.tracks.some((track) => track.track === activeTrack)) {
+          const fallbackSlug = selectedSlug || nodes[0]?.slug
+          if (fallbackSlug) {
+            navigate(
+              `/nodes/${encodeURIComponent(fallbackSlug)}${routeSearch({
+                activeArea,
+                query,
+                isFocusMode,
+              })}`,
+              { replace: true },
+            )
+          }
+        }
       } catch (loadError) {
         if (isActive) {
           setError(loadError instanceof Error ? loadError.message : 'Unable to load tracks')
@@ -525,7 +663,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, viewMode])
+  }, [activeArea, activeTrack, isFocusMode, navigate, nodes, query, selectedSlug, viewMode])
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -537,6 +675,7 @@ function App() {
     async function loadDetail() {
       try {
         setIsDetailLoading(true)
+        setSelectedNode(null)
         const data = await fetchJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}`)
         if (isActive) setSelectedNode(data.node)
       } catch (loadError) {
@@ -565,6 +704,7 @@ function App() {
     async function loadQuizDetail() {
       try {
         setIsDetailLoading(true)
+        setSelectedQuiz(null)
         const data = await fetchJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}`)
         if (isActive) setSelectedQuiz(data.quiz)
       } catch (loadError) {
@@ -618,6 +758,55 @@ function App() {
     }
   }, [selectedQuizId, selectedSlug, viewMode])
 
+  useEffect(() => {
+    const hasLoadedBody =
+      viewMode === 'nodes'
+        ? selectedNode?.slug === selectedSlug && Boolean(selectedNode.body)
+        : viewMode === 'quizzes'
+          ? selectedQuiz?.id === selectedQuizId && Boolean(selectedQuiz.body)
+          : false
+    if (!hasLoadedBody) return
+
+    clearStaleHeadingHash()
+    window.addEventListener('hashchange', clearStaleHeadingHash)
+    return () => window.removeEventListener('hashchange', clearStaleHeadingHash)
+  }, [
+    selectedNode?.body,
+    selectedNode?.slug,
+    selectedQuiz?.body,
+    selectedQuiz?.id,
+    selectedQuizId,
+    selectedSlug,
+    viewMode,
+  ])
+
+  useEffect(() => {
+    const hasLoadedBody =
+      viewMode === 'nodes'
+        ? selectedNode?.slug === selectedSlug && Boolean(selectedNode.body)
+        : viewMode === 'quizzes'
+          ? selectedQuiz?.id === selectedQuizId && Boolean(selectedQuiz.body)
+          : false
+    if (!hasLoadedBody) return
+
+    requestAnimationFrame(() => {
+      if (!scrollToLocationHash()) {
+        scrollDetailToTop()
+      }
+    })
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    selectedNode?.body,
+    selectedNode?.slug,
+    selectedQuiz?.body,
+    selectedQuiz?.id,
+    selectedQuizId,
+    selectedSlug,
+    viewMode,
+  ])
+
   const filteredNodes = nodes.filter((node) => {
     if (activeArea === 'archive') return node.visibility === 'archive'
     if (activeArea === 'all') return node.visibility !== 'archive'
@@ -649,15 +838,6 @@ function App() {
   const visibleTracks =
     viewMode === 'nodes' && activeArea !== 'all' && activeArea !== 'archive' ? tracks : []
 
-  const currentHistoryEntry =
-    viewMode === 'quizzes'
-      ? selectedQuizId
-        ? { viewMode, selectedQuizId, activeArea, activeTrack }
-        : null
-      : viewMode === 'nodes' && selectedSlug
-        ? { viewMode, selectedSlug, activeArea, activeTrack }
-        : null
-
   const exitEditMode = (shouldConfirm = true) => {
     if (!isEditMode) return true
     if (shouldConfirm && editDraft.trim() && !window.confirm('Discard unsaved Markdown edits?')) {
@@ -668,44 +848,18 @@ function App() {
     return true
   }
 
-  const pushCurrentHistory = () => {
-    if (!currentHistoryEntry) return
-    setHistoryStack((current) => [...current, currentHistoryEntry])
-  }
-
   const openQuestionTarget = (item: ReaderQuestion) => {
     exitEditMode(false)
     if (item.target_type === 'node') {
-      setViewMode('nodes')
-      setSelectedSlug(item.target_id)
-      setIsFocusMode(true)
+      navigateToNode(item.target_id, { focus: true })
     } else {
-      setViewMode('quizzes')
-      setSelectedQuizId(item.target_id)
-      setIsFocusMode(true)
+      navigateToQuiz(item.target_id, { focus: true })
     }
   }
 
   const goBack = () => {
     if (!exitEditMode()) return
-    setHistoryStack((current) => {
-      const previous = current.at(-1)
-      if (!previous) return current
-
-      if (previous.viewMode === 'nodes') {
-        setViewMode('nodes')
-        setActiveArea(previous.activeArea)
-        setActiveTrack(previous.activeTrack)
-        setSelectedSlug(previous.selectedSlug)
-      } else {
-        setViewMode('quizzes')
-        setActiveArea(previous.activeArea)
-        setActiveTrack(previous.activeTrack)
-        setSelectedQuizId(previous.selectedQuizId)
-      }
-
-      return current.slice(0, -1)
-    })
+    navigate(-1)
   }
 
   const submitReaderQuestion = async () => {
@@ -747,7 +901,9 @@ function App() {
     const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
     if (!body) return
     setEditDraft(body)
-    setIsFocusMode(true)
+    if (!isFocusMode) {
+      toggleFocusRoute()
+    }
     setIsEditMode(true)
   }
 
@@ -785,7 +941,7 @@ function App() {
     viewMode === 'quizzes'
       ? selectedQuiz?.open_question_count ?? 0
       : selectedNode?.open_question_count ?? 0
-  const visibleReaderQuestions = currentHistoryEntry ? readerQuestions : []
+  const visibleReaderQuestions = readerQuestions
 
   return (
     <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''}`}>
@@ -802,10 +958,8 @@ function App() {
               type="button"
               className={area === activeArea ? 'active' : ''}
               onClick={() => {
-                setViewMode('nodes')
-                setActiveArea(area)
-                setActiveTrack('all')
-                setQuery('')
+                if (!exitEditMode()) return
+                navigateToArea(area)
               }}
             >
               <span>{areaLabels[area] ?? area}</span>
@@ -826,10 +980,8 @@ function App() {
             type="button"
             className={viewMode === 'quizzes' ? 'active' : ''}
             onClick={() => {
-              setViewMode('quizzes')
-              setActiveArea('all')
-              setActiveTrack('all')
-              setQuery('')
+              if (!exitEditMode()) return
+              navigate(`/quizzes${routeSearch({ query })}`)
             }}
           >
             Practice / Quiz Bank
@@ -838,11 +990,8 @@ function App() {
             type="button"
             className={viewMode === 'question-queue' ? 'active' : ''}
             onClick={() => {
-              exitEditMode(false)
-              setViewMode('question-queue')
-              setActiveArea('all')
-              setActiveTrack('all')
-              setQuery('')
+              if (!exitEditMode()) return
+              navigateToQueue()
             }}
           >
             Q Queue
@@ -867,7 +1016,32 @@ function App() {
           <input
             id="node-search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const nextQuery = event.target.value
+              if (viewMode === 'quizzes') {
+                navigate(
+                  `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                    activeArea,
+                    activeTrack,
+                    query: nextQuery,
+                    isFocusMode,
+                  })}`,
+                  { replace: true },
+                )
+              } else if (viewMode === 'question-queue') {
+                navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
+              } else {
+                navigate(
+                  `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                    activeArea,
+                    activeTrack,
+                    query: nextQuery,
+                    isFocusMode,
+                  })}`,
+                  { replace: true },
+                )
+              }
+            }}
             placeholder={
               viewMode === 'question-queue'
                 ? 'Open questions are loaded directly...'
@@ -901,7 +1075,7 @@ function App() {
               <button
                 type="button"
                 className={activeTrack === 'all' ? 'active' : ''}
-                onClick={() => setActiveTrack('all')}
+                onClick={() => navigateToNode(selectedSlug, { replace: true })}
               >
                 All tracks
               </button>
@@ -910,7 +1084,17 @@ function App() {
                   key={track.track}
                   type="button"
                   className={activeTrack === track.track ? 'active' : ''}
-                  onClick={() => setActiveTrack(track.track)}
+                  onClick={() =>
+                    navigate(
+                      `/nodes/${encodeURIComponent(selectedSlug)}${routeSearch({
+                        activeArea,
+                        activeTrack: track.track,
+                        query,
+                        isFocusMode,
+                      })}`,
+                      { replace: true },
+                    )
+                  }
                 >
                   <span>{trackLabels[track.track] ?? track.label}</span>
                   <strong>{track.node_count}</strong>
@@ -948,7 +1132,7 @@ function App() {
                   className={`node-card ${quiz.id === selectedQuizId ? 'selected' : ''}`}
                   onClick={() => {
                     if (!exitEditMode()) return
-                    setSelectedQuizId(quiz.id)
+                    navigateToQuiz(quiz.id)
                   }}
                 >
                   <span className="node-meta">
@@ -965,7 +1149,7 @@ function App() {
                   className={`node-card ${node.slug === selectedSlug ? 'selected' : ''}`}
                   onClick={() => {
                     if (!exitEditMode()) return
-                    setSelectedSlug(node.slug)
+                    navigateToNode(node.slug)
                   }}
                 >
                   <span className="node-meta">
@@ -985,7 +1169,7 @@ function App() {
             <h2>Q to be solved</h2>
             <p>Select a question from the queue to open its source node or quiz.</p>
           </div>
-        ) : viewMode === 'quizzes' && selectedQuiz ? (
+        ) : viewMode === 'quizzes' && selectedQuiz?.id === selectedQuizId ? (
           <>
             {isFocusMode && !isEditMode && <MarkdownToc body={selectedQuiz.body} />}
             <div className="detail-main">
@@ -1009,7 +1193,6 @@ function App() {
                     <button
                       type="button"
                       className="focus-toggle"
-                      disabled={!historyStack.length}
                       onClick={goBack}
                     >
                       Back
@@ -1017,7 +1200,7 @@ function App() {
                     <button
                       type="button"
                       className="focus-toggle"
-                      onClick={() => setIsFocusMode((current) => !current)}
+                      onClick={toggleFocusRoute}
                     >
                       {isFocusMode ? 'Show map' : 'Focus reading'}
                     </button>
@@ -1077,10 +1260,7 @@ function App() {
                             className="text-link"
                             onClick={() => {
                               if (!exitEditMode()) return
-                              pushCurrentHistory()
-                              setViewMode('nodes')
-                              setSelectedSlug(link.slug)
-                              setIsFocusMode(true)
+                              navigateToNode(link.slug, { focus: true })
                             }}
                           >
                             {link.kind}: {link.title}
@@ -1140,7 +1320,7 @@ function App() {
               </aside>
             )}
           </>
-        ) : viewMode === 'nodes' && selectedNode ? (
+        ) : viewMode === 'nodes' && selectedNode?.slug === selectedSlug ? (
           <>
             {isFocusMode && !isEditMode && <MarkdownToc body={selectedNode.body} />}
             <div className="detail-main">
@@ -1164,7 +1344,6 @@ function App() {
                     <button
                       type="button"
                       className="focus-toggle"
-                      disabled={!historyStack.length}
                       onClick={goBack}
                     >
                       Back
@@ -1172,7 +1351,7 @@ function App() {
                     <button
                       type="button"
                       className="focus-toggle"
-                      onClick={() => setIsFocusMode((current) => !current)}
+                      onClick={toggleFocusRoute}
                     >
                       {isFocusMode ? 'Show map' : 'Focus reading'}
                     </button>
@@ -1231,9 +1410,7 @@ function App() {
                             className="text-link"
                             onClick={() => {
                               if (!exitEditMode()) return
-                              pushCurrentHistory()
-                              setSelectedSlug(link.target)
-                              setIsFocusMode(true)
+                              navigateToNode(link.target, { focus: true })
                             }}
                           >
                             {link.kind}: {slugTitle(link.target)}

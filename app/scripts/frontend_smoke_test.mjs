@@ -7,6 +7,8 @@ const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:8000'
 const outputDir = new URL('../../generated/qa/', import.meta.url)
 const screenshotPath = (name) => fileURLToPath(new URL(name, outputDir))
 
+const currentUrl = (page) => new URL(page.url())
+
 await mkdir(outputDir, { recursive: true })
 
 const browser = await chromium.launch()
@@ -15,33 +17,54 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 await page.goto(baseUrl, { waitUntil: 'networkidle' })
 await page.getByText('Knowledge Workbench').waitFor()
 await page.getByRole('button', { name: /Binary Search/ }).waitFor()
+if (!currentUrl(page).pathname.startsWith('/nodes/')) {
+  throw new Error('Home should redirect to a node URL.')
+}
 await page.screenshot({ path: screenshotPath('desktop-home.png'), fullPage: false })
 
 await page.getByLabel('Global search').fill('binary')
 await page.getByRole('button', { name: /Binary Search/ }).waitFor()
+if (currentUrl(page).searchParams.get('q') !== 'binary') {
+  throw new Error('Search query should be reflected in the URL.')
+}
 await page.screenshot({ path: screenshotPath('desktop-search-binary.png'), fullPage: false })
 
+await page.getByLabel('Global search').fill('')
 await page.getByRole('button', { name: /CS fundamentals/ }).click()
 await page.getByText('Reading tracks').waitFor()
 await page.getByRole('button', { name: /x86-64 Addressing and leaq/ }).click()
 await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
-await page.locator('.markdown-body h2 strong', { hasText: '作用' }).waitFor()
-const rawBoldSyntaxCount = await page
-  .locator('.markdown-body')
-  .evaluate((body) => (body.textContent?.match(/\*\*作用\*\*/g) ?? []).length)
+if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
+  throw new Error('Node card navigation should update the URL path.')
+}
+await page.locator('.markdown-body h2 strong').first().waitFor()
+const rawBoldSyntaxCount = await page.locator('.markdown-body').evaluate((body) => (body.textContent?.match(/\*\*/g) ?? []).length)
 if (rawBoldSyntaxCount > 0) {
   throw new Error('Markdown bold syntax leaked into rendered text.')
 }
 await page.locator('.code-block').first().waitFor()
+
 await page.getByRole('button', { name: 'Focus reading' }).click()
-await page.getByLabel('Markdown table of contents').getByText('作用').waitFor()
+if (currentUrl(page).searchParams.get('focus') !== '1') {
+  throw new Error('Focus mode should be reflected in the URL.')
+}
+await page.getByLabel('Markdown table of contents').locator('a').first().click()
+if (!currentUrl(page).hash.startsWith('#section-')) {
+  throw new Error('TOC navigation should use a section hash.')
+}
 await page.getByRole('button', { name: 'Show map' }).click()
 await page.screenshot({ path: screenshotPath('desktop-markdown-bold.png'), fullPage: false })
 
 await page.getByRole('button', { name: 'Practice / Quiz Bank' }).click()
+if (currentUrl(page).pathname !== '/quizzes') {
+  throw new Error('Quiz bank navigation should use /quizzes.')
+}
 await page.getByText(/indexed quizzes/).waitFor()
 await page.getByRole('button', { name: /Trace %rax through x86-64 instructions/ }).click()
 await page.getByText('Quiz body').waitFor()
+if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
+  throw new Error('Quiz selection should update the URL path.')
+}
 await page.locator('.markdown-body').getByText('Compute the final value of').waitFor()
 await page.locator('.code-block').first().waitFor()
 await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).waitFor()
@@ -49,17 +72,42 @@ await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage:
 
 await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).click()
 await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
+if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
+  throw new Error('Linked review should navigate to a node URL.')
+}
 await page.getByRole('button', { name: 'Back' }).click()
 await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'Trace %rax' }).waitFor()
+if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
+  throw new Error('Back should restore the previous quiz URL.')
+}
 
-await page.goto(baseUrl, { waitUntil: 'networkidle' })
-await page.getByRole('button', { name: /Binary Search/ }).waitFor()
-await page.getByRole('button', { name: /Binary Search/ }).click()
-await page.getByRole('button', { name: 'Focus reading' }).click()
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.getByLabel('Markdown table of contents').getByText('Binary Search').waitFor()
 await page.getByLabel('Markdown table of contents').getByText('Why It Matters').click()
-await page.locator('.markdown-body h2', { hasText: 'Why It Matters' }).waitFor()
+if (!currentUrl(page).hash.startsWith('#section-')) {
+  throw new Error('TOC section should be represented as a URL hash.')
+}
+await page.locator('.detail-panel').evaluate((panel) => {
+  panel.scrollTop = panel.scrollHeight
+})
+await page.getByRole('button', { name: /related: X86 64 Addressing And Leaq/ }).click()
+await page.locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
+if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
+  throw new Error('Related link should move to the linked node URL.')
+}
+const linkedScrollTop = await page.locator('.detail-panel').evaluate((panel) => panel.scrollTop)
+if (linkedScrollTop > 8) {
+  throw new Error('Linked node navigation should reset the detail scroll position.')
+}
+await page.goBack()
+await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
+if (!currentUrl(page).pathname.endsWith('/nodes/binary-search') || !currentUrl(page).hash.startsWith('#section-')) {
+  throw new Error('Browser back should restore the previous node URL and section hash.')
+}
+
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.getByRole('button', { name: 'Edit mode' }).click()
 await page.getByLabel('Markdown editor').waitFor()
 await page.getByLabel('Reader questions').waitFor({ state: 'hidden' })
@@ -82,9 +130,9 @@ if (smokeQuestion) {
   })
 }
 await page.screenshot({ path: screenshotPath('desktop-focus-reading.png'), fullPage: false })
+
 await page.getByRole('button', { name: 'Show map' }).click()
 await page.getByRole('button', { name: 'Focus reading' }).waitFor()
-
 await page.getByLabel('Global search').fill('graph.*(')
 await page.getByText(/visible of .* indexed nodes/).waitFor()
 

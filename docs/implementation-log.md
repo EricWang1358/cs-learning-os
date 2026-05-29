@@ -596,3 +596,38 @@ Verified:
 - Backend smoke test passes.
 - `npm run lint`
 - `npm run build`
+
+## 2026-05-29: URL-First Navigation
+
+Completed:
+- Added `react-router-dom` and wrapped the app with `BrowserRouter`.
+- Made URL routes the source of truth for the main reading state:
+  - `/nodes/:slug`
+  - `/quizzes/:quizId`
+  - `/queue`
+- Moved focus mode into URL query state with `?focus=1`.
+- Kept Markdown TOC section navigation as normal `#section...` hashes.
+- Replaced the internal detail history stack with browser history.
+- Prevented stale detail bodies from clearing valid section hashes during browser Back.
+
+Verified:
+- Browser Back restores prior node/quiz URLs.
+- Browser Back restores prior Markdown section hashes when applicable.
+- Frontend smoke test passes in a real browser.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+## 2026-05-29: Detail Scroll Restoration
+
+Completed:
+- Added route-aware scroll restoration for the detail panel.
+- Node/quiz route changes without a hash now reset the reading pane to the top.
+- Routes with `#section...` scroll to the matching Markdown heading after content loads.
+- Added frontend smoke coverage for link navigation after manually scrolling the detail pane down.
+
+Verified:
+- Frontend smoke test passes in a real browser.
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
