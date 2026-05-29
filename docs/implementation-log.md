@@ -698,3 +698,16 @@ Completed:
 
 Verified:
 - Minimal Codex CLI JSON-schema smoke succeeds with the generated Codex HOME and third-party provider base URL.
+
+## 2026-05-29: Unsafe Patch Guard
+
+Completed:
+- Tightened AI revision instructions so `replace` patch ops must match the full old block, not only a heading or first line.
+- Added backend validation that rejects multi-line replacements whose `find` text is too small.
+- Added backend validation that rejects replacement text that appears to append new content after the old text instead of replacing it.
+- Added smoke coverage for the exact failure shape that duplicated the quiz `基础说明` block.
+
+Verified:
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`

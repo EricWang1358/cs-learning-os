@@ -87,6 +87,33 @@ class AiJobReject(BaseModel):
     reason: str = ""
 
 
+def non_empty_line_count(text: str) -> int:
+    return sum(1 for line in text.splitlines() if line.strip())
+
+
+def validate_patch_op(index: int, action: str, find_text: str, replace_text: str) -> None:
+    if action != "replace":
+        return
+    find_lines = non_empty_line_count(find_text)
+    replace_lines = non_empty_line_count(replace_text)
+    if replace_lines >= 4 and find_lines < 2:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"AI patch op #{index} is unsafe: replace find text is too small for "
+                "a multi-line replacement. Match the full old block instead."
+            ),
+        )
+    if replace_text.strip().startswith(find_text.strip()) and replace_lines > find_lines + 2:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"AI patch op #{index} is unsafe: replacement appears to append new content "
+                "after the old text instead of replacing the full old block."
+            ),
+        )
+
+
 def apply_patch_ops(original_body: str, patch_ops: list[dict]) -> str:
     body = original_body
     for index, op in enumerate(patch_ops, start=1):
@@ -106,6 +133,7 @@ def apply_patch_ops(original_body: str, patch_ops: list[dict]) -> str:
                 status_code=502,
                 detail=f"AI patch op #{index} expected one match, found {occurrences}",
             )
+        validate_patch_op(index, action, find_text, replace_text)
         if action == "replace":
             body = body.replace(find_text, replace_text, 1)
         else:
@@ -672,6 +700,8 @@ You are revising a personal CS learning knowledge base from a local web app.
 Return a JSON object matching the provided schema. Do not wrap it in Markdown.
 Rules:
 - Prefer patch_ops over rewriting the whole file. Use small exact-find patches when the answer can be localized.
+- For replace patch_ops, find must contain the complete old block being replaced, not just a heading or first line.
+- A replace patch_op must not keep a duplicate copy of the old block after the new block. If you add bilingual lines, replace the full original section with the bilingual section.
 - If patch_ops can build the final Markdown, revised_body may be an empty string.
 - If no safe exact patch is possible, revised_body must be the complete replacement Markdown body only, without YAML frontmatter.
 - revised_body and patch_ops must not both be empty. If no useful edit is needed, return the original body unchanged as revised_body.
@@ -859,6 +889,7 @@ You revise a personal CS learning knowledge base. Return only valid JSON matchin
 Do not invent external sources. Preserve Markdown. Preserve the learner's useful structure.
 Improve clarity, fill missing reasoning steps, and keep the body suitable for direct saving.
 Prefer compact patch_ops with exact find text; use revised_body only when a patch would be unsafe.
+For replace patch_ops, match and replace the full old block. Do not use a heading-only find string to insert a new section above the old section.
 If the target is a node, prefer Standard A. If the target is a quiz, prefer Standard Q.
 Resolve only question IDs that are directly answered in the revised body.
 """

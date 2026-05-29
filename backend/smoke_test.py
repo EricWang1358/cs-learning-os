@@ -13,7 +13,7 @@ os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
 os.environ.pop("OPENAI_API_KEY", None)
 
 from ingest import ingest
-from api import app
+from api import app, apply_patch_ops
 
 
 def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
@@ -302,6 +302,23 @@ def main() -> int:
     assert failed_job_payload["error_code"] == "non_json"
     failed_cleanup = client.delete(f"/api/reader-questions/{failed_question_id}")
     assert failed_cleanup.status_code == 200, failed_cleanup.text
+
+    unsafe_patch_failed = False
+    try:
+        apply_patch_ops(
+            "## 基础说明\n- 原始中文\n\n## Answer\n",
+            [
+                {
+                    "op": "replace",
+                    "section": "## 基础说明",
+                    "find": "## 基础说明",
+                    "replace": "## 基础说明\n- 原始中文\n  English: original Chinese.\n- 原始中文",
+                }
+            ],
+        )
+    except Exception:
+        unsafe_patch_failed = True
+    assert unsafe_patch_failed
 
     os.environ.pop("CS_LEARNING_CODEX_FAKE", None)
     os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
