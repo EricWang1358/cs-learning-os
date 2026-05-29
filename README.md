@@ -93,6 +93,7 @@ This script:
 - starts Vite on `127.0.0.1:5173`
 - writes logs under `generated/dev/`
 - opens the frontend in the browser
+- keeps a foreground supervisor running so `Ctrl+C` stops both dev servers
 
 On this machine, `dev.ps1` will automatically prefer a sibling private data directory if it exists:
 
@@ -105,6 +106,12 @@ To run the same app shell against another user's content and database explicitly
 
 ```powershell
 .\scripts\dev.ps1 -ContentDir D:\path\to\their-content -DbPath D:\path\to\their-knowledge.db
+```
+
+To start servers in the old background style, for smoke tests or automation:
+
+```powershell
+.\scripts\dev.ps1 -Detached -NoBrowser
 ```
 
 To only stop the local dev servers:

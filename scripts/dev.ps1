@@ -4,7 +4,8 @@ param(
     [string]$ContentDir = "",
     [string]$DbPath = "",
     [switch]$NoIngest,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$Detached
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +48,28 @@ function Stop-PortOwner {
         catch {
             Write-Warning "Could not stop PID ${processId} for port ${Port}: $($_.Exception.Message)"
         }
+    }
+}
+
+function Stop-StartedProcess {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$Name
+    )
+
+    if ($null -eq $Process) {
+        return
+    }
+
+    try {
+        $Process.Refresh()
+        if (-not $Process.HasExited) {
+            Write-Host "Stopping $Name PID $($Process.Id)"
+            Stop-Process -Id $Process.Id -Force
+        }
+    }
+    catch {
+        Write-Warning "Could not stop ${Name}: $($_.Exception.Message)"
     }
 }
 
@@ -107,4 +130,41 @@ Write-Host "  UI PID:   $($frontend.Id)"
 
 if (-not $NoBrowser) {
     Start-Process "http://127.0.0.1:$FrontendPort"
+}
+
+if ($Detached) {
+    Write-Host ""
+    Write-Host "Detached mode: services keep running after this script exits."
+    Write-Host "Stop them later with: .\scripts\stop-dev.ps1"
+    return
+}
+
+Write-Host ""
+Write-Host "Foreground supervisor mode is active."
+Write-Host "Press Ctrl+C in this terminal to stop both dev servers."
+
+$exitReason = ""
+try {
+    while ($true) {
+        Start-Sleep -Seconds 1
+        $api.Refresh()
+        $frontend.Refresh()
+
+        if ($api.HasExited) {
+            $exitReason = "API process exited with code $($api.ExitCode). Check $ApiErrLog"
+            break
+        }
+        if ($frontend.HasExited) {
+            $exitReason = "Frontend process exited with code $($frontend.ExitCode). Check $FrontendErrLog"
+            break
+        }
+    }
+}
+finally {
+    Stop-StartedProcess -Process $frontend -Name "frontend"
+    Stop-StartedProcess -Process $api -Name "API"
+}
+
+if ($exitReason) {
+    throw $exitReason
 }

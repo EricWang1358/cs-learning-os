@@ -645,3 +645,11 @@ Completed:
 Notes:
 - The app still cannot disable internal Codex CLI provider retries directly; it now avoids adding its own retry loop and keeps failures retryable from the queue.
 - Failed jobs remain visible until retried; retry creates a new queued job and marks the old one as `retried`.
+
+## 2026-05-29: Dev Script Foreground Supervisor
+
+Completed:
+- Changed `scripts/dev.ps1` to default to foreground supervisor mode.
+- `Ctrl+C` in the terminal now stops both the FastAPI and Vite processes started by the script.
+- Added `-Detached` for automation or old background-style startup.
+- Documented the new behavior in README.
