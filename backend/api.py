@@ -6,37 +6,66 @@ import os
 import json
 import logging
 import hashlib
-import shutil
-import subprocess
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python < 3.11
-    try:
-        import tomli as tomllib
-    except ModuleNotFoundError:
-        tomllib = None
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
+    from .ai_job_service import (
+        add_ai_job_event as service_add_ai_job_event,
+        classify_ai_error,
+        ensure_job_can_write as service_ensure_job_can_write,
+        get_ai_job_or_404,
+        recover_stale_ai_jobs as service_recover_stale_ai_jobs,
+        row_to_ai_job,
+        summarize_ai_error,
+        update_ai_job as service_update_ai_job,
+        utc_now,
+    )
+    from .codex_service import (
+        codex_base_url,
+        codex_cli_path,
+        codex_is_configured,
+        codex_job_home,
+        codex_model_name,
+        codex_model_provider_name,
+        run_codex_json,
+    )
     from .db import connect, initialize
+    from .patch_policy import apply_patch_ops
 except ImportError:
+    from ai_job_service import (
+        add_ai_job_event as service_add_ai_job_event,
+        classify_ai_error,
+        ensure_job_can_write as service_ensure_job_can_write,
+        get_ai_job_or_404,
+        recover_stale_ai_jobs as service_recover_stale_ai_jobs,
+        row_to_ai_job,
+        summarize_ai_error,
+        update_ai_job as service_update_ai_job,
+        utc_now,
+    )
+    from codex_service import (
+        codex_base_url,
+        codex_cli_path,
+        codex_is_configured,
+        codex_job_home,
+        codex_model_name,
+        codex_model_provider_name,
+        run_codex_json,
+    )
     from db import connect, initialize
+    from patch_policy import apply_patch_ops
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")).resolve()
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 logger = logging.getLogger("cs_learning.api")
-DEFAULT_CODEX_CLI = Path(r"D:\Program Files\nodejs\node_global\codex.cmd")
-DEFAULT_CODEX_HOME = Path.home() / ".codex"
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -87,64 +116,26 @@ class AiJobReject(BaseModel):
     reason: str = ""
 
 
-def non_empty_line_count(text: str) -> int:
-    return sum(1 for line in text.splitlines() if line.strip())
-
-
-def validate_patch_op(index: int, action: str, find_text: str, replace_text: str) -> None:
-    if action != "replace":
-        return
-    find_lines = non_empty_line_count(find_text)
-    replace_lines = non_empty_line_count(replace_text)
-    if replace_lines >= 4 and find_lines < 2:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f"AI patch op #{index} is unsafe: replace find text is too small for "
-                "a multi-line replacement. Match the full old block instead."
-            ),
-        )
-    if replace_text.strip().startswith(find_text.strip()) and replace_lines > find_lines + 2:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f"AI patch op #{index} is unsafe: replacement appears to append new content "
-                "after the old text instead of replacing the full old block."
-            ),
-        )
-
-
-def apply_patch_ops(original_body: str, patch_ops: list[dict]) -> str:
-    body = original_body
-    for index, op in enumerate(patch_ops, start=1):
-        action = op.get("op")
-        find_text = str(op.get("find") or "")
-        replace_text = str(op.get("replace") or "")
-        if action not in {"replace", "append_after", "append_end"}:
-            raise HTTPException(status_code=502, detail=f"AI patch op #{index} has unsupported op: {action}")
-        if action == "append_end":
-            body = f"{body.rstrip()}\n\n{replace_text.strip()}\n"
-            continue
-        if not find_text:
-            raise HTTPException(status_code=502, detail=f"AI patch op #{index} is missing find text")
-        occurrences = body.count(find_text)
-        if occurrences != 1:
-            raise HTTPException(
-                status_code=502,
-                detail=f"AI patch op #{index} expected one match, found {occurrences}",
-            )
-        validate_patch_op(index, action, find_text, replace_text)
-        if action == "replace":
-            body = body.replace(find_text, replace_text, 1)
-        else:
-            body = body.replace(find_text, f"{find_text.rstrip()}\n\n{replace_text.strip()}", 1)
-    return body.strip()
-
-
 def get_conn() -> sqlite3.Connection:
     conn = connect(DB_PATH)
     initialize(conn)
     return conn
+
+
+def update_ai_job(job_id: int, **fields: object) -> None:
+    service_update_ai_job(get_conn, job_id, **fields)
+
+
+def add_ai_job_event(job_id: int, stage: str, message: str, level: str = "info") -> None:
+    service_add_ai_job_event(get_conn, job_id, stage, message, level)
+
+
+def ensure_job_can_write(job_id: int) -> sqlite3.Row:
+    return service_ensure_job_can_write(get_conn, job_id)
+
+
+def recover_stale_ai_jobs() -> None:
+    service_recover_stale_ai_jobs(get_conn, int(os.environ.get("CS_LEARNING_STALE_JOB_SECONDS", "900")))
 
 
 def row_to_node(row: sqlite3.Row) -> dict:
@@ -187,86 +178,6 @@ def row_to_reader_question(row: sqlite3.Row) -> dict:
         "created_at": row["created_at"],
         "resolved_at": row["resolved_at"],
         "resolution_note": row["resolution_note"],
-    }
-
-
-def summarize_ai_error(error: str | None) -> str:
-    if not error:
-        return ""
-
-    text = error.strip()
-    lower_text = text.lower()
-    if "high demand" in lower_text:
-        return (
-            "Codex CLI failed because the model provider reported high demand. "
-            "The job is safe to retry; it did not change your Markdown."
-        )
-    if "timed out" in lower_text:
-        return "Codex CLI timed out before returning a draft. The job is safe to retry."
-    if "openai_api_key" in lower_text or "api key" in lower_text:
-        return "AI provider is not configured with the required API key."
-    if "returned non-json" in lower_text:
-        return "Codex CLI returned output that was not valid JSON, so the draft could not be parsed."
-
-    for marker in ["\n--------\nuser", "\nuser\n", "Original Markdown body:"]:
-        marker_index = text.find(marker)
-        if marker_index != -1:
-            text = text[:marker_index].strip()
-
-    lines = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if "WARN codex_core" in stripped or "ERROR: Reconnecting" in stripped:
-            continue
-        lines.append(stripped)
-        if len(" ".join(lines)) > 700:
-            break
-
-    summary = " ".join(lines).strip()
-    return summary[:900] + ("..." if len(summary) > 900 else "")
-
-
-def classify_ai_error(error: str | None) -> str:
-    text = (error or "").lower()
-    if "high demand" in text:
-        return "high_demand"
-    if "timed out" in text:
-        return "timeout"
-    if "non-json" in text or "not valid json" in text:
-        return "non_json"
-    if "api key" in text or "unauthorized" in text or "not configured" in text:
-        return "auth_or_config"
-    if "cancel" in text:
-        return "cancelled"
-    return "unknown"
-
-
-def row_to_ai_job(row: sqlite3.Row) -> dict:
-    result = json.loads(row["result_json"] or "{}")
-    error = row["error"] or ""
-    return {
-        "id": row["id"],
-        "target_type": row["target_type"],
-        "target_id": row["target_id"],
-        "question_ids": json.loads(row["question_ids"] or "[]"),
-        "provider": row["provider"],
-        "model": row["model"],
-        "status": row["status"],
-        "stage": row["stage"],
-        "instruction": row["instruction"],
-        "error": error,
-        "error_summary": summarize_ai_error(error),
-        "error_code": row["error_code"],
-        "retry_of": row["retry_of"],
-        "attempt": row["attempt"],
-        "base_body_hash": row["base_body_hash"],
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-        "completed_at": row["completed_at"],
-        "started_at": row["started_at"],
-        "revision": result.get("revision"),
     }
 
 
@@ -348,92 +259,6 @@ def openai_model_name() -> str:
     return os.environ.get("CS_LEARNING_OPENAI_MODEL", "gpt-5.4-mini")
 
 
-def codex_model_name() -> str:
-    return os.environ.get("CS_LEARNING_CODEX_MODEL", "gpt-5.4-mini")
-
-
-def codex_source_home() -> Path:
-    return Path(os.environ.get("CS_LEARNING_CODEX_SOURCE_HOME", DEFAULT_CODEX_HOME)).resolve()
-
-
-def load_codex_source_config() -> dict:
-    config_path = codex_source_home() / "config.toml"
-    if not config_path.is_file():
-        return {}
-    if tomllib is None:
-        logger.warning("Python tomllib is unavailable; set CS_LEARNING_CODEX_BASE_URL explicitly for dynamic Codex config.")
-        return {}
-    try:
-        with config_path.open("rb") as config_file:
-            return tomllib.load(config_file)
-    except Exception as exc:
-        logger.warning("Could not read Codex source config %s: %s", config_path, exc)
-        return {}
-
-
-def codex_model_provider_name() -> str:
-    return os.environ.get("CS_LEARNING_CODEX_MODEL_PROVIDER") or load_codex_source_config().get("model_provider", "OpenAI")
-
-
-def codex_base_url() -> str:
-    configured = os.environ.get("CS_LEARNING_CODEX_BASE_URL")
-    if configured:
-        return configured.strip()
-    config = load_codex_source_config()
-    provider_name = codex_model_provider_name()
-    provider = config.get("model_providers", {}).get(provider_name, {})
-    return str(provider.get("base_url") or "https://api.openai.com/v1").strip()
-
-
-def codex_auth_mode() -> str:
-    configured = os.environ.get("CS_LEARNING_CODEX_AUTH_MODE")
-    if configured:
-        return configured.strip()
-    config = load_codex_source_config()
-    provider_name = codex_model_provider_name()
-    provider = config.get("model_providers", {}).get(provider_name, {})
-    return "openai" if provider.get("requires_openai_auth", True) else "none"
-
-
-def codex_auth_file() -> Path:
-    return Path(os.environ.get("CS_LEARNING_CODEX_AUTH_FILE", codex_source_home() / "auth.json")).resolve()
-
-
-def codex_job_home() -> Path:
-    return Path(os.environ.get("CS_LEARNING_CODEX_HOME", ROOT / "generated" / "codex-home")).resolve()
-
-
-def shell_quote_toml(value: str) -> str:
-    return json.dumps(value)
-
-
-def ensure_codex_job_home() -> Path:
-    home = codex_job_home()
-    home.mkdir(parents=True, exist_ok=True)
-    auth_file = codex_auth_file()
-    if auth_file.is_file():
-        shutil.copy2(auth_file, home / "auth.json")
-    config_text = "\n".join(
-        [
-            f"model_provider = {shell_quote_toml(codex_model_provider_name())}",
-            f"model = {shell_quote_toml(codex_model_name())}",
-            'model_reasoning_effort = "none"',
-            "disable_response_storage = true",
-            "",
-            f'[model_providers.{shell_quote_toml(codex_model_provider_name())}]',
-            f"name = {shell_quote_toml(codex_model_provider_name())}",
-            f"base_url = {shell_quote_toml(codex_base_url())}",
-            'wire_api = "responses"',
-            f"requires_openai_auth = {str(codex_auth_mode() == 'openai').lower()}",
-            "",
-            "[features]",
-            "js_repl = false",
-        ]
-    )
-    (home / "config.toml").write_text(config_text, encoding="utf-8")
-    return home
-
-
 def codex_fake_mode() -> str:
     return os.environ.get("CS_LEARNING_CODEX_FAKE", "").strip().lower()
 
@@ -444,20 +269,6 @@ def ai_provider_name() -> str:
 
 def openai_is_configured() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY"))
-
-
-def codex_cli_path() -> str:
-    configured = os.environ.get("CS_LEARNING_CODEX_CLI")
-    if configured:
-        return configured
-    if DEFAULT_CODEX_CLI.is_file():
-        return str(DEFAULT_CODEX_CLI)
-    found = shutil.which("codex.cmd") or shutil.which("codex")
-    return found or ""
-
-
-def codex_is_configured() -> bool:
-    return bool(codex_cli_path())
 
 
 def extract_response_text(response: object) -> str:
@@ -771,94 +582,12 @@ def run_codex_revision(context_json: str, reader_questions: list[dict]) -> dict:
             raise HTTPException(status_code=504, detail="Codex CLI revision timed out")
         raise HTTPException(status_code=502, detail=f"Fake Codex failure: {fake_mode}")
 
-    executable = codex_cli_path()
-    if not executable:
-        raise HTTPException(
-            status_code=503,
-            detail="Codex CLI is not configured. Set CS_LEARNING_CODEX_CLI or install @openai/codex.",
-        )
-
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as schema_file:
-        json.dump(ai_revision_schema(), schema_file, ensure_ascii=False)
-        schema_path = schema_file.name
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as output_file:
-        output_path = output_file.name
-
     try:
-        model = codex_model_name()
-        codex_home = ensure_codex_job_home()
-        command = [
-            executable,
-            "--ask-for-approval",
-            "never",
-            "-m",
-            model,
-            "exec",
-            "--ephemeral",
-            "--ignore-rules",
-            "-C",
-            str(ROOT),
-            "--sandbox",
-            "read-only",
-            "--output-schema",
-            schema_path,
-            "--output-last-message",
-            output_path,
-            "-",
-        ]
-        logger.info("Starting Codex CLI revision with executable=%s model=%s", executable, model)
-        env = os.environ.copy()
-        env["CODEX_HOME"] = str(codex_home)
-        completed = subprocess.run(
-            command,
-            cwd=ROOT,
-            input=build_ai_revision_instruction(context_json),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=int(os.environ.get("CS_LEARNING_CODEX_TIMEOUT", "180")),
-            check=False,
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        logger.exception("Codex CLI revision timed out")
-        raise HTTPException(status_code=504, detail="Codex CLI revision timed out") from exc
-    finally:
-        try:
-            Path(schema_path).unlink(missing_ok=True)
-        except OSError:
-            logger.warning("Could not delete temporary Codex schema file: %s", schema_path)
-
-    output = ""
-    output_file_path = Path(output_path)
-    if output_file_path.is_file():
-        output = output_file_path.read_text(encoding="utf-8").strip()
-    if not output:
-        output = (completed.stdout or "").strip()
-    try:
-        output_file_path.unlink(missing_ok=True)
-    except OSError:
-        logger.warning("Could not delete temporary Codex output file: %s", output_path)
-
-    diagnostics = (completed.stderr or "").strip()
-    if completed.returncode != 0:
-        logger.error(
-            "Codex CLI revision failed returncode=%s stderr=%s stdout=%s",
-            completed.returncode,
-            diagnostics[-2000:],
-            output[-2000:],
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"Codex CLI revision failed: {summarize_ai_error(diagnostics or output or str(completed.returncode))}",
-        )
-
-    try:
-        result = json.loads(output)
-    except json.JSONDecodeError as exc:
-        logger.error("Codex CLI returned non-JSON output: %s", output[-2000:])
-        raise HTTPException(status_code=502, detail="Codex CLI returned non-JSON output") from exc
+        result = run_codex_json(build_ai_revision_instruction(context_json), ai_revision_schema())
+    except HTTPException as exc:
+        if exc.status_code == 502 and isinstance(exc.detail, str):
+            raise HTTPException(status_code=502, detail=summarize_ai_error(exc.detail)) from exc
+        raise
 
     logger.info("Codex CLI revision finished")
     context = json.loads(context_json)
@@ -919,88 +648,6 @@ Resolve only question IDs that are directly answered in the revised body.
     context = json.loads(context_json)
     original_body = (context["draft_body_override"] or context["target"]["body"]).strip()
     return revision_response(result, reader_questions, openai_model_name(), "openai-api", original_body)
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def update_ai_job(job_id: int, **fields: object) -> None:
-    if not fields:
-        return
-    fields["updated_at"] = utc_now()
-    assignments = ", ".join(f"{name} = ?" for name in fields)
-    values = list(fields.values())
-    values.append(job_id)
-    with get_conn() as conn:
-        conn.execute(f"UPDATE ai_jobs SET {assignments} WHERE id = ?", values)
-        conn.commit()
-
-
-def add_ai_job_event(job_id: int, stage: str, message: str, level: str = "info") -> None:
-    with get_conn() as conn:
-        conn.execute(
-            """
-            INSERT INTO ai_job_events (job_id, level, stage, message, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (job_id, level, stage, message, utc_now()),
-        )
-        conn.commit()
-
-
-def get_ai_job_or_404(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row:
-    row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="AI job not found")
-    return row
-
-
-def ensure_job_can_write(job_id: int) -> sqlite3.Row:
-    with get_conn() as conn:
-        row = get_ai_job_or_404(conn, job_id)
-    if row["status"] not in {"queued", "solving"}:
-        raise HTTPException(status_code=409, detail=f"AI job is already {row['status']}")
-    return row
-
-
-def recover_stale_ai_jobs() -> None:
-    cutoff_seconds = int(os.environ.get("CS_LEARNING_STALE_JOB_SECONDS", "900"))
-    cutoff = datetime.now(timezone.utc).timestamp() - cutoff_seconds
-    now = utc_now()
-    with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, updated_at
-            FROM ai_jobs
-            WHERE status IN ('queued', 'solving')
-            """
-        ).fetchall()
-        stale_ids = []
-        for row in rows:
-            try:
-                updated = datetime.fromisoformat(row["updated_at"]).timestamp()
-            except ValueError:
-                updated = 0
-            if updated < cutoff:
-                stale_ids.append(row["id"])
-        for job_id in stale_ids:
-            conn.execute(
-                """
-                UPDATE ai_jobs
-                SET status = 'failed',
-                    stage = 'stale_failed',
-                    error = ?,
-                    error_code = 'stale_worker',
-                    updated_at = ?,
-                    completed_at = ?
-                WHERE id = ?
-                """,
-                ("AI job was left queued/solving after the worker stopped or the API restarted.", now, now, job_id),
-            )
-        conn.commit()
-    for job_id in stale_ids:
-        add_ai_job_event(job_id, "stale_failed", "Marked stale after local worker recovery.", "warning")
 
 
 def run_ai_job(job_id: int) -> None:

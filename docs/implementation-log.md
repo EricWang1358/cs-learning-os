@@ -711,3 +711,37 @@ Verified:
 - Backend smoke test passes.
 - `npm run lint`
 - `npm run build`
+
+## 2026-05-29: Patch Policy Refactor
+
+Completed:
+- Extracted AI patch validation and composition from `backend/api.py` into `backend/patch_policy.py`.
+- Kept FastAPI routes responsible for orchestration instead of patch semantics.
+- Updated smoke tests to import the policy module directly.
+
+Verified:
+- Backend smoke test passes.
+
+## 2026-05-29: Codex Service Refactor
+
+Completed:
+- Extracted dynamic Codex provider config and CLI JSON execution from `backend/api.py` into `backend/codex_service.py`.
+- Kept API routes focused on app orchestration and revision response handling.
+- Preserved the generated project-local Codex HOME behavior for third-party providers.
+
+Verified:
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`
+
+## 2026-05-29: AI Job Service Refactor
+
+Completed:
+- Extracted AI job row serialization, error summarization, error classification, event logging, job updates, stale recovery, and write guards into `backend/ai_job_service.py`.
+- Kept thin wrappers in `backend/api.py` so existing route orchestration stayed stable.
+- Preserved the current AI job state machine while reducing route-file responsibilities.
+
+Verified:
+- Backend smoke test passes.
+- `npm run lint`
+- `npm run build`

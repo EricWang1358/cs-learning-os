@@ -13,7 +13,8 @@ os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
 os.environ.pop("OPENAI_API_KEY", None)
 
 from ingest import ingest
-from api import app, apply_patch_ops
+from api import app
+from patch_policy import apply_patch_ops
 
 
 def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
