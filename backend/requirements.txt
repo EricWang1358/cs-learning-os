@@ -1,3 +1,4 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 openai>=2.0
+tomli>=2.0; python_version < "3.11"

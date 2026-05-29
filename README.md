@@ -195,6 +195,8 @@ By default, the app uses the local Codex CLI so it can reuse your Codex configur
 - The backend looks for `D:\Program Files\nodejs\node_global\codex.cmd` first.
 - Override with `CS_LEARNING_CODEX_CLI` if your path is different.
 - The Codex CLI model defaults to `gpt-5.4-mini`; override with `CS_LEARNING_CODEX_MODEL`.
+- Third-party Codex providers are supported through a generated project-local Codex config at `generated/codex-home`.
+- By default, the backend reads provider settings from `%USERPROFILE%\.codex\config.toml` and copies `%USERPROFILE%\.codex\auth.json`; override with `CS_LEARNING_CODEX_SOURCE_HOME`, `CS_LEARNING_CODEX_BASE_URL`, `CS_LEARNING_CODEX_MODEL_PROVIDER`, `CS_LEARNING_CODEX_AUTH_FILE`, or `CS_LEARNING_CODEX_HOME`.
 - In focus reading, add or select `Q to be solved`, then click `Draft with AI`.
 - The request is persisted as an AI job in `Q Queue`; no page refresh is needed.
 - The AI draft waits in `Q Queue` until you click `Review draft`; it does not save automatically.

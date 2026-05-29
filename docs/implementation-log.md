@@ -686,3 +686,15 @@ Verified:
 - Frontend smoke test passes in a real browser with fake Codex enabled.
 - `npm run lint`
 - `npm run build`
+
+## 2026-05-29: Dynamic Codex Provider Config
+
+Completed:
+- Added project-local Codex HOME generation for backend AI jobs at `generated/codex-home`.
+- The generated config preserves third-party provider settings such as `base_url`, model provider name, model, and auth mode.
+- The backend copies the configured Codex auth file into the generated Codex HOME instead of assuming the official OpenAI API key path.
+- Added environment overrides for `CS_LEARNING_CODEX_SOURCE_HOME`, `CS_LEARNING_CODEX_BASE_URL`, `CS_LEARNING_CODEX_MODEL_PROVIDER`, `CS_LEARNING_CODEX_AUTH_FILE`, and `CS_LEARNING_CODEX_HOME`.
+- Added `tomli` fallback support for Python versions before 3.11.
+
+Verified:
+- Minimal Codex CLI JSON-schema smoke succeeds with the generated Codex HOME and third-party provider base URL.
