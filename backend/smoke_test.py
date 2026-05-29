@@ -39,6 +39,11 @@ def main() -> int:
     assert health.json()["ok"] is True
     assert "ai" in health.json()
 
+    preflight = client.get("/api/ai/preflight")
+    assert preflight.status_code == 200, preflight.text
+    assert "ok" in preflight.json()
+    assert preflight.json()["ran_model"] is False
+
     nodes = client.get("/api/nodes")
     assert nodes.status_code == 200, nodes.text
     assert len(nodes.json()["nodes"]) >= 2

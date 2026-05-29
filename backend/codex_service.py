@@ -125,6 +125,52 @@ def codex_is_configured() -> bool:
     return bool(codex_cli_path())
 
 
+def codex_preflight(run_model: bool = False) -> dict:
+    executable = codex_cli_path()
+    home = ensure_codex_job_home() if executable else codex_job_home()
+    checks = {
+        "cli": bool(executable),
+        "auth_file": (home / "auth.json").is_file(),
+        "config_file": (home / "config.toml").is_file(),
+    }
+    payload = {
+        "ok": all(checks.values()),
+        "checks": checks,
+        "codex_cli": executable,
+        "model": codex_model_name(),
+        "model_provider": codex_model_provider_name(),
+        "base_url": codex_base_url(),
+        "codex_home": str(home),
+        "ran_model": False,
+        "message": "Codex CLI metadata checks passed." if all(checks.values()) else "Codex CLI is not ready.",
+    }
+    if not run_model or not payload["ok"]:
+        return payload
+
+    try:
+        result = run_codex_json(
+            'Return JSON with ok true and message "preflight".',
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "ok": {"type": "boolean"},
+                    "message": {"type": "string"},
+                },
+                "required": ["ok", "message"],
+            },
+        )
+        payload["ran_model"] = True
+        payload["model_result"] = result
+        payload["ok"] = bool(result.get("ok"))
+        payload["message"] = "Codex CLI model preflight passed." if payload["ok"] else "Codex CLI model preflight returned an unexpected result."
+    except HTTPException as exc:
+        payload["ran_model"] = True
+        payload["ok"] = False
+        payload["message"] = str(exc.detail)
+    return payload
+
+
 def run_codex_json(prompt: str, schema: dict) -> dict:
     executable = codex_cli_path()
     if not executable:

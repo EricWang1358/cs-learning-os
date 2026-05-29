@@ -33,6 +33,7 @@ try:
         codex_job_home,
         codex_model_name,
         codex_model_provider_name,
+        codex_preflight,
         run_codex_json,
     )
     from .db import connect, initialize
@@ -56,6 +57,7 @@ except ImportError:
         codex_job_home,
         codex_model_name,
         codex_model_provider_name,
+        codex_preflight,
         run_codex_json,
     )
     from db import connect, initialize
@@ -730,6 +732,25 @@ def health() -> dict:
             "codex_base_url": codex_base_url() if ai_provider_name() == "codex-cli" else "",
             "codex_home": str(codex_job_home()) if ai_provider_name() == "codex-cli" else "",
         },
+    }
+
+
+@app.get("/api/ai/preflight")
+def ai_preflight(run_model: bool = False) -> dict:
+    provider = ai_provider_name()
+    if provider == "codex-cli":
+        return {"provider": provider, **codex_preflight(run_model=run_model)}
+    return {
+        "provider": provider,
+        "ok": openai_is_configured(),
+        "checks": {"openai_api_key": openai_is_configured()},
+        "model": openai_model_name(),
+        "ran_model": False,
+        "message": (
+            "OpenAI API key is configured."
+            if openai_is_configured()
+            else "OPENAI_API_KEY is not configured for the local API process."
+        ),
     }
 
 

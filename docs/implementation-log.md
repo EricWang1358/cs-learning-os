@@ -745,3 +745,13 @@ Verified:
 - Backend smoke test passes.
 - `npm run lint`
 - `npm run build`
+
+## 2026-05-29: AI Provider Preflight
+
+Completed:
+- Added `GET /api/ai/preflight` for lightweight provider readiness checks.
+- Added optional `GET /api/ai/preflight?run_model=true` for a tiny real Codex JSON-schema call.
+- Documented lightweight vs real-model preflight behavior in README and state-machine docs.
+
+Verified:
+- Backend smoke test covers the lightweight preflight endpoint.

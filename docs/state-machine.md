@@ -209,10 +209,39 @@ Current gaps:
 
 Recommended next actions:
 
-- Add `preflight` endpoint and UI gate.
+- Add UI gate for the existing `preflight` endpoint.
 - Store external process PID on `ai_jobs` when possible.
 - Add process-tree kill on timeout/cancel.
 - Add retention and abnormal-job filters.
+
+## AI Provider Preflight State Machine
+
+Preflight is separate from AI job execution. It exists to fail fast before a user spends time waiting on a draft.
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_checked
+    not_checked --> metadata_ready: /api/ai/preflight
+    not_checked --> metadata_failed: missing CLI, auth file, or config file
+    metadata_ready --> model_ready: /api/ai/preflight?run_model=true
+    metadata_ready --> model_failed: provider/auth/schema/timeout failure
+    model_ready --> draft_enabled
+    metadata_ready --> draft_enabled: lightweight mode allowed with warning
+    metadata_failed --> draft_disabled
+    model_failed --> draft_disabled
+```
+
+Preflight modes:
+
+- Lightweight metadata check: verifies Codex CLI path, generated Codex HOME, copied auth file, generated config file, provider name, model, and base URL.
+- Real model check: performs a tiny JSON-schema Codex call and confirms structured output.
+
+Rules:
+
+- Lightweight preflight must not spend model tokens.
+- Real model preflight should be user-triggered or release-gate-triggered.
+- Draft jobs should record provider/model/config context so failures can be traced.
+- UI should show preflight status before or near `Draft with AI`.
 
 ## AI Draft Patch State Machine
 
