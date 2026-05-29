@@ -123,7 +123,21 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     error TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    completed_at TEXT NOT NULL DEFAULT ''
+    completed_at TEXT NOT NULL DEFAULT '',
+    started_at TEXT NOT NULL DEFAULT '',
+    retry_of INTEGER,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    base_body_hash TEXT NOT NULL DEFAULT '',
+    error_code TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ai_job_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES ai_jobs(id) ON DELETE CASCADE,
+    level TEXT NOT NULL DEFAULT 'info',
+    stage TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 
@@ -145,4 +159,18 @@ def initialize(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE nodes ADD COLUMN track TEXT NOT NULL DEFAULT 'general'")
     if "display_order" not in existing_columns:
         conn.execute("ALTER TABLE nodes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
+
+    ai_job_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(ai_jobs)").fetchall()
+    }
+    migrations = {
+        "started_at": "ALTER TABLE ai_jobs ADD COLUMN started_at TEXT NOT NULL DEFAULT ''",
+        "retry_of": "ALTER TABLE ai_jobs ADD COLUMN retry_of INTEGER",
+        "attempt": "ALTER TABLE ai_jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1",
+        "base_body_hash": "ALTER TABLE ai_jobs ADD COLUMN base_body_hash TEXT NOT NULL DEFAULT ''",
+        "error_code": "ALTER TABLE ai_jobs ADD COLUMN error_code TEXT NOT NULL DEFAULT ''",
+    }
+    for column, statement in migrations.items():
+        if column not in ai_job_columns:
+            conn.execute(statement)
     conn.commit()

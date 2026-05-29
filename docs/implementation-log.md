@@ -653,3 +653,36 @@ Completed:
 - `Ctrl+C` in the terminal now stops both the FastAPI and Vite processes started by the script.
 - Added `-Detached` for automation or old background-style startup.
 - Documented the new behavior in README.
+
+## 2026-05-29: Q Queue Reliability V1
+
+Completed:
+- Refined the AI job state model so reader questions stay `open` while drafts are queued/running/ready.
+- Added AI job events for durable stage logs.
+- Added fake Codex modes for deterministic smoke tests without spending model tokens.
+- Added `base_body_hash` conflict checks before applying drafts.
+- Moved AI draft apply into one backend API call that writes Markdown, refreshes SQLite/FTS, marks the job applied, and resolves linked questions.
+- Added `Reject draft`; rejected drafts leave linked questions open.
+- Added stale job recovery for old queued/solving jobs.
+- Added a minimal `project-crud-app` demo node and covered the CRUD Q -> fake draft -> apply flow in smoke tests.
+
+Verified:
+- Backend smoke test passes against isolated demo DB.
+- `npm run lint`
+- `npm run build`
+
+## 2026-05-29: AI Draft Patch And Conflict Review
+
+Completed:
+- Added `patch_ops` to the AI revision schema so local AI can propose compact exact-find patches instead of always rewriting full Markdown.
+- Kept full `revised_body` as the safe review artifact; when only patch ops are returned, the backend composes the final body before exposing it to the UI.
+- Added an AI draft preview card that shows patch op count, affected sections, and a line-level diff.
+- Added stale-draft conflict handling: applying a draft now checks the target body hash and blocks if the Markdown changed after the draft was created.
+- Added a draft conflict UI with return-to-queue and create-fresh-draft actions.
+- Extended browser smoke coverage to simulate an external edit, verify the conflict UI, then return to the queue and apply safely.
+
+Verified:
+- Backend smoke test passes against isolated demo DB.
+- Frontend smoke test passes in a real browser with fake Codex enabled.
+- `npm run lint`
+- `npm run build`

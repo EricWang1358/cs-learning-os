@@ -1,16 +1,36 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+os.environ["CS_LEARNING_CONTENT"] = str(ROOT / "content-demo")
+os.environ["CS_LEARNING_DB"] = str(ROOT / "generated" / "smoke" / "knowledge.db")
 
 from fastapi.testclient import TestClient
 
 os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
 os.environ.pop("OPENAI_API_KEY", None)
 
+from ingest import ingest
 from api import app
 
 
+def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
+    terminal_statuses = terminal_statuses or {"draft_ready", "failed", "cancelled", "applied", "rejected"}
+    last_payload: dict | None = None
+    for _ in range(20):
+        response = client.get(f"/api/ai/jobs/{job_id}")
+        assert response.status_code == 200, response.text
+        last_payload = response.json()["job"]
+        if last_payload["status"] in terminal_statuses:
+            return last_payload
+    assert last_payload is not None
+    return last_payload
+
+
 def main() -> int:
+    ingest(Path(os.environ["CS_LEARNING_CONTENT"]), Path(os.environ["CS_LEARNING_DB"]))
     client = TestClient(app)
 
     health = client.get("/api/health")
@@ -167,6 +187,124 @@ def main() -> int:
     for question_id in job_payload["question_ids"]:
         cleanup = client.delete(f"/api/reader-questions/{question_id}")
         assert cleanup.status_code == 200, cleanup.text
+
+    os.environ["CS_LEARNING_AI_PROVIDER"] = "codex-cli"
+    os.environ["CS_LEARNING_CODEX_FAKE"] = "success"
+
+    crud_detail = client.get("/api/nodes/project-crud-app")
+    assert crud_detail.status_code == 200, crud_detail.text
+    crud_original_body = crud_detail.json()["node"]["body"]
+
+    crud_question = client.post(
+        "/api/reader-questions",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question": "Explain the CRUD loop in one concrete sentence.",
+        },
+    )
+    assert crud_question.status_code == 200, crud_question.text
+    crud_question_payload = crud_question.json()["question"]
+
+    crud_job = client.post(
+        "/api/ai/jobs",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question_ids": [crud_question_payload["id"]],
+            "instruction": "Use a minimal deterministic fake draft.",
+        },
+    )
+    assert crud_job.status_code == 200, crud_job.text
+    crud_job_payload = wait_for_job(client, crud_job.json()["job"]["id"])
+    assert crud_job_payload["status"] == "draft_ready", crud_job_payload
+
+    question_still_open = client.get(
+        "/api/reader-questions",
+        params={"target_type": "node", "target_id": "project-crud-app", "status": "open"},
+    )
+    assert question_still_open.status_code == 200, question_still_open.text
+    assert any(item["id"] == crud_question_payload["id"] for item in question_still_open.json()["questions"])
+
+    events = client.get(f"/api/ai/jobs/{crud_job_payload['id']}/events")
+    assert events.status_code == 200, events.text
+    assert any(item["stage"] == "draft_ready" for item in events.json()["events"])
+
+    revised_body = crud_job_payload["revision"]["revised_body"]
+    assert crud_job_payload["revision"]["patch_ops"][0]["op"] == "append_end"
+    assert "AI Draft Smoke Note" in revised_body
+    apply_job = client.post(f"/api/ai/jobs/{crud_job_payload['id']}/apply", json={"body": revised_body})
+    assert apply_job.status_code == 200, apply_job.text
+    assert apply_job.json()["job"]["status"] == "applied"
+
+    resolved_question = client.get(
+        "/api/reader-questions",
+        params={"target_type": "node", "target_id": "project-crud-app", "status": "resolved"},
+    )
+    assert resolved_question.status_code == 200, resolved_question.text
+    assert any(item["id"] == crud_question_payload["id"] for item in resolved_question.json()["questions"])
+
+    restore_crud = client.put("/api/nodes/project-crud-app/body", json={"body": crud_original_body})
+    assert restore_crud.status_code == 200, restore_crud.text
+
+    reject_question = client.post(
+        "/api/reader-questions",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question": "Reject path smoke question.",
+        },
+    )
+    assert reject_question.status_code == 200, reject_question.text
+    reject_question_id = reject_question.json()["question"]["id"]
+    reject_job = client.post(
+        "/api/ai/jobs",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question_ids": [reject_question_id],
+            "instruction": "Fake reject path.",
+        },
+    )
+    assert reject_job.status_code == 200, reject_job.text
+    reject_job_payload = wait_for_job(client, reject_job.json()["job"]["id"])
+    assert reject_job_payload["status"] == "draft_ready", reject_job_payload
+    reject_job_id = reject_job_payload["id"]
+    reject = client.post(f"/api/ai/jobs/{reject_job_id}/reject", json={"reason": "Smoke reject"})
+    assert reject.status_code == 200, reject.text
+    assert reject.json()["job"]["status"] == "rejected"
+    reject_cleanup = client.delete(f"/api/reader-questions/{reject_question_id}")
+    assert reject_cleanup.status_code == 200, reject_cleanup.text
+
+    os.environ["CS_LEARNING_CODEX_FAKE"] = "non_json"
+    failed_question = client.post(
+        "/api/reader-questions",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question": "Failure path smoke question.",
+        },
+    )
+    assert failed_question.status_code == 200, failed_question.text
+    failed_question_id = failed_question.json()["question"]["id"]
+    failed_job = client.post(
+        "/api/ai/jobs",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question_ids": [failed_question_id],
+            "instruction": "Fake failure path.",
+        },
+    )
+    assert failed_job.status_code == 200, failed_job.text
+    failed_job_payload = wait_for_job(client, failed_job.json()["job"]["id"])
+    assert failed_job_payload["status"] == "failed"
+    assert failed_job_payload["error_code"] == "non_json"
+    failed_cleanup = client.delete(f"/api/reader-questions/{failed_question_id}")
+    assert failed_cleanup.status_code == 200, failed_cleanup.text
+
+    os.environ.pop("CS_LEARNING_CODEX_FAKE", None)
+    os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
 
     print("API smoke test passed")
     return 0

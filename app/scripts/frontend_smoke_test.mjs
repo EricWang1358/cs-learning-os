@@ -139,6 +139,50 @@ await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networki
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-focus-reading.png'), fullPage: false })
 
+await page.goto(`${baseUrl}/nodes/project-crud-app?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h1', { hasText: 'Project Pattern: CRUD' }).waitFor()
+const crudDetail = await page.request.get(`${apiBaseUrl}/api/nodes/project-crud-app`)
+const crudOriginalBody = (await crudDetail.json()).node.body
+const crudSmokeQuestion = `Frontend fake Codex CRUD smoke question ${Date.now()}.`
+await page.getByLabel('Reader questions').getByPlaceholder(/This explanation skips/).fill(crudSmokeQuestion)
+await page.getByRole('button', { name: 'Save question' }).click()
+await page.getByText(/Q to be solved:/).waitFor()
+await page.goto(`${baseUrl}/queue`, { waitUntil: 'networkidle' })
+const crudQuestionCard = page.locator('.question-card', { hasText: crudSmokeQuestion }).first()
+await crudQuestionCard.waitFor()
+await crudQuestionCard.locator('button.text-link', { hasText: /^Draft$/ }).click()
+await crudQuestionCard.locator('button.text-link', { hasText: /^Review draft$/ }).waitFor({ timeout: 30000 })
+await crudQuestionCard.locator('button.text-link', { hasText: /^Review draft$/ }).click()
+await page.getByLabel('Markdown editor').waitFor()
+await page.getByText('Patch ops: 1').waitFor()
+await page.getByLabel('AI draft line diff').waitFor()
+await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
+  data: { body: `${crudOriginalBody}\n\n## External Edit\nThis simulates another save before applying the AI draft.` },
+})
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Save Markdown' }).click()
+await page.getByLabel('AI draft conflict').waitFor()
+await page.getByRole('button', { name: 'Return to Q Queue' }).click()
+await page.getByLabel('Question queue').waitFor()
+await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
+  data: { body: crudOriginalBody },
+})
+await crudQuestionCard.locator('button.text-link', { hasText: /^Review draft$/ }).click()
+await page.getByLabel('Markdown editor').waitFor()
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Save Markdown' }).click()
+await page.locator('.markdown-body').getByText('AI Draft Smoke Note').waitFor()
+const crudQuestions = await page.request.get(
+  `${apiBaseUrl}/api/reader-questions?target_type=node&target_id=project-crud-app&status=resolved`,
+)
+const crudQuestionPayload = await crudQuestions.json()
+if (!crudQuestionPayload.questions.some((item) => item.question === crudSmokeQuestion)) {
+  throw new Error('Frontend fake Codex flow should resolve the linked CRUD question after apply.')
+}
+await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
+  data: { body: crudOriginalBody },
+})
+
 await page.getByRole('button', { name: 'Show map' }).click()
 await page.getByRole('button', { name: 'Focus reading' }).waitFor()
 await page.getByLabel('Global search').fill('graph.*(')

@@ -195,12 +195,15 @@ By default, the app uses the local Codex CLI so it can reuse your Codex configur
 - The backend looks for `D:\Program Files\nodejs\node_global\codex.cmd` first.
 - Override with `CS_LEARNING_CODEX_CLI` if your path is different.
 - The Codex CLI model defaults to `gpt-5.4-mini`; override with `CS_LEARNING_CODEX_MODEL`.
-- In focus reading, add or select `Q to be solved`, then click `Resolve with AI`.
+- In focus reading, add or select `Q to be solved`, then click `Draft with AI`.
 - The request is persisted as an AI job in `Q Queue`; no page refresh is needed.
 - The AI draft waits in `Q Queue` until you click `Review draft`; it does not save automatically.
 - Review the Markdown, then click `Save Markdown` to write the local source file.
-- Questions that the AI draft directly answers are marked resolved only after you save.
+- Questions stay open while the AI job runs and are marked resolved only after you apply the draft.
+- Drafts can be rejected from `Q Queue`; rejected drafts leave linked questions open.
 - Failed jobs keep a short readable error summary and can be retried from `Q Queue`.
+- AI drafts prefer compact `patch_ops` when possible, then the backend composes the final Markdown for review.
+- If the target Markdown changed after a draft was created, apply is blocked and the UI shows a draft conflict instead of overwriting newer content.
 
 Example:
 
@@ -232,6 +235,8 @@ Reader questions are tracked through the `Q Queue`:
 - Use the sidebar `Q Queue` entry to see open questions and persisted AI jobs in one list.
 - The queue reads from `reader_questions`, so agents do not need to scan all nodes or tags.
 - AI jobs are separate durable records; queued, solving, draft-ready, and failed states are visible.
+- Job event logs record stage changes for debugging local Codex CLI failures.
+- Draft-ready jobs are still human-controlled: review the generated Markdown, inspect the line diff, then apply, reject, or retry.
 - Test-created questions should be resolved by smoke tests and should not remain in the open queue.
 
 ## Git And Data Policy

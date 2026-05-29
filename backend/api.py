@@ -5,10 +5,10 @@ import re
 import os
 import json
 import logging
+import hashlib
 import shutil
 import subprocess
 import tempfile
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -68,6 +68,40 @@ class AiJobCreate(BaseModel):
     question: str = ""
     instruction: str = ""
     draft_body: str = ""
+
+
+class AiJobApply(BaseModel):
+    body: str = Field(min_length=1)
+
+
+class AiJobReject(BaseModel):
+    reason: str = ""
+
+
+def apply_patch_ops(original_body: str, patch_ops: list[dict]) -> str:
+    body = original_body
+    for index, op in enumerate(patch_ops, start=1):
+        action = op.get("op")
+        find_text = str(op.get("find") or "")
+        replace_text = str(op.get("replace") or "")
+        if action not in {"replace", "append_after", "append_end"}:
+            raise HTTPException(status_code=502, detail=f"AI patch op #{index} has unsupported op: {action}")
+        if action == "append_end":
+            body = f"{body.rstrip()}\n\n{replace_text.strip()}\n"
+            continue
+        if not find_text:
+            raise HTTPException(status_code=502, detail=f"AI patch op #{index} is missing find text")
+        occurrences = body.count(find_text)
+        if occurrences != 1:
+            raise HTTPException(
+                status_code=502,
+                detail=f"AI patch op #{index} expected one match, found {occurrences}",
+            )
+        if action == "replace":
+            body = body.replace(find_text, replace_text, 1)
+        else:
+            body = body.replace(find_text, f"{find_text.rstrip()}\n\n{replace_text.strip()}", 1)
+    return body.strip()
 
 
 def get_conn() -> sqlite3.Connection:
@@ -157,6 +191,21 @@ def summarize_ai_error(error: str | None) -> str:
     return summary[:900] + ("..." if len(summary) > 900 else "")
 
 
+def classify_ai_error(error: str | None) -> str:
+    text = (error or "").lower()
+    if "high demand" in text:
+        return "high_demand"
+    if "timed out" in text:
+        return "timeout"
+    if "non-json" in text or "not valid json" in text:
+        return "non_json"
+    if "api key" in text or "unauthorized" in text or "not configured" in text:
+        return "auth_or_config"
+    if "cancel" in text:
+        return "cancelled"
+    return "unknown"
+
+
 def row_to_ai_job(row: sqlite3.Row) -> dict:
     result = json.loads(row["result_json"] or "{}")
     error = row["error"] or ""
@@ -172,9 +221,14 @@ def row_to_ai_job(row: sqlite3.Row) -> dict:
         "instruction": row["instruction"],
         "error": error,
         "error_summary": summarize_ai_error(error),
+        "error_code": row["error_code"],
+        "retry_of": row["retry_of"],
+        "attempt": row["attempt"],
+        "base_body_hash": row["base_body_hash"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "completed_at": row["completed_at"],
+        "started_at": row["started_at"],
         "revision": result.get("revision"),
     }
 
@@ -197,9 +251,55 @@ def write_markdown_body(path: Path, body: str) -> None:
     path.write_text(frontmatter + normalized_body, encoding="utf-8")
 
 
+def body_hash(body: str) -> str:
+    return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
+
+
 def build_fts_query(term: str) -> str:
     tokens = re.findall(r"[\w-]+", term, flags=re.UNICODE)
     return " ".join(token.replace('"', "") for token in tokens)
+
+
+def update_node_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    slug = row["slug"]
+    tags = [
+        item["tag_name"]
+        for item in conn.execute(
+            "SELECT tag_name FROM node_tags WHERE node_slug = ? ORDER BY tag_name",
+            (slug,),
+        ).fetchall()
+    ]
+    conn.execute("UPDATE nodes SET body = ?, updated_at = ? WHERE slug = ?", (body, now, slug))
+    conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
+    conn.execute(
+        """
+        INSERT INTO node_fts (slug, title, summary, body, tags)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (slug, row["title"], row["summary"], body, " ".join(tags)),
+    )
+
+
+def update_quiz_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    quiz_id = row["id"]
+    tags = [
+        item["tag_name"]
+        for item in conn.execute(
+            "SELECT tag_name FROM quiz_tags WHERE quiz_id = ? ORDER BY tag_name",
+            (quiz_id,),
+        ).fetchall()
+    ]
+    conn.execute("UPDATE quizzes SET body = ?, updated_at = ? WHERE id = ?", (body, now, quiz_id))
+    conn.execute("DELETE FROM quiz_fts WHERE id = ?", (quiz_id,))
+    conn.execute(
+        """
+        INSERT INTO quiz_fts (id, title, summary, body, tags)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (quiz_id, row["title"], row["summary"], body, " ".join(tags)),
+    )
 
 
 def like_term(term: str) -> str:
@@ -213,6 +313,10 @@ def openai_model_name() -> str:
 
 def codex_model_name() -> str:
     return os.environ.get("CS_LEARNING_CODEX_MODEL", "gpt-5.4-mini")
+
+
+def codex_fake_mode() -> str:
+    return os.environ.get("CS_LEARNING_CODEX_FAKE", "").strip().lower()
 
 
 def ai_provider_name() -> str:
@@ -258,7 +362,34 @@ def ai_revision_schema() -> dict:
         "properties": {
             "revised_body": {
                 "type": "string",
-                "description": "Full replacement Markdown body only, without YAML frontmatter.",
+                "description": "Full replacement Markdown body only. Leave empty only when patch_ops can build the final body.",
+            },
+            "patch_ops": {
+                "type": "array",
+                "description": "Preferred compact Markdown patch operations. Use exact find text from the original body.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "op": {
+                            "type": "string",
+                            "enum": ["replace", "append_after", "append_end"],
+                        },
+                        "section": {
+                            "type": "string",
+                            "description": "Nearby Markdown heading or human-readable location.",
+                        },
+                        "find": {
+                            "type": "string",
+                            "description": "Exact existing Markdown to replace or append after. Empty only for append_end.",
+                        },
+                        "replace": {
+                            "type": "string",
+                            "description": "New Markdown fragment.",
+                        },
+                    },
+                    "required": ["op", "section", "find", "replace"],
+                },
             },
             "summary": {
                 "type": "string",
@@ -287,6 +418,7 @@ def ai_revision_schema() -> dict:
         },
         "required": [
             "revised_body",
+            "patch_ops",
             "summary",
             "rationale",
             "changed_sections",
@@ -301,13 +433,20 @@ def revision_response(
     reader_questions: list[dict],
     model: str,
     provider: str,
+    original_body: str = "",
 ) -> dict:
+    patch_ops = result.get("patch_ops") or []
     revised_body = result.get("revised_body", "").strip()
+    if not revised_body and patch_ops and original_body:
+        revised_body = apply_patch_ops(original_body, patch_ops)
     if not revised_body:
         logger.error("AI revision returned an empty body: %s", result)
         raise HTTPException(
             status_code=502,
-            detail=f"AI revision returned an empty body. Raw result: {json.dumps(result, ensure_ascii=False)[:1000]}",
+            detail=(
+                "AI revision returned neither a full body nor applicable patch ops. "
+                f"Raw result: {json.dumps(result, ensure_ascii=False)[:1000]}"
+            ),
         )
 
     known_question_ids = {item["id"] for item in reader_questions}
@@ -320,6 +459,7 @@ def revision_response(
     return {
         "revision": {
             "revised_body": revised_body,
+            "patch_ops": patch_ops,
             "summary": result.get("summary", ""),
             "rationale": result.get("rationale", []),
             "changed_sections": result.get("changed_sections", []),
@@ -440,8 +580,10 @@ You are revising a personal CS learning knowledge base from a local web app.
 
 Return a JSON object matching the provided schema. Do not wrap it in Markdown.
 Rules:
-- revised_body must be the complete replacement Markdown body only, without YAML frontmatter.
-- revised_body must never be empty. If no useful edit is needed, return the original body unchanged.
+- Prefer patch_ops over rewriting the whole file. Use small exact-find patches when the answer can be localized.
+- If patch_ops can build the final Markdown, revised_body may be an empty string.
+- If no safe exact patch is possible, revised_body must be the complete replacement Markdown body only, without YAML frontmatter.
+- revised_body and patch_ops must not both be empty. If no useful edit is needed, return the original body unchanged as revised_body.
 - Preserve the useful structure of the original body.
 - Improve clarity, fill missing reasoning steps, and keep explanations tutorial-like.
 - If target_type is node, prefer Standard A.
@@ -473,6 +615,41 @@ Original Markdown body:
 
 
 def run_codex_revision(context_json: str, reader_questions: list[dict]) -> dict:
+    fake_mode = codex_fake_mode()
+    if fake_mode:
+        if fake_mode == "success":
+            context = json.loads(context_json)
+            target = context["target"]
+            original_body = (context["draft_body_override"] or target["body"]).strip()
+            questions = context["reader_questions"]
+            return revision_response(
+                {
+                    "revised_body": "",
+                    "patch_ops": [
+                        {
+                            "op": "append_end",
+                            "section": "end",
+                            "find": "",
+                            "replace": "## AI Draft Smoke Note\nThis fake Codex draft answers the selected reader question for the CRUD demo flow.",
+                        }
+                    ],
+                    "summary": "Fake Codex draft added a small clarification.",
+                    "rationale": ["Fake response used for deterministic smoke coverage."],
+                    "changed_sections": ["AI Draft Smoke Note"],
+                    "resolved_question_ids": [item["id"] for item in questions],
+                    "suggested_new_nodes": [],
+                },
+                reader_questions,
+                "fake-codex",
+                "codex-cli",
+                original_body,
+            )
+        if fake_mode == "non_json":
+            raise HTTPException(status_code=502, detail="Codex CLI returned non-JSON output")
+        if fake_mode == "timeout":
+            raise HTTPException(status_code=504, detail="Codex CLI revision timed out")
+        raise HTTPException(status_code=502, detail=f"Fake Codex failure: {fake_mode}")
+
     executable = codex_cli_path()
     if not executable:
         raise HTTPException(
@@ -559,7 +736,9 @@ def run_codex_revision(context_json: str, reader_questions: list[dict]) -> dict:
         raise HTTPException(status_code=502, detail="Codex CLI returned non-JSON output") from exc
 
     logger.info("Codex CLI revision finished")
-    return revision_response(result, reader_questions, codex_model_name(), "codex-cli")
+    context = json.loads(context_json)
+    original_body = (context["draft_body_override"] or context["target"]["body"]).strip()
+    return revision_response(result, reader_questions, codex_model_name(), "codex-cli", original_body)
 
 
 def run_openai_revision(context_json: str, reader_questions: list[dict]) -> dict:
@@ -584,6 +763,7 @@ def run_openai_revision(context_json: str, reader_questions: list[dict]) -> dict
 You revise a personal CS learning knowledge base. Return only valid JSON matching the schema.
 Do not invent external sources. Preserve Markdown. Preserve the learner's useful structure.
 Improve clarity, fill missing reasoning steps, and keep the body suitable for direct saving.
+Prefer compact patch_ops with exact find text; use revised_body only when a patch would be unsafe.
 If the target is a node, prefer Standard A. If the target is a quiz, prefer Standard Q.
 Resolve only question IDs that are directly answered in the revised body.
 """
@@ -610,7 +790,9 @@ Resolve only question IDs that are directly answered in the revised body.
         logger.exception("OpenAI API revision failed during model call or response parsing")
         raise HTTPException(status_code=502, detail=f"OpenAI API revision failed: {exc}") from exc
 
-    return revision_response(result, reader_questions, openai_model_name(), "openai-api")
+    context = json.loads(context_json)
+    original_body = (context["draft_body_override"] or context["target"]["body"]).strip()
+    return revision_response(result, reader_questions, openai_model_name(), "openai-api", original_body)
 
 
 def utc_now() -> str:
@@ -629,6 +811,18 @@ def update_ai_job(job_id: int, **fields: object) -> None:
         conn.commit()
 
 
+def add_ai_job_event(job_id: int, stage: str, message: str, level: str = "info") -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO ai_job_events (job_id, level, stage, message, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (job_id, level, stage, message, utc_now()),
+        )
+        conn.commit()
+
+
 def get_ai_job_or_404(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
     if not row:
@@ -636,19 +830,63 @@ def get_ai_job_or_404(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row:
     return row
 
 
+def ensure_job_can_write(job_id: int) -> sqlite3.Row:
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+    if row["status"] not in {"queued", "solving"}:
+        raise HTTPException(status_code=409, detail=f"AI job is already {row['status']}")
+    return row
+
+
+def recover_stale_ai_jobs() -> None:
+    cutoff_seconds = int(os.environ.get("CS_LEARNING_STALE_JOB_SECONDS", "900"))
+    cutoff = datetime.now(timezone.utc).timestamp() - cutoff_seconds
+    now = utc_now()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, updated_at
+            FROM ai_jobs
+            WHERE status IN ('queued', 'solving')
+            """
+        ).fetchall()
+        stale_ids = []
+        for row in rows:
+            try:
+                updated = datetime.fromisoformat(row["updated_at"]).timestamp()
+            except ValueError:
+                updated = 0
+            if updated < cutoff:
+                stale_ids.append(row["id"])
+        for job_id in stale_ids:
+            conn.execute(
+                """
+                UPDATE ai_jobs
+                SET status = 'failed',
+                    stage = 'stale_failed',
+                    error = ?,
+                    error_code = 'stale_worker',
+                    updated_at = ?,
+                    completed_at = ?
+                WHERE id = ?
+                """,
+                ("AI job was left queued/solving after the worker stopped or the API restarted.", now, now, job_id),
+            )
+        conn.commit()
+    for job_id in stale_ids:
+        add_ai_job_event(job_id, "stale_failed", "Marked stale after local worker recovery.", "warning")
+
+
 def run_ai_job(job_id: int) -> None:
     try:
-        update_ai_job(job_id, status="solving", stage="context_built")
+        add_ai_job_event(job_id, "queued", "AI job picked up by local worker.")
+        update_ai_job(job_id, status="solving", stage="context_built", started_at=utc_now())
         with get_conn() as conn:
             row = get_ai_job_or_404(conn, job_id)
+            if row["status"] not in {"queued", "solving"}:
+                add_ai_job_event(job_id, row["status"], "AI job stopped before context build.", "warning")
+                return
             question_ids = json.loads(row["question_ids"] or "[]")
-            if question_ids:
-                placeholders = ",".join("?" for _ in question_ids)
-                conn.execute(
-                    f"UPDATE reader_questions SET status = 'solving' WHERE id IN ({placeholders})",
-                    question_ids,
-                )
-                conn.commit()
             target, reader_questions = load_ai_target(
                 conn,
                 row["target_type"],
@@ -664,9 +902,11 @@ def run_ai_job(job_id: int) -> None:
                 row["instruction"],
                 row["draft_body"],
             )
+        add_ai_job_event(job_id, "context_built", f"Built prompt with {len(reader_questions)} reader question(s).")
 
         provider = ai_provider_name()
         update_ai_job(job_id, provider=provider, stage="codex_running" if provider == "codex-cli" else "model_running")
+        add_ai_job_event(job_id, "codex_running" if provider == "codex-cli" else "model_running", f"Starting {provider}.")
         if provider == "codex-cli":
             response = run_codex_revision(context_json, reader_questions)
         elif provider == "openai-api":
@@ -677,16 +917,8 @@ def run_ai_job(job_id: int) -> None:
                 detail="CS_LEARNING_AI_PROVIDER must be codex-cli or openai-api",
             )
 
+        ensure_job_can_write(job_id)
         revision = response["revision"]
-        draft_question_ids = list(dict.fromkeys([*question_ids, *revision["resolved_question_ids"]]))
-        if draft_question_ids:
-            with get_conn() as conn:
-                placeholders = ",".join("?" for _ in draft_question_ids)
-                conn.execute(
-                    f"UPDATE reader_questions SET status = 'draft_ready' WHERE id IN ({placeholders})",
-                    draft_question_ids,
-                )
-                conn.commit()
         update_ai_job(
             job_id,
             status="draft_ready",
@@ -696,33 +928,24 @@ def run_ai_job(job_id: int) -> None:
             result_json=json.dumps(response, ensure_ascii=False),
             completed_at=utc_now(),
         )
+        add_ai_job_event(job_id, "draft_ready", "AI draft is ready for human review.")
     except Exception as exc:
         detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
         logger.exception("AI job %s failed", job_id)
+        error_text = str(detail)
+        error_code = classify_ai_error(error_text)
         try:
-            with get_conn() as conn:
-                row = conn.execute("SELECT question_ids FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
-                question_ids = json.loads(row["question_ids"] or "[]") if row else []
-                if question_ids:
-                    placeholders = ",".join("?" for _ in question_ids)
-                    conn.execute(
-                        f"UPDATE reader_questions SET status = 'open' WHERE id IN ({placeholders})",
-                        question_ids,
-                    )
-                    conn.commit()
-        except Exception:
-            logger.exception("Could not restore reader question status after failed AI job")
-        update_ai_job(
-            job_id,
-            status="failed",
-            stage="failed",
-            error=str(detail),
-            completed_at=utc_now(),
-        )
+            ensure_job_can_write(job_id)
+        except HTTPException:
+            add_ai_job_event(job_id, "stopped", "AI worker stopped after job state changed.", "warning")
+            return
+        update_ai_job(job_id, status="failed", stage="failed", error=error_text, error_code=error_code, completed_at=utc_now())
+        add_ai_job_event(job_id, "failed", summarize_ai_error(error_text), "error")
 
 
 @app.get("/api/health")
 def health() -> dict:
+    recover_stale_ai_jobs()
     return {
         "ok": True,
         "ai": {
@@ -809,26 +1032,21 @@ def create_ai_job(payload: AiJobCreate, background_tasks: BackgroundTasks) -> di
             )
             question_ids.append(cursor.lastrowid)
 
-        if question_ids:
-            placeholders = ",".join("?" for _ in question_ids)
-            conn.execute(
-                f"""
-                UPDATE reader_questions
-                SET status = 'queued'
-                WHERE target_type = ?
-                  AND target_id = ?
-                  AND id IN ({placeholders})
-                """,
-                [payload.target_type, payload.target_id, *question_ids],
-            )
+        base_body = payload.draft_body.strip()
+        if not base_body:
+            if payload.target_type == "node":
+                body_row = conn.execute("SELECT body FROM nodes WHERE slug = ?", (payload.target_id,)).fetchone()
+            else:
+                body_row = conn.execute("SELECT body FROM quizzes WHERE id = ?", (payload.target_id,)).fetchone()
+            base_body = body_row["body"] if body_row else ""
 
         cursor = conn.execute(
             """
             INSERT INTO ai_jobs (
                 target_type, target_id, question_ids, provider, model, status, stage,
-                instruction, draft_body, created_at, updated_at
+                instruction, draft_body, created_at, updated_at, base_body_hash
             )
-            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?)
             """,
             (
                 payload.target_type,
@@ -840,11 +1058,13 @@ def create_ai_job(payload: AiJobCreate, background_tasks: BackgroundTasks) -> di
                 payload.draft_body,
                 now,
                 now,
+                body_hash(base_body),
             ),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()
 
+    add_ai_job_event(row["id"], "queued", "AI job created. Reader questions remain open until draft is applied.")
     background_tasks.add_task(run_ai_job, row["id"])
     return {"job": row_to_ai_job(row)}
 
@@ -883,13 +1103,43 @@ def get_ai_job(job_id: int) -> dict:
     return {"job": row_to_ai_job(row)}
 
 
+@app.get("/api/ai/jobs/{job_id}/events")
+def list_ai_job_events(job_id: int) -> dict:
+    with get_conn() as conn:
+        get_ai_job_or_404(conn, job_id)
+        rows = conn.execute(
+            """
+            SELECT id, job_id, level, stage, message, created_at
+            FROM ai_job_events
+            WHERE job_id = ?
+            ORDER BY id
+            """,
+            (job_id,),
+        ).fetchall()
+    return {"events": [dict(row) for row in rows]}
+
+
 @app.post("/api/ai/jobs/{job_id}/apply")
-def apply_ai_job(job_id: int) -> dict:
+def apply_ai_job(job_id: int, payload: AiJobApply) -> dict:
     now = utc_now()
     with get_conn() as conn:
         row = get_ai_job_or_404(conn, job_id)
         if row["status"] != "draft_ready":
             raise HTTPException(status_code=400, detail="AI job is not draft_ready")
+        if row["target_type"] == "node":
+            target_row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (row["target_id"],)).fetchone()
+        else:
+            target_row = conn.execute("SELECT * FROM quizzes WHERE id = ?", (row["target_id"],)).fetchone()
+        if not target_row:
+            raise HTTPException(status_code=404, detail="AI job target not found")
+        if row["base_body_hash"] and body_hash(target_row["body"]) != row["base_body_hash"]:
+            raise HTTPException(status_code=409, detail="Target Markdown changed after this draft was created")
+
+        write_markdown_body(CONTENT_ROOT / target_row["path"], payload.body)
+        if row["target_type"] == "node":
+            update_node_body_in_conn(conn, target_row, payload.body.strip())
+        else:
+            update_quiz_body_in_conn(conn, target_row, payload.body.strip())
         question_ids = json.loads(row["question_ids"] or "[]")
         if question_ids:
             placeholders = ",".join("?" for _ in question_ids)
@@ -916,6 +1166,7 @@ def apply_ai_job(job_id: int) -> dict:
         )
         conn.commit()
         updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    add_ai_job_event(job_id, "applied", "Human applied the draft and resolved linked questions.")
     return {"job": row_to_ai_job(updated)}
 
 
@@ -924,15 +1175,8 @@ def cancel_ai_job(job_id: int) -> dict:
     now = utc_now()
     with get_conn() as conn:
         row = get_ai_job_or_404(conn, job_id)
-        if row["status"] in {"draft_ready", "failed", "cancelled", "applied"}:
+        if row["status"] in {"draft_ready", "failed", "cancelled", "applied", "rejected", "retried"}:
             raise HTTPException(status_code=400, detail=f"cannot cancel {row['status']} job")
-        question_ids = json.loads(row["question_ids"] or "[]")
-        if question_ids:
-            placeholders = ",".join("?" for _ in question_ids)
-            conn.execute(
-                f"UPDATE reader_questions SET status = 'open' WHERE id IN ({placeholders})",
-                question_ids,
-            )
         conn.execute(
             """
             UPDATE ai_jobs
@@ -946,6 +1190,33 @@ def cancel_ai_job(job_id: int) -> dict:
         )
         conn.commit()
         updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    add_ai_job_event(job_id, "cancelled", "Human cancelled the job. Linked questions remain open.", "warning")
+    return {"job": row_to_ai_job(updated)}
+
+
+@app.post("/api/ai/jobs/{job_id}/reject")
+def reject_ai_job(job_id: int, payload: AiJobReject) -> dict:
+    now = utc_now()
+    with get_conn() as conn:
+        row = get_ai_job_or_404(conn, job_id)
+        if row["status"] != "draft_ready":
+            raise HTTPException(status_code=400, detail=f"cannot reject {row['status']} job")
+        note = payload.reason.strip() or "Draft rejected by human review"
+        conn.execute(
+            """
+            UPDATE ai_jobs
+            SET status = 'rejected',
+                stage = 'rejected',
+                error = ?,
+                updated_at = ?,
+                completed_at = ?
+            WHERE id = ?
+            """,
+            (note, now, now, job_id),
+        )
+        conn.commit()
+        updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+    add_ai_job_event(job_id, "rejected", "Human rejected the draft. Linked questions remain open.", "warning")
     return {"job": row_to_ai_job(updated)}
 
 
@@ -957,13 +1228,6 @@ def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
         if row["status"] != "failed":
             raise HTTPException(status_code=400, detail=f"cannot retry {row['status']} job")
 
-        question_ids = json.loads(row["question_ids"] or "[]")
-        if question_ids:
-            placeholders = ",".join("?" for _ in question_ids)
-            conn.execute(
-                f"UPDATE reader_questions SET status = 'queued' WHERE id IN ({placeholders})",
-                question_ids,
-            )
         conn.execute(
             """
             UPDATE ai_jobs
@@ -980,9 +1244,9 @@ def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
             """
             INSERT INTO ai_jobs (
                 target_type, target_id, question_ids, provider, model, status, stage,
-                instruction, draft_body, created_at, updated_at
+                instruction, draft_body, created_at, updated_at, retry_of, attempt, base_body_hash
             )
-            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row["target_type"],
@@ -994,11 +1258,15 @@ def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
                 row["draft_body"],
                 now,
                 now,
+                row["id"],
+                int(row["attempt"] or 1) + 1,
+                row["base_body_hash"],
             ),
         )
         conn.commit()
         new_row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()
 
+    add_ai_job_event(new_row["id"], "queued", f"Retry created from job #{job_id}.")
     background_tasks.add_task(run_ai_job, new_row["id"])
     return {"job": row_to_ai_job(new_row)}
 
@@ -1080,7 +1348,6 @@ def update_node_body(slug: str, payload: BodyUpdate) -> dict:
     if not body:
         raise HTTPException(status_code=400, detail="body cannot be empty")
 
-    now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
         if not row:
@@ -1092,25 +1359,7 @@ def update_node_body(slug: str, payload: BodyUpdate) -> dict:
 
         write_markdown_body(content_path, body)
 
-        tags = [
-            item["tag_name"]
-            for item in conn.execute(
-                "SELECT tag_name FROM node_tags WHERE node_slug = ? ORDER BY tag_name",
-                (slug,),
-            ).fetchall()
-        ]
-        conn.execute(
-            "UPDATE nodes SET body = ?, updated_at = ? WHERE slug = ?",
-            (body, now, slug),
-        )
-        conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
-        conn.execute(
-            """
-            INSERT INTO node_fts (slug, title, summary, body, tags)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (slug, row["title"], row["summary"], body, " ".join(tags)),
-        )
+        update_node_body_in_conn(conn, row, body)
         conn.commit()
 
     return get_node(slug)
@@ -1277,7 +1526,6 @@ def update_quiz_body(quiz_id: str, payload: BodyUpdate) -> dict:
     if not body:
         raise HTTPException(status_code=400, detail="body cannot be empty")
 
-    now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM quizzes WHERE id = ?", (quiz_id,)).fetchone()
         if not row:
@@ -1289,25 +1537,7 @@ def update_quiz_body(quiz_id: str, payload: BodyUpdate) -> dict:
 
         write_markdown_body(content_path, body)
 
-        tags = [
-            item["tag_name"]
-            for item in conn.execute(
-                "SELECT tag_name FROM quiz_tags WHERE quiz_id = ? ORDER BY tag_name",
-                (quiz_id,),
-            ).fetchall()
-        ]
-        conn.execute(
-            "UPDATE quizzes SET body = ?, updated_at = ? WHERE id = ?",
-            (body, now, quiz_id),
-        )
-        conn.execute("DELETE FROM quiz_fts WHERE id = ?", (quiz_id,))
-        conn.execute(
-            """
-            INSERT INTO quiz_fts (id, title, summary, body, tags)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (quiz_id, row["title"], row["summary"], body, " ".join(tags)),
-        )
+        update_quiz_body_in_conn(conn, row, body)
         conn.commit()
 
     return get_quiz(quiz_id)
