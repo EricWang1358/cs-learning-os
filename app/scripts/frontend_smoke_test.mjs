@@ -42,7 +42,7 @@ const rawBoldSyntaxCount = await page.locator('.markdown-body').evaluate((body) 
 if (rawBoldSyntaxCount > 0) {
   throw new Error('Markdown bold syntax leaked into rendered text.')
 }
-await page.locator('.code-block').first().waitFor()
+await page.locator('.markdown-body pre code').first().waitFor()
 
 await page.getByRole('button', { name: 'Focus reading' }).click()
 if (currentUrl(page).searchParams.get('focus') !== '1') {
@@ -66,7 +66,7 @@ if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
   throw new Error('Quiz selection should update the URL path.')
 }
 await page.locator('.markdown-body').first().waitFor()
-await page.locator('.code-block').first().waitFor()
+await page.locator('.markdown-body pre code').first().waitFor()
 await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage: false })
 
@@ -177,6 +177,17 @@ await page.goto(`${baseUrl}/nodes/project-crud-app?focus=1`, { waitUntil: 'netwo
 await page.locator('.markdown-body h1', { hasText: 'Project Pattern: CRUD' }).waitFor()
 const crudDetail = await page.request.get(`${apiBaseUrl}/api/nodes/project-crud-app`)
 const crudOriginalBody = (await crudDetail.json()).node.body
+await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
+  data: {
+    body: `${crudOriginalBody}\n\n## Markdown Table Smoke\n| Command | Meaning |\n| --- | --- |\n| \`stepi\` | Step one CPU instruction. |`,
+  },
+})
+await page.goto(`${baseUrl}/nodes/project-crud-app?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body table').waitFor()
+await page.locator('.markdown-body table').getByText('stepi').waitFor()
+await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
+  data: { body: crudOriginalBody },
+})
 const crudSmokeQuestion = `Frontend fake Codex CRUD smoke question ${Date.now()}.`
 await page.getByLabel('Reader questions').getByPlaceholder(/This explanation skips/).fill(crudSmokeQuestion)
 await page.getByRole('button', { name: 'Save question' }).click()

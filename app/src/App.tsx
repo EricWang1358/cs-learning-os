@@ -1,5 +1,18 @@
-import { startTransition, useEffect, useState, useDeferredValue } from 'react'
+import { startTransition, useEffect, useState, useDeferredValue, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import bash from 'highlight.js/lib/languages/bash'
+import c from 'highlight.js/lib/languages/c'
+import cpp from 'highlight.js/lib/languages/cpp'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import markdown from 'highlight.js/lib/languages/markdown'
+import powershell from 'highlight.js/lib/languages/powershell'
+import python from 'highlight.js/lib/languages/python'
+import typescript from 'highlight.js/lib/languages/typescript'
+import x86asm from 'highlight.js/lib/languages/x86asm'
+import hljs from 'highlight.js/lib/core'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './App.css'
 
 type NodeSummary = {
@@ -230,22 +243,36 @@ class ApiRequestError extends Error {
 type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
 type AiDraftScope = 'question' | 'selected' | 'page'
 
-type MarkdownBlock =
-  | { kind: 'code'; code: string; language: string }
-  | { kind: 'heading'; level: 1 | 2 | 3; text: string }
-  | { kind: 'paragraph'; text: string }
-  | { kind: 'list'; items: string[] }
-
 type TocItem = {
   id: string
   level: 1 | 2 | 3
   text: string
 }
 
-type RenderMarkdownBlock = {
-  block: MarkdownBlock
-  id: string
+type ParsedHeading = TocItem & {
+  lineNumber: number
 }
+
+const codeHighlightLanguages = {
+  asm: x86asm,
+  bash,
+  c,
+  cpp,
+  javascript,
+  json,
+  markdown,
+  powershell,
+  python,
+  sh: bash,
+  shell: bash,
+  ts: typescript,
+  typescript,
+  x86asm,
+}
+
+Object.entries(codeHighlightLanguages).forEach(([name, language]) => {
+  hljs.registerLanguage(name, language)
+})
 
 type LineDiffRow = {
   kind: 'same' | 'added' | 'removed'
@@ -357,6 +384,17 @@ function plainMarkdownText(text: string) {
   return text.replace(/`([^`]+)`/g, '$1').replace(/\*\*([^*]+?)\*\*/g, '$1')
 }
 
+function reactNodeText(value: ReactNode): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return ''
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return value.map(reactNodeText).join('')
+  if (typeof value === 'object' && 'props' in value) {
+    const props = value.props as { children?: ReactNode }
+    return reactNodeText(props.children)
+  }
+  return ''
+}
+
 function headingId(text: string, index: number) {
   const base = plainMarkdownText(text)
     .toLowerCase()
@@ -365,20 +403,26 @@ function headingId(text: string, index: number) {
   return `section-${base || 'heading'}-${index}`
 }
 
-function withHeadingIds(blocks: MarkdownBlock[]): RenderMarkdownBlock[] {
-  const renderBlocks: RenderMarkdownBlock[] = []
+function markdownNodeLine(node: unknown) {
+  const positionedNode = node as { position?: { start?: { line?: number } } }
+  return positionedNode.position?.start?.line
+}
+
+function parseMarkdownHeadings(body: string): ParsedHeading[] {
   let headingIndex = 0
-
-  for (const block of blocks) {
-    if (block.kind === 'heading') {
-      renderBlocks.push({ block, id: headingId(block.text, headingIndex) })
-      headingIndex += 1
-    } else {
-      renderBlocks.push({ block, id: '' })
+  return body.split('\n').flatMap((line, lineIndex) => {
+    const heading = line.trim().match(/^(#{1,3})\s+(.+)$/)
+    if (!heading) return []
+    const text = plainMarkdownText(heading[2].trim())
+    const item = {
+      id: headingId(text, headingIndex),
+      level: heading[1].length as 1 | 2 | 3,
+      lineNumber: lineIndex + 1,
+      text,
     }
-  }
-
-  return renderBlocks
+    headingIndex += 1
+    return [item]
+  })
 }
 
 function buildLineDiffSummary(before: string, after: string, maxRows = 80): LineDiffSummary {
@@ -480,192 +524,53 @@ async function responseErrorMessage(response: Response) {
   return `Request failed: ${response.status} ${response.statusText}`.trim()
 }
 
-function parseMarkdownBlocks(body: string): MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = []
-  const lines = body.split('\n')
-  let paragraphBuffer: string[] = []
-  let listBuffer: string[] = []
-  let codeBuffer: string[] = []
-  let codeLanguage = ''
-  let isInCodeBlock = false
-
-  const flushParagraph = () => {
-    const text = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim()
-    if (text) blocks.push({ kind: 'paragraph', text })
-    paragraphBuffer = []
-  }
-
-  const flushList = () => {
-    const items = listBuffer.map((item) => item.replace(/^-\s+/, '').trim()).filter(Boolean)
-    if (items.length) blocks.push({ kind: 'list', items })
-    listBuffer = []
-  }
-
-  const flushTextBlocks = () => {
-    flushParagraph()
-    flushList()
-  }
-
-  for (const line of lines) {
-    const fence = line.match(/^```(\w+)?\s*$/)
-    if (fence && !isInCodeBlock) {
-      flushTextBlocks()
-      isInCodeBlock = true
-      codeLanguage = fence[1] ?? ''
-      codeBuffer = []
-      continue
-    }
-    if (fence && isInCodeBlock) {
-      blocks.push({ kind: 'code', code: codeBuffer.join('\n'), language: codeLanguage })
-      isInCodeBlock = false
-      codeLanguage = ''
-      codeBuffer = []
-      continue
-    }
-
-    if (isInCodeBlock) {
-      codeBuffer.push(line)
-      continue
-    }
-
-    const trimmed = line.trim()
-    if (!trimmed) {
-      flushTextBlocks()
-      continue
-    }
-
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/)
-    if (heading) {
-      flushTextBlocks()
-      blocks.push({
-        kind: 'heading',
-        level: heading[1].length as 1 | 2 | 3,
-        text: heading[2].trim(),
-      })
-      continue
-    }
-
-    if (trimmed.startsWith('- ')) {
-      flushParagraph()
-      listBuffer.push(trimmed)
-      continue
-    }
-
-    flushList()
-    paragraphBuffer.push(trimmed)
-  }
-
-  if (isInCodeBlock) {
-    blocks.push({ kind: 'code', code: codeBuffer.join('\n'), language: codeLanguage })
-  }
-  flushTextBlocks()
-
-  return blocks
-}
-
-function InlineMarkdown({ text }: { text: string }) {
-  const codeParts = text.split(/(`[^`]+`)/g)
-  const renderStrongText = (value: string, partIndex: number) =>
-    value.split(/(\*\*[^*]+?\*\*)/g).map((part, index) =>
-      part.startsWith('**') && part.endsWith('**') ? (
-        <strong key={`strong-${partIndex}-${index}`}>{part.slice(2, -2)}</strong>
-      ) : (
-        <span key={`text-${partIndex}-${index}`}>{part}</span>
-      ),
-    )
-
-  return (
-    <>
-      {codeParts.map((part, index) =>
-        part.startsWith('`') && part.endsWith('`') ? (
-          <code key={`${part}-${index}`}>{part.slice(1, -1)}</code>
-        ) : (
-          renderStrongText(part, index)
-        ),
-      )}
-    </>
-  )
-}
-
 function MarkdownView({ body }: { body: string }) {
-  const blocks = parseMarkdownBlocks(body)
-  const renderBlocks = withHeadingIds(blocks)
+  const headingIdsByLine = new Map(parseMarkdownHeadings(body).map((heading) => [heading.lineNumber, heading.id]))
 
   return (
     <div className="markdown-body">
-      {renderBlocks.map(({ block, id }, index) => {
-        const content =
-          block.kind === 'code'
-            ? block.code
-            : block.kind === 'list'
-              ? block.items.join(' ')
-              : block.text
-        const key = `${index}-${content.slice(0, 18)}`
-
-        if (block.kind === 'code') {
-          return (
-            <figure className="code-block" key={key}>
-              {block.language && <figcaption>{block.language}</figcaption>}
-              <pre>
-                <code>{block.code}</code>
-              </pre>
-            </figure>
-          )
-        }
-        if (block.kind === 'heading') {
-          if (block.level === 1) {
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ children, className }) {
+            const language = /language-([a-zA-Z0-9_-]+)/.exec(className ?? '')?.[1]
+            const code = reactNodeText(children).replace(/\n$/, '')
+            if (!language || !hljs.getLanguage(language)) {
+              return <code className={className}>{children}</code>
+            }
+            const highlighted = hljs.highlight(code, { language, ignoreIllegals: true }).value
             return (
-              <h1 id={id} key={key}>
-                <InlineMarkdown text={block.text} />
-              </h1>
+              <code
+                className={`hljs language-${language}`}
+                dangerouslySetInnerHTML={{ __html: highlighted }}
+              />
             )
-          }
-          if (block.level === 2) {
-            return (
-              <h2 id={id} key={key}>
-                <InlineMarkdown text={block.text} />
-              </h2>
-            )
-          }
-          return (
-            <h3 id={id} key={key}>
-              <InlineMarkdown text={block.text} />
-            </h3>
-          )
-        }
-        if (block.kind === 'list') {
-          return (
-            <ul key={key}>
-              {block.items.map((item) => (
-                <li key={item}>
-                  <InlineMarkdown text={item} />
-                </li>
-              ))}
-            </ul>
-          )
-        }
-        return (
-          <p key={key}>
-            <InlineMarkdown text={block.text} />
-          </p>
-        )
-      })}
+          },
+          h1({ children, node }) {
+            const text = plainMarkdownText(reactNodeText(children))
+            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
+            return <h1 id={id}>{children}</h1>
+          },
+          h2({ children, node }) {
+            const text = plainMarkdownText(reactNodeText(children))
+            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
+            return <h2 id={id}>{children}</h2>
+          },
+          h3({ children, node }) {
+            const text = plainMarkdownText(reactNodeText(children))
+            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
+            return <h3 id={id}>{children}</h3>
+          },
+        }}
+      >
+        {body}
+      </ReactMarkdown>
     </div>
   )
 }
 
 function buildTableOfContents(body: string): TocItem[] {
-  let headingIndex = 0
-  return parseMarkdownBlocks(body).flatMap((block) => {
-    if (block.kind !== 'heading') return []
-    const item = {
-      id: headingId(block.text, headingIndex),
-      level: block.level,
-      text: plainMarkdownText(block.text),
-    }
-    headingIndex += 1
-    return [item]
-  })
+  return parseMarkdownHeadings(body).map(({ id, level, text }) => ({ id, level, text }))
 }
 
 function MarkdownToc({ body }: { body: string }) {
