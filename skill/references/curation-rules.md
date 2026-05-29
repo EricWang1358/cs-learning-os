@@ -95,3 +95,30 @@ Create or update a knowledge node alongside the quiz when:
 Default classification:
 - screenshots of specific questions become Standard Q quiz items
 - conceptual questions about why something works become Standard A knowledge nodes or reader-question updates
+
+## Area Placement Guardrails
+
+### CS fundamentals
+
+`cs-fundamentals` should stay useful as a broad foundation area, but new additions must pass an intro-level gate.
+
+Put a node in `cs-fundamentals` when:
+- it is an intro prerequisite for C, GDB, x86-64, CSAPP, Bomb Lab, binary representation, memory, or machine-level reasoning
+- it is likely to be linked by multiple quizzes or low-level systems notes
+- it explains vocabulary a beginner needs before solving exam-style questions
+
+Do not put a node in `cs-fundamentals` when:
+- it is advanced rather than introductory
+- it is project-specific
+- it is primarily a tool workflow
+- it is a rare trick that should be archived
+
+If unsure, prefer a more specific area/track and explain the placement decision before writing the node.
+
+Recommended tracks:
+- `c-and-memory`
+- `gdb-debugging`
+- `x86-64-assembly`
+- `bomb-lab`
+- `binary-representation`
+- `intro-systems`

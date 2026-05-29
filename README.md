@@ -18,6 +18,8 @@ This project is not just a notes folder. It is a small local knowledge app:
 - React reading UI with Markdown rendering, code blocks, links, and focus mode.
 - Separate quiz-bank layer for exam-style practice questions.
 - Linked review: quiz items can point back to the knowledge nodes they test.
+- `Current loop` cockpit with a full-width knowledge navigator and program health route.
+- Program health reads real local metrics: content size, SQLite size, generated artifacts, queue counts, and AI readiness.
 - Content standards for future additions:
   - `Standard A`: bilingual practical exam note.
   - `Standard Q`: quiz-bank item.
@@ -172,6 +174,19 @@ Use `Standard A` for concept notes, command explanations, GDB/C topics, and bili
 
 Use `Standard Q` for fixed practice questions, exam screenshots, and future daily review candidates.
 
+Quality bar:
+
+- New explanations should match the depth of `Shark Tank Passcode: process_code and is_valid_code`.
+- Do not skip prerequisite vocabulary, state changes, command effects, operand roles, or arithmetic steps.
+- If a quiz exposes missing prerequisite knowledge, update/create the linked Standard A node before treating the quiz as complete.
+
+Placement rule:
+
+- `CS fundamentals` stays broad, but new nodes there must be intro-level prerequisites or foundational bridges.
+- Good fits: intro C, GDB, x86-64, binary representation, memory, CSAPP/Bomb Lab basics.
+- Bad fits: advanced OS/compiler/security topics, project-specific notes, tool-only workflows, or rare tricks.
+- If unsure, choose a more specific area/track or mark the item `archive`; do not dump it into `CS fundamentals`.
+
 Knowledge nodes and quiz items should stay separate:
 
 - Knowledge nodes teach concepts.
@@ -242,6 +257,24 @@ Reader questions are tracked through the `Q Queue`:
 - Draft-ready jobs are still human-controlled: review the generated Markdown, inspect the line diff, then apply, reject, or retry.
 - Test-created questions should be resolved by smoke tests and should not remain in the open queue.
 
+## Navigation Cockpit
+
+The sidebar `Current loop` section has two expansion routes:
+
+- `Knowledge navigator` opens `/graph`, a full-width 2.5D navigator backed by graph endpoints and `graph_cache`.
+- `System health` opens `/health`, a local observability page backed by `/api/system/metrics`.
+
+The graph navigator is intentionally closer to an advanced mind map than a decorative star field:
+
+- `/graph` shows `Workbench -> area`.
+- `/graph/area/<area>` shows area -> tracks.
+- `/graph/track/<area>/<track>` shows track -> nodes.
+- `/graph/node/<slug>` shows node -> Markdown headings.
+- Node and heading layers page at 12 visible cards.
+- Heading cards jump to `focus=1` reading URLs with section hashes.
+
+Future 3D graph work should keep this route and backend contract stable, then lazy-load heavier rendering only after the user opens `/graph`.
+
 ## Git And Data Policy
 
 The repository should stay small and portable.
@@ -284,3 +317,5 @@ This keeps GitHub clean while allowing large local databases, screenshots, downl
 - Add daily review queue with weights and due dates.
 - Improve related-knowledge recommendations.
 - Add richer search filters across nodes and quizzes.
+- Upgrade `/graph` into an interactive 3D knowledge map with lazy-loaded rendering.
+- Expand `/health` into diagnostics for storage growth, failed jobs, stale indexes, backups, and provider readiness.

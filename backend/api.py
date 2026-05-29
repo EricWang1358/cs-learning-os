@@ -68,6 +68,26 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")).resolve()
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 logger = logging.getLogger("cs_learning.api")
+GRAPH_PAGE_SIZE = 12
+STABLE_AREAS = ["abilities", "algorithms", "cs-fundamentals", "projects", "tools", "questions"]
+AREA_LABELS = {
+    "abilities": "Abilities",
+    "algorithms": "Algorithms",
+    "cs-fundamentals": "CS fundamentals",
+    "projects": "Projects",
+    "tools": "Tools",
+    "questions": "Questions",
+    "archive": "Archive",
+}
+TRACK_LABELS = {
+    "general": "General",
+    "c-and-memory": "C and memory",
+    "gdb-debugging": "GDB debugging",
+    "x86-64-assembly": "x86-64 assembly",
+    "bomb-lab": "Bomb Lab",
+    "networking": "Networking",
+}
+HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$", re.MULTILINE)
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -122,6 +142,278 @@ def get_conn() -> sqlite3.Connection:
     conn = connect(DB_PATH)
     initialize(conn)
     return conn
+
+
+def directory_size(path: Path) -> int:
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def plain_markdown_text(text: str) -> str:
+    return re.sub(r"\*\*([^*]+?)\*\*", r"\1", re.sub(r"`([^`]+)`", r"\1", text)).strip()
+
+
+def heading_id(text: str, index: int) -> str:
+    base = plain_markdown_text(text).lower()
+    base = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", base).strip("-")
+    return f"section-{base or 'heading'}-{index}"
+
+
+def markdown_headings(body: str) -> list[dict]:
+    headings: list[dict] = []
+    for index, match in enumerate(HEADING_RE.finditer(body)):
+        text = plain_markdown_text(match.group(2))
+        headings.append(
+            {
+                "type": "heading",
+                "id": heading_id(text, index),
+                "label": text,
+                "meta": f"h{len(match.group(1))}",
+                "hint": "Open this section in focus reading.",
+                "level": len(match.group(1)),
+                "href": "",
+                "child_count": 0,
+                "has_children": False,
+            }
+        )
+    return headings
+
+
+def graph_page(items: list[dict], page: int) -> tuple[list[dict], dict]:
+    safe_page = max(page, 1)
+    total = len(items)
+    total_pages = max(1, (total + GRAPH_PAGE_SIZE - 1) // GRAPH_PAGE_SIZE)
+    current_page = min(safe_page, total_pages)
+    start = (current_page - 1) * GRAPH_PAGE_SIZE
+    return items[start : start + GRAPH_PAGE_SIZE], {
+        "page": current_page,
+        "page_size": GRAPH_PAGE_SIZE,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": current_page > 1,
+        "has_next": current_page < total_pages,
+    }
+
+
+def graph_cache_key(level: str, parts: list[str], page: int) -> str:
+    return ":".join([level, *parts, f"page={max(page, 1)}"])
+
+
+def get_cached_graph(conn: sqlite3.Connection, cache_key: str) -> dict | None:
+    row = conn.execute("SELECT payload_json FROM graph_cache WHERE cache_key = ?", (cache_key,)).fetchone()
+    if not row:
+        return None
+    return json.loads(row["payload_json"])
+
+
+def set_cached_graph(conn: sqlite3.Connection, cache_key: str, payload: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO graph_cache (cache_key, payload_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET
+            payload_json = excluded.payload_json,
+            updated_at = excluded.updated_at
+        """,
+        (cache_key, json.dumps(payload, ensure_ascii=False), utc_now()),
+    )
+
+
+def graph_node(
+    node_type: str,
+    node_id: str,
+    label: str,
+    meta: str = "",
+    hint: str = "",
+    child_count: int = 0,
+    href: str = "",
+    level: int = 0,
+) -> dict:
+    return {
+        "type": node_type,
+        "id": node_id,
+        "label": label,
+        "meta": meta,
+        "hint": hint,
+        "child_count": child_count,
+        "has_children": child_count > 0,
+        "href": href,
+        "level": level,
+    }
+
+
+def graph_response(
+    conn: sqlite3.Connection,
+    cache_key: str,
+    center: dict,
+    path: list[dict],
+    children: list[dict],
+    page: int = 1,
+    actions: list[dict] | None = None,
+) -> dict:
+    paged_children, pagination = graph_page(children, page)
+    payload = {
+        "center": center,
+        "path": path,
+        "children": paged_children,
+        "pagination": pagination,
+        "actions": actions or [],
+    }
+    set_cached_graph(conn, cache_key, payload)
+    return payload
+
+
+def root_graph_payload(conn: sqlite3.Connection, page: int) -> dict:
+    cache_key = graph_cache_key("root", ["workbench"], page)
+    cached = get_cached_graph(conn, cache_key)
+    if cached:
+        return cached
+
+    rows = conn.execute(
+        """
+        SELECT area, COUNT(*) AS count, MIN(display_order) AS first_order
+        FROM nodes
+        WHERE visibility != 'archive'
+        GROUP BY area
+        """
+    ).fetchall()
+    counts = {row["area"]: row["count"] for row in rows}
+    areas = [area for area in STABLE_AREAS if counts.get(area, 0) > 0]
+    extras = sorted(area for area in counts if area not in STABLE_AREAS)
+    children = [
+        graph_node(
+            "area",
+            area,
+            AREA_LABELS.get(area, area.replace("-", " ").title()),
+            f"area · {counts[area]} nodes",
+            "Open this knowledge domain.",
+            counts[area],
+            f"/graph/area/{area}",
+        )
+        for area in [*areas, *extras]
+    ]
+    center = graph_node("root", "workbench", "Workbench", "root · learning map", "Choose a knowledge domain.", len(children))
+    return graph_response(conn, cache_key, center, [center], children, page)
+
+
+def area_graph_payload(conn: sqlite3.Connection, area: str, page: int) -> dict:
+    cache_key = graph_cache_key("area", [area], page)
+    cached = get_cached_graph(conn, cache_key)
+    if cached:
+        return cached
+
+    rows = conn.execute(
+        """
+        SELECT track, COUNT(*) AS count, MIN(display_order) AS first_order
+        FROM nodes
+        WHERE area = ? AND visibility != 'archive'
+        GROUP BY track
+        ORDER BY first_order, track
+        """,
+        (area,),
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Graph area not found")
+    label = AREA_LABELS.get(area, area.replace("-", " ").title())
+    children = [
+        graph_node(
+            "track",
+            row["track"],
+            TRACK_LABELS.get(row["track"], row["track"].replace("-", " ").title()),
+            f"track · {row['count']} nodes",
+            f"Continue through {label}.",
+            row["count"],
+            f"/graph/track/{area}/{row['track']}",
+        )
+        for row in rows
+    ]
+    root = graph_node("root", "workbench", "Workbench", "root", "Back to all domains.", len(children), "/graph")
+    center = graph_node("area", area, label, f"area · {sum(row['count'] for row in rows)} nodes", "Choose a track.", len(children))
+    return graph_response(conn, cache_key, center, [root, center], children, page)
+
+
+def track_graph_payload(conn: sqlite3.Connection, area: str, track: str, page: int) -> dict:
+    cache_key = graph_cache_key("track", [area, track], page)
+    cached = get_cached_graph(conn, cache_key)
+    if cached:
+        return cached
+
+    rows = conn.execute(
+        """
+        SELECT slug, title, summary, display_order, updated_at, body
+        FROM nodes
+        WHERE area = ? AND track = ? AND visibility != 'archive'
+        ORDER BY display_order, updated_at DESC, title
+        """,
+        (area, track),
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Graph track not found")
+    area_label = AREA_LABELS.get(area, area.replace("-", " ").title())
+    track_label = TRACK_LABELS.get(track, track.replace("-", " ").title())
+    children = [
+        graph_node(
+            "node",
+            row["slug"],
+            row["title"],
+            f"node · #{row['display_order']} · {len(markdown_headings(row['body']))} headings",
+            row["summary"] or "Open headings or read this note.",
+            len(markdown_headings(row["body"])),
+            f"/graph/node/{row['slug']}",
+        )
+        for row in rows
+    ]
+    path = [
+        graph_node("root", "workbench", "Workbench", "root", "Back to all domains.", 0, "/graph"),
+        graph_node("area", area, area_label, "area", "Back to this domain.", len(rows), f"/graph/area/{area}"),
+        graph_node("track", track, track_label, f"track · {len(rows)} nodes", "Choose a node.", len(rows)),
+    ]
+    return graph_response(conn, cache_key, path[-1], path, children, page)
+
+
+def node_graph_payload(conn: sqlite3.Connection, slug: str, page: int) -> dict:
+    cache_key = graph_cache_key("node", [slug], page)
+    cached = get_cached_graph(conn, cache_key)
+    if cached:
+        return cached
+
+    row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Graph node not found")
+    headings = markdown_headings(row["body"])
+    for heading in headings:
+        heading["href"] = f"/nodes/{slug}?focus=1#{heading['id']}"
+    area_label = AREA_LABELS.get(row["area"], row["area"].replace("-", " ").title())
+    track_label = TRACK_LABELS.get(row["track"], row["track"].replace("-", " ").title())
+    path = [
+        graph_node("root", "workbench", "Workbench", "root", "Back to all domains.", 0, "/graph"),
+        graph_node("area", row["area"], area_label, "area", "Back to this domain.", 0, f"/graph/area/{row['area']}"),
+        graph_node(
+            "track",
+            row["track"],
+            track_label,
+            "track",
+            "Back to this track.",
+            0,
+            f"/graph/track/{row['area']}/{row['track']}",
+        ),
+        graph_node("node", slug, row["title"], f"node · {len(headings)} headings", row["summary"], len(headings)),
+    ]
+    actions = [
+        {"kind": "open_reading", "label": "Open reading", "href": f"/nodes/{slug}"},
+        {"kind": "focus_reading", "label": "Focus reading", "href": f"/nodes/{slug}?focus=1"},
+    ]
+    return graph_response(conn, cache_key, path[-1], path, headings, page, actions)
 
 
 def update_ai_job(job_id: int, **fields: object) -> None:
@@ -482,11 +774,19 @@ def build_ai_revision_prompt(
     content_standard = """
 Standard A: bilingual practical exam note. Use a patient tutorial tone, aligned English and Chinese,
 concrete command/code examples, plain explanation, common mistakes, quick recall, and deliberate links.
+Quality bar: match the depth of "Shark Tank Passcode: process_code and is_valid_code". Do not skip
+prerequisite vocabulary, command effects, operand/register roles, state changes, branch decisions, or
+arithmetic. For C/GDB/assembly, include tiny examples and define terms a first-pass learner would ask about.
 When a reader question is local to the current node, fold the answer into this body. If it reveals a
 reusable prerequisite, mention it in suggested_new_nodes instead of bloating this body.
+Placement gate: cs-fundamentals is only for intro-level prerequisites or foundational bridges such as
+intro C, GDB, x86-64, binary representation, memory, CSAPP/Bomb Lab basics. Do not place advanced,
+project-specific, tool-only, or rare-trick material there by default.
 
 Standard Q: quiz-bank item. Keep prompt, answer, explanation, plain explanation, what this tests, and
 linked review. Do not skip reasoning steps; show line-by-line state changes and arithmetic when relevant.
+Include "How To Think" when the solution depends on recognizing noise, calling convention, state tracing,
+pointer/memory layout, or a non-obvious instruction pattern. Explain tempting wrong answers when useful.
 """
     payload = {
         "target_type": target_type,
@@ -522,6 +822,9 @@ Rules:
 - Improve clarity, fill missing reasoning steps, and keep explanations tutorial-like.
 - If target_type is node, prefer Standard A.
 - If target_type is quiz, prefer Standard Q.
+- Treat Shark Tank Passcode as the minimum quality bar for quiz and low-level systems explanations.
+- Do not create shallow prerequisite nodes. If a concept deserves a node, make it tutorial-grade; otherwise fold it into the current body.
+- Keep cs-fundamentals intro-level only. Suggest a different area/track for advanced, project-specific, tool-only, or rare material.
 - Do not invent external sources.
 - resolved_question_ids may include only reader questions directly answered in revised_body.
 
@@ -619,9 +922,11 @@ def run_openai_revision(context_json: str, reader_questions: list[dict]) -> dict
 You revise a personal CS learning knowledge base. Return only valid JSON matching the schema.
 Do not invent external sources. Preserve Markdown. Preserve the learner's useful structure.
 Improve clarity, fill missing reasoning steps, and keep the body suitable for direct saving.
+Use Shark Tank Passcode as the quality bar: detailed reasoning, prerequisite vocabulary, examples, common mistakes, and linked review.
 Prefer compact patch_ops with exact find text; use revised_body only when a patch would be unsafe.
 For replace patch_ops, match and replace the full old block. Do not use a heading-only find string to insert a new section above the old section.
 If the target is a node, prefer Standard A. If the target is a quiz, prefer Standard Q.
+Keep cs-fundamentals intro-level only; do not dump advanced or project-specific topics there.
 Resolve only question IDs that are directly answered in the revised body.
 """
 
@@ -751,6 +1056,37 @@ def ai_preflight(run_model: bool = False) -> dict:
             if openai_is_configured()
             else "OPENAI_API_KEY is not configured for the local API process."
         ),
+    }
+
+
+@app.get("/api/system/metrics")
+def system_metrics() -> dict:
+    recover_stale_ai_jobs()
+    with get_conn() as conn:
+        counts = {
+            "nodes": conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0],
+            "quizzes": conn.execute("SELECT COUNT(*) FROM quizzes").fetchone()[0],
+            "open_questions": conn.execute("SELECT COUNT(*) FROM reader_questions WHERE status = 'open'").fetchone()[0],
+            "active_ai_jobs": conn.execute("SELECT COUNT(*) FROM ai_jobs WHERE status IN ('queued', 'solving', 'draft_ready', 'failed')").fetchone()[0],
+            "failed_ai_jobs": conn.execute("SELECT COUNT(*) FROM ai_jobs WHERE status = 'failed'").fetchone()[0],
+        }
+    generated_dir = ROOT / "generated"
+    return {
+        "counts": counts,
+        "storage": {
+            "content_bytes": directory_size(CONTENT_ROOT),
+            "db_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+            "generated_bytes": directory_size(generated_dir),
+        },
+        "paths": {
+            "content": str(CONTENT_ROOT),
+            "db": str(DB_PATH),
+            "generated": str(generated_dir),
+        },
+        "ai": codex_preflight(run_model=False) if ai_provider_name() == "codex-cli" else {
+            "ok": openai_is_configured(),
+            "message": "OpenAI API key is configured." if openai_is_configured() else "OPENAI_API_KEY is not configured.",
+        },
     }
 
 
@@ -1086,6 +1422,38 @@ def list_nodes(
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
     return {"nodes": [row_to_node(row) for row in rows]}
+
+
+@app.get("/api/graph")
+def get_graph_root(page: int = Query(default=1, ge=1)) -> dict:
+    with get_conn() as conn:
+        payload = root_graph_payload(conn, page)
+        conn.commit()
+        return payload
+
+
+@app.get("/api/graph/area/{area}")
+def get_graph_area(area: str, page: int = Query(default=1, ge=1)) -> dict:
+    with get_conn() as conn:
+        payload = area_graph_payload(conn, area, page)
+        conn.commit()
+        return payload
+
+
+@app.get("/api/graph/track/{area}/{track}")
+def get_graph_track(area: str, track: str, page: int = Query(default=1, ge=1)) -> dict:
+    with get_conn() as conn:
+        payload = track_graph_payload(conn, area, track, page)
+        conn.commit()
+        return payload
+
+
+@app.get("/api/graph/node/{slug}")
+def get_graph_node(slug: str, page: int = Query(default=1, ge=1)) -> dict:
+    with get_conn() as conn:
+        payload = node_graph_payload(conn, slug, page)
+        conn.commit()
+        return payload
 
 
 @app.get("/api/nodes/{slug}")

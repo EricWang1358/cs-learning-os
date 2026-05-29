@@ -12,6 +12,8 @@ Tone target:
 - Use a small runnable example before abstract explanation when possible.
 - Keep English and Chinese aligned: the Chinese should explain the same idea, not become a loose unrelated translation.
 - Prefer "what you type", "what you see", and "how to read it" over only definitions.
+- Match the depth of `Shark Tank Passcode: process_code and is_valid_code`: no skipped reasoning steps, no unexplained prerequisite vocabulary, and no bare definitions without examples.
+- For C/GDB/assembly, explain roles of each command, operand, register, variable, memory location, or branch condition that the learner needs to solve the related quiz.
 
 Required structure:
 
@@ -57,6 +59,32 @@ Rules:
 - Build links deliberately: prerequisites before related/suggested ideas.
 - If a command depends on architecture, state the portable form and the common x86-64 form.
 - If a question only clarifies the current node, update that node; if it reveals a reusable prerequisite or cross-topic bridge, create a new linked node.
+- If the note introduces a term such as accumulator, general-purpose register, quad-word, stack pointer, immediate, displacement, or zero-extension, define it in plain language or link to a prerequisite node.
+- Do not add a shallow node just to satisfy a quiz link. If the knowledge node would be too thin, fold the answer into the current node or create a fuller prerequisite.
+
+## Placement Gate: `cs-fundamentals`
+
+`CS fundamentals` is broad but not a dumping ground. New nodes may enter this area only when they are intro-level prerequisites or foundational bridges.
+
+Allowed:
+- Intro C basics, pointers, arrays, strings, structs, stack/heap, memory layout, integer representation.
+- Intro GDB commands and debugging workflow.
+- Intro x86-64 concepts for CSAPP/Bomb Lab: registers, calling convention, addressing, simple arithmetic, `cmp`/jumps, stack inspection.
+- Binary representation and machine-level concepts repeatedly reused by quizzes.
+
+Not allowed by default:
+- Advanced OS/compiler/security/architecture topics.
+- Project-specific implementation notes.
+- Tool-only workflow notes that belong in `tools`.
+- Rare tricks that should be `archive` or a more specific area.
+
+Recommended metadata:
+
+```yaml
+area: cs-fundamentals
+track: c-and-memory | gdb-debugging | x86-64-assembly | bomb-lab | binary-representation | intro-systems
+level: intro
+```
 
 ## Standard Q: Quiz Bank Item
 
@@ -116,3 +144,5 @@ Quality rules:
 - Keep the prompt reproducible without needing the original image.
 - Do not jump steps in explanations. For assembly quizzes, include line-by-line state updates, operand-direction notes, branch decisions, and hex arithmetic when relevant.
 - Add a "How To Think" or equivalent walkthrough when the solution depends on recognizing noise, calling convention, or a non-obvious instruction pattern.
+- Use `Shark Tank Passcode: process_code and is_valid_code` as the quality bar: final answer first, then exhaustive but readable reasoning, then plain explanation, then linked review.
+- If the quiz requires a concept that is not already explained deeply enough, update or create the linked Standard A node before claiming the quiz is complete.

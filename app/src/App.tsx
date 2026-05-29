@@ -152,6 +152,67 @@ type ApiAiJobEventsResponse = {
   events: AiJobEvent[]
 }
 
+type SystemMetrics = {
+  counts: {
+    nodes: number
+    quizzes: number
+    open_questions: number
+    active_ai_jobs: number
+    failed_ai_jobs: number
+  }
+  storage: {
+    content_bytes: number
+    db_bytes: number
+    generated_bytes: number
+  }
+  paths: {
+    content: string
+    db: string
+    generated: string
+  }
+  ai: {
+    ok: boolean
+    message: string
+    provider?: string
+    checks?: Record<string, boolean>
+    model?: string
+    model_provider?: string
+    base_url?: string
+    codex_home?: string
+  }
+}
+
+type ApiSystemMetricsResponse = SystemMetrics
+
+type GraphItem = {
+  type: 'root' | 'area' | 'track' | 'node' | 'heading'
+  id: string
+  label: string
+  meta: string
+  hint: string
+  child_count: number
+  has_children: boolean
+  href: string
+  level?: number
+}
+
+type GraphPayload = {
+  center: GraphItem
+  path: GraphItem[]
+  children: GraphItem[]
+  pagination: {
+    page: number
+    page_size: number
+    total: number
+    total_pages: number
+    has_prev: boolean
+    has_next: boolean
+  }
+  actions: Array<{ kind: string; label: string; href: string }>
+}
+
+type ApiGraphResponse = GraphPayload
+
 type ApiErrorBody = {
   detail?: string
 }
@@ -166,7 +227,7 @@ class ApiRequestError extends Error {
   }
 }
 
-type ViewMode = 'nodes' | 'quizzes' | 'question-queue'
+type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
 type AiDraftScope = 'question' | 'selected' | 'page'
 
 type MarkdownBlock =
@@ -227,14 +288,25 @@ function routeFromLocation(pathname: string, search: string) {
   const quizMatch = pathname.match(/^\/quizzes\/([^/]+)$/)
   const isQuizList = pathname === '/quizzes'
   const isQueue = pathname === '/queue'
+  const isGraph = pathname === '/graph' || pathname.startsWith('/graph/')
+  const isHealth = pathname === '/health'
 
   return {
-    viewMode: isQueue ? 'question-queue' as ViewMode : quizMatch || isQuizList ? 'quizzes' as ViewMode : 'nodes' as ViewMode,
+    viewMode: isGraph
+      ? 'graph' as ViewMode
+      : isHealth
+        ? 'health' as ViewMode
+        : isQueue
+          ? 'question-queue' as ViewMode
+          : quizMatch || isQuizList
+            ? 'quizzes' as ViewMode
+            : 'nodes' as ViewMode,
     selectedSlug: nodeMatch ? decodeURIComponent(nodeMatch[1]) : '',
     selectedQuizId: quizMatch ? decodeURIComponent(quizMatch[1]) : '',
     activeArea: params.get('area') || 'all',
     activeTrack: params.get('track') || 'all',
     query: params.get('q') || '',
+    graphPage: Number(params.get('page') || '1'),
     isFocusMode: params.get('focus') === '1',
   }
 }
@@ -244,14 +316,22 @@ function routeSearch(options: {
   activeTrack?: string
   query?: string
   isFocusMode?: boolean
+  page?: number
 }) {
   const params = new URLSearchParams()
   if (options.activeArea && options.activeArea !== 'all') params.set('area', options.activeArea)
   if (options.activeTrack && options.activeTrack !== 'all') params.set('track', options.activeTrack)
   if (options.query) params.set('q', options.query)
   if (options.isFocusMode) params.set('focus', '1')
+  if (options.page && options.page > 1) params.set('page', String(options.page))
   const value = params.toString()
   return value ? `?${value}` : ''
+}
+
+function graphApiPath(pathname: string, page: number) {
+  const search = routeSearch({ page })
+  if (pathname === '/graph') return `/api/graph${search}`
+  return `/api${pathname}${search}`
 }
 
 function slugTitle(slug: string) {
@@ -259,6 +339,18 @@ function slugTitle(slug: string) {
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`
 }
 
 function plainMarkdownText(text: string) {
@@ -688,6 +780,169 @@ function DraftConflictCard({
   )
 }
 
+function graphChildPosition(index: number, total: number) {
+  const slots = Math.max(total, 1)
+  const angle = slots === 1 ? -90 : -90 + (index * 360) / slots
+  const radiusX = 38
+  const radiusY = 30
+  const x = 50 + Math.cos((angle * Math.PI) / 180) * radiusX
+  const y = 53 + Math.sin((angle * Math.PI) / 180) * radiusY
+  return { x, y, style: { left: `${x}%`, top: `${y}%` } }
+}
+
+function GraphNavigator({
+  payload,
+  isLoading,
+  error,
+  onNavigate,
+  onPage,
+}: {
+  payload: GraphPayload | null
+  isLoading: boolean
+  error: string
+  onNavigate: (href: string) => void
+  onPage: (page: number) => void
+}) {
+  if (isLoading && !payload) {
+    return (
+      <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">
+        <p className="detail-loading">Loading graph navigator...</p>
+      </section>
+    )
+  }
+
+  if (!payload) {
+    return (
+      <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">
+        <div className="empty-state">
+          <h2>Graph unavailable</h2>
+          <p>{error || 'The graph endpoint did not return a payload.'}</p>
+        </div>
+      </section>
+    )
+  }
+
+  const { center, children, pagination, path, actions } = payload
+
+  return (
+    <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">
+      <header className="graph-control-bar">
+        <button type="button" className="focus-toggle" onClick={() => onNavigate('/graph')}>
+          Workbench
+        </button>
+        <nav className="graph-breadcrumb" aria-label="Graph breadcrumb">
+          {path.map((item, index) => (
+            <button
+              key={`${item.type}-${item.id}-${index}`}
+              type="button"
+              disabled={!item.href}
+              onClick={() => item.href && onNavigate(item.href)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="graph-action-row">
+          {actions.map((action) => (
+            <button
+              key={`${action.kind}-${action.href}`}
+              type="button"
+              className="focus-toggle ai-action"
+              onClick={() => onNavigate(action.href)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {error && <p className="error-banner">{error}</p>}
+
+      <div className="graph-canvas" data-level={center.type}>
+        <div className="graph-axis">
+          <span>Workbench</span>
+        </div>
+        <svg className="graph-link-layer" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
+          {children.map((item, index) => {
+            const position = graphChildPosition(index, children.length)
+            return (
+              <line
+                key={`link-${item.type}-${item.id}`}
+                x1="50"
+                y1="53"
+                x2={position.x}
+                y2={position.y}
+              />
+            )
+          })}
+        </svg>
+        <article className="graph-center-card">
+          <p className="eyebrow">{center.meta}</p>
+          <h2>{center.label}</h2>
+          <p>{center.hint}</p>
+          {center.child_count > 0 && <strong>{center.child_count} linked entries</strong>}
+        </article>
+        {children.map((item, index) => {
+          const position = graphChildPosition(index, children.length)
+          const canRead = item.type === 'node'
+          return (
+            <article
+              className={`graph-child-card ${item.type}`}
+              key={`${item.type}-${item.id}`}
+              style={position.style}
+            >
+              <button
+                type="button"
+                className="graph-child-main"
+                onClick={() => onNavigate(item.href)}
+              >
+                <span>{item.meta}</span>
+                <strong>{item.label}</strong>
+                <small>{item.hint}</small>
+              </button>
+              {canRead && (
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => onNavigate(`/nodes/${encodeURIComponent(item.id)}?focus=1`)}
+                >
+                  Read
+                </button>
+              )}
+            </article>
+          )
+        })}
+      </div>
+
+      <footer className="graph-pagination">
+        <span>
+          {pagination.total === 0
+            ? 'No entries'
+            : `${children.length} visible of ${pagination.total} · page ${pagination.page}/${pagination.total_pages}`}
+        </span>
+        <div>
+          <button
+            type="button"
+            className="focus-toggle"
+            disabled={!pagination.has_prev}
+            onClick={() => onPage(pagination.page - 1)}
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            className="focus-toggle"
+            disabled={!pagination.has_next}
+            onClick={() => onPage(pagination.page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </footer>
+    </section>
+  )
+}
+
 function clearLocationHash() {
   if (window.location.hash) {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
@@ -730,6 +985,7 @@ function App() {
   const activeArea = routeState.activeArea
   const activeTrack = routeState.activeTrack
   const query = routeState.query
+  const graphPage = routeState.graphPage
   const isFocusMode = routeState.isFocusMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([])
@@ -755,6 +1011,9 @@ function App() {
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([])
   const [questionScopes, setQuestionScopes] = useState<Record<number, AiDraftScope>>({})
   const [jobEvents, setJobEvents] = useState<Record<number, AiJobEvent[]>>({})
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
+  const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
+  const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
 
   const deferredQuery = useDeferredValue(query)
 
@@ -846,6 +1105,29 @@ function App() {
             setReaderQuestions(questionsData.questions)
             setAiJobs(jobsData.jobs)
           })
+        } else if (viewMode === 'graph') {
+          const cacheKey = `${location.pathname}?page=${graphPage}`
+          const cached = graphCache[cacheKey]
+          if (cached) {
+            setGraphPayload(cached)
+            return
+          }
+          const data = await fetchJson<ApiGraphResponse>(graphApiPath(location.pathname, graphPage))
+
+          if (!isActive) return
+
+          startTransition(() => {
+            setGraphPayload(data)
+            setGraphCache((current) => ({ ...current, [cacheKey]: data }))
+          })
+        } else if (viewMode === 'health') {
+          const metricsData = await fetchJson<ApiSystemMetricsResponse>('/api/system/metrics')
+
+          if (!isActive) return
+
+          startTransition(() => {
+            setSystemMetrics(metricsData)
+          })
         } else {
           const data = deferredQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
@@ -883,7 +1165,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, deferredQuery, isFocusMode, location.pathname, navigate, query, viewMode])
+  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, query, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'nodes' || activeArea === 'all' || activeArea === 'archive') {
@@ -1173,6 +1455,10 @@ function App() {
     return quiz.area === activeArea && quiz.visibility !== 'archive'
   })
 
+  const totalStorageBytes = systemMetrics
+    ? systemMetrics.storage.content_bytes + systemMetrics.storage.db_bytes + systemMetrics.storage.generated_bytes
+    : 0
+
   const activeAiJobs = aiJobs.filter((job) =>
     ['queued', 'solving', 'draft_ready', 'failed'].includes(job.status),
   )
@@ -1216,12 +1502,22 @@ function App() {
   const visibleCount =
     viewMode === 'question-queue'
       ? queueItems.length
+      : viewMode === 'graph'
+        ? graphPayload?.children.length ?? 0
+        : viewMode === 'health'
+          ? systemMetrics
+            ? 1
+            : 0
       : viewMode === 'quizzes'
         ? filteredQuizzes.length
         : filteredNodes.length
   const totalCount =
     viewMode === 'question-queue'
       ? totalQueueItems
+      : viewMode === 'graph'
+        ? graphPayload?.pagination.total ?? 0
+        : viewMode === 'health'
+          ? 1
       : viewMode === 'quizzes'
         ? quizzes.length
         : nodes.length
@@ -1322,6 +1618,16 @@ function App() {
   const goBack = () => {
     if (!exitEditMode()) return
     navigate(-1)
+  }
+
+  const navigateGraph = (href: string) => {
+    if (!exitEditMode()) return
+    navigate(href)
+  }
+
+  const navigateGraphPage = (page: number) => {
+    if (!exitEditMode()) return
+    navigate(`${location.pathname}${routeSearch({ page })}`)
   }
 
   const dismissReaderQuestion = async (item: ReaderQuestion) => {
@@ -1617,7 +1923,7 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -1674,14 +1980,47 @@ function App() {
         <section className="system-note">
           <h2>Current loop</h2>
           <p>Markdown stays source of truth. SQLite powers search. React is the daily surface.</p>
+          <div className="loop-actions">
+            <button
+              type="button"
+              className={viewMode === 'graph' ? 'active' : ''}
+              onClick={() => {
+                if (!exitEditMode()) return
+                navigate('/graph')
+              }}
+            >
+              Knowledge navigator
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'health' ? 'active' : ''}
+              onClick={() => {
+                if (!exitEditMode()) return
+                navigate('/health')
+              }}
+            >
+              System health
+            </button>
+          </div>
         </section>
       </aside>
 
+      {viewMode === 'graph' ? (
+        <GraphNavigator
+          payload={graphPayload}
+          isLoading={isLoading}
+          error={error}
+          onNavigate={navigateGraph}
+          onPage={navigateGraphPage}
+        />
+      ) : (
       <section className="node-column" aria-label="Knowledge nodes">
         <header className="search-header">
           <label htmlFor="node-search">
             {viewMode === 'question-queue'
               ? 'Question queue'
+              : viewMode === 'health'
+                  ? 'Program health'
               : viewMode === 'quizzes'
                 ? 'Quiz search'
                 : 'Global search'}
@@ -1703,6 +2042,8 @@ function App() {
                 )
               } else if (viewMode === 'question-queue') {
                 navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
+              } else if (viewMode === 'health') {
+                navigate('/health', { replace: true })
               } else {
                 navigate(
                   `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
@@ -1718,10 +2059,13 @@ function App() {
             placeholder={
               viewMode === 'question-queue'
                 ? 'Open questions are loaded directly...'
+                : viewMode === 'health'
+                    ? 'Health is live metrics; search is disabled here.'
                 : viewMode === 'quizzes'
                 ? 'Search quiz prompts, tags, answers...'
                 : 'Search concepts, tags, summaries...'
             }
+            disabled={viewMode === 'health'}
           />
           <p>
             {isLoading
@@ -1729,6 +2073,8 @@ function App() {
               : `${visibleCount} visible of ${totalCount} indexed ${
                   viewMode === 'question-queue'
                     ? 'open questions'
+                    : viewMode === 'health'
+                        ? 'health dashboards'
                     : viewMode === 'quizzes'
                       ? 'quizzes'
                       : 'nodes'
@@ -1914,6 +2260,28 @@ function App() {
                   </article>
                 )
               })
+            : viewMode === 'health'
+              ? (
+                  <>
+                    <article className="node-card compact-card">
+                      <span className="node-meta">content / markdown source</span>
+                      <strong>{systemMetrics ? formatBytes(systemMetrics.storage.content_bytes) : 'Loading...'}</strong>
+                      <span>{systemMetrics?.paths.content ?? 'Content directory metrics are loading.'}</span>
+                    </article>
+                    <article className="node-card compact-card">
+                      <span className="node-meta">sqlite / local index</span>
+                      <strong>{systemMetrics ? formatBytes(systemMetrics.storage.db_bytes) : 'Loading...'}</strong>
+                      <span>{systemMetrics?.paths.db ?? 'SQLite path is loading.'}</span>
+                    </article>
+                    <article className="node-card compact-card">
+                      <span className="node-meta">ai / jobs</span>
+                      <strong>{systemMetrics?.counts.active_ai_jobs ?? 0} active</strong>
+                      <span>
+                        {systemMetrics?.ai.message ?? 'AI preflight will appear after metrics load.'}
+                      </span>
+                    </article>
+                  </>
+                )
             : viewMode === 'quizzes'
             ? filteredQuizzes.map((quiz) => (
                 <button
@@ -1952,7 +2320,9 @@ function App() {
               ))}
         </div>
       </section>
+      )}
 
+      {viewMode !== 'graph' && (
       <aside className="detail-panel" aria-label="Node detail">
         {viewMode === 'question-queue' ? (
           <div className="queue-detail">
@@ -2047,6 +2417,84 @@ function App() {
                 <p>No AI jobs yet.</p>
               )}
             </section>
+          </div>
+        ) : viewMode === 'health' ? (
+          <div className="health-detail">
+            <section className="detail-heading health-heading">
+              <p className="eyebrow">Program health</p>
+              <h2>System Health</h2>
+              <p>
+                A local observability cockpit for content size, SQLite growth, AI job health, and future
+                maintenance warnings.
+              </p>
+            </section>
+            {systemMetrics ? (
+              <>
+                <section className="health-grid" aria-label="Storage usage">
+                  <article className="health-card accent-card">
+                    <p className="eyebrow">Total local footprint</p>
+                    <h3>{formatBytes(totalStorageBytes)}</h3>
+                    <p>Tracked across content, SQLite, and generated app artifacts.</p>
+                  </article>
+                  <article className="health-card">
+                    <p className="eyebrow">Content</p>
+                    <h3>{formatBytes(systemMetrics.storage.content_bytes)}</h3>
+                    <div className="health-meter">
+                      <span
+                        style={{
+                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.content_bytes / totalStorageBytes) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <p>{systemMetrics.paths.content}</p>
+                  </article>
+                  <article className="health-card">
+                    <p className="eyebrow">SQLite DB</p>
+                    <h3>{formatBytes(systemMetrics.storage.db_bytes)}</h3>
+                    <div className="health-meter">
+                      <span
+                        style={{
+                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.db_bytes / totalStorageBytes) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <p>{systemMetrics.paths.db}</p>
+                  </article>
+                  <article className="health-card">
+                    <p className="eyebrow">Generated</p>
+                    <h3>{formatBytes(systemMetrics.storage.generated_bytes)}</h3>
+                    <div className="health-meter">
+                      <span
+                        style={{
+                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.generated_bytes / totalStorageBytes) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <p>{systemMetrics.paths.generated}</p>
+                  </article>
+                </section>
+                <section className="detail-section split">
+                  <div className="health-card">
+                    <p className="eyebrow">Knowledge inventory</p>
+                    <ul className="metric-list">
+                      <li><strong>{systemMetrics.counts.nodes}</strong> nodes</li>
+                      <li><strong>{systemMetrics.counts.quizzes}</strong> quizzes</li>
+                      <li><strong>{systemMetrics.counts.open_questions}</strong> open reader questions</li>
+                    </ul>
+                  </div>
+                  <div className="health-card">
+                    <p className="eyebrow">AI workflow</p>
+                    <ul className="metric-list">
+                      <li><strong>{systemMetrics.counts.active_ai_jobs}</strong> active jobs</li>
+                      <li><strong>{systemMetrics.counts.failed_ai_jobs}</strong> failed jobs</li>
+                      <li><strong>{systemMetrics.ai.ok ? 'Ready' : 'Needs setup'}</strong> {systemMetrics.ai.message}</li>
+                    </ul>
+                  </div>
+                </section>
+              </>
+            ) : (
+              <p className="detail-loading">Loading health metrics...</p>
+            )}
           </div>
         ) : viewMode === 'quizzes' && selectedQuiz?.id === selectedQuizId ? (
           <>
@@ -2394,6 +2842,7 @@ function App() {
           </div>
         )}
       </aside>
+      )}
     </main>
   )
 }

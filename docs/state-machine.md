@@ -22,7 +22,7 @@ The application layer is the user-facing React app.
 
 Responsibilities:
 
-- Own visible modes: node reading, quiz reading, focus mode, edit mode, Q Queue, AI draft review.
+- Own visible modes: node reading, quiz reading, focus mode, edit mode, Q Queue, AI draft review, knowledge graph, and program health.
 - Make URL route the source of truth for selected node/quiz/queue and focus mode.
 - Treat edit mode as transient UI state, not canonical content state.
 - Never save AI output automatically.
@@ -48,7 +48,7 @@ Recommended next actions:
 
 - Split `App.tsx` into route shells, queue components, markdown editor, AI job panel, and API client modules.
 - Add typed UI state reducers for edit/review/queue flows.
-- Add a status banner fed by backend health/preflight.
+- Continue expanding `/health` into a status cockpit fed by backend health, metrics, and AI preflight.
 - Add list virtualization if nodes/quizzes/questions exceed a few hundred visible rows.
 
 ## Data Layer
@@ -326,6 +326,8 @@ Canonical routes:
 - `/quizzes/:quizId`
 - `/quizzes`
 - `/queue`
+- `/graph`
+- `/health`
 
 Query state:
 
@@ -343,6 +345,45 @@ Rules:
 - Browser back should restore selected node/quiz and section hash.
 - Link navigation should reset detail scroll to top when no section hash is present.
 - Stale section hashes should not move the next page to the wrong location.
+- Graph and health are standalone cockpit routes; they should not inherit stale node hashes or focus-mode state.
+
+## Current Loop Cockpit State
+
+The `Current loop` sidebar section is the expansion point for app-level views that are not single knowledge nodes.
+
+```mermaid
+stateDiagram-v2
+    [*] --> reading: default node or quiz
+    reading --> graph: Knowledge navigator
+    reading --> health: System health
+    graph --> graph: click area, track, or node
+    graph --> reading: click heading or reading action
+    health --> reading: open node/quiz from future diagnostics
+    graph --> health: sidebar button
+    health --> graph: sidebar button
+```
+
+Current implementation:
+
+- `/graph` reads backend graph payloads and renders a full-width 2.5D navigator.
+- `/graph/area/:area`, `/graph/track/:area/:track`, and `/graph/node/:slug` are canonical layered graph routes.
+- Graph endpoint payloads include `path`, `center`, `children`, `pagination`, and `actions`.
+- `graph_cache` stores generated payload JSON by route/page key; ingest clears it.
+- `/health` reads `/api/system/metrics` and shows content size, SQLite size, generated artifacts, queue counts, and AI readiness.
+- Both routes are deliberately dependency-light.
+
+Future graph rules:
+
+- Lazy-load WebGL or Three.js only when `/graph` is opened.
+- Build graph edges from links, tags, prerequisites, review history, and embeddings rather than hardcoded UI arrays.
+- Keep click-through to canonical `/nodes/:slug` and `/quizzes/:quizId`.
+- Keep node and heading layers paginated at 12 visible cards unless user testing proves more is still readable.
+
+Future health rules:
+
+- Health metrics must never leak secrets or private Markdown body text.
+- Health should prefer counts, sizes, timestamps, hashes, and status summaries.
+- Health should flag actionable states: stale index, large generated artifacts, failed jobs, missing provider config, and backup age.
 
 ## Performance Plan
 
@@ -359,6 +400,7 @@ Near-term optimizations:
 - Add queue indexes listed in the data layer section.
 - Only fetch detail bodies when needed.
 - Split bundle into route-level chunks if the UI grows.
+- Lazy-load heavy graph rendering dependencies from the `/graph` route only.
 - Limit Q Queue results to recent/abnormal by default.
 - Add `limit` and `cursor` query params for jobs/questions.
 

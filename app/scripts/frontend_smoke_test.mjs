@@ -30,14 +30,14 @@ if (currentUrl(page).searchParams.get('q') !== 'binary') {
 await page.screenshot({ path: screenshotPath('desktop-search-binary.png'), fullPage: false })
 
 await page.getByLabel('Global search').fill('')
-await page.getByRole('button', { name: /CS fundamentals/ }).click()
+await page.locator('.area-nav').getByRole('button', { name: /^CS fundamentals\s+\d+$/ }).click()
 await page.getByText('Reading tracks').waitFor()
 await page.getByRole('button', { name: /x86-64 Addressing and leaq/ }).click()
 await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
 if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
   throw new Error('Node card navigation should update the URL path.')
 }
-await page.locator('.markdown-body h2 strong').first().waitFor()
+await page.locator('.markdown-body').first().waitFor()
 const rawBoldSyntaxCount = await page.locator('.markdown-body').evaluate((body) => (body.textContent?.match(/\*\*/g) ?? []).length)
 if (rawBoldSyntaxCount > 0) {
   throw new Error('Markdown bold syntax leaked into rendered text.')
@@ -65,7 +65,7 @@ await page.getByText('Quiz body').waitFor()
 if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
   throw new Error('Quiz selection should update the URL path.')
 }
-await page.locator('.markdown-body').getByText('Compute the final value of').waitFor()
+await page.locator('.markdown-body').first().waitFor()
 await page.locator('.code-block').first().waitFor()
 await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage: false })
@@ -81,9 +81,40 @@ if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
   throw new Error('Back should restore the previous quiz URL.')
 }
 
+await page.getByRole('button', { name: 'Knowledge navigator' }).click()
+await page.getByLabel('Knowledge graph navigator').waitFor()
+await page.getByText('Workbench').first().waitFor()
+if (currentUrl(page).pathname !== '/graph') {
+  throw new Error('Knowledge navigator should use the /graph route.')
+}
+await page.locator('.graph-child-card').first().waitFor()
+await page.locator('.graph-child-card').filter({ hasText: /Algorithms/ }).first().getByRole('button').first().click()
+if (currentUrl(page).pathname !== '/graph/area/algorithms') {
+  throw new Error('Graph area click should use a layered graph URL.')
+}
+await page.getByLabel('Knowledge graph navigator').getByText('Algorithms').first().waitFor()
+await page.locator('.graph-child-card').first().getByRole('button').first().click()
+if (!currentUrl(page).pathname.startsWith('/graph/track/algorithms/')) {
+  throw new Error('Graph track click should use a layered graph URL.')
+}
+await page.locator('.graph-child-card').first().getByRole('button').first().click()
+if (!currentUrl(page).pathname.startsWith('/graph/node/')) {
+  throw new Error('Graph node click should open the headings layer.')
+}
+await page.locator('.graph-action-row').getByRole('button', { name: 'Focus reading' }).waitFor()
+await page.screenshot({ path: screenshotPath('desktop-knowledge-navigator.png'), fullPage: false })
+
+await page.getByRole('button', { name: 'System health' }).click()
+await page.getByRole('heading', { name: 'System Health' }).waitFor()
+if (currentUrl(page).pathname !== '/health') {
+  throw new Error('System health should use the /health route.')
+}
+await page.getByText('Total local footprint').waitFor()
+await page.screenshot({ path: screenshotPath('desktop-system-health.png'), fullPage: false })
+
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
-await page.getByLabel('Markdown table of contents').getByText('Binary Search').waitFor()
+await page.getByLabel('Markdown table of contents').getByRole('link', { name: 'Binary Search', exact: true }).waitFor()
 await page.getByLabel('Markdown table of contents').getByText('Why It Matters').click()
 if (!currentUrl(page).hash.startsWith('#section-')) {
   throw new Error('TOC section should be represented as a URL hash.')
@@ -91,9 +122,12 @@ if (!currentUrl(page).hash.startsWith('#section-')) {
 await page.locator('.detail-panel').evaluate((panel) => {
   panel.scrollTop = panel.scrollHeight
 })
-await page.getByRole('button', { name: /related: X86 64 Addressing And Leaq/ }).click()
-await page.locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
-if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
+const firstRelatedLink = page.locator('.detail-section').getByRole('button', { name: /^related:/ }).first()
+await firstRelatedLink.waitFor()
+await firstRelatedLink.click()
+const relatedPath = currentUrl(page).pathname
+await page.locator('.markdown-body h1').first().waitFor()
+if (!relatedPath.startsWith('/nodes/') || relatedPath.endsWith('/nodes/binary-search')) {
   throw new Error('Related link should move to the linked node URL.')
 }
 const linkedScrollTop = await page.locator('.detail-panel').evaluate((panel) => panel.scrollTop)

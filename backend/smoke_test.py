@@ -48,6 +48,28 @@ def main() -> int:
     assert nodes.status_code == 200, nodes.text
     assert len(nodes.json()["nodes"]) >= 2
 
+    graph_root = client.get("/api/graph")
+    assert graph_root.status_code == 200, graph_root.text
+    graph_root_payload = graph_root.json()
+    assert graph_root_payload["center"]["type"] == "root"
+    assert any(item["type"] == "area" for item in graph_root_payload["children"])
+
+    graph_area = client.get("/api/graph/area/algorithms")
+    assert graph_area.status_code == 200, graph_area.text
+    assert graph_area.json()["center"]["type"] == "area"
+
+    graph_track = client.get("/api/graph/track/algorithms/search-patterns")
+    assert graph_track.status_code == 200, graph_track.text
+    assert graph_track.json()["center"]["type"] == "track"
+    assert graph_track.json()["pagination"]["page_size"] == 12
+
+    graph_node = client.get("/api/graph/node/binary-search")
+    assert graph_node.status_code == 200, graph_node.text
+    graph_node_payload = graph_node.json()
+    assert graph_node_payload["center"]["type"] == "node"
+    assert any(item["type"] == "heading" for item in graph_node_payload["children"])
+    assert any(action["kind"] == "focus_reading" for action in graph_node_payload["actions"])
+
     search = client.get("/api/search", params={"q": "binary"})
     assert search.status_code == 200, search.text
     assert any(node["slug"] == "binary-search" for node in search.json()["nodes"])

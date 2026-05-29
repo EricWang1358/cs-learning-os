@@ -180,6 +180,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
         conn.execute("DELETE FROM quiz_links")
         conn.execute("DELETE FROM quiz_tags")
         conn.execute("DELETE FROM quizzes")
+        conn.execute("DELETE FROM graph_cache")
         conn.execute("DELETE FROM node_fts")
         conn.execute("DELETE FROM sources")
         conn.execute("DELETE FROM links")

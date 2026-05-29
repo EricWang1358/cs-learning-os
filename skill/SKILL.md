@@ -26,7 +26,9 @@ The LLM is responsible for judgment calls:
 5. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
 6. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
 7. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
-8. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index when the map has changed.
+8. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
+9. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
+10. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index when the map has changed.
 
 ## Map Operations
 
@@ -43,6 +45,8 @@ Use these top-level areas unless the existing map already has a better taxonomy:
 - `cs-fundamentals`
 - `tools`
 - `questions`
+
+`cs-fundamentals` is broad but guarded. Only add intro C, GDB, x86-64, binary representation, memory, CSAPP/Bomb Lab basics, or reusable foundational bridge nodes there. Do not use it as a catch-all for advanced, project-specific, tool-only, or rare material.
 
 ### Link a node
 
