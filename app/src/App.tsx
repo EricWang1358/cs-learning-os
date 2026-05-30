@@ -26,6 +26,8 @@ type NodeSummary = {
   summary: string
   path: string
   updated_at: string
+  last_read_at?: string
+  read_count?: number
 }
 
 type NodeDetail = NodeSummary & {
@@ -40,8 +42,28 @@ type ApiNodesResponse = {
   nodes: NodeSummary[]
 }
 
+type AreaSummary = {
+  area: string
+  label: string
+  node_count: number
+  first_order: number
+}
+
+type ApiAreasResponse = {
+  areas: AreaSummary[]
+  system: Record<string, number>
+}
+
 type ApiNodeResponse = {
   node: NodeDetail
+}
+
+type NodeCreateDraft = {
+  title: string
+  area: string
+  track: string
+  summary: string
+  tags: string
 }
 
 type QuizSummary = {
@@ -227,7 +249,7 @@ type GraphPayload = {
 type ApiGraphResponse = GraphPayload
 
 type ApiErrorBody = {
-  detail?: string
+  detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
 class ApiRequestError extends Error {
@@ -251,6 +273,19 @@ type TocItem = {
 
 type ParsedHeading = TocItem & {
   lineNumber: number
+}
+
+type MarkdownSection = {
+  startLine: number
+  endLine: number
+  isEditable: boolean
+  level: 0 | 1 | 2
+  text: string
+  title: string
+}
+
+type SectionEditDraft = MarkdownSection & {
+  draft: string
 }
 
 const codeHighlightLanguages = {
@@ -286,6 +321,7 @@ type LineDiffSummary = {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+const SYSTEM_AREAS = ['all', 'archive', 'trash']
 
 const areaLabels: Record<string, string> = {
   all: 'All nodes',
@@ -296,6 +332,7 @@ const areaLabels: Record<string, string> = {
   tools: 'Tools',
   questions: 'Questions',
   archive: 'Archive',
+  trash: 'Trashbin',
 }
 
 const stableAreas = ['abilities', 'algorithms', 'cs-fundamentals', 'projects', 'tools', 'questions']
@@ -368,6 +405,39 @@ function slugTitle(slug: string) {
     .join(' ')
 }
 
+function slugifyInput(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function formatZoneTime(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
+}
+
+function formatTraceTime(isoTime?: string) {
+  if (!isoTime) return 'Not recorded yet'
+  const date = new Date(isoTime)
+  if (Number.isNaN(date.getTime())) return 'Unknown'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']
@@ -408,21 +478,103 @@ function markdownNodeLine(node: unknown) {
   return positionedNode.position?.start?.line
 }
 
+function markdownContentLines(body: string) {
+  let isInCodeFence = false
+  return body.split('\n').map((line, index) => {
+    if (/^\s*```/.test(line)) {
+      const result = { isCode: true, line, lineNumber: index + 1 }
+      isInCodeFence = !isInCodeFence
+      return result
+    }
+    return { isCode: isInCodeFence, line, lineNumber: index + 1 }
+  })
+}
+
 function parseMarkdownHeadings(body: string): ParsedHeading[] {
   let headingIndex = 0
-  return body.split('\n').flatMap((line, lineIndex) => {
+  return markdownContentLines(body).flatMap(({ isCode, line, lineNumber }) => {
+    if (isCode) return []
     const heading = line.trim().match(/^(#{1,3})\s+(.+)$/)
     if (!heading) return []
     const text = plainMarkdownText(heading[2].trim())
     const item = {
       id: headingId(text, headingIndex),
       level: heading[1].length as 1 | 2 | 3,
-      lineNumber: lineIndex + 1,
+      lineNumber,
       text,
     }
     headingIndex += 1
     return [item]
   })
+}
+
+function splitMarkdownSections(body: string): MarkdownSection[] {
+  const lines = body.split('\n')
+  const editableHeadings = markdownContentLines(body)
+    .filter((item) => !item.isCode)
+    .flatMap((item) => {
+      const heading = item.line.trim().match(/^(#{1,2})\s+(.+)$/)
+      if (!heading) return []
+      return [
+        {
+          ...item,
+          level: heading[1].length as 1 | 2,
+          title: plainMarkdownText(heading[2].trim()),
+        },
+      ]
+    })
+
+  if (!editableHeadings.length) {
+    return [
+      {
+        startLine: 1,
+        endLine: lines.length,
+        isEditable: false,
+        level: 0,
+        text: body,
+        title: 'Full note',
+      },
+    ]
+  }
+
+  const sections: MarkdownSection[] = []
+  const firstHeading = editableHeadings[0]
+  if (firstHeading.lineNumber > 1) {
+    sections.push({
+      startLine: 1,
+      endLine: firstHeading.lineNumber - 1,
+      isEditable: false,
+      level: 0,
+      text: lines.slice(0, firstHeading.lineNumber - 1).join('\n'),
+      title: 'Before first heading',
+    })
+  }
+
+  return [
+    ...sections,
+    ...editableHeadings.map((heading, index) => {
+      const nextHeading = editableHeadings[index + 1]
+      const endLine = nextHeading ? nextHeading.lineNumber - 1 : lines.length
+      const text = lines.slice(heading.lineNumber - 1, endLine).join('\n')
+      return {
+        startLine: heading.lineNumber,
+        endLine,
+        isEditable: true,
+        level: heading.level,
+        text,
+        title: heading.title,
+      }
+    }),
+  ]
+}
+
+function replaceMarkdownLineRange(body: string, startLine: number, endLine: number, replacement: string) {
+  const lines = body.split('\n')
+  return [
+    ...lines.slice(0, startLine - 1),
+    ...replacement.split('\n'),
+    ...lines.slice(endLine),
+  ].join('\n')
 }
 
 function buildLineDiffSummary(before: string, after: string, maxRows = 80): LineDiffSummary {
@@ -516,6 +668,15 @@ async function responseErrorMessage(response: Response) {
   try {
     const body = (await response.json()) as ApiErrorBody
     if (body.detail) {
+      if (Array.isArray(body.detail)) {
+        const details = body.detail
+          .map((item) => {
+            const field = item.loc?.filter((part) => part !== 'body').join('.') || 'request'
+            return `${field}: ${item.msg || item.type || 'invalid value'}`
+          })
+          .join('; ')
+        return `Request failed ${response.status}: ${details}`
+      }
       return `Request failed ${response.status}: ${body.detail}`
     }
   } catch {
@@ -524,11 +685,32 @@ async function responseErrorMessage(response: Response) {
   return `Request failed: ${response.status} ${response.statusText}`.trim()
 }
 
-function MarkdownView({ body }: { body: string }) {
+function MarkdownView({
+  body,
+  editingSection,
+  isSectionSaving,
+  onCancelSectionEdit,
+  onChangeSectionDraft,
+  onSaveSectionEdit,
+  onStartSectionEdit,
+  sectionEditError,
+}: {
+  body: string
+  editingSection?: SectionEditDraft | null
+  isSectionSaving?: boolean
+  onCancelSectionEdit?: () => void
+  onChangeSectionDraft?: (draft: string) => void
+  onSaveSectionEdit?: () => void
+  onStartSectionEdit?: (section: MarkdownSection) => void
+  sectionEditError?: string
+}) {
+  const sections = splitMarkdownSections(body)
+  const shouldRenderBySection = Boolean(editingSection)
   const headingIdsByLine = new Map(parseMarkdownHeadings(body).map((heading) => [heading.lineNumber, heading.id]))
+  const sectionsByStartLine = new Map(sections.map((section) => [section.startLine, section]))
 
-  return (
-    <div className="markdown-body">
+  const renderMarkdown = (markdownBody: string, lineOffset = 1) => {
+    return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -548,23 +730,106 @@ function MarkdownView({ body }: { body: string }) {
           },
           h1({ children, node }) {
             const text = plainMarkdownText(reactNodeText(children))
-            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
-            return <h1 id={id}>{children}</h1>
+            const localLineNumber = markdownNodeLine(node) ?? -1
+            const lineNumber = localLineNumber + lineOffset - 1
+            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
+            const section = sectionsByStartLine.get(lineNumber)
+            return (
+              <h1 className={section?.isEditable ? 'editable-heading' : undefined} id={id}>
+                <span>{children}</span>
+                {section?.isEditable && onStartSectionEdit && (
+                  <button
+                    type="button"
+                    className="section-edit-button"
+                    aria-label={`Edit section: ${section.title}`}
+                    title="Edit this section"
+                    onClick={() => onStartSectionEdit(section)}
+                  >
+                    Edit
+                  </button>
+                )}
+              </h1>
+            )
           },
           h2({ children, node }) {
             const text = plainMarkdownText(reactNodeText(children))
-            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
-            return <h2 id={id}>{children}</h2>
+            const localLineNumber = markdownNodeLine(node) ?? -1
+            const lineNumber = localLineNumber + lineOffset - 1
+            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
+            const section = sectionsByStartLine.get(lineNumber)
+            return (
+              <h2 className={section?.isEditable ? 'editable-heading' : undefined} id={id}>
+                <span>{children}</span>
+                {section?.isEditable && onStartSectionEdit && (
+                  <button
+                    type="button"
+                    className="section-edit-button"
+                    aria-label={`Edit section: ${section.title}`}
+                    title="Edit this section"
+                    onClick={() => onStartSectionEdit(section)}
+                  >
+                    Edit
+                  </button>
+                )}
+              </h2>
+            )
           },
           h3({ children, node }) {
             const text = plainMarkdownText(reactNodeText(children))
-            const id = headingIdsByLine.get(markdownNodeLine(node) ?? -1) ?? headingId(text, 0)
+            const localLineNumber = markdownNodeLine(node) ?? -1
+            const lineNumber = localLineNumber + lineOffset - 1
+            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
             return <h3 id={id}>{children}</h3>
           },
         }}
       >
-        {body}
+        {markdownBody}
       </ReactMarkdown>
+    )
+  }
+
+  const renderSectionEditor = (section: SectionEditDraft) => (
+    <div className="markdown-section-editor" id={headingIdsByLine.get(section.startLine)} key={`edit-${section.startLine}`}>
+      <div className="section-editor-header">
+        <p className="eyebrow">Editing section</p>
+        <strong>{section.title}</strong>
+      </div>
+      <textarea
+        aria-label={`Edit Markdown section: ${section.title}`}
+        value={section.draft}
+        onChange={(event) => onChangeSectionDraft?.(event.target.value)}
+      />
+      {sectionEditError && <p className="section-editor-error">{sectionEditError}</p>}
+      <div className="section-editor-actions">
+        <button
+          type="button"
+          className="focus-toggle"
+          disabled={isSectionSaving}
+          onClick={onSaveSectionEdit}
+        >
+          {isSectionSaving ? 'Saving...' : 'Save section'}
+        </button>
+        <button
+          type="button"
+          className="focus-toggle"
+          disabled={isSectionSaving}
+          onClick={onCancelSectionEdit}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="markdown-body">
+      {shouldRenderBySection
+        ? sections.map((section) =>
+            editingSection?.startLine === section.startLine
+              ? renderSectionEditor(editingSection)
+              : <div className="markdown-section" key={section.startLine}>{renderMarkdown(section.text, section.startLine)}</div>,
+          )
+        : renderMarkdown(body)}
     </div>
   )
 }
@@ -893,6 +1158,8 @@ function App() {
   const graphPage = routeState.graphPage
   const isFocusMode = routeState.isFocusMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
+  const [areas, setAreas] = useState<AreaSummary[]>([])
+  const [areaSystemCounts, setAreaSystemCounts] = useState<Record<string, number>>({})
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([])
   const [tracks, setTracks] = useState<TrackSummary[]>([])
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
@@ -906,11 +1173,27 @@ function App() {
   const [isQuestionSaving, setIsQuestionSaving] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editDraft, setEditDraft] = useState('')
+  const [editModeError, setEditModeError] = useState('')
+  const [sectionEditDraft, setSectionEditDraft] = useState<SectionEditDraft | null>(null)
+  const [sectionEditError, setSectionEditError] = useState('')
+  const [actionNotice, setActionNotice] = useState('')
+  const [undoTrashSlug, setUndoTrashSlug] = useState('')
+  const [questionFeedback, setQuestionFeedback] = useState('')
+  const [isNewNodeOpen, setIsNewNodeOpen] = useState(false)
+  const [newNodeDraft, setNewNodeDraft] = useState<NodeCreateDraft>({
+    title: '',
+    area: 'questions',
+    track: 'general',
+    summary: '',
+    tags: '',
+  })
+  const [newNodeFeedback, setNewNodeFeedback] = useState('')
+  const [isNodeCreating, setIsNodeCreating] = useState(false)
   const [isEditSaving, setIsEditSaving] = useState(false)
   const [isAiRevising, setIsAiRevising] = useState(false)
   const [aiRevision, setAiRevision] = useState<AiRevision | null>(null)
   const [aiStatus, setAiStatus] = useState('')
-  const [aiElapsedSeconds, setAiElapsedSeconds] = useState(0)
+  const [clockNow, setClockNow] = useState(() => new Date())
   const [draftConflict, setDraftConflict] = useState('')
   const [activeAiJob, setActiveAiJob] = useState<AiJob | null>(null)
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([])
@@ -921,6 +1204,33 @@ function App() {
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
 
   const deferredQuery = useDeferredValue(query)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (viewMode !== 'nodes' || !selectedNode?.slug || selectedNode.slug !== selectedSlug) return
+    let isActive = true
+    const markRead = async () => {
+      try {
+        const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/read`, {
+          read_at: new Date().toISOString(),
+          min_interval_seconds: 60,
+        })
+        if (!isActive) return
+        setSelectedNode((current) => (current?.slug === data.node.slug ? data.node : current))
+        setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
+      } catch {
+        // Reading should not fail just because the activity trace could not be updated.
+      }
+    }
+    markRead()
+    return () => {
+      isActive = false
+    }
+  }, [selectedNode?.slug, selectedSlug, viewMode])
 
   const navigateToNode = (slug: string, options: { focus?: boolean; replace?: boolean } = {}) => {
     navigate(
@@ -948,6 +1258,23 @@ function App() {
 
   const navigateToQueue = () => {
     navigate(`/queue${routeSearch({ query })}`)
+  }
+
+  const refreshAreas = async () => {
+    const data = await fetchJson<ApiAreasResponse>('/api/areas')
+    setAreas(data.areas)
+    setAreaSystemCounts(data.system)
+  }
+
+  const openNewNodeForm = () => {
+    setIsNewNodeOpen((current) => !current)
+    setNewNodeFeedback('')
+    const safeArea = activeArea !== 'all' && activeArea !== 'archive' && activeArea !== 'trash' ? activeArea : 'questions'
+    setNewNodeDraft((current) => ({
+      ...current,
+      area: safeArea,
+      track: activeTrack !== 'all' ? activeTrack : current.track,
+    }))
   }
 
   const navigateToArea = (area: string) => {
@@ -1073,7 +1400,30 @@ function App() {
   }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, query, viewMode])
 
   useEffect(() => {
-    if (viewMode !== 'nodes' || activeArea === 'all' || activeArea === 'archive') {
+    let isActive = true
+
+    async function loadAreas() {
+      try {
+        const data = await fetchJson<ApiAreasResponse>('/api/areas')
+        if (!isActive) return
+        setAreas(data.areas)
+        setAreaSystemCounts(data.system)
+      } catch (loadError) {
+        if (isActive) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load areas')
+        }
+      }
+    }
+
+    loadAreas()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (viewMode !== 'nodes' || SYSTEM_AREAS.includes(activeArea)) {
       return
     }
 
@@ -1297,19 +1647,6 @@ function App() {
   ])
 
   useEffect(() => {
-    if (!activeAiJob || !['queued', 'solving'].includes(activeAiJob.status)) {
-      return
-    }
-
-    const startedAt = Date.now()
-    const timer = window.setInterval(() => {
-      setAiElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
-    }, 1000)
-
-    return () => window.clearInterval(timer)
-  }, [activeAiJob])
-
-  useEffect(() => {
     const activeJobId = activeAiJob?.id
     const activeJobStatus = activeAiJob?.status
     if (!activeJobId || !activeJobStatus || !['queued', 'solving'].includes(activeJobStatus)) return
@@ -1345,11 +1682,12 @@ function App() {
   }, [activeAiJob?.id, activeAiJob?.status])
 
   const filteredNodes = nodes.filter((node) => {
+    if (activeArea === 'trash') return node.visibility === 'trash'
     if (activeArea === 'archive') return node.visibility === 'archive'
-    if (activeArea === 'all') return node.visibility !== 'archive'
+    if (activeArea === 'all') return !['archive', 'trash'].includes(node.visibility)
     return (
       node.area === activeArea &&
-      node.visibility !== 'archive' &&
+      !['archive', 'trash'].includes(node.visibility) &&
       (activeTrack === 'all' || node.track === activeTrack)
     )
   })
@@ -1367,6 +1705,26 @@ function App() {
   const activeAiJobs = aiJobs.filter((job) =>
     ['queued', 'solving', 'draft_ready', 'failed'].includes(job.status),
   )
+  const contentAreas = Array.from(
+    new Map(areas.map((area) => [area.area, area])).keys(),
+  ).sort((left, right) => {
+    const leftStableIndex = stableAreas.indexOf(left)
+    const rightStableIndex = stableAreas.indexOf(right)
+    if (leftStableIndex !== -1 || rightStableIndex !== -1) {
+      if (leftStableIndex === -1) return 1
+      if (rightStableIndex === -1) return -1
+      return leftStableIndex - rightStableIndex
+    }
+    return left.localeCompare(right)
+  })
+  const sidebarAreas = ['all', ...contentAreas, 'archive', 'trash']
+  const areaCounts = new Map<string, number>()
+  areaCounts.set('all', areaSystemCounts.all ?? 0)
+  areaCounts.set('archive', areaSystemCounts.archive ?? 0)
+  areaCounts.set('trash', areaSystemCounts.trash ?? 0)
+  for (const area of areas) {
+    areaCounts.set(area.area, area.node_count)
+  }
   const jobsByQuestionId = new Map<number, AiJob>()
   for (const job of activeAiJobs) {
     for (const questionId of job.question_ids) {
@@ -1427,12 +1785,31 @@ function App() {
         ? quizzes.length
         : nodes.length
   const visibleTracks =
-    viewMode === 'nodes' && activeArea !== 'all' && activeArea !== 'archive' ? tracks : []
+    viewMode === 'nodes' && !SYSTEM_AREAS.includes(activeArea) ? tracks : []
+  const visibleReaderQuestions = readerQuestions
   const isAiJobRunning = Boolean(activeAiJob && ['queued', 'solving'].includes(activeAiJob.status))
+  const activeAiJobStartedAt = activeAiJob ? new Date(activeAiJob.started_at || activeAiJob.created_at).getTime() : Number.NaN
+  const aiElapsedSeconds = isAiJobRunning && !Number.isNaN(activeAiJobStartedAt)
+    ? Math.max(0, Math.floor((clockNow.getTime() - activeAiJobStartedAt) / 1000))
+    : 0
   const aiStatusText = isAiJobRunning
     ? `${aiStatus} ${aiElapsedSeconds}s elapsed. Job #${activeAiJob?.id} is persisted; no refresh needed. Open Q Queue when the draft is ready.`
     : aiStatus
   const aiStatusClass = isAiJobRunning ? 'ai-status running' : 'ai-status error'
+  const readerQuestionHint = questionFeedback
+    || (isQuestionSaving
+      ? 'Saving your question...'
+      : !questionDraft.trim()
+        ? 'Write a question before saving or drafting.'
+        : '')
+  const aiDraftHint =
+    isAiRevising
+      ? 'Creating a draft job...'
+      : isAiJobRunning
+        ? 'An AI job is already running for this target. Check Q Queue for progress.'
+        : !visibleReaderQuestions.length && !questionDraft.trim()
+          ? 'Add or save a question first, then draft with AI.'
+          : ''
 
   const exitEditMode = (shouldConfirm = true) => {
     if (!isEditMode) return true
@@ -1441,15 +1818,40 @@ function App() {
     }
     setIsEditMode(false)
     setEditDraft('')
+    setEditModeError('')
     setAiRevision(null)
     setAiStatus('')
-    setAiElapsedSeconds(0)
     setDraftConflict('')
+    setSectionEditDraft(null)
+    setSectionEditError('')
+    return true
+  }
+
+  const exitSectionEdit = (shouldConfirm = true) => {
+    if (!sectionEditDraft) return true
+    if (
+      shouldConfirm &&
+      sectionEditDraft.draft !== sectionEditDraft.text &&
+      !window.confirm('Discard unsaved section edits?')
+    ) {
+      setActionNotice('Navigation stayed here because section edits are unsaved.')
+      setSectionEditError('Navigation stayed here because section edits are unsaved.')
+      return false
+    }
+    setSectionEditDraft(null)
+    setSectionEditError('')
+    return true
+  }
+
+  const exitEditingBeforeNavigation = () => {
+    if (!exitEditMode()) return false
+    if (!exitSectionEdit()) return false
+    setActionNotice('')
     return true
   }
 
   const openQuestionTarget = (item: ReaderQuestion) => {
-    exitEditMode(false)
+    if (!exitEditingBeforeNavigation()) return
     if (item.target_type === 'node') {
       navigateToNode(item.target_id, { focus: true })
     } else {
@@ -1512,7 +1914,7 @@ function App() {
   }
 
   const openJobTarget = (job: AiJob) => {
-    exitEditMode(false)
+    if (!exitEditingBeforeNavigation()) return
     if (job.target_type === 'node') {
       navigateToNode(job.target_id, { focus: true })
     } else {
@@ -1521,18 +1923,39 @@ function App() {
   }
 
   const goBack = () => {
-    if (!exitEditMode()) return
+    if (!exitEditingBeforeNavigation()) return
     navigate(-1)
   }
 
   const navigateGraph = (href: string) => {
-    if (!exitEditMode()) return
+    if (!exitEditingBeforeNavigation()) return
     navigate(href)
   }
 
   const navigateGraphPage = (page: number) => {
-    if (!exitEditMode()) return
+    if (!exitEditingBeforeNavigation()) return
     navigate(`${location.pathname}${routeSearch({ page })}`)
+  }
+
+  const adjustOpenQuestionCount = (targetType: 'node' | 'quiz', targetId: string, delta: number) => {
+    if (targetType === 'node') {
+      setSelectedNode((current) =>
+        current?.slug === targetId
+          ? { ...current, open_question_count: Math.max(0, current.open_question_count + delta) }
+          : current,
+      )
+    } else {
+      setSelectedQuiz((current) =>
+        current?.id === targetId
+          ? { ...current, open_question_count: Math.max(0, current.open_question_count + delta) }
+          : current,
+      )
+    }
+  }
+
+  const decrementOpenQuestionCount = (item: ReaderQuestion) => {
+    if (item.status !== 'open') return
+    adjustOpenQuestionCount(item.target_type, item.target_id, -1)
   }
 
   const dismissReaderQuestion = async (item: ReaderQuestion) => {
@@ -1541,6 +1964,7 @@ function App() {
         resolution_note: 'Dismissed from Q Queue',
       })
       setReaderQuestions((current) => current.filter((question) => question.id !== item.id))
+      decrementOpenQuestionCount(item)
     } catch (dismissError) {
       setError(dismissError instanceof Error ? dismissError.message : 'Unable to dismiss question')
     }
@@ -1551,6 +1975,7 @@ function App() {
     try {
       await deleteJson<{ ok: boolean }>(`/api/reader-questions/${item.id}`)
       setReaderQuestions((current) => current.filter((question) => question.id !== item.id))
+      decrementOpenQuestionCount(item)
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete question')
     }
@@ -1611,7 +2036,6 @@ function App() {
       const data = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${job.id}/retry`, {})
       setAiJobs((current) => [data.job, ...current.filter((item) => item.id !== job.id)])
       setActiveAiJob(data.job)
-      setAiElapsedSeconds(0)
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : 'Unable to retry AI job')
     }
@@ -1655,10 +2079,18 @@ function App() {
     const question = questionDraft.trim()
     const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
     const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
-    if (!question || !targetId) return
+    if (!question) {
+      setQuestionFeedback('Write a question before saving.')
+      return
+    }
+    if (!targetId) {
+      setQuestionFeedback('No target is loaded yet; wait for the page to finish loading.')
+      return
+    }
 
     try {
       setIsQuestionSaving(true)
+      setQuestionFeedback('Saving your question...')
       const data = await postJson<ApiReaderQuestionResponse>('/api/reader-questions', {
         target_type: targetType,
         target_id: targetId,
@@ -1666,23 +2098,73 @@ function App() {
       })
       setReaderQuestions((current) => [data.question, ...current])
       setQuestionDraft('')
-      if (targetType === 'node') {
-        setSelectedNode((current) =>
-          current
-            ? { ...current, open_question_count: current.open_question_count + 1 }
-            : current,
-        )
-      } else {
-        setSelectedQuiz((current) =>
-          current
-            ? { ...current, open_question_count: current.open_question_count + 1 }
-            : current,
-        )
-      }
+      setQuestionFeedback('Question saved into Q Queue.')
+      adjustOpenQuestionCount(targetType, targetId, 1)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save reader question')
+      const message = saveError instanceof Error ? saveError.message : 'Unable to save reader question'
+      setQuestionFeedback(message)
+      setError(message)
     } finally {
       setIsQuestionSaving(false)
+    }
+  }
+
+  const createNodeFromForm = async () => {
+    const title = newNodeDraft.title.trim()
+    if (!title) {
+      setNewNodeFeedback('Title is required before creating a node.')
+      return
+    }
+
+    try {
+      setIsNodeCreating(true)
+      setNewNodeFeedback('Creating node file...')
+      const area = slugifyInput(newNodeDraft.area) || 'questions'
+      const track = slugifyInput(newNodeDraft.track) || 'general'
+      const data = await postJson<ApiNodeResponse>('/api/nodes', {
+        title,
+        area,
+        track,
+        summary: newNodeDraft.summary.trim(),
+        tags: newNodeDraft.tags
+          .split(',')
+          .map((tag) => slugifyInput(tag))
+          .filter(Boolean),
+        visibility: 'support',
+        status: 'draft',
+        order: 1000,
+      })
+      setNodes((current) => [data.node, ...current.filter((node) => node.slug !== data.node.slug)])
+      setSelectedNode(data.node)
+      setEditDraft(data.node.body)
+      setEditModeError('')
+      setSectionEditDraft(null)
+      setSectionEditError('')
+      setIsEditMode(true)
+      setIsNewNodeOpen(false)
+      setNewNodeDraft({
+        title: '',
+        area: data.node.area,
+        track: data.node.track,
+        summary: '',
+        tags: '',
+      })
+      await refreshAreas()
+      setNewNodeFeedback('')
+      navigate(
+        `/nodes/${encodeURIComponent(data.node.slug)}${routeSearch({
+          activeArea: data.node.area,
+          activeTrack: data.node.track,
+          query,
+          isFocusMode: true,
+        })}`,
+      )
+    } catch (createError) {
+      const message = createError instanceof Error ? createError.message : 'Unable to create node'
+      setNewNodeFeedback(message)
+      setError(message)
+    } finally {
+      setIsNodeCreating(false)
     }
   }
 
@@ -1690,7 +2172,18 @@ function App() {
     const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
     const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
     const currentBody = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
-    if (!targetId || !currentBody || isAiRevising || isAiJobRunning) return
+    if (!targetId || !currentBody) {
+      setQuestionFeedback('No loaded target body yet; wait for the page to finish loading.')
+      return
+    }
+    if (isAiRevising) {
+      setQuestionFeedback('A draft request is already being created.')
+      return
+    }
+    if (isAiJobRunning) {
+      setQuestionFeedback('An AI job is already running for this target. Open Q Queue to track it.')
+      return
+    }
 
     const visibleQuestionIds = visibleReaderQuestions.map((item) => item.id)
     const selectedVisibleQuestionIds = selectedQuestionIds.filter((id) =>
@@ -1707,8 +2200,8 @@ function App() {
     try {
       setIsAiRevising(true)
       setError('')
+      setQuestionFeedback('')
       setAiRevision(null)
-      setAiElapsedSeconds(0)
       setDraftConflict('')
       setAiStatus(`Creating AI job for ${targetType} "${targetId}"...`)
       const data = await postJson<ApiAiJobResponse>('/api/ai/jobs', {
@@ -1738,8 +2231,14 @@ function App() {
 
   const startEditMode = () => {
     const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
-    if (!body) return
+    if (!body) {
+      setActionNotice('Markdown body is still loading; try Edit mode again in a moment.')
+      return
+    }
     setEditDraft(body)
+    setEditModeError('')
+    setSectionEditDraft(null)
+    setSectionEditError('')
     setAiRevision(null)
     setAiStatus('')
     setDraftConflict('')
@@ -1749,17 +2248,99 @@ function App() {
     setIsEditMode(true)
   }
 
+  const startSectionEdit = (section: MarkdownSection) => {
+    setSectionEditDraft({ ...section, draft: section.text })
+    setSectionEditError('')
+    setActionNotice('')
+    setAiRevision(null)
+    setAiStatus('')
+    setDraftConflict('')
+  }
+
   const cancelEditMode = () => {
     exitEditMode()
   }
 
+  const cancelSectionEdit = () => {
+    if (
+      sectionEditDraft &&
+      sectionEditDraft.draft !== sectionEditDraft.text &&
+      !window.confirm('Discard unsaved section edits?')
+    ) {
+      return
+    }
+    setSectionEditDraft(null)
+    setSectionEditError('')
+  }
+
+  const saveSectionEdit = async () => {
+    if (!sectionEditDraft) {
+      setActionNotice('No section is open for editing.')
+      return
+    }
+    const currentBody = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
+    if (!currentBody) {
+      setSectionEditError('Markdown body is still loading; wait a moment and save again.')
+      return
+    }
+    const draft = sectionEditDraft.draft.trimEnd()
+    if (!draft.trim()) {
+      setSectionEditError('Section cannot be empty.')
+      return
+    }
+    const expectedPrefix = `${'#'.repeat(sectionEditDraft.level)} `
+    if (!sectionEditDraft.isEditable || !draft.trimStart().startsWith(expectedPrefix)) {
+      setSectionEditError(
+        `Keep the opening heading line unchanged at this level, for example "${expectedPrefix}${sectionEditDraft.title}".`,
+      )
+      return
+    }
+    if (!window.confirm('Save this Markdown section to the local source file?')) return
+
+    const body = replaceMarkdownLineRange(
+      currentBody,
+      sectionEditDraft.startLine,
+      sectionEditDraft.endLine,
+      draft,
+    )
+
+    try {
+      setIsEditSaving(true)
+      setError('')
+      setSectionEditError('')
+      if (viewMode === 'quizzes' && selectedQuizId) {
+        const data = await putJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}/body`, {
+          body,
+        })
+        setSelectedQuiz(data.quiz)
+      } else if (selectedSlug) {
+        const data = await putJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}/body`, {
+          body,
+        })
+        setSelectedNode(data.node)
+      }
+      setSectionEditDraft(null)
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : 'Unable to save Markdown section'
+      setSectionEditError(message)
+      setError(message)
+    } finally {
+      setIsEditSaving(false)
+    }
+  }
+
   const saveEditMode = async () => {
     const body = editDraft.trim()
-    if (!body) return
+    if (!body) {
+      setEditModeError('Markdown cannot be empty.')
+      return
+    }
     if (!window.confirm('Save these Markdown changes to the local source file?')) return
 
     try {
       setIsEditSaving(true)
+      setEditModeError('')
+      setError('')
       if (activeAiJob?.status === 'draft_ready') {
         const applied = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${activeAiJob.id}/apply`, {
           body,
@@ -1775,6 +2356,7 @@ function App() {
         setReaderQuestions((current) =>
           current.filter((item) => !activeAiJob.question_ids.includes(item.id)),
         )
+        adjustOpenQuestionCount(activeAiJob.target_type, activeAiJob.target_id, -activeAiJob.question_ids.length)
         setActiveAiJob(null)
       } else {
         if (viewMode === 'quizzes' && selectedQuizId) {
@@ -1800,6 +2382,11 @@ function App() {
         setReaderQuestions((current) =>
           current.filter((item) => !aiRevision.resolved_question_ids.includes(item.id)),
         )
+        const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
+        const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
+        if (targetId) {
+          adjustOpenQuestionCount(targetType, targetId, -aiRevision.resolved_question_ids.length)
+        }
       }
       exitEditMode(false)
     } catch (saveError) {
@@ -1810,6 +2397,7 @@ function App() {
         )
         setError('')
       } else {
+        setEditModeError(message)
         setError(message)
       }
     } finally {
@@ -1817,11 +2405,78 @@ function App() {
     }
   }
 
+  const moveSelectedNodeToTrash = async () => {
+    if (!selectedNode) return
+    if (!window.confirm(`Move "${selectedNode.title}" to Trashbin?`)) return
+    try {
+      setActionNotice('Moving node to Trashbin...')
+      const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/trash`, {})
+      setSelectedNode(data.node)
+      setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
+      await refreshAreas()
+      setUndoTrashSlug(data.node.slug)
+      setActionNotice('Node moved to Trashbin. Restore it from Trashbin if needed.')
+      navigateToArea('trash')
+    } catch (trashError) {
+      const message = trashError instanceof Error ? trashError.message : 'Unable to move node to Trashbin'
+      setActionNotice(message)
+      setError(message)
+    }
+  }
+
+  const restoreSelectedNode = async () => {
+    if (!selectedNode) return
+    await restoreNodeBySlug(selectedNode.slug)
+  }
+
+  const restoreNodeBySlug = async (slug: string) => {
+    try {
+      setActionNotice('Restoring node...')
+      const data = await postJson<ApiNodeResponse>(`/api/nodes/${slug}/restore`, {})
+      setSelectedNode(data.node)
+      setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
+      await refreshAreas()
+      setUndoTrashSlug('')
+      exitEditMode(false)
+      setActionNotice('Node restored as support visibility.')
+      navigate(
+        `/nodes/${encodeURIComponent(data.node.slug)}${routeSearch({
+          activeArea: data.node.area,
+          activeTrack: data.node.track,
+          query,
+          isFocusMode: true,
+        })}`,
+      )
+    } catch (restoreError) {
+      const message = restoreError instanceof Error ? restoreError.message : 'Unable to restore node'
+      setActionNotice(message)
+      setError(message)
+    }
+  }
+
+  const permanentlyDeleteSelectedNode = async () => {
+    if (!selectedNode) return
+    if (!window.confirm(`Permanently delete "${selectedNode.title}"? This cannot be undone.`)) return
+    try {
+      setActionNotice('Deleting node permanently...')
+      await deleteJson<{ ok: boolean }>(`/api/nodes/${selectedNode.slug}`)
+      setNodes((current) => current.filter((node) => node.slug !== selectedNode.slug))
+      await refreshAreas()
+      setSelectedNode(null)
+      setUndoTrashSlug('')
+      setActionNotice('Node permanently deleted.')
+      navigate('/nodes?area=trash')
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : 'Unable to permanently delete node'
+      setActionNotice(message)
+      setError(message)
+    }
+  }
+
   const openQuestionCount =
     viewMode === 'quizzes'
       ? selectedQuiz?.open_question_count ?? 0
       : selectedNode?.open_question_count ?? 0
-  const visibleReaderQuestions = readerQuestions
   const currentBodyForDiff = viewMode === 'quizzes' ? selectedQuiz?.body ?? '' : selectedNode?.body ?? ''
   const aiDraftDiff = aiRevision
     ? buildLineDiffSummary(currentBodyForDiff, aiRevision.revised_body)
@@ -1835,24 +2490,31 @@ function App() {
           <h1>Knowledge Workbench</h1>
         </div>
 
+        <section className="world-clock" aria-label="World clock">
+          <div>
+            <span>Beijing</span>
+            <strong>{formatZoneTime(clockNow, 'Asia/Shanghai')}</strong>
+          </div>
+          <div>
+            <span>US East</span>
+            <strong>{formatZoneTime(clockNow, 'America/New_York')}</strong>
+          </div>
+        </section>
+
         <nav className="area-nav">
-          {['all', ...stableAreas, 'archive'].map((area) => (
+          {sidebarAreas.map((area) => (
             <button
               key={area}
               type="button"
               className={area === activeArea ? 'active' : ''}
               onClick={() => {
-                if (!exitEditMode()) return
+                if (!exitEditingBeforeNavigation()) return
                 navigateToArea(area)
               }}
             >
-              <span>{areaLabels[area] ?? area}</span>
+              <span>{areaLabels[area] ?? slugTitle(area)}</span>
               <strong>
-                {area === 'all'
-                  ? nodes.filter((node) => node.visibility !== 'archive').length
-                  : area === 'archive'
-                    ? nodes.filter((node) => node.visibility === 'archive').length
-                    : nodes.filter((node) => node.area === area).length}
+                {areaCounts.get(area) ?? 0}
               </strong>
             </button>
           ))}
@@ -1864,7 +2526,7 @@ function App() {
             type="button"
             className={viewMode === 'quizzes' ? 'active' : ''}
             onClick={() => {
-              if (!exitEditMode()) return
+              if (!exitEditingBeforeNavigation()) return
               navigate(`/quizzes${routeSearch({ query })}`)
             }}
           >
@@ -1874,7 +2536,7 @@ function App() {
             type="button"
             className={viewMode === 'question-queue' ? 'active' : ''}
             onClick={() => {
-              if (!exitEditMode()) return
+              if (!exitEditingBeforeNavigation()) return
               navigateToQueue()
             }}
           >
@@ -1890,7 +2552,7 @@ function App() {
               type="button"
               className={viewMode === 'graph' ? 'active' : ''}
               onClick={() => {
-                if (!exitEditMode()) return
+                if (!exitEditingBeforeNavigation()) return
                 navigate('/graph')
               }}
             >
@@ -1900,7 +2562,7 @@ function App() {
               type="button"
               className={viewMode === 'health' ? 'active' : ''}
               onClick={() => {
-                if (!exitEditMode()) return
+                if (!exitEditingBeforeNavigation()) return
                 navigate('/health')
               }}
             >
@@ -1985,15 +2647,83 @@ function App() {
                       : 'nodes'
                 }`}
           </p>
+          {viewMode === 'nodes' && (
+            <button type="button" className="focus-toggle new-node-toggle" onClick={openNewNodeForm}>
+              {isNewNodeOpen ? 'Close new node' : '+ New node'}
+            </button>
+          )}
         </header>
 
+        {viewMode === 'nodes' && isNewNodeOpen && (
+          <section className="new-node-panel" aria-label="Create new node">
+            <p className="eyebrow">Create node</p>
+            <input
+              value={newNodeDraft.title}
+              onChange={(event) => {
+                setNewNodeFeedback('')
+                setNewNodeDraft((current) => ({ ...current, title: event.target.value }))
+              }}
+              placeholder="Title, e.g. Pointer Arithmetic"
+              aria-label="New node title"
+            />
+            <div className="new-node-grid">
+              <input
+                value={newNodeDraft.area}
+                onChange={(event) => setNewNodeDraft((current) => ({ ...current, area: event.target.value }))}
+                placeholder="area"
+                aria-label="New node area"
+              />
+              <input
+                value={newNodeDraft.track}
+                onChange={(event) => setNewNodeDraft((current) => ({ ...current, track: event.target.value }))}
+                placeholder="track"
+                aria-label="New node track"
+              />
+            </div>
+            <p className="inline-hint">
+              Area, track, and tags accept normal text; they will be saved as slug values.
+            </p>
+            <input
+              value={newNodeDraft.summary}
+              onChange={(event) => setNewNodeDraft((current) => ({ ...current, summary: event.target.value }))}
+              placeholder="Short summary"
+              aria-label="New node summary"
+            />
+            <input
+              value={newNodeDraft.tags}
+              onChange={(event) => setNewNodeDraft((current) => ({ ...current, tags: event.target.value }))}
+              placeholder="tags, comma separated"
+              aria-label="New node tags"
+            />
+            {newNodeFeedback && <p className={newNodeFeedback.includes('Request failed') ? 'inline-error' : 'inline-hint'}>{newNodeFeedback}</p>}
+            <button
+              type="button"
+              className="focus-toggle ai-action"
+              disabled={isNodeCreating}
+              onClick={createNodeFromForm}
+            >
+              {isNodeCreating ? 'Creating...' : 'Create and edit'}
+            </button>
+          </section>
+        )}
+
+        {actionNotice && (
+          <div className="action-notice">
+            <span>{actionNotice}</span>
+            {undoTrashSlug && (
+              <button type="button" className="text-link" onClick={() => restoreNodeBySlug(undoTrashSlug)}>
+                Undo move to trash
+              </button>
+            )}
+          </div>
+        )}
         {error && <p className="error-banner">{error}</p>}
 
         {viewMode === 'nodes' && visibleTracks.length > 0 && (
           <section className="track-panel" aria-label="Reading tracks">
             <div>
               <p className="eyebrow">Reading tracks</p>
-              <strong>{areaLabels[activeArea] ?? activeArea}</strong>
+              <strong>{areaLabels[activeArea] ?? slugTitle(activeArea)}</strong>
             </div>
             <div className="track-list">
               <button
@@ -2020,7 +2750,7 @@ function App() {
                     )
                   }
                 >
-                  <span>{trackLabels[track.track] ?? track.label}</span>
+                  <span>{trackLabels[track.track] ?? track.label ?? slugTitle(track.track)}</span>
                   <strong>{track.node_count}</strong>
                 </button>
               ))}
@@ -2194,12 +2924,12 @@ function App() {
                   type="button"
                   className={`node-card ${quiz.id === selectedQuizId ? 'selected' : ''}`}
                   onClick={() => {
-                    if (!exitEditMode()) return
+                    if (!exitEditingBeforeNavigation()) return
                     navigateToQuiz(quiz.id)
                   }}
                 >
                   <span className="node-meta">
-                    {areaLabels[quiz.area] ?? quiz.area} / {quiz.difficulty} / weight {quiz.weight}
+                    {areaLabels[quiz.area] ?? slugTitle(quiz.area)} / {quiz.difficulty} / weight {quiz.weight}
                   </span>
                   <strong>{quiz.title}</strong>
                   <span>{quiz.summary}</span>
@@ -2211,12 +2941,12 @@ function App() {
                   type="button"
                   className={`node-card ${node.slug === selectedSlug ? 'selected' : ''}`}
                   onClick={() => {
-                    if (!exitEditMode()) return
+                    if (!exitEditingBeforeNavigation()) return
                     navigateToNode(node.slug)
                   }}
                 >
                   <span className="node-meta">
-                    {areaLabels[node.area] ?? node.area} / {trackLabels[node.track] ?? node.track} /{' '}
+                    {areaLabels[node.area] ?? slugTitle(node.area)} / {trackLabels[node.track] ?? slugTitle(node.track)} /{' '}
                     #{node.display_order}
                   </span>
                   <strong>{node.title}</strong>
@@ -2458,14 +3188,18 @@ function App() {
                   <div className="markdown-editor">
                     <textarea
                       value={editDraft}
-                      onChange={(event) => setEditDraft(event.target.value)}
+                      onChange={(event) => {
+                        setEditModeError('')
+                        setEditDraft(event.target.value)
+                      }}
                       aria-label="Markdown editor"
                     />
+                    {editModeError && <p className="inline-error">{editModeError}</p>}
                     <div className="editor-actions">
                       <button
                         type="button"
                         className="focus-toggle"
-                        disabled={!editDraft.trim() || isEditSaving}
+                        disabled={isEditSaving}
                         onClick={saveEditMode}
                       >
                         {isEditSaving ? 'Saving...' : 'Save Markdown'}
@@ -2486,7 +3220,19 @@ function App() {
                     {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
-                  <MarkdownView body={selectedQuiz.body} />
+                  <MarkdownView
+                    body={selectedQuiz.body}
+                    editingSection={sectionEditDraft}
+                    isSectionSaving={isEditSaving}
+                    onCancelSectionEdit={cancelSectionEdit}
+                    onChangeSectionDraft={(draft) => {
+                      setSectionEditError('')
+                      setSectionEditDraft((current) => (current ? { ...current, draft } : current))
+                    }}
+                    onSaveSectionEdit={saveSectionEdit}
+                    onStartSectionEdit={startSectionEdit}
+                    sectionEditError={sectionEditError}
+                  />
                 )}
               </section>
 
@@ -2501,7 +3247,7 @@ function App() {
                             type="button"
                             className="text-link"
                             onClick={() => {
-                              if (!exitEditMode()) return
+                              if (!exitEditingBeforeNavigation()) return
                               navigateToNode(link.slug, { focus: true })
                             }}
                           >
@@ -2542,13 +3288,21 @@ function App() {
                 </div>
                 <textarea
                   value={questionDraft}
-                  onChange={(event) => setQuestionDraft(event.target.value)}
+                  onChange={(event) => {
+                    setQuestionFeedback('')
+                    setQuestionDraft(event.target.value)
+                  }}
                   placeholder="Example: Why does sete write only %al here?"
                 />
+                {(readerQuestionHint || aiDraftHint) && (
+                  <p className={questionFeedback ? 'inline-success' : 'inline-hint'}>
+                    {questionFeedback || aiDraftHint || readerQuestionHint}
+                  </p>
+                )}
                 <button
                   type="button"
                   className="focus-toggle"
-                  disabled={!questionDraft.trim() || isQuestionSaving}
+                  disabled={isQuestionSaving}
                   onClick={submitReaderQuestion}
                 >
                   {isQuestionSaving ? 'Saving...' : 'Save question'}
@@ -2556,7 +3310,7 @@ function App() {
                 <button
                   type="button"
                   className="focus-toggle ai-action"
-                  disabled={isAiRevising || (!visibleReaderQuestions.length && !questionDraft.trim())}
+                  disabled={isAiRevising}
                   onClick={requestAiRevision}
                 >
                   {isAiRevising ? 'Drafting...' : 'Draft with AI'}
@@ -2606,6 +3360,20 @@ function App() {
                     >
                       {isFocusMode ? 'Show map' : 'Focus reading'}
                     </button>
+                    {selectedNode.visibility === 'trash' ? (
+                      <>
+                        <button type="button" className="focus-toggle ai-action" onClick={restoreSelectedNode}>
+                          Restore
+                        </button>
+                        <button type="button" className="focus-toggle danger-button" onClick={permanentlyDeleteSelectedNode}>
+                          Delete forever
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="focus-toggle danger-button" onClick={moveSelectedNodeToTrash}>
+                        Move to trash
+                      </button>
+                    )}
                   </div>
                 </div>
                 <h2>{selectedNode.title}</h2>
@@ -2627,14 +3395,18 @@ function App() {
                   <div className="markdown-editor">
                     <textarea
                       value={editDraft}
-                      onChange={(event) => setEditDraft(event.target.value)}
+                      onChange={(event) => {
+                        setEditModeError('')
+                        setEditDraft(event.target.value)
+                      }}
                       aria-label="Markdown editor"
                     />
+                    {editModeError && <p className="inline-error">{editModeError}</p>}
                     <div className="editor-actions">
                       <button
                         type="button"
                         className="focus-toggle"
-                        disabled={!editDraft.trim() || isEditSaving}
+                        disabled={isEditSaving}
                         onClick={saveEditMode}
                       >
                         {isEditSaving ? 'Saving...' : 'Save Markdown'}
@@ -2655,7 +3427,19 @@ function App() {
                     {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
-                  <MarkdownView body={selectedNode.body} />
+                  <MarkdownView
+                    body={selectedNode.body}
+                    editingSection={sectionEditDraft}
+                    isSectionSaving={isEditSaving}
+                    onCancelSectionEdit={cancelSectionEdit}
+                    onChangeSectionDraft={(draft) => {
+                      setSectionEditError('')
+                      setSectionEditDraft((current) => (current ? { ...current, draft } : current))
+                    }}
+                    onSaveSectionEdit={saveSectionEdit}
+                    onStartSectionEdit={startSectionEdit}
+                    sectionEditError={sectionEditError}
+                  />
                 )}
               </section>
 
@@ -2670,7 +3454,7 @@ function App() {
                             type="button"
                             className="text-link"
                             onClick={() => {
-                              if (!exitEditMode()) return
+                              if (!exitEditingBeforeNavigation()) return
                               navigateToNode(link.target, { focus: true })
                             }}
                           >
@@ -2697,6 +3481,27 @@ function App() {
                 </div>
               </section>
 
+              <section className="detail-section reading-trace" aria-label="Node reading trace">
+                <div>
+                  <p className="eyebrow">Reading trace</p>
+                  <h3>Memory hooks</h3>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Last read</dt>
+                    <dd>{formatTraceTime(selectedNode.last_read_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Last edit</dt>
+                    <dd>{formatTraceTime(selectedNode.updated_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Read count</dt>
+                    <dd>{selectedNode.read_count ?? 0}</dd>
+                  </div>
+                </dl>
+              </section>
+
               {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
             </div>
             {isFocusMode && !isEditMode && (
@@ -2711,13 +3516,21 @@ function App() {
                 </div>
                 <textarea
                   value={questionDraft}
-                  onChange={(event) => setQuestionDraft(event.target.value)}
+                  onChange={(event) => {
+                    setQuestionFeedback('')
+                    setQuestionDraft(event.target.value)
+                  }}
                   placeholder="Example: This explanation skips why %eax changes here."
                 />
+                {(readerQuestionHint || aiDraftHint) && (
+                  <p className={questionFeedback ? 'inline-success' : 'inline-hint'}>
+                    {questionFeedback || aiDraftHint || readerQuestionHint}
+                  </p>
+                )}
                 <button
                   type="button"
                   className="focus-toggle"
-                  disabled={!questionDraft.trim() || isQuestionSaving}
+                  disabled={isQuestionSaving}
                   onClick={submitReaderQuestion}
                 >
                   {isQuestionSaving ? 'Saving...' : 'Save question'}
@@ -2725,7 +3538,7 @@ function App() {
                 <button
                   type="button"
                   className="focus-toggle ai-action"
-                  disabled={isAiRevising || (!visibleReaderQuestions.length && !questionDraft.trim())}
+                  disabled={isAiRevising}
                   onClick={requestAiRevision}
                 >
                   {isAiRevising ? 'Drafting...' : 'Draft with AI'}
@@ -2753,3 +3566,4 @@ function App() {
 }
 
 export default App
+

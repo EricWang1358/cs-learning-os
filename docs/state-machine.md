@@ -63,6 +63,8 @@ Canonical stores:
 - `reader_questions` stores unresolved or resolved reading questions.
 - `ai_jobs` stores durable AI work requests and their outcomes.
 - `ai_job_events` stores a timeline for debugging background AI work.
+- `node_activity` stores durable per-node reading traces such as `last_read_at` and `read_count`.
+- `/api/areas` is the stable metadata source for sidebar areas and counts.
 - `generated/codex-home` stores project-local Codex config generated from the user's provider config.
 
 Data ownership rules:
@@ -72,10 +74,22 @@ Data ownership rules:
 - Demo content is tiny and safe to commit.
 - Applying an AI draft must update Markdown source and SQLite rows in one backend transaction path.
 - Reader questions should stay `open` until a draft is actually applied.
+- Node creation, trash, restore, and permanent delete must go through backend APIs so Markdown files, SQLite rows, FTS, graph cache, and area metadata stay aligned.
+- Reading activity is app data, not Markdown content. It belongs in SQLite so future spaced repetition and review scheduling can use it.
+
+Transaction and compensation rules:
+
+- SQLite transactions protect database mutations only; Markdown file writes need explicit compensation.
+- For body edits, AI apply, create, trash, and restore, the backend snapshots the original file text before writing. If DB mutation or commit fails, it restores the original file text.
+- For create, failure removes the newly created file if it did not exist before.
+- For permanent delete, first move the Markdown file into a local staging trash, then commit SQLite deletion, then remove the staged file. If DB commit fails, move the file back.
+- No frontend state should assume success until the backend returns the updated object or `{ ok: true }`.
 
 Current risks:
 
 - Full re-ingest is simple but may become expensive as content grows.
+- The current area metadata endpoint is count-based and simple; future versions may need ordering, hidden areas, and user-pinned areas.
+- Filesystem operations are still not truly atomic across crashes or power loss; robust snapshots and repair tooling are still needed.
 - Job/event retention is not yet enforced.
 - There is no explicit schema version table.
 - There is no automatic backup/snapshot before write.
@@ -156,6 +170,114 @@ Invariants:
 - A question must remain `open` while AI jobs are queued, running, failed, draft-ready, rejected, cancelled, or retried.
 - A question becomes `resolved` only after the final content has been applied.
 - Deleting a question should not delete historical AI jobs unless a retention job explicitly prunes old data.
+
+## Node Lifecycle State Machine
+
+Nodes are canonical Markdown files indexed into SQLite.
+
+```mermaid
+stateDiagram-v2
+    [*] --> create_intent: user fills Create Node
+    create_intent --> creating: submit
+    creating --> draft: file + DB commit succeeds
+    creating --> create_failed: file or DB write fails
+    create_failed --> create_intent: user edits and retries
+    draft --> support: user edits useful content
+    support --> trash_intent: Move to Trashbin
+    draft --> trash_intent: Move to Trashbin
+    trash_intent --> trashing: confirm
+    trash_intent --> support: cancel
+    trashing --> trash: file + DB commit succeeds
+    trashing --> support: failure rolls back file/DB
+    trash --> support: Undo move to trash or Restore
+    trash --> delete_intent: Delete forever
+    delete_intent --> trash: cancel
+    delete_intent --> deleting: confirm
+    deleting --> deleted: DB commit succeeds, then file removed
+    deleting --> trash: DB failure or file removal failure report
+    support --> archive: future archive action
+    archive --> support: future unarchive action
+    deleted --> [*]
+```
+
+Current implementation:
+
+- `POST /api/nodes` creates a Markdown file under `content/nodes/:area/:slug.md`, writes frontmatter, indexes SQLite, FTS, tags, links, and sources.
+- The browser form accepts normal text for area, track, and tags, but saves slug values such as `Network Programming` -> `network-programming`.
+- `POST /api/nodes/:slug/trash` changes frontmatter `visibility` to `trash` and re-indexes the file.
+- `POST /api/nodes/:slug/restore` changes `visibility` back to `support`.
+- `DELETE /api/nodes/:slug` is allowed only from `trash`; it deletes the Markdown file and dependent SQLite rows.
+- Node body updates use backend write paths only; the React app never writes Markdown files directly.
+- File writes are guarded with a compensation step: if SQLite update or commit fails after a Markdown write, the backend restores the previous file contents.
+- Permanent delete commits SQLite deletion before removing the Markdown file, so a DB failure does not orphan content by deleting the source first.
+- Moving to Trashbin shows an `Undo move to trash` action; Trashbin restore remains the longer-lived cancellation path.
+- Moving to Trashbin stores `previous_visibility` in frontmatter so restore can return to `draft`, `support`, or `core` instead of always becoming `support`.
+
+Invariants:
+
+- `visibility = trash` hides the node from ordinary search, graph, and area flows but keeps it visible in Trashbin.
+- Permanent delete must be explicit and irreversible from the UI.
+- After create, trash, restore, or delete, the frontend must refresh area metadata so sidebar counts do not drift.
+- FTS rows and graph cache must be invalidated whenever node content or visibility changes.
+- Cancel means no durable state change. Undo/restore means a new durable state change back to `support`.
+- A failed write must either leave both Markdown and SQLite unchanged or return a visible error.
+- If a filesystem delete fails after DB commit, the backend must report the error; future cleanup tooling should reconcile orphaned files.
+- Restore/Undo should return the UI to readable node detail, not leave the user in a stale edit session from the trashed state.
+- Derived UI counters such as `open_question_count` must be updated whenever questions are saved, dismissed, deleted, resolved, or resolved by AI apply.
+
+## Area And Track Metadata State
+
+Areas and tracks are not a hardcoded frontend taxonomy. They are derived from indexed content.
+
+```mermaid
+stateDiagram-v2
+    [*] --> indexed_content: ingest or node write
+    indexed_content --> area_metadata: GET /api/areas
+    indexed_content --> track_metadata: GET /api/areas/:area/tracks
+    area_metadata --> sidebar: render area list and counts
+    track_metadata --> track_filter: render track pills for selected area
+    sidebar --> area_metadata: create/trash/restore/delete refresh
+```
+
+Rules:
+
+- `/api/areas` is the source of truth for sidebar area names and counts.
+- `all`, `archive`, and `trash` are system views, not content areas.
+- Unknown areas should be displayed with a humanized slug label, not hidden.
+- New areas created from the browser must appear without editing React code.
+- Track pills are scoped to the active content area and should not appear for `all`, `archive`, or `trash`.
+
+Current limitation:
+
+- Area ordering is currently based on first node order plus slug fallback. Future user-pinned order should live in a metadata table rather than in React constants.
+
+## Reading Activity State Machine
+
+Reading activity is durable app metadata used for future review scheduling.
+
+```mermaid
+stateDiagram-v2
+    [*] --> unread: node exists
+    unread --> read_marked: open node detail
+    read_marked --> read_marked: reopen after min interval
+    read_marked --> recently_seen: reopen inside debounce window
+    recently_seen --> read_marked: debounce window expires and node is opened again
+```
+
+Current implementation:
+
+- Opening a node detail calls `POST /api/nodes/:slug/read`.
+- The backend stores `last_read_at`, `read_count`, and activity `updated_at` in `node_activity`.
+- The frontend sends `min_interval_seconds: 60` so StrictMode, refreshes, or quick back-and-forth navigation do not inflate `read_count`.
+- `last_read_at` may still update inside the debounce window; `read_count` should not.
+- `last_read_at` is monotonic. Older client-provided timestamps must not move the stored read time backwards or increment `read_count`.
+- The detail page displays `Last read`, `Last edit`, and `Read count` in `Reading trace`.
+
+Future review rules:
+
+- Spaced repetition should use `node_activity` plus quiz outcomes, not Markdown timestamps alone.
+- `last_read_at` is not the same as mastery. It is only an exposure signal.
+- Future scheduling should store review events separately once answers, confidence, and weights exist.
 
 ## AI Job State Machine
 
@@ -346,6 +468,8 @@ Rules:
 - Link navigation should reset detail scroll to top when no section hash is present.
 - Stale section hashes should not move the next page to the wrong location.
 - Graph and health are standalone cockpit routes; they should not inherit stale node hashes or focus-mode state.
+- Area and track query params should filter visible cards but should not hide a newly created node immediately after create; create navigation must use the new node's area and track.
+- `Network Programming`-style user input should be normalized before persistence, while UI labels should remain human-readable.
 
 ## Current Loop Cockpit State
 
@@ -398,7 +522,9 @@ Near-term optimizations:
 
 - Incremental ingest by file hash or modified time.
 - Add queue indexes listed in the data layer section.
+- Add indexes for `node_activity(last_read_at)` once review scheduling queries exist.
 - Only fetch detail bodies when needed.
+- Keep `/api/areas` and `/api/areas/:area/tracks` lightweight so sidebar and track filters do not require scanning rendered cards.
 - Split bundle into route-level chunks if the UI grows.
 - Lazy-load heavy graph rendering dependencies from the `/graph` route only.
 - Limit Q Queue results to recent/abnormal by default.
@@ -454,6 +580,9 @@ Risk controls already present:
 - Dynamic Codex provider config instead of hardcoded official API assumptions.
 - `base_body_hash` stale draft protection.
 - Patch validation for unsafe replace behavior.
+- Backend-owned node create/trash/restore/delete paths keep Markdown, SQLite, FTS, and graph cache synchronized.
+- `/api/areas` prevents frontend taxonomy drift when new content areas are created.
+- Reading activity is persisted in SQLite with a debounce interval to avoid inflated review signals.
 - Smoke tests for Q Queue and fake AI draft flow.
 
 Risk controls still needed:

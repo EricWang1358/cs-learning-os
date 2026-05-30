@@ -16,6 +16,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 await page.goto(baseUrl, { waitUntil: 'networkidle' })
 await page.getByText('Knowledge Workbench').waitFor()
+await page.getByLabel('World clock').getByText('Beijing').waitFor()
+await page.getByLabel('World clock').getByText('US East').waitFor()
 await page.getByRole('button', { name: /Binary Search/ }).waitFor()
 if (!currentUrl(page).pathname.startsWith('/nodes/')) {
   throw new Error('Home should redirect to a node URL.')
@@ -30,6 +32,41 @@ if (currentUrl(page).searchParams.get('q') !== 'binary') {
 await page.screenshot({ path: screenshotPath('desktop-search-binary.png'), fullPage: false })
 
 await page.getByLabel('Global search').fill('')
+await page.getByRole('button', { name: '+ New node' }).click()
+const newNodeTitle = `Frontend Smoke Node ${Date.now()}`
+await page.getByLabel('New node title').fill(newNodeTitle)
+await page.getByLabel('New node area').fill('Network Programming')
+await page.getByLabel('New node track').fill('Network Programming')
+await page.getByLabel('New node summary').fill('Temporary frontend-created node.')
+await page.getByLabel('New node tags').fill('smoke, Frontend Basic')
+await page.getByRole('button', { name: 'Create and edit' }).click()
+await page.getByLabel('Markdown editor').waitFor()
+const createdSlug = currentUrl(page).pathname.split('/').pop()
+if (!createdSlug || !currentUrl(page).pathname.startsWith('/nodes/')) {
+  throw new Error('Creating a node should navigate to the new node URL.')
+}
+await page.getByRole('button', { name: 'Exit edit mode' }).click()
+await page.getByRole('button', { name: 'Show map' }).click()
+await page.locator('.area-nav').getByRole('button', { name: /^Network Programming\s+\d+$/ }).waitFor()
+const createdDetail = await page.request.get(`${apiBaseUrl}/api/nodes/${createdSlug}`)
+const createdNode = (await createdDetail.json()).node
+if (createdNode.area !== 'network-programming' || createdNode.track !== 'network-programming' || !createdNode.tags.includes('frontend-basic')) {
+  throw new Error('New node form should slugify natural-language area, track, and tag input before saving.')
+}
+const areaMetadata = await page.request.get(`${apiBaseUrl}/api/areas`)
+const areaPayload = await areaMetadata.json()
+if (!areaPayload.areas.some((area) => area.area === 'network-programming')) {
+  throw new Error('New content areas should be exposed through /api/areas metadata.')
+}
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Move to trash' }).click()
+await page.getByRole('button', { name: 'Undo move to trash' }).waitFor()
+await page.getByRole('button', { name: 'Undo move to trash' }).click()
+await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: newNodeTitle }).waitFor()
+await page.request.post(`${apiBaseUrl}/api/nodes/${createdSlug}/trash`, { data: {} })
+await page.request.delete(`${apiBaseUrl}/api/nodes/${createdSlug}`)
+await page.goto(`${baseUrl}/nodes/binary-search`, { waitUntil: 'networkidle' })
+
 await page.locator('.area-nav').getByRole('button', { name: /^CS fundamentals\s+\d+$/ }).click()
 await page.getByText('Reading tracks').waitFor()
 await page.getByRole('button', { name: /x86-64 Addressing and leaq/ }).click()
@@ -38,6 +75,13 @@ if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
   throw new Error('Node card navigation should update the URL path.')
 }
 await page.locator('.markdown-body').first().waitFor()
+await page.getByLabel('Node reading trace').getByText('Last read').waitFor()
+await page.getByLabel('Node reading trace').getByText('Last edit').waitFor()
+const x86TraceDetail = await page.request.get(`${apiBaseUrl}/api/nodes/x86-64-addressing-and-leaq`)
+const x86TraceNode = (await x86TraceDetail.json()).node
+if (!x86TraceNode.last_read_at || x86TraceNode.read_count < 1) {
+  throw new Error('Opening a node should persist last_read_at and read_count in the backend.')
+}
 const rawBoldSyntaxCount = await page.locator('.markdown-body').evaluate((body) => (body.textContent?.match(/\*\*/g) ?? []).length)
 if (rawBoldSyntaxCount > 0) {
   throw new Error('Markdown bold syntax leaked into rendered text.')
@@ -93,11 +137,11 @@ if (currentUrl(page).pathname !== '/graph/area/algorithms') {
   throw new Error('Graph area click should use a layered graph URL.')
 }
 await page.getByLabel('Knowledge graph navigator').getByText('Algorithms').first().waitFor()
-await page.locator('.graph-child-card').first().getByRole('button').first().click()
+await page.locator('.graph-child-card').filter({ hasText: /General|Algorithms/i }).first().getByRole('button').first().click()
 if (!currentUrl(page).pathname.startsWith('/graph/track/algorithms/')) {
   throw new Error('Graph track click should use a layered graph URL.')
 }
-await page.locator('.graph-child-card').first().getByRole('button').first().click()
+await page.locator('.graph-child-card').filter({ hasText: /Binary Search/ }).first().getByRole('button').first().click()
 if (!currentUrl(page).pathname.startsWith('/graph/node/')) {
   throw new Error('Graph node click should open the headings layer.')
 }
@@ -142,10 +186,58 @@ if (!currentUrl(page).pathname.endsWith('/nodes/binary-search') || !currentUrl(p
 
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
+const binaryDetail = await page.request.get(`${apiBaseUrl}/api/nodes/binary-search`)
+const binaryOriginalBody = (await binaryDetail.json()).node.body
+await page.request.put(`${apiBaseUrl}/api/nodes/binary-search/body`, {
+  data: {
+    body: `${binaryOriginalBody}\n\n## Code Fence Heading Smoke\n\n\`\`\`python\n# This is a Python comment, not a Markdown heading\nprint("ok")\n\`\`\``,
+  },
+})
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h2', { hasText: 'Code Fence Heading Smoke' }).waitFor()
+await page.getByLabel('Markdown table of contents').getByRole('link', { name: 'Code Fence Heading Smoke' }).waitFor()
+if (await page.getByLabel('Markdown table of contents').getByRole('link', { name: 'This is a Python comment, not a Markdown heading' }).count()) {
+  throw new Error('Code comments inside fenced blocks should not become TOC headings.')
+}
+if (await page.getByRole('button', { name: 'Edit section: This is a Python comment, not a Markdown heading' }).count()) {
+  throw new Error('Code comments inside fenced blocks should not become editable sections.')
+}
+await page.request.put(`${apiBaseUrl}/api/nodes/binary-search/body`, {
+  data: { body: binaryOriginalBody },
+})
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
+await page.getByRole('button', { name: 'Edit section: Binary Search' }).click()
+await page.getByLabel('Edit Markdown section: Binary Search').waitFor()
+await page.getByLabel('Edit Markdown section: Binary Search').fill(
+  binaryOriginalBody.replace('# Binary Search', 'Binary Search'),
+)
+await page.getByRole('button', { name: 'Save section' }).click()
+await page.locator('.markdown-section-editor').getByText(/Keep the opening heading line/).waitFor()
+await page.getByLabel('Edit Markdown section: Binary Search').fill(`${binaryOriginalBody}\n\nUnsaved section edit.`)
+page.once('dialog', (dialog) => dialog.dismiss())
+await page.getByRole('button', { name: /related:/ }).first().click()
+await page.locator('.markdown-section-editor').getByText('Navigation stayed here because section edits are unsaved.').waitFor()
+await page.getByLabel('Edit Markdown section: Binary Search').waitFor()
+await page.getByLabel('Edit Markdown section: Binary Search').fill(
+  `${binaryOriginalBody}\n\n## Section Edit Smoke\nThis temporary line verifies section editing.`,
+)
+page.once('dialog', (dialog) => dialog.accept())
+await page.getByRole('button', { name: 'Save section' }).click()
+await page.locator('.markdown-body').getByText('Section Edit Smoke').waitFor()
+await page.request.put(`${apiBaseUrl}/api/nodes/binary-search/body`, {
+  data: { body: binaryOriginalBody },
+})
+await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
+await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 await page.getByRole('button', { name: 'Edit mode' }).click()
 await page.getByLabel('Markdown editor').waitFor()
 await page.getByLabel('Reader questions').waitFor({ state: 'hidden' })
 await page.getByLabel('Markdown table of contents').waitFor({ state: 'hidden' })
+await page.getByLabel('Markdown editor').fill('   ')
+await page.getByRole('button', { name: 'Save Markdown' }).click()
+await page.getByText('Markdown cannot be empty.').waitFor()
+await page.getByLabel('Markdown editor').fill(binaryOriginalBody)
 page.once('dialog', (dialog) => dialog.accept())
 await page.getByRole('button', { name: 'Exit edit mode' }).click()
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()

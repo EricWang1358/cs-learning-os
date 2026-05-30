@@ -61,9 +61,56 @@
   scroll-margin-top: 24px;
 }
 
+.markdown-body h1,
+.markdown-body h2.editable-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .markdown-body h1 {
   margin: 0 0 14px;
   font-size: 28px;
+}
+
+.markdown-body h1 > span,
+.markdown-body h2.editable-heading > span {
+  min-width: 0;
+}
+
+.section-edit-button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(252, 213, 53, 0.32);
+  border-radius: 999px;
+  background: rgba(252, 213, 53, 0.08);
+  color: var(--accent);
+  cursor: pointer;
+  font: 11px/1 var(--mono);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  padding: 7px 9px;
+  text-transform: uppercase;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.editable-heading:hover .section-edit-button,
+.editable-heading:focus-within .section-edit-button,
+.section-edit-button:focus-visible {
+  opacity: 1;
+}
+
+.section-edit-button:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #181a20;
+  transform: translateY(-1px);
 }
 
 .markdown-body h2 {
@@ -191,4 +238,62 @@
 
 .markdown-body del {
   color: var(--muted);
+}
+
+.markdown-section-editor {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 24px;
+  border: 1px solid rgba(252, 213, 53, 0.46);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(252, 213, 53, 0.12), transparent 44%),
+    rgba(11, 14, 17, 0.72);
+  padding: 16px;
+}
+
+.section-editor-header {
+  display: grid;
+  gap: 4px;
+}
+
+.section-editor-header strong {
+  color: var(--ink-strong);
+  font-size: 18px;
+}
+
+.markdown-section-editor textarea {
+  width: 100%;
+  min-height: 340px;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0b0e11;
+  color: var(--ink);
+  font: 14px/1.65 var(--mono);
+  padding: 14px;
+  tab-size: 2;
+}
+
+.markdown-section-editor textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid rgba(252, 213, 53, 0.2);
+}
+
+.section-editor-error {
+  border: 1px solid rgba(246, 70, 93, 0.48);
+  border-radius: 10px;
+  background: rgba(246, 70, 93, 0.12);
+  color: #ff99a6;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.section-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

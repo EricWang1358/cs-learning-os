@@ -6,6 +6,8 @@ import os
 import json
 import logging
 import hashlib
+import shutil
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -78,6 +80,7 @@ AREA_LABELS = {
     "tools": "Tools",
     "questions": "Questions",
     "archive": "Archive",
+    "trash": "Trashbin",
 }
 TRACK_LABELS = {
     "general": "General",
@@ -88,6 +91,7 @@ TRACK_LABELS = {
     "networking": "Networking",
 }
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$", re.MULTILINE)
+SAFE_SLUG_RE = re.compile(r"[^a-z0-9-]+")
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -111,6 +115,22 @@ class ReaderQuestionResolve(BaseModel):
 
 class BodyUpdate(BaseModel):
     body: str
+
+
+class NodeCreate(BaseModel):
+    title: str = Field(min_length=1)
+    area: str = Field(default="questions", pattern="^[a-z0-9-]+$")
+    track: str = Field(default="general", pattern="^[a-z0-9-]+$")
+    summary: str = ""
+    tags: list[str] = []
+    visibility: str = Field(default="support", pattern="^(core|support|draft|archive)$")
+    status: str = "draft"
+    order: int = 1000
+
+
+class NodeReadMark(BaseModel):
+    read_at: Optional[str] = None
+    min_interval_seconds: int = Field(default=60, ge=0, le=86400)
 
 
 class AiReviseRequest(BaseModel):
@@ -283,7 +303,7 @@ def root_graph_payload(conn: sqlite3.Connection, page: int) -> dict:
         """
         SELECT area, COUNT(*) AS count, MIN(display_order) AS first_order
         FROM nodes
-        WHERE visibility != 'archive'
+        WHERE visibility NOT IN ('archive', 'trash')
         GROUP BY area
         """
     ).fetchall()
@@ -316,7 +336,7 @@ def area_graph_payload(conn: sqlite3.Connection, area: str, page: int) -> dict:
         """
         SELECT track, COUNT(*) AS count, MIN(display_order) AS first_order
         FROM nodes
-        WHERE area = ? AND visibility != 'archive'
+        WHERE area = ? AND visibility NOT IN ('archive', 'trash')
         GROUP BY track
         ORDER BY first_order, track
         """,
@@ -352,7 +372,7 @@ def track_graph_payload(conn: sqlite3.Connection, area: str, track: str, page: i
         """
         SELECT slug, title, summary, display_order, updated_at, body
         FROM nodes
-        WHERE area = ? AND track = ? AND visibility != 'archive'
+        WHERE area = ? AND track = ? AND visibility NOT IN ('archive', 'trash')
         ORDER BY display_order, updated_at DESC, title
         """,
         (area, track),
@@ -433,7 +453,7 @@ def recover_stale_ai_jobs() -> None:
 
 
 def row_to_node(row: sqlite3.Row) -> dict:
-    return {
+    node = {
         "slug": row["slug"],
         "title": row["title"],
         "area": row["area"],
@@ -445,6 +465,11 @@ def row_to_node(row: sqlite3.Row) -> dict:
         "path": row["path"],
         "updated_at": row["updated_at"],
     }
+    if "last_read_at" in row.keys():
+        node["last_read_at"] = row["last_read_at"] or ""
+    if "read_count" in row.keys():
+        node["read_count"] = row["read_count"] or 0
+    return node
 
 
 def row_to_quiz(row: sqlite3.Row) -> dict:
@@ -479,6 +504,11 @@ def slug_title(value: str) -> str:
     return " ".join(part.capitalize() for part in value.replace("_", "-").split("-"))
 
 
+def slugify(value: str) -> str:
+    slug = SAFE_SLUG_RE.sub("-", value.strip().lower().replace("_", "-")).strip("-")
+    return re.sub(r"-+", "-", slug) or "untitled-node"
+
+
 def split_markdown_frontmatter(text: str) -> tuple[str, str]:
     match = re.match(r"^(---\s*\n.*?\n---\s*\n)(.*)$", text, flags=re.DOTALL)
     if not match:
@@ -486,11 +516,149 @@ def split_markdown_frontmatter(text: str) -> tuple[str, str]:
     return match.group(1), match.group(2)
 
 
+def parse_frontmatter_block(frontmatter: str) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    if not frontmatter:
+        return meta
+    for line in frontmatter.splitlines():
+        if not line or line == "---" or line.startswith("  - "):
+            continue
+        if ":" in line:
+            key, value = line.split(":", 1)
+            meta[key.strip()] = value.strip().strip("\"'")
+    return meta
+
+
+def yaml_scalar(value: object) -> str:
+    text = str(value).replace('"', '\\"')
+    return f'"{text}"'
+
+
+def markdown_frontmatter(payload: dict[str, object]) -> str:
+    lines = ["---"]
+    for key, value in payload.items():
+        if isinstance(value, list):
+            lines.append(f"{key}: [{', '.join(yaml_scalar(item) for item in value)}]")
+        else:
+            lines.append(f"{key}: {yaml_scalar(value)}")
+    lines.append("---")
+    return "\n".join(lines) + "\n\n"
+
+
+def node_markdown_template(slug: str, title: str, area: str, track: str, summary: str, tags: list[str], visibility: str, status: str, order: int) -> str:
+    body = f"""# {title}
+
+## Why It Matters
+
+Explain why this node deserves to exist in your learning map.
+
+## Core Idea
+
+Write the smallest useful version of the concept here.
+
+## Example
+
+```text
+Replace this demo block with a concrete example.
+```
+
+## Common Mistakes
+
+- Add the first mistake or confusion you want future-you to avoid.
+
+## Suggested Next
+
+- Link related nodes after this note becomes stable.
+"""
+    frontmatter = markdown_frontmatter(
+        {
+            "slug": slug,
+            "title": title,
+            "area": area,
+            "track": track,
+            "order": order,
+            "status": status,
+            "visibility": visibility,
+            "summary": summary or "Draft node. Replace this summary after editing.",
+            "tags": tags,
+        }
+    )
+    return frontmatter + body
+
+
+def update_markdown_frontmatter_value(path: Path, key: str, value: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    frontmatter, body = split_markdown_frontmatter(text)
+    if not frontmatter:
+        raise HTTPException(status_code=400, detail="Node source file has no frontmatter")
+    lines = frontmatter.strip().splitlines()
+    updated = False
+    for index, line in enumerate(lines):
+        if line.startswith(f"{key}:"):
+            lines[index] = f"{key}: {yaml_scalar(value)}"
+            updated = True
+            break
+    if not updated:
+        lines.insert(-1, f"{key}: {yaml_scalar(value)}")
+    path.write_text("\n".join(lines) + "\n" + body, encoding="utf-8")
+
+
+def remove_markdown_frontmatter_key(path: Path, key: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    frontmatter, body = split_markdown_frontmatter(text)
+    if not frontmatter:
+        raise HTTPException(status_code=400, detail="Node source file has no frontmatter")
+    lines = [
+        line
+        for line in frontmatter.strip().splitlines()
+        if not line.startswith(f"{key}:")
+    ]
+    path.write_text("\n".join(lines) + "\n" + body, encoding="utf-8")
+
+
+def read_markdown_frontmatter_value(path: Path, key: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    frontmatter, _ = split_markdown_frontmatter(text)
+    return parse_frontmatter_block(frontmatter).get(key, "")
+
+
 def write_markdown_body(path: Path, body: str) -> None:
     text = path.read_text(encoding="utf-8")
     frontmatter, _ = split_markdown_frontmatter(text)
     normalized_body = body.strip() + "\n"
     path.write_text(frontmatter + normalized_body, encoding="utf-8")
+
+
+@contextmanager
+def restore_file_on_failure(path: Path):
+    existed = path.exists()
+    original = path.read_text(encoding="utf-8") if existed else ""
+    try:
+        yield
+    except Exception:
+        if existed:
+            path.write_text(original, encoding="utf-8")
+        elif path.exists():
+            path.unlink()
+        raise
+
+
+@contextmanager
+def stage_file_delete(path: Path):
+    if not path.exists():
+        yield
+        return
+    trash_dir = CONTENT_ROOT / ".trash"
+    trash_dir.mkdir(parents=True, exist_ok=True)
+    staged_path = trash_dir / f"{utc_now().replace(':', '-').replace('.', '-')}-{path.name}"
+    shutil.move(str(path), str(staged_path))
+    try:
+        yield
+    except Exception:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(staged_path), str(path))
+        raise
+    staged_path.unlink(missing_ok=True)
 
 
 def body_hash(body: str) -> str:
@@ -521,6 +689,99 @@ def update_node_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: s
         """,
         (slug, row["title"], row["summary"], body, " ".join(tags)),
     )
+
+
+def upsert_node_file_in_conn(conn: sqlite3.Connection, path: Path) -> sqlite3.Row:
+    try:
+        from .ingest import parse_frontmatter, as_list, slug_from_path
+    except ImportError:
+        from ingest import parse_frontmatter, as_list, slug_from_path
+
+    text = path.read_text(encoding="utf-8")
+    meta, body = parse_frontmatter(text)
+    rel_path = path.relative_to(CONTENT_ROOT).as_posix()
+    slug = str(meta.get("slug") or slug_from_path(path))
+    title = str(meta.get("title") or path.stem.replace("-", " ").title())
+    area = str(meta.get("area") or path.parent.name)
+    track = str(meta.get("track") or "general")
+    display_order = int(meta.get("order") or meta.get("display_order") or 1000)
+    status = str(meta.get("status") or "draft")
+    visibility = str(meta.get("visibility") or "support")
+    summary = str(meta.get("summary") or "")
+    tags = as_list(meta.get("tags"))
+    prerequisites = as_list(meta.get("prerequisites"))
+    related = as_list(meta.get("related"))
+    sources = as_list(meta.get("sources"))
+    normalized_body = body.strip()
+    now = utc_now()
+
+    conn.execute(
+        """
+        INSERT INTO nodes (
+            slug, title, area, track, display_order, status, visibility, summary, body, path, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(slug) DO UPDATE SET
+            title = excluded.title,
+            area = excluded.area,
+            track = excluded.track,
+            display_order = excluded.display_order,
+            status = excluded.status,
+            visibility = excluded.visibility,
+            summary = excluded.summary,
+            body = excluded.body,
+            path = excluded.path,
+            updated_at = excluded.updated_at
+        """,
+        (
+            slug,
+            title,
+            area,
+            track,
+            display_order,
+            status,
+            visibility,
+            summary,
+            normalized_body,
+            rel_path,
+            now,
+        ),
+    )
+    conn.execute("DELETE FROM node_tags WHERE node_slug = ?", (slug,))
+    conn.execute("DELETE FROM links WHERE source_slug = ?", (slug,))
+    conn.execute("DELETE FROM sources WHERE node_slug = ?", (slug,))
+    conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
+    conn.execute("DELETE FROM graph_cache")
+
+    for tag in tags:
+        conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+        conn.execute("INSERT INTO node_tags (node_slug, tag_name) VALUES (?, ?)", (slug, tag))
+    for target in prerequisites:
+        conn.execute(
+            "INSERT INTO links (source_slug, target_slug, kind) VALUES (?, ?, ?)",
+            (slug, target, "prerequisite"),
+        )
+    for target in related:
+        conn.execute(
+            "INSERT INTO links (source_slug, target_slug, kind) VALUES (?, ?, ?)",
+            (slug, target, "related"),
+        )
+    for source in sources:
+        source_type = "url" if source.startswith(("http://", "https://")) else "local"
+        conn.execute(
+            "INSERT INTO sources (node_slug, source, source_type) VALUES (?, ?, ?)",
+            (slug, source, source_type),
+        )
+    conn.execute(
+        """
+        INSERT INTO node_fts (slug, title, summary, body, tags)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (slug, title, summary, normalized_body, " ".join(tags)),
+    )
+    row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=500, detail="Node upsert failed")
+    return row
 
 
 def update_quiz_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: str) -> None:
@@ -1268,36 +1529,38 @@ def apply_ai_job(job_id: int, payload: AiJobApply) -> dict:
         if row["base_body_hash"] and body_hash(target_row["body"]) != row["base_body_hash"]:
             raise HTTPException(status_code=409, detail="Target Markdown changed after this draft was created")
 
-        write_markdown_body(CONTENT_ROOT / target_row["path"], payload.body)
-        if row["target_type"] == "node":
-            update_node_body_in_conn(conn, target_row, payload.body.strip())
-        else:
-            update_quiz_body_in_conn(conn, target_row, payload.body.strip())
-        question_ids = json.loads(row["question_ids"] or "[]")
-        if question_ids:
-            placeholders = ",".join("?" for _ in question_ids)
+        content_path = CONTENT_ROOT / target_row["path"]
+        with restore_file_on_failure(content_path):
+            write_markdown_body(content_path, payload.body)
+            if row["target_type"] == "node":
+                update_node_body_in_conn(conn, target_row, payload.body.strip())
+            else:
+                update_quiz_body_in_conn(conn, target_row, payload.body.strip())
+            question_ids = json.loads(row["question_ids"] or "[]")
+            if question_ids:
+                placeholders = ",".join("?" for _ in question_ids)
+                conn.execute(
+                    f"""
+                    UPDATE reader_questions
+                    SET status = 'resolved',
+                        resolved_at = ?,
+                        resolution_note = ?
+                    WHERE id IN ({placeholders})
+                    """,
+                    [now, "Resolved by applied AI job", *question_ids],
+                )
             conn.execute(
-                f"""
-                UPDATE reader_questions
-                SET status = 'resolved',
-                    resolved_at = ?,
-                    resolution_note = ?
-                WHERE id IN ({placeholders})
+                """
+                UPDATE ai_jobs
+                SET status = 'applied',
+                    stage = 'applied',
+                    updated_at = ?,
+                    completed_at = ?
+                WHERE id = ?
                 """,
-                [now, "Resolved by applied AI job", *question_ids],
+                (now, now, job_id),
             )
-        conn.execute(
-            """
-            UPDATE ai_jobs
-            SET status = 'applied',
-                stage = 'applied',
-                updated_at = ?,
-                completed_at = ?
-            WHERE id = ?
-            """,
-            (now, now, job_id),
-        )
-        conn.commit()
+            conn.commit()
         updated = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
     add_ai_job_event(job_id, "applied", "Human applied the draft and resolved linked questions.")
     return {"job": row_to_ai_job(updated)}
@@ -1424,6 +1687,89 @@ def list_nodes(
     return {"nodes": [row_to_node(row) for row in rows]}
 
 
+@app.get("/api/areas")
+def list_areas() -> dict:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                area,
+                COUNT(*) AS node_count,
+                MIN(display_order) AS first_order
+            FROM nodes
+            WHERE visibility NOT IN ('archive', 'trash')
+            GROUP BY area
+            ORDER BY first_order, area
+            """
+        ).fetchall()
+        archive_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM nodes WHERE visibility = 'archive'"
+        ).fetchone()["count"]
+        trash_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM nodes WHERE visibility = 'trash'"
+        ).fetchone()["count"]
+        total_count = sum(row["node_count"] for row in rows)
+
+    return {
+        "areas": [
+            {
+                "area": row["area"],
+                "label": slug_title(row["area"]),
+                "node_count": row["node_count"],
+                "first_order": row["first_order"],
+            }
+            for row in rows
+        ],
+        "system": {
+            "all": total_count,
+            "archive": archive_count,
+            "trash": trash_count,
+        },
+    }
+
+
+@app.post("/api/nodes")
+def create_node(payload: NodeCreate) -> dict:
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title cannot be empty")
+    area = slugify(payload.area)
+    track = slugify(payload.track)
+    slug_base = slugify(title)
+    tags = [slugify(tag) for tag in payload.tags if tag.strip()]
+    summary = payload.summary.strip()
+
+    with get_conn() as conn:
+        slug = slug_base
+        counter = 2
+        while conn.execute("SELECT 1 FROM nodes WHERE slug = ?", (slug,)).fetchone() or (CONTENT_ROOT / "nodes" / area / f"{slug}.md").exists():
+            slug = f"{slug_base}-{counter}"
+            counter += 1
+
+        node_dir = CONTENT_ROOT / "nodes" / area
+        node_dir.mkdir(parents=True, exist_ok=True)
+        node_path = node_dir / f"{slug}.md"
+        with restore_file_on_failure(node_path):
+            node_path.write_text(
+                node_markdown_template(
+                    slug,
+                    title,
+                    area,
+                    track,
+                    summary,
+                    tags,
+                    payload.visibility,
+                    payload.status.strip() or "draft",
+                    payload.order,
+                ),
+                encoding="utf-8",
+            )
+            upsert_node_file_in_conn(conn, node_path)
+            conn.commit()
+
+    return get_node(slug)
+
+
 @app.get("/api/graph")
 def get_graph_root(page: int = Query(default=1, ge=1)) -> dict:
     with get_conn() as conn:
@@ -1459,7 +1805,15 @@ def get_graph_node(slug: str, page: int = Query(default=1, ge=1)) -> dict:
 @app.get("/api/nodes/{slug}")
 def get_node(slug: str) -> dict:
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        row = conn.execute(
+            """
+            SELECT n.*, COALESCE(a.last_read_at, '') AS last_read_at, COALESCE(a.read_count, 0) AS read_count
+            FROM nodes n
+            LEFT JOIN node_activity a ON a.node_slug = n.slug
+            WHERE n.slug = ?
+            """,
+            (slug,),
+        ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Node not found")
         tags = [
@@ -1507,6 +1861,45 @@ def get_node(slug: str) -> dict:
     return {"node": node}
 
 
+@app.post("/api/nodes/{slug}/read")
+def mark_node_read(slug: str, payload: NodeReadMark) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT slug FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        now = payload.read_at or utc_now()
+        existing = conn.execute(
+            "SELECT last_read_at FROM node_activity WHERE node_slug = ?",
+            (slug,),
+        ).fetchone()
+        should_increment = True
+        write_time = now
+        if existing and existing["last_read_at"] and payload.min_interval_seconds > 0:
+            try:
+                previous = datetime.fromisoformat(str(existing["last_read_at"]).replace("Z", "+00:00"))
+                current = datetime.fromisoformat(str(now).replace("Z", "+00:00"))
+                elapsed_seconds = (current - previous).total_seconds()
+                should_increment = elapsed_seconds >= payload.min_interval_seconds
+                if elapsed_seconds < 0:
+                    write_time = existing["last_read_at"]
+                    should_increment = False
+            except ValueError:
+                should_increment = True
+        conn.execute(
+            """
+            INSERT INTO node_activity (node_slug, last_read_at, read_count, updated_at)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(node_slug) DO UPDATE SET
+                last_read_at = excluded.last_read_at,
+                read_count = node_activity.read_count + ?,
+                updated_at = excluded.updated_at
+            """,
+            (slug, write_time, utc_now(), 1 if should_increment else 0),
+        )
+        conn.commit()
+    return get_node(slug)
+
+
 @app.put("/api/nodes/{slug}/body")
 def update_node_body(slug: str, payload: BodyUpdate) -> dict:
     body = payload.body.strip()
@@ -1522,12 +1915,67 @@ def update_node_body(slug: str, payload: BodyUpdate) -> dict:
         if not content_path.is_file():
             raise HTTPException(status_code=404, detail="Node source file not found")
 
-        write_markdown_body(content_path, body)
-
-        update_node_body_in_conn(conn, row, body)
-        conn.commit()
+        with restore_file_on_failure(content_path):
+            write_markdown_body(content_path, body)
+            update_node_body_in_conn(conn, row, body)
+            conn.commit()
 
     return get_node(slug)
+
+
+@app.post("/api/nodes/{slug}/trash")
+def trash_node(slug: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        content_path = CONTENT_ROOT / row["path"]
+        if not content_path.is_file():
+            raise HTTPException(status_code=404, detail="Node source file not found")
+        with restore_file_on_failure(content_path):
+            previous_visibility = read_markdown_frontmatter_value(content_path, "visibility")
+            if previous_visibility and previous_visibility != "trash":
+                update_markdown_frontmatter_value(content_path, "previous_visibility", previous_visibility)
+            update_markdown_frontmatter_value(content_path, "visibility", "trash")
+            upsert_node_file_in_conn(conn, content_path)
+            conn.commit()
+    return get_node(slug)
+
+
+@app.post("/api/nodes/{slug}/restore")
+def restore_node(slug: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        content_path = CONTENT_ROOT / row["path"]
+        if not content_path.is_file():
+            raise HTTPException(status_code=404, detail="Node source file not found")
+        with restore_file_on_failure(content_path):
+            previous_visibility = read_markdown_frontmatter_value(content_path, "previous_visibility") or "support"
+            update_markdown_frontmatter_value(content_path, "visibility", previous_visibility)
+            remove_markdown_frontmatter_key(content_path, "previous_visibility")
+            upsert_node_file_in_conn(conn, content_path)
+            conn.commit()
+    return get_node(slug)
+
+
+@app.delete("/api/nodes/{slug}")
+def permanently_delete_node(slug: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        if row["visibility"] != "trash":
+            raise HTTPException(status_code=400, detail="Move node to Trashbin before permanent delete")
+        content_path = CONTENT_ROOT / row["path"]
+        with stage_file_delete(content_path):
+            conn.execute("DELETE FROM links WHERE target_slug = ?", (slug,))
+            conn.execute("DELETE FROM nodes WHERE slug = ?", (slug,))
+            conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
+            conn.execute("DELETE FROM graph_cache")
+            conn.commit()
+    return {"ok": True}
 
 
 @app.get("/api/search")
@@ -1545,6 +1993,7 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
                         FROM node_fts
                         JOIN nodes n ON n.slug = node_fts.slug
                         WHERE node_fts MATCH ?
+                          AND n.visibility != 'trash'
                         ORDER BY rank, n.title
                         LIMIT 50
                         """,
@@ -1559,10 +2008,13 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
                     SELECT DISTINCT n.*
                     FROM nodes n
                     LEFT JOIN node_tags nt ON nt.node_slug = n.slug
-                    WHERE n.title LIKE ? ESCAPE '\\'
-                       OR n.summary LIKE ? ESCAPE '\\'
-                       OR n.body LIKE ? ESCAPE '\\'
-                       OR nt.tag_name LIKE ? ESCAPE '\\'
+                    WHERE n.visibility != 'trash'
+                      AND (
+                        n.title LIKE ? ESCAPE '\\'
+                        OR n.summary LIKE ? ESCAPE '\\'
+                        OR n.body LIKE ? ESCAPE '\\'
+                        OR nt.tag_name LIKE ? ESCAPE '\\'
+                      )
                     ORDER BY n.area, n.title
                     LIMIT 50
                     """,
@@ -1570,7 +2022,7 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
                 ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM nodes ORDER BY area, track, display_order, title LIMIT 50"
+                "SELECT * FROM nodes WHERE visibility != 'trash' ORDER BY area, track, display_order, title LIMIT 50"
             ).fetchall()
 
     return {"nodes": [row_to_node(row) for row in rows]}
@@ -1587,7 +2039,7 @@ def list_area_tracks(area: str) -> dict:
                 MIN(display_order) AS first_order
             FROM nodes
             WHERE area = ?
-              AND visibility != 'archive'
+              AND visibility NOT IN ('archive', 'trash')
             GROUP BY track
             ORDER BY first_order, track
             """,
@@ -1700,10 +2152,10 @@ def update_quiz_body(quiz_id: str, payload: BodyUpdate) -> dict:
         if not content_path.is_file():
             raise HTTPException(status_code=404, detail="Quiz source file not found")
 
-        write_markdown_body(content_path, body)
-
-        update_quiz_body_in_conn(conn, row, body)
-        conn.commit()
+        with restore_file_on_failure(content_path):
+            write_markdown_body(content_path, body)
+            update_quiz_body_in_conn(conn, row, body)
+            conn.commit()
 
     return get_quiz(quiz_id)
 

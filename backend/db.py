@@ -145,6 +145,13 @@ CREATE TABLE IF NOT EXISTS graph_cache (
     payload_json TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS node_activity (
+    node_slug TEXT PRIMARY KEY REFERENCES nodes(slug) ON DELETE CASCADE,
+    last_read_at TEXT NOT NULL DEFAULT '',
+    read_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
 """
 
 

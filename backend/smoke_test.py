@@ -15,6 +15,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 from ingest import ingest
 from api import app
 from patch_policy import apply_patch_ops
+import api as api_module
 
 
 def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
@@ -32,7 +33,7 @@ def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | 
 
 def main() -> int:
     ingest(Path(os.environ["CS_LEARNING_CONTENT"]), Path(os.environ["CS_LEARNING_DB"]))
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
 
     health = client.get("/api/health")
     assert health.status_code == 200, health.text
@@ -47,6 +48,12 @@ def main() -> int:
     nodes = client.get("/api/nodes")
     assert nodes.status_code == 200, nodes.text
     assert len(nodes.json()["nodes"]) >= 2
+
+    areas = client.get("/api/areas")
+    assert areas.status_code == 200, areas.text
+    area_payload = areas.json()
+    assert any(area["area"] == "cs-fundamentals" for area in area_payload["areas"])
+    assert area_payload["system"]["all"] >= len(area_payload["areas"])
 
     graph_root = client.get("/api/graph")
     assert graph_root.status_code == 200, graph_root.text
@@ -84,6 +91,32 @@ def main() -> int:
     assert "tags" in payload
     assert "sources" in payload
     assert "open_question_count" in payload
+
+    read_once = client.post(
+        "/api/nodes/binary-search/read",
+        json={"read_at": "2026-05-30T00:00:00+00:00", "min_interval_seconds": 60},
+    )
+    assert read_once.status_code == 200, read_once.text
+    read_count_once = read_once.json()["node"]["read_count"]
+    read_duplicate = client.post(
+        "/api/nodes/binary-search/read",
+        json={"read_at": "2026-05-30T00:00:30+00:00", "min_interval_seconds": 60},
+    )
+    assert read_duplicate.status_code == 200, read_duplicate.text
+    assert read_duplicate.json()["node"]["read_count"] == read_count_once
+    read_later = client.post(
+        "/api/nodes/binary-search/read",
+        json={"read_at": "2026-05-30T00:02:00+00:00", "min_interval_seconds": 60},
+    )
+    assert read_later.status_code == 200, read_later.text
+    assert read_later.json()["node"]["read_count"] == read_count_once + 1
+    read_backwards = client.post(
+        "/api/nodes/binary-search/read",
+        json={"read_at": "2026-05-29T00:00:00+00:00", "min_interval_seconds": 60},
+    )
+    assert read_backwards.status_code == 200, read_backwards.text
+    assert read_backwards.json()["node"]["read_count"] == read_count_once + 1
+    assert read_backwards.json()["node"]["last_read_at"] == "2026-05-30T00:02:00+00:00"
 
     reader_question = client.post(
         "/api/reader-questions",
@@ -149,6 +182,57 @@ def main() -> int:
     restore = client.put("/api/nodes/binary-search/body", json={"body": original_body})
     assert restore.status_code == 200, restore.text
     assert restore.json()["node"]["body"] == original_body
+
+    binary_path = Path(os.environ["CS_LEARNING_CONTENT"]) / payload["path"]
+    original_file_text = binary_path.read_text(encoding="utf-8")
+    original_update_node_body = api_module.update_node_body_in_conn
+
+    def failing_update_node_body(*args, **kwargs):
+        raise RuntimeError("simulated DB failure after file write")
+
+    api_module.update_node_body_in_conn = failing_update_node_body
+    try:
+        failed_update = client.put(
+            "/api/nodes/binary-search/body",
+            json={"body": original_body + "\n\n## Should Roll Back\nThis must not remain."},
+        )
+        assert failed_update.status_code == 500, failed_update.text
+    finally:
+        api_module.update_node_body_in_conn = original_update_node_body
+    assert binary_path.read_text(encoding="utf-8") == original_file_text
+
+    created = client.post(
+        "/api/nodes",
+        json={
+            "title": "Smoke Web Node",
+            "area": "questions",
+            "track": "general",
+            "summary": "Temporary node created by backend smoke.",
+            "tags": ["smoke", "web-create"],
+            "visibility": "draft",
+        },
+    )
+    assert created.status_code == 200, created.text
+    created_node = created.json()["node"]
+    created_slug = created_node["slug"]
+    assert created_node["visibility"] == "draft"
+    created_path = Path(os.environ["CS_LEARNING_CONTENT"]) / created_node["path"]
+    assert created_path.exists()
+
+    trashed = client.post(f"/api/nodes/{created_slug}/trash")
+    assert trashed.status_code == 200, trashed.text
+    assert trashed.json()["node"]["visibility"] == "trash"
+
+    restored_node = client.post(f"/api/nodes/{created_slug}/restore")
+    assert restored_node.status_code == 200, restored_node.text
+    assert restored_node.json()["node"]["visibility"] == "draft"
+    assert "previous_visibility" not in created_path.read_text(encoding="utf-8")
+
+    trashed_again = client.post(f"/api/nodes/{created_slug}/trash")
+    assert trashed_again.status_code == 200, trashed_again.text
+    deleted_node = client.delete(f"/api/nodes/{created_slug}")
+    assert deleted_node.status_code == 200, deleted_node.text
+    assert not created_path.exists()
 
     tracks = client.get("/api/areas/cs-fundamentals/tracks")
     assert tracks.status_code == 200, tracks.text
