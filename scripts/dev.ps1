@@ -14,7 +14,16 @@ $Root = Split-Path -Parent $PSScriptRoot
 $AppDir = Join-Path $Root "app"
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 $Npm = (Get-Command "npm.cmd" -ErrorAction Stop).Source
-$DefaultDataRoot = (Resolve-Path (Join-Path $Root "..\\cs-learning-data") -ErrorAction SilentlyContinue)
+$RepoDataRoot = Join-Path $Root "data"
+$SiblingDataRoot = Join-Path $Root "..\\cs-learning-data"
+$DataRootCandidate = if ($env:CS_LEARNING_DATA_ROOT) {
+    $env:CS_LEARNING_DATA_ROOT
+} elseif (Test-Path $RepoDataRoot) {
+    $RepoDataRoot
+} else {
+    $SiblingDataRoot
+}
+$DefaultDataRoot = (Resolve-Path $DataRootCandidate -ErrorAction SilentlyContinue)
 $DefaultContentDir = if ($DefaultDataRoot) { Join-Path $DefaultDataRoot.Path "content" } else { Join-Path $Root "content-demo" }
 $DefaultDbPath = if ($DefaultDataRoot) { Join-Path $DefaultDataRoot.Path "knowledge.db" } else { Join-Path $Root "var\knowledge.db" }
 $ResolvedContentDir = if ($ContentDir) { (Resolve-Path $ContentDir).Path } else { $DefaultContentDir }

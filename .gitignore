@@ -10,6 +10,7 @@ __pycache__/
 # Generated indexes and caches
 generated/
 var/
+data/
 content/
 content/index.html
 content/index.json

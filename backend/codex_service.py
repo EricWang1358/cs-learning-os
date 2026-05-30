@@ -20,7 +20,6 @@ except ModuleNotFoundError:  # Python < 3.11
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CODEX_CLI = Path(r"D:\Program Files\nodejs\node_global\codex.cmd")
 DEFAULT_CODEX_HOME = Path.home() / ".codex"
 logger = logging.getLogger("cs_learning.codex")
 
@@ -115,8 +114,6 @@ def codex_cli_path() -> str:
     configured = os.environ.get("CS_LEARNING_CODEX_CLI")
     if configured:
         return configured
-    if DEFAULT_CODEX_CLI.is_file():
-        return str(DEFAULT_CODEX_CLI)
     found = shutil.which("codex.cmd") or shutil.which("codex")
     return found or ""
 

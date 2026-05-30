@@ -64,11 +64,11 @@ var/knowledge.db
 
 This means one app shell can serve many different knowledge bases.
 
-On Eric's local machine, private data is kept outside the app repository:
+Private data is kept in the repo-local ignored data directory by default:
 
 ```text
-../cs-learning-data/content
-../cs-learning-data/knowledge.db
+data/content
+data/knowledge.db
 ```
 
 Important privacy note:

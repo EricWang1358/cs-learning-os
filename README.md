@@ -62,14 +62,14 @@ npm install
 Markdown files are ingested into SQLite.
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os
+cd <path-to-cs-learning-os>
 .\.venv\Scripts\python.exe -m backend.ingest --content content-demo --db var\knowledge.db
 ```
 
-For private user data, point ingest at the external content directory:
+For private user data, use the repo-local ignored data directory:
 
 ```powershell
-.\.venv\Scripts\python.exe -m backend.ingest --content ..\cs-learning-data\content --db ..\cs-learning-data\knowledge.db
+.\.venv\Scripts\python.exe -m backend.ingest --content data\content --db data\knowledge.db
 ```
 
 Expected output looks like:
@@ -83,7 +83,7 @@ Ingested 2 nodes and 1 quizzes into ...\var\knowledge.db
 Recommended Windows one-command workflow:
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os
+cd <path-to-cs-learning-os>
 .\scripts\dev.ps1
 ```
 
@@ -97,17 +97,17 @@ This script:
 - opens the frontend in the browser
 - keeps a foreground supervisor running so `Ctrl+C` stops both dev servers
 
-On this machine, `dev.ps1` will automatically prefer a sibling private data directory if it exists:
+`dev.ps1` will automatically prefer the repo-local private `data/` directory, then `CS_LEARNING_DATA_ROOT`, then a legacy sibling data directory if present:
 
 ```text
-..\cs-learning-data\content
-..\cs-learning-data\knowledge.db
+data\content
+data\knowledge.db
 ```
 
 To run the same app shell against another user's content and database explicitly:
 
 ```powershell
-.\scripts\dev.ps1 -ContentDir D:\path\to\their-content -DbPath D:\path\to\their-knowledge.db
+.\scripts\dev.ps1 -ContentDir <path-to-content> -DbPath <path-to-knowledge.db>
 ```
 
 To start servers in the old background style, for smoke tests or automation:
@@ -127,14 +127,14 @@ Manual startup is also supported.
 Start the backend:
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os
+cd <path-to-cs-learning-os>
 .\.venv\Scripts\python.exe -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
 ```
 
 Start the frontend in another terminal:
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os\app
+cd app
 npm run dev
 ```
 
@@ -151,14 +151,14 @@ If port `8000` is already occupied, find and stop the old Python process before 
 Backend smoke test:
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os
+cd <path-to-cs-learning-os>
 .\.venv\Scripts\python.exe backend\smoke_test.py
 ```
 
 Frontend checks:
 
 ```powershell
-cd D:\A\1CMU\26Summer\cs-learning-os\app
+cd app
 npm run lint
 npm run build
 npm run test:smoke
@@ -207,8 +207,8 @@ Optional AI-assisted revision is available through the local FastAPI backend.
 By default, the app uses the local Codex CLI so it can reuse your Codex configuration:
 
 - Install Codex CLI with `npm install -g @openai/codex`.
-- The backend looks for `D:\Program Files\nodejs\node_global\codex.cmd` first.
-- Override with `CS_LEARNING_CODEX_CLI` if your path is different.
+- The backend looks for `codex.cmd` / `codex` on `PATH`.
+- Override with `CS_LEARNING_CODEX_CLI` if your executable is not on `PATH`.
 - The Codex CLI model defaults to `gpt-5.4-mini`; override with `CS_LEARNING_CODEX_MODEL`.
 - Third-party Codex providers are supported through a generated project-local Codex config at `generated/codex-home`.
 - By default, the backend reads provider settings from `%USERPROFILE%\.codex\config.toml` and copies `%USERPROFILE%\.codex\auth.json`; override with `CS_LEARNING_CODEX_SOURCE_HOME`, `CS_LEARNING_CODEX_BASE_URL`, `CS_LEARNING_CODEX_MODEL_PROVIDER`, `CS_LEARNING_CODEX_AUTH_FILE`, or `CS_LEARNING_CODEX_HOME`.
@@ -227,7 +227,8 @@ Example:
 
 ```powershell
 $env:CS_LEARNING_AI_PROVIDER="codex-cli"
-$env:CS_LEARNING_CODEX_CLI="D:\Program Files\nodejs\node_global\codex.cmd"
+# Optional when codex is not on PATH:
+# $env:CS_LEARNING_CODEX_CLI="<path-to-codex.cmd>"
 $env:CS_LEARNING_CODEX_MODEL="gpt-5.4-mini"
 .\scripts\dev.ps1
 ```
