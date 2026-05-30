@@ -8,7 +8,7 @@ Commit code, skill rules, design docs, lightweight metadata, demo content, and s
 
 Examples:
 - `app/`
-- demo `content/` or `content-demo/`
+- demo `content-demo/`
 - `skill/`
 - `scripts/`
 - `docs/`
@@ -48,6 +48,19 @@ Examples:
 
 The frontend and backend should be reusable across different users.
 
+## Content Directory Roles
+
+Use these names consistently:
+
+- `data/content/`: the current private Markdown knowledge base for normal local runs.
+- `data/knowledge.db`: the generated SQLite index for `data/content/`.
+- `data/nodes/` and `data/quizzes/`: invalid root-level orphan locations. Do not write there; inspect, migrate, or quarantine if they appear.
+- `content-demo/`: tiny Git-tracked synthetic demo data for clean installs, smoke tests, and fallback behavior.
+- `content/`: ignored legacy local copy from earlier iterations. It should not receive new notes unless `CS_LEARNING_CONTENT` explicitly points there for a one-off migration.
+- `var/knowledge.db`: ignored demo or fallback SQLite index, usually regenerated from `content-demo/`.
+
+New notes, quizzes, sources, trash entries, and reader-question workflows should target the active content root, not a hard-coded folder name.
+
 Runtime data is selected by:
 
 ```text
@@ -70,6 +83,8 @@ Private data is kept in the repo-local ignored data directory by default:
 data/content
 data/knowledge.db
 ```
+
+The one-command dev script prefers this repo-local `data/` root when it exists. `CS_LEARNING_DATA_ROOT` can move the whole private data root, while `CS_LEARNING_CONTENT` and `CS_LEARNING_DB` override the exact paths.
 
 Important privacy note:
 

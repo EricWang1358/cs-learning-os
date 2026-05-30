@@ -21,20 +21,47 @@ The LLM is responsible for judgment calls:
 
 1. If the user is starting from scratch, create a map from `assets/starter-map`.
 2. If the user already has notes, inspect the folder tree and existing indexes before adding anything.
-3. Read [references/architecture.md](references/architecture.md) before changing the structure.
-4. Read [references/node-schema.md](references/node-schema.md) before creating or editing a node.
-5. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
-6. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
-7. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
-8. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
-9. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
-10. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index when the map has changed.
+3. Resolve the active content root before writing:
+   - Prefer `CS_LEARNING_CONTENT` if it is set.
+   - Otherwise, prefer `data/content/` for this project.
+   - Use `content-demo/` only for demo/smoke-test content.
+   - Treat `content/` as an ignored legacy local copy unless explicitly selected for migration.
+   - If `data/nodes/` or `data/quizzes/` exists, treat it as orphaned root-level content caused by a bad content-root selection; do not add new material there.
+4. Read [references/architecture.md](references/architecture.md) before changing the structure.
+5. Read [references/node-schema.md](references/node-schema.md) before creating or editing a node.
+6. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
+7. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
+8. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
+9. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
+10. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
+11. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index only for the selected content root when the map has changed.
 
 ## Map Operations
+
+## Private Library Write Rule
+
+For this project, real tutorials and quiz content go into the private library, not the app shell:
+
+```text
+data/content/
+```
+
+Before writing a file:
+- Resolve the active content root from `CS_LEARNING_CONTENT` when available.
+- If no override exists, use `data/content/`.
+- Create learning nodes under `<active-content-root>/nodes/<area>/`.
+- Create quiz-bank items under `<active-content-root>/quizzes/<area>/`.
+- Keep sources under `<active-content-root>/sources/`.
+- Never create root-level `data/nodes/` or `data/quizzes/`.
+- Never add real personal study material to `content-demo/`; it is only for small demo and smoke-test fixtures.
+
+After writing or moving content, rebuild the selected SQLite index with the same content root and database path used by the app.
 
 ### Add a learning node
 
 Create one Markdown file for one durable concept, skill, project pattern, or recurring question. Prefer a concise note with metadata and links over a long essay.
+
+Write it under the active content root, usually `data/content/nodes/<area>/...` for real local notes. Do not write real study material into `content-demo/`, the legacy ignored `content/` folder, or root-level `data/nodes/`.
 
 ### Place a node
 

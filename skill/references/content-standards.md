@@ -2,6 +2,21 @@
 
 Before adding learning content, ask which standard to use unless the user explicitly names one.
 
+## Private Library Path Rule
+
+For real local tutorials and quiz-bank items in this project, write into the active content root:
+
+```text
+data/content/
+```
+
+If `CS_LEARNING_CONTENT` is set, use that configured content root instead.
+
+Do not write real study material into:
+- `content-demo/`, which is only for small demo and smoke-test fixtures.
+- root-level `data/nodes/` or `data/quizzes/`, which are invalid orphan locations.
+- legacy ignored `content/`, unless the user explicitly selected it for migration.
+
 ## Standard A: Bilingual Practical Exam Note
 
 Use Standard A for coursework, exam questions, debugging commands, systems/C topics, and concepts that benefit from concrete command or code examples.
@@ -15,19 +30,23 @@ Tone target:
 - Match the depth of `Shark Tank Passcode: process_code and is_valid_code`: no skipped reasoning steps, no unexplained prerequisite vocabulary, and no bare definitions without examples.
 - For C/GDB/assembly, explain roles of each command, operand, register, variable, memory location, or branch condition that the learner needs to solve the related quiz.
 
+Required path:
+
+```text
+<active-content-root>/nodes/<area>/<slug>.md
+```
+
 Required structure:
 
 ```markdown
 # English Title / 中文标题
 
 ## What This Solves / 解决什么问题
-
 English explanation.
 
 中文解释。
 
 ## Core Commands or Code / 核心命令或代码
-
 Use short, runnable examples.
 
 ## Plain Explanation / 通俗解释
@@ -35,7 +54,6 @@ Use short, runnable examples.
 Explain the idea like teaching a busy student before an exam.
 
 ## Reader Questions / 读者追问
-
 Answer likely confusions exposed by the learner.
 
 ## Common Mistakes / 常见错误
@@ -43,11 +61,9 @@ Answer likely confusions exposed by the learner.
 - English + 中文 paired bullets.
 
 ## Quick Recall / 快速记忆
-
 Add a compact exam-oriented memory hook.
 
 ## Suggested Next / 下一步
-
 Link to related nodes by slug in frontmatter and mention the learning path in text.
 ```
 
@@ -91,7 +107,7 @@ level: intro
 Use Standard Q for fixed practice questions, exam screenshots, daily review candidates, and anything where the learner should answer before reading the explanation.
 
 Data rule:
-- Store quiz items under `content/quizzes/<area>/`.
+- Store quiz items under `<active-content-root>/quizzes/<area>/`, usually `data/content/quizzes/<area>/` for real local data.
 - Keep quiz items separate from knowledge nodes.
 - Link quiz items to knowledge nodes with `linked_nodes`.
 - Use `weight` as a future scheduling hint, but do not overfit the first version.

@@ -7,8 +7,16 @@ The map has two jobs:
 
 ## Recommended Layout
 
+This layout is relative to the active content root, not necessarily the repository root. In `cs-learning-os`, the normal private content root is:
+
 ```text
-map-root/
+data/content/
+```
+
+Do not confuse this with the data root itself. `data/nodes/` and `data/quizzes/` are invalid orphan locations.
+
+```text
+<active-content-root>/
   index.md
   index.html
   index.json
@@ -22,6 +30,8 @@ map-root/
   sources/
   inbox/
 ```
+
+Git-tracked `content-demo/` may use the same internal layout, but only for tiny synthetic demo data.
 
 ## Deterministic Parts
 

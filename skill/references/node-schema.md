@@ -62,3 +62,13 @@ Use lowercase words separated by hyphens. Prefer stable concept names:
 - `union-find`
 - `cache-locality`
 - `project-auth-flow`
+
+## Path Rule
+
+For real local tutorials in this project, write nodes under the active private content root:
+
+```text
+data/content/nodes/<area>/<slug>.md
+```
+
+If `CS_LEARNING_CONTENT` is set, replace `data/content` with that configured content root. Never write real nodes to root-level `data/nodes/`, and never use `content-demo/` except for demo fixtures or smoke tests.

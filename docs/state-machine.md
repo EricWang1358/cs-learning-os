@@ -202,7 +202,7 @@ stateDiagram-v2
 
 Current implementation:
 
-- `POST /api/nodes` creates a Markdown file under `content/nodes/:area/:slug.md`, writes frontmatter, indexes SQLite, FTS, tags, links, and sources.
+- `POST /api/nodes` creates a Markdown file under `<active-content-root>/nodes/:area/:slug.md`, writes frontmatter, indexes SQLite, FTS, tags, links, and sources.
 - The browser form accepts normal text for area, track, and tags, but saves slug values such as `Network Programming` -> `network-programming`.
 - `POST /api/nodes/:slug/trash` changes frontmatter `visibility` to `trash` and re-indexes the file.
 - `POST /api/nodes/:slug/restore` changes `visibility` back to `support`.

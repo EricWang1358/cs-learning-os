@@ -81,7 +81,7 @@ Use for:
 - questions where the learner should answer before reading the explanation
 
 Requirements:
-- Store under `content/quizzes/<area>/`.
+- Store under `<active-content-root>/quizzes/<area>/`, usually `data/content/quizzes/<area>/` for real local data.
 - Keep quiz items separate from knowledge nodes.
 - Include `Prompt`, `Answer`, `Explanation`, `Plain Explanation`, `What This Tests`, and `Linked Review`.
 - Explanations must not skip reasoning steps; show the line-by-line state change, the mental translation, and the arithmetic.

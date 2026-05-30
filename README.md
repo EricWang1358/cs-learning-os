@@ -29,10 +29,11 @@ This project is not just a notes folder. It is a small local knowledge app:
 ```text
 app/                 React + Vite frontend
 backend/             FastAPI API, SQLite schema, Markdown ingest
+data/                Private runtime data root, ignored by Git
+data/content/        Current private Markdown knowledge base
+data/knowledge.db    Current private SQLite index
 content-demo/        Small demo Markdown content tracked by Git
-content/             Local/private Markdown content, ignored by Git when present
-content/nodes/       Local/private knowledge nodes
-content/quizzes/     Local/private quiz-bank items
+content/             Legacy ignored local content copy; do not use for new notes
 docs/                Design notes, implementation log, standards
 scripts/             Utility scripts
 skill/               Local skill instructions and references
@@ -60,6 +61,15 @@ npm install
 ## Rebuild The Database
 
 Markdown files are ingested into SQLite.
+
+The default private runtime pair is:
+
+```text
+data\content
+data\knowledge.db
+```
+
+`content-demo/` is only the tiny Git-tracked demo content for clean installs and smoke tests.
 
 ```powershell
 cd <path-to-cs-learning-os>
@@ -103,6 +113,14 @@ This script:
 data\content
 data\knowledge.db
 ```
+
+Directory roles:
+
+- `data/content/` is the active private learning library for normal local use.
+- `data/knowledge.db` is the generated SQLite index for that private library.
+- `data/nodes/` or `data/quizzes/` at the data-root level are invalid orphan locations. They are not the normal runtime content root and should be migrated or quarantined before ingesting.
+- `content-demo/` is a small tracked demo library for clean checkouts and tests.
+- `content/` is an ignored legacy copy from earlier migrations. Do not add new notes there; migrate or delete it only after verifying it is not your active `CS_LEARNING_CONTENT`.
 
 To run the same app shell against another user's content and database explicitly:
 
@@ -287,7 +305,9 @@ Architecture principle:
 
 - Frontend and backend code are the app shell.
 - `content-demo/` is tiny synthetic demo data, not a real knowledge base.
-- `content/` and SQLite are user data.
+- `data/content/` and `data/knowledge.db` are the default private runtime user data.
+- Root-level `data/nodes/` and `data/quizzes/` are not valid app data layout; real content belongs under `data/content/nodes/` and `data/content/quizzes/`.
+- `content/` is an ignored legacy local copy, not the normal write target.
 - Different users should be able to run the same app against different content directories and databases.
 - FastAPI reads `CS_LEARNING_CONTENT` and `CS_LEARNING_DB` when provided.
 - Removing private content from the current Git tree does not erase it from old commits. Keep the repository private or rewrite history before treating earlier personal content as fully removed.
