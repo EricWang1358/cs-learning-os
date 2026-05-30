@@ -13,6 +13,7 @@ Use for:
 Requirements:
 - English and Chinese explanations.
 - A concrete command or code sample.
+- High-signal images when they clarify a workflow, state transition, diagram, debugger screen, or visual reasoning step.
 - A plain-language explanation.
 - A tutorial tone: start from confusion, show what to type, explain how to read the result.
 - Quality target: match the explanatory depth of `Shark Tank Passcode: process_code and is_valid_code`, not a short glossary note.
@@ -23,6 +24,15 @@ Requirements:
 - Frontmatter links to prerequisites and related nodes.
 - Reader questions when the learner's confusion reveals a missing explanation.
 - Do not use vague filler such as "understand the concept" without showing what changes in code, registers, memory, output, or reasoning.
+
+Image rule:
+- Store web-visible tutorial images under `app/public/images/<topic>/`.
+- Use lowercase kebab-case filenames, for example `bomblab-prep-02.png`.
+- Avoid spaces, parentheses, Chinese punctuation, URL-encoded filenames, and local absolute paths.
+- Reference images with root-relative Markdown paths, for example `![GDB startup screen](/images/bomblab/bomblab-prep-03.png)`.
+- Put captions as short italic paragraphs immediately after the image.
+- Use images selectively; each image should explain a step, visual state, or mental model.
+- After adding images, rebuild/ingest and visually check focus reading for overflow.
 
 Workflow rule:
 - Before adding future content, ask the user which standard to use unless they explicitly specify one.

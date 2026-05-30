@@ -72,11 +72,19 @@ Rules:
 - Include both English and Chinese in the body.
 - Prefer exact commands over vague descriptions.
 - Include a small C or GDB example when relevant.
+- When an image clarifies a tutorial step, store it under `app/public/images/<topic>/`, use a lowercase kebab-case filename, and reference it as `![Alt text](/images/<topic>/<file>.png)` followed by an italic caption.
 - Build links deliberately: prerequisites before related/suggested ideas.
 - If a command depends on architecture, state the portable form and the common x86-64 form.
 - If a question only clarifies the current node, update that node; if it reveals a reusable prerequisite or cross-topic bridge, create a new linked node.
 - If the note introduces a term such as accumulator, general-purpose register, quad-word, stack pointer, immediate, displacement, or zero-extension, define it in plain language or link to a prerequisite node.
 - Do not add a shallow node just to satisfy a quiz link. If the knowledge node would be too thin, fold the answer into the current node or create a fuller prerequisite.
+
+Image checklist:
+- Use images for visual reasoning, not decoration.
+- Avoid filenames with spaces, parentheses, or URL-encoded punctuation.
+- Never use local absolute paths such as `D:\...` in Markdown.
+- Prefer one image per major idea; do not mirror an entire slide deck into a note.
+- Verify images in focus reading after ingesting Markdown into SQLite.
 
 ## Placement Gate: `cs-fundamentals`
 

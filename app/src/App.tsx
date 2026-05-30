@@ -850,6 +850,17 @@ function MarkdownView({
             const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
             return <h3 id={id}>{children}</h3>
           },
+          img({ alt, src, title }) {
+            return (
+              <img
+                alt={alt ?? ''}
+                decoding="async"
+                loading="lazy"
+                src={typeof src === 'string' ? src : ''}
+                title={typeof title === 'string' ? title : undefined}
+              />
+            )
+          },
         }}
       >
         {markdownBody}

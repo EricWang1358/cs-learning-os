@@ -57,6 +57,17 @@ Before writing a file:
 
 After writing or moving content, rebuild the selected SQLite index with the same content root and database path used by the app.
 
+## Tutorial Image Rule
+
+When a tutorial needs screenshots or diagrams:
+- Store web-visible images under `app/public/images/<topic>/`.
+- Use lowercase kebab-case filenames such as `bomblab-prep-02.png`; avoid spaces, parentheses, Chinese punctuation, and Windows paths.
+- Reference images from Markdown with root-relative URLs: `![Alt text](/images/<topic>/<file>.png)`.
+- Put the image on its own line, followed by a short italic caption on the next line.
+- Add only high-signal images that teach a step, state change, UI location, or visual mental model.
+- Keep large raw source files out of Git unless they are intentionally part of the app experience.
+- After adding images, verify that each referenced file exists and the rendered page does not overflow in focus reading.
+
 ### Add a learning node
 
 Create one Markdown file for one durable concept, skill, project pattern, or recurring question. Prefer a concise note with metadata and links over a long essay.
