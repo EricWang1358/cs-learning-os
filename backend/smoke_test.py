@@ -40,6 +40,25 @@ def main() -> int:
     assert health.json()["ok"] is True
     assert "ai" in health.json()
 
+    metrics = client.get("/api/system/metrics")
+    assert metrics.status_code == 200, metrics.text
+    metrics_payload = metrics.json()
+    assert metrics_payload["storage"]["project_related_bytes"] >= metrics_payload["storage"]["content_bytes"]
+    assert metrics_payload["storage"]["github_repo_bytes"] >= 0
+    assert metrics_payload["storage"]["github_repo_fallback_tracked_bytes"] >= 0
+    assert "cache" in metrics_payload
+    assert "refreshing" in metrics_payload["cache"]
+    assert "collected_at" in metrics_payload
+    partition_keys = {partition["key"] for partition in metrics_payload["storage"]["partitions"]}
+    assert {"content", "sqlite-db", "generated"}.issubset(partition_keys)
+    exclusive_keys = {partition["key"] for partition in metrics_payload["storage"]["exclusive_partitions"]}
+    assert exclusive_keys
+    if not metrics_payload["cache"]["refreshing"]:
+        assert {"project-related", "github-upload", "git-tracked", "app-repo"}.issubset(partition_keys)
+        assert any(key in exclusive_keys for key in {"repo-app", "repo-backend", "repo-content"})
+    assert metrics_payload["storage"]["explained_project_bytes"] >= metrics_payload["storage"]["project_related_bytes"]
+    assert metrics_payload["github"]["source"] in {"github-api", "git-tracked-fallback", "git-tracked-local", "pending-cache"}
+
     preflight = client.get("/api/ai/preflight")
     assert preflight.status_code == 200, preflight.text
     assert "ok" in preflight.json()
@@ -104,6 +123,7 @@ def main() -> int:
     )
     assert read_duplicate.status_code == 200, read_duplicate.text
     assert read_duplicate.json()["node"]["read_count"] == read_count_once
+    assert read_duplicate.json()["node"]["last_read_at"] == "2026-05-30T00:00:00+00:00"
     read_later = client.post(
         "/api/nodes/binary-search/read",
         json={"read_at": "2026-05-30T00:02:00+00:00", "min_interval_seconds": 60},

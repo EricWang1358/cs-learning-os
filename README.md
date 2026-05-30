@@ -263,6 +263,9 @@ The sidebar `Current loop` section has two expansion routes:
 
 - `Knowledge navigator` opens `/graph`, a full-width 2.5D navigator backed by graph endpoints and `graph_cache`.
 - `System health` opens `/health`, a local observability page backed by `/api/system/metrics`.
+- `/api/system/metrics` keeps heavyweight storage checks behind a cached snapshot. Refreshing the page should not rescan `.venv`, `node_modules`, or `generated/` synchronously.
+- On API startup, the backend loads the last health snapshot and refreshes heavy storage metrics in a single background thread. The Health page shows the snapshot timestamp in Beijing time.
+- GitHub upload size defaults to the local tracked-file estimate to avoid rate limits and network stalls. Set `CS_LEARNING_GITHUB_REMOTE_SIZE=1` only when you explicitly want a remote GitHub API check.
 
 The graph navigator is intentionally closer to an advanced mind map than a decorative star field:
 

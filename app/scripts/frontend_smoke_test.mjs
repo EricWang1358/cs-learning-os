@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 const baseUrl = process.env.FRONTEND_BASE_URL ?? 'http://127.0.0.1:5173'
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:8000'
+const readMarkDelayMs = Number(process.env.SMOKE_READ_MARK_DELAY_MS ?? '21000')
 const outputDir = new URL('../../generated/qa/', import.meta.url)
 const screenshotPath = (name) => fileURLToPath(new URL(name, outputDir))
 
@@ -46,7 +47,7 @@ if (!createdSlug || !currentUrl(page).pathname.startsWith('/nodes/')) {
   throw new Error('Creating a node should navigate to the new node URL.')
 }
 await page.getByRole('button', { name: 'Exit edit mode' }).click()
-await page.getByRole('button', { name: 'Show map' }).click()
+await page.locator('.toolbar-actions').getByRole('button', { name: 'Show map' }).click()
 await page.locator('.area-nav').getByRole('button', { name: /^Network Programming\s+\d+$/ }).waitFor()
 const createdDetail = await page.request.get(`${apiBaseUrl}/api/nodes/${createdSlug}`)
 const createdNode = (await createdDetail.json()).node
@@ -77,26 +78,32 @@ if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
 await page.locator('.markdown-body').first().waitFor()
 await page.getByLabel('Node reading trace').getByText('Last read').waitFor()
 await page.getByLabel('Node reading trace').getByText('Last edit').waitFor()
-const x86TraceDetail = await page.request.get(`${apiBaseUrl}/api/nodes/x86-64-addressing-and-leaq`)
-const x86TraceNode = (await x86TraceDetail.json()).node
-if (!x86TraceNode.last_read_at || x86TraceNode.read_count < 1) {
-  throw new Error('Opening a node should persist last_read_at and read_count in the backend.')
-}
+let x86TraceDetail = await page.request.get(`${apiBaseUrl}/api/nodes/x86-64-addressing-and-leaq`)
+const x86TraceBeforeFocus = (await x86TraceDetail.json()).node
 const rawBoldSyntaxCount = await page.locator('.markdown-body').evaluate((body) => (body.textContent?.match(/\*\*/g) ?? []).length)
 if (rawBoldSyntaxCount > 0) {
   throw new Error('Markdown bold syntax leaked into rendered text.')
 }
 await page.locator('.markdown-body pre code').first().waitFor()
 
-await page.getByRole('button', { name: 'Focus reading' }).click()
+await page.locator('.toolbar-actions').getByRole('button', { name: 'Focus reading' }).click()
 if (currentUrl(page).searchParams.get('focus') !== '1') {
   throw new Error('Focus mode should be reflected in the URL.')
+}
+await page.waitForTimeout(readMarkDelayMs)
+x86TraceDetail = await page.request.get(`${apiBaseUrl}/api/nodes/x86-64-addressing-and-leaq`)
+const x86TraceAfterFocus = (await x86TraceDetail.json()).node
+if (
+  x86TraceAfterFocus.read_count <= x86TraceBeforeFocus.read_count &&
+  x86TraceAfterFocus.last_read_at === x86TraceBeforeFocus.last_read_at
+) {
+  throw new Error('Focus reading dwell should persist last_read_at or read_count in the backend.')
 }
 await page.getByLabel('Markdown table of contents').locator('a').first().click()
 if (!currentUrl(page).hash.startsWith('#section-')) {
   throw new Error('TOC navigation should use a section hash.')
 }
-await page.getByRole('button', { name: 'Show map' }).click()
+await page.locator('.toolbar-actions').getByRole('button', { name: 'Show map' }).click()
 await page.screenshot({ path: screenshotPath('desktop-markdown-bold.png'), fullPage: false })
 
 await page.getByRole('button', { name: 'Practice / Quiz Bank' }).click()
@@ -153,7 +160,8 @@ await page.getByRole('heading', { name: 'System Health' }).waitFor()
 if (currentUrl(page).pathname !== '/health') {
   throw new Error('System health should use the /health route.')
 }
-await page.getByText('Total local footprint').waitFor()
+await page.locator('.health-card').filter({ hasText: 'Project related files' }).first().waitFor()
+await page.locator('.health-card').filter({ hasText: 'Git upload estimate' }).first().waitFor()
 await page.screenshot({ path: screenshotPath('desktop-system-health.png'), fullPage: false })
 
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
@@ -320,8 +328,8 @@ await page.request.put(`${apiBaseUrl}/api/nodes/project-crud-app/body`, {
   data: { body: crudOriginalBody },
 })
 
-await page.getByRole('button', { name: 'Show map' }).click()
-await page.getByRole('button', { name: 'Focus reading' }).waitFor()
+await page.locator('.toolbar-actions').getByRole('button', { name: 'Show map' }).click()
+await page.locator('.toolbar-actions').getByRole('button', { name: 'Focus reading' }).waitFor()
 await page.getByLabel('Global search').fill('graph.*(')
 await page.getByText(/visible of .* indexed nodes/).waitFor()
 

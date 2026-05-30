@@ -268,8 +268,9 @@ Current implementation:
 
 - Opening a node detail calls `POST /api/nodes/:slug/read`.
 - The backend stores `last_read_at`, `read_count`, and activity `updated_at` in `node_activity`.
-- The frontend sends `min_interval_seconds: 60` so StrictMode, refreshes, or quick back-and-forth navigation do not inflate `read_count`.
-- `last_read_at` may still update inside the debounce window; `read_count` should not.
+- The frontend records reads only in Focus reading mode after a short dwell time, so ordinary clicking/browsing is not treated as review.
+- The frontend sends `min_interval_seconds` so StrictMode, refreshes, or quick back-and-forth navigation do not inflate `read_count`.
+- `last_read_at` does not update inside the debounce window; it should represent the latest effective reading exposure, not every click.
 - `last_read_at` is monotonic. Older client-provided timestamps must not move the stored read time backwards or increment `read_count`.
 - The detail page displays `Last read`, `Last edit`, and `Read count` in `Reading trace`.
 
@@ -494,6 +495,7 @@ Current implementation:
 - Graph endpoint payloads include `path`, `center`, `children`, `pagination`, and `actions`.
 - `graph_cache` stores generated payload JSON by route/page key; ingest clears it.
 - `/health` reads `/api/system/metrics` and shows content size, SQLite size, generated artifacts, queue counts, and AI readiness.
+- `/health` is a cockpit mode, not a node-reading mode: the search input is hidden, the center column is a storage ledger, and sidebar/ledger/dashboard panes scroll independently.
 - Both routes are deliberately dependency-light.
 
 Future graph rules:
@@ -508,6 +510,12 @@ Future health rules:
 - Health metrics must never leak secrets or private Markdown body text.
 - Health should prefer counts, sizes, timestamps, hashes, and status summaries.
 - Health should flag actionable states: stale index, large generated artifacts, failed jobs, missing provider config, and backup age.
+- Heavy health diagnostics must not block first paint. Storage totals and deep partition scans use a cached snapshot with a background refresh path.
+- On API startup, the backend loads the previous health snapshot into memory and starts one daemon refresh thread. `/health` reads the last available snapshot and labels the Beijing-time update timestamp.
+- Opening `/health` should not be the first trigger for a heavy scan. Manual refresh may still call `/api/system/metrics?refresh=true`.
+- If `/health` receives `cache.refreshing=true`, the frontend polls `/api/system/metrics` every 4 seconds and stops once the refreshed snapshot is available.
+- GitHub upload size defaults to local tracked-file estimates. Remote GitHub API checks are opt-in through `CS_LEARNING_GITHUB_REMOTE_SIZE=1` to avoid rate limits and network stalls.
+- `/api/system/metrics` returns real-time DB counts plus cached heavy metrics. If no snapshot exists, it returns a lightweight fallback immediately and records `cache.refreshing=true`.
 
 ## Performance Plan
 
@@ -517,10 +525,12 @@ Current performance profile:
 - SQLite search is appropriate for local-first usage.
 - React renders all visible cards directly.
 - AI prompt currently sends full body in many cases.
+- Program health used to spend roughly 20+ seconds per request on synchronous recursive disk scans plus GitHub checks; it is now guarded by startup background refresh, a 10-minute in-memory/on-disk snapshot cache, and local-first Git sizing.
 
 Near-term optimizations:
 
 - Incremental ingest by file hash or modified time.
+- Keep heavy diagnostics behind TTL caches, explicit refresh actions, or background workers.
 - Add queue indexes listed in the data layer section.
 - Add indexes for `node_activity(last_read_at)` once review scheduling queries exist.
 - Only fetch detail bodies when needed.

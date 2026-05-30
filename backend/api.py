@@ -7,6 +7,10 @@ import json
 import logging
 import hashlib
 import shutil
+import subprocess
+import threading
+import time
+import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,6 +75,16 @@ CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 logger = logging.getLogger("cs_learning.api")
 GRAPH_PAGE_SIZE = 12
+SYSTEM_METRICS_CACHE_TTL_SECONDS = 600
+SYSTEM_METRICS_GITHUB_TTL_SECONDS = 3600
+SYSTEM_METRICS_CACHE_MAX_STALE_SECONDS = 86400
+SYSTEM_METRICS_CACHE_PATH = ROOT / "generated" / "health-metrics-cache.json"
+SYSTEM_METRICS_CACHE: dict[str, object] = {"payload": None, "collected_at": 0.0}
+SYSTEM_METRICS_GITHUB_CACHE: dict[str, object] = {"payload": None, "collected_at": 0.0}
+SYSTEM_METRICS_LOCK = threading.Lock()
+SYSTEM_METRICS_GITHUB_LOCK = threading.Lock()
+SYSTEM_METRICS_REFRESH_IN_PROGRESS = False
+SYSTEM_METRICS_STARTUP_REFRESH_STARTED = False
 STABLE_AREAS = ["abilities", "algorithms", "cs-fundamentals", "projects", "tools", "questions"]
 AREA_LABELS = {
     "abilities": "Abilities",
@@ -101,6 +115,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    start_system_metrics_background_refresh()
 
 
 class ReaderQuestionCreate(BaseModel):
@@ -177,6 +196,428 @@ def directory_size(path: Path) -> int:
             except OSError:
                 continue
     return total
+
+
+def unique_directory_size(paths: list[Path]) -> int:
+    resolved_paths = []
+    for path in paths:
+        try:
+            resolved_paths.append(path.resolve())
+        except OSError:
+            continue
+    roots: list[Path] = []
+    for path in sorted(set(resolved_paths), key=lambda item: len(item.parts)):
+        if not any(path == root or root in path.parents for root in roots):
+            roots.append(path)
+    return sum(directory_size(path) for path in roots)
+
+
+def git_tracked_size(repo_root: Path) -> int:
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    total = 0
+    for raw_name in result.stdout.split(b"\0"):
+        if not raw_name:
+            continue
+        path = repo_root / raw_name.decode("utf-8", errors="ignore")
+        if path.is_file():
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def github_repo_size(owner: str = "EricWang1358", repo: str = "cs-learning-os") -> dict:
+    fallback_bytes = git_tracked_size(ROOT)
+    if os.environ.get("CS_LEARNING_GITHUB_REMOTE_SIZE", "").lower() not in {"1", "true", "yes"}:
+        return {
+            "bytes": fallback_bytes,
+            "source": "git-tracked-local",
+            "url": f"https://github.com/{owner}/{repo}",
+            "message": "Showing local tracked-file estimate. Set CS_LEARNING_GITHUB_REMOTE_SIZE=1 to query GitHub.",
+            "fallback_tracked_bytes": fallback_bytes,
+            "cached": True,
+        }
+    now = time.monotonic()
+    with SYSTEM_METRICS_GITHUB_LOCK:
+        cached = SYSTEM_METRICS_GITHUB_CACHE.get("payload")
+        collected_at = float(SYSTEM_METRICS_GITHUB_CACHE.get("collected_at") or 0)
+        if cached and now - collected_at < SYSTEM_METRICS_GITHUB_TTL_SECONDS:
+            return {**cached, "cached": True}
+    url = f"https://api.github.com/repos/{owner}/{repo}"
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "cs-learning-os-local-health",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        size_kb = int(payload.get("size") or 0)
+        result = {
+            "bytes": size_kb * 1024,
+            "source": "github-api",
+            "url": payload.get("html_url") or f"https://github.com/{owner}/{repo}",
+            "message": "GitHub reports repository size in KiB.",
+            "fallback_tracked_bytes": fallback_bytes,
+            "cached": False,
+        }
+    except Exception as error:
+        result = {
+            "bytes": fallback_bytes,
+            "source": "git-tracked-fallback",
+            "url": f"https://github.com/{owner}/{repo}",
+            "message": f"GitHub API unavailable; showing local tracked-file estimate. {error}",
+            "fallback_tracked_bytes": fallback_bytes,
+            "cached": False,
+        }
+    with SYSTEM_METRICS_GITHUB_LOCK:
+        SYSTEM_METRICS_GITHUB_CACHE["payload"] = result
+        SYSTEM_METRICS_GITHUB_CACHE["collected_at"] = time.monotonic()
+    return result
+
+
+def storage_partition(key: str, label: str, path: Path, summary: str, kind: str) -> dict:
+    return {
+        "key": key,
+        "label": label,
+        "bytes": directory_size(path),
+        "path": str(path),
+        "summary": summary,
+        "kind": kind,
+    }
+
+
+def read_system_metrics_snapshot() -> Optional[dict]:
+    if not SYSTEM_METRICS_CACHE_PATH.exists():
+        return None
+    try:
+        with SYSTEM_METRICS_CACHE_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    collected_at = payload.get("collected_at")
+    if not isinstance(collected_at, str):
+        return None
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(collected_at)).total_seconds()
+    except ValueError:
+        return None
+    if age > SYSTEM_METRICS_CACHE_MAX_STALE_SECONDS:
+        return None
+    return payload
+
+
+def write_system_metrics_snapshot(payload: dict) -> None:
+    try:
+        SYSTEM_METRICS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SYSTEM_METRICS_CACHE_PATH.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+    except OSError as error:
+        logger.warning("Failed to write system metrics cache: %s", error)
+
+
+def cached_system_metrics_payload() -> Optional[dict]:
+    now = time.monotonic()
+    with SYSTEM_METRICS_LOCK:
+        cached = SYSTEM_METRICS_CACHE.get("payload")
+        collected_at = float(SYSTEM_METRICS_CACHE.get("collected_at") or 0)
+        if cached and now - collected_at < SYSTEM_METRICS_CACHE_TTL_SECONDS:
+            return {**cached, "cached": True, "refreshing": SYSTEM_METRICS_REFRESH_IN_PROGRESS}
+    snapshot = read_system_metrics_snapshot()
+    if snapshot:
+        with SYSTEM_METRICS_LOCK:
+            SYSTEM_METRICS_CACHE["payload"] = snapshot
+            SYSTEM_METRICS_CACHE["collected_at"] = now
+        return {**snapshot, "cached": True, "refreshing": False}
+    return None
+
+
+def load_system_metrics_snapshot_into_memory() -> Optional[dict]:
+    snapshot = read_system_metrics_snapshot()
+    if snapshot:
+        with SYSTEM_METRICS_LOCK:
+            SYSTEM_METRICS_CACHE["payload"] = snapshot
+            SYSTEM_METRICS_CACHE["collected_at"] = time.monotonic()
+    return snapshot
+
+
+def build_heavy_system_metrics() -> dict:
+    started = time.perf_counter()
+    generated_dir = ROOT / "generated"
+    github_size = github_repo_size()
+    db_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    project_related_bytes = unique_directory_size([ROOT, CONTENT_ROOT, DB_PATH.parent, generated_dir])
+    exclusive_partitions = exclusive_storage_partitions()
+    explained_project_bytes = sum(partition["bytes"] for partition in exclusive_partitions)
+    if project_related_bytes > explained_project_bytes:
+        exclusive_partitions.append(
+            {
+                "key": "unaccounted",
+                "label": "Other related files",
+                "bytes": project_related_bytes - explained_project_bytes,
+                "path": "multiple roots",
+                "summary": "Files counted in the total but not assigned to a named partition. This usually means an external path or overlap needs a clearer label.",
+                "kind": "other",
+            }
+        )
+    partitions = [
+        {
+            "key": "project-related",
+            "label": "Project related files",
+            "bytes": project_related_bytes,
+            "path": str(ROOT),
+            "summary": "Total local footprint across the app repository, external content data, SQLite storage, and generated artifacts.",
+            "kind": "total",
+        },
+        {
+            "key": "github-upload",
+            "label": "GitHub upload size",
+            "bytes": github_size["bytes"],
+            "path": github_size["url"],
+            "summary": "Remote repository size if GitHub API is reachable; otherwise a local tracked-file estimate.",
+            "kind": "remote",
+        },
+        {
+            "key": "git-tracked",
+            "label": "Git tracked files",
+            "bytes": github_size["fallback_tracked_bytes"],
+            "path": str(ROOT),
+            "summary": "Local files currently tracked by Git. This approximates what is uploaded, excluding ignored private data.",
+            "kind": "source",
+        },
+        storage_partition(
+            "app-repo",
+            "App repository",
+            ROOT,
+            "React app, FastAPI backend, docs, scripts, demo content, and Git metadata for the public project.",
+            "code",
+        ),
+        storage_partition(
+            "content",
+            "Content data",
+            CONTENT_ROOT,
+            "Private or demo Markdown knowledge files that back nodes, quizzes, links, and sources.",
+            "knowledge",
+        ),
+        {
+            "key": "sqlite-db",
+            "label": "SQLite DB",
+            "bytes": db_bytes,
+            "path": str(DB_PATH),
+            "summary": "Local query/index database with nodes, quizzes, FTS search tables, questions, jobs, graph cache, and reading activity.",
+            "kind": "database",
+        },
+        storage_partition(
+            "generated",
+            "Generated artifacts",
+            generated_dir,
+            "Development logs, screenshots, smoke-test evidence, temporary Codex home, and other rebuildable artifacts.",
+            "generated",
+        ),
+    ]
+    return {
+        "storage": {
+            "content_bytes": directory_size(CONTENT_ROOT),
+            "db_bytes": db_bytes,
+            "generated_bytes": directory_size(generated_dir),
+            "project_related_bytes": project_related_bytes,
+            "github_repo_bytes": github_size["bytes"],
+            "github_repo_fallback_tracked_bytes": github_size["fallback_tracked_bytes"],
+            "partitions": partitions,
+            "exclusive_partitions": exclusive_partitions,
+            "explained_project_bytes": sum(partition["bytes"] for partition in exclusive_partitions),
+        },
+        "paths": {
+            "project": str(ROOT),
+            "content": str(CONTENT_ROOT),
+            "db": str(DB_PATH),
+            "generated": str(generated_dir),
+        },
+        "github": github_size,
+        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collection_ms": round((time.perf_counter() - started) * 1000),
+    }
+
+
+def refresh_system_metrics_cache() -> None:
+    global SYSTEM_METRICS_REFRESH_IN_PROGRESS
+    with SYSTEM_METRICS_LOCK:
+        if SYSTEM_METRICS_REFRESH_IN_PROGRESS:
+            return
+        SYSTEM_METRICS_REFRESH_IN_PROGRESS = True
+    try:
+        payload = build_heavy_system_metrics()
+        write_system_metrics_snapshot(payload)
+        with SYSTEM_METRICS_LOCK:
+            SYSTEM_METRICS_CACHE["payload"] = payload
+            SYSTEM_METRICS_CACHE["collected_at"] = time.monotonic()
+    except Exception:
+        logger.exception("Failed to refresh system metrics cache")
+    finally:
+        with SYSTEM_METRICS_LOCK:
+            SYSTEM_METRICS_REFRESH_IN_PROGRESS = False
+
+
+def start_system_metrics_background_refresh() -> None:
+    global SYSTEM_METRICS_STARTUP_REFRESH_STARTED
+    with SYSTEM_METRICS_LOCK:
+        if SYSTEM_METRICS_STARTUP_REFRESH_STARTED:
+            return
+        SYSTEM_METRICS_STARTUP_REFRESH_STARTED = True
+    load_system_metrics_snapshot_into_memory()
+    thread = threading.Thread(
+        target=refresh_system_metrics_cache,
+        name="system-metrics-refresh",
+        daemon=True,
+    )
+    thread.start()
+
+
+def fallback_system_metrics_payload() -> dict:
+    generated_dir = ROOT / "generated"
+    db_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    content_bytes = 0
+    generated_bytes = 0
+    project_related_bytes = content_bytes + db_bytes + generated_bytes
+    partitions = [
+        {
+            "key": "content",
+            "label": "Content data",
+            "bytes": content_bytes,
+            "path": str(CONTENT_ROOT),
+            "summary": "Pending heavy scan: private or demo Markdown knowledge files.",
+            "kind": "knowledge",
+        },
+        {
+            "key": "sqlite-db",
+            "label": "SQLite DB",
+            "bytes": db_bytes,
+            "path": str(DB_PATH),
+            "summary": "Fast fallback: local SQLite database file.",
+            "kind": "database",
+        },
+        {
+            "key": "generated",
+            "label": "Generated artifacts",
+            "bytes": generated_bytes,
+            "path": str(generated_dir),
+            "summary": "Pending heavy scan: rebuildable local generated artifacts.",
+            "kind": "generated",
+        },
+    ]
+    return {
+        "storage": {
+            "content_bytes": content_bytes,
+            "db_bytes": db_bytes,
+            "generated_bytes": generated_bytes,
+            "project_related_bytes": project_related_bytes,
+            "github_repo_bytes": 0,
+            "github_repo_fallback_tracked_bytes": 0,
+            "partitions": partitions,
+            "exclusive_partitions": partitions,
+            "explained_project_bytes": project_related_bytes,
+        },
+        "paths": {
+            "project": str(ROOT),
+            "content": str(CONTENT_ROOT),
+            "db": str(DB_PATH),
+            "generated": str(generated_dir),
+        },
+        "github": {
+            "bytes": 0,
+            "source": "pending-cache",
+            "url": "https://github.com/EricWang1358/cs-learning-os",
+            "message": "Local tracked-file GitHub estimate is pending; cached metrics will replace this fallback.",
+            "fallback_tracked_bytes": 0,
+            "cached": False,
+        },
+        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collection_ms": 0,
+    }
+
+
+def direct_child_partitions(root: Path, reserved_paths: list[Path], key_prefix: str) -> list[dict]:
+    partitions = []
+    reserved = []
+    for path in reserved_paths:
+        try:
+            reserved.append(path.resolve())
+        except OSError:
+            continue
+    if not root.exists() or not root.is_dir():
+        return partitions
+    for child in sorted(root.iterdir(), key=lambda item: item.name.lower()):
+        try:
+            resolved_child = child.resolve()
+        except OSError:
+            continue
+        if any(reserved_path == resolved_child or resolved_child in reserved_path.parents for reserved_path in reserved):
+            continue
+        if child.name in {".git", "node_modules", ".venv", "__pycache__"}:
+            summary = "Tooling/cache footprint. Usually useful locally, but not part of authored learning content."
+            kind = "tooling"
+        elif child.name in {"app", "backend", "scripts", "docs", "skill", "content-demo"}:
+            summary = "Project source, docs, scripts, skills, or committed demo material."
+            kind = "source"
+        elif child.name == "content":
+            summary = "Knowledge Markdown content directory for nodes, quizzes, links, and sources."
+            kind = "knowledge"
+        elif child.suffix == ".db":
+            summary = "SQLite database file with local search indexes, jobs, graph cache, and reading activity."
+            kind = "database"
+        elif child.name == "generated":
+            summary = "Development logs, screenshots, smoke-test evidence, Codex home, and rebuildable artifacts."
+            kind = "generated"
+        else:
+            summary = "Project-adjacent file or folder under the app repository root."
+            kind = "other"
+        partitions.append(
+            {
+                "key": f"{key_prefix}-{child.name.lower().replace(' ', '-')}",
+                "label": child.name,
+                "bytes": directory_size(child),
+                "path": str(child),
+                "summary": summary,
+                "kind": kind,
+            }
+        )
+    return partitions
+
+
+def exclusive_storage_partitions() -> list[dict]:
+    roots = [ROOT]
+    candidates = [CONTENT_ROOT, DB_PATH.parent]
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if any(resolved == root or root in resolved.parents for root in roots):
+            continue
+        roots = [root for root in roots if not (root == resolved or resolved in root.parents)]
+        roots.append(resolved)
+
+    partitions: list[dict] = []
+    for root in roots:
+        try:
+            key_prefix = "repo" if root.resolve() == ROOT.resolve() else f"external-{root.name.lower().replace(' ', '-')}"
+        except OSError:
+            key_prefix = f"external-{root.name.lower().replace(' ', '-')}"
+        partitions.extend(direct_child_partitions(root, [], key_prefix))
+    return partitions
 
 
 def plain_markdown_text(text: str) -> str:
@@ -1321,7 +1762,7 @@ def ai_preflight(run_model: bool = False) -> dict:
 
 
 @app.get("/api/system/metrics")
-def system_metrics() -> dict:
+def system_metrics(background_tasks: BackgroundTasks, refresh: bool = Query(False)) -> dict:
     recover_stale_ai_jobs()
     with get_conn() as conn:
         counts = {
@@ -1331,23 +1772,30 @@ def system_metrics() -> dict:
             "active_ai_jobs": conn.execute("SELECT COUNT(*) FROM ai_jobs WHERE status IN ('queued', 'solving', 'draft_ready', 'failed')").fetchone()[0],
             "failed_ai_jobs": conn.execute("SELECT COUNT(*) FROM ai_jobs WHERE status = 'failed'").fetchone()[0],
         }
-    generated_dir = ROOT / "generated"
+    heavy_metrics = None if refresh else cached_system_metrics_payload()
+    if heavy_metrics is None:
+        heavy_metrics = fallback_system_metrics_payload()
+        if refresh:
+            background_tasks.add_task(refresh_system_metrics_cache)
+        heavy_metrics["cached"] = False
+        heavy_metrics["refreshing"] = SYSTEM_METRICS_REFRESH_IN_PROGRESS
+    elif refresh:
+        background_tasks.add_task(refresh_system_metrics_cache)
+        heavy_metrics["refreshing"] = True
+    ai_payload = codex_preflight(run_model=False) if ai_provider_name() == "codex-cli" else {
+        "ok": openai_is_configured(),
+        "message": "OpenAI API key is configured." if openai_is_configured() else "OPENAI_API_KEY is not configured.",
+    }
     return {
         "counts": counts,
-        "storage": {
-            "content_bytes": directory_size(CONTENT_ROOT),
-            "db_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
-            "generated_bytes": directory_size(generated_dir),
+        **heavy_metrics,
+        "cache": {
+            "cached": bool(heavy_metrics.get("cached")),
+            "refreshing": bool(heavy_metrics.get("refreshing")),
+            "ttl_seconds": SYSTEM_METRICS_CACHE_TTL_SECONDS,
+            "refresh_after": "Manual refresh or cache expiry; heavy scans run in the background.",
         },
-        "paths": {
-            "content": str(CONTENT_ROOT),
-            "db": str(DB_PATH),
-            "generated": str(generated_dir),
-        },
-        "ai": codex_preflight(run_model=False) if ai_provider_name() == "codex-cli" else {
-            "ok": openai_is_configured(),
-            "message": "OpenAI API key is configured." if openai_is_configured() else "OPENAI_API_KEY is not configured.",
-        },
+        "ai": ai_payload,
     }
 
 
@@ -1880,7 +2328,7 @@ def mark_node_read(slug: str, payload: NodeReadMark) -> dict:
                 current = datetime.fromisoformat(str(now).replace("Z", "+00:00"))
                 elapsed_seconds = (current - previous).total_seconds()
                 should_increment = elapsed_seconds >= payload.min_interval_seconds
-                if elapsed_seconds < 0:
+                if elapsed_seconds < payload.min_interval_seconds:
                     write_time = existing["last_read_at"]
                     should_increment = False
             except ValueError:
@@ -1953,6 +2401,47 @@ def restore_node(slug: str) -> dict:
             raise HTTPException(status_code=404, detail="Node source file not found")
         with restore_file_on_failure(content_path):
             previous_visibility = read_markdown_frontmatter_value(content_path, "previous_visibility") or "support"
+            update_markdown_frontmatter_value(content_path, "visibility", previous_visibility)
+            remove_markdown_frontmatter_key(content_path, "previous_visibility")
+            upsert_node_file_in_conn(conn, content_path)
+            conn.commit()
+    return get_node(slug)
+
+
+@app.post("/api/nodes/{slug}/archive")
+def archive_node(slug: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        if row["visibility"] == "trash":
+            raise HTTPException(status_code=400, detail="Restore node from Trashbin before archiving")
+        content_path = CONTENT_ROOT / row["path"]
+        if not content_path.is_file():
+            raise HTTPException(status_code=404, detail="Node source file not found")
+        with restore_file_on_failure(content_path):
+            previous_visibility = read_markdown_frontmatter_value(content_path, "visibility")
+            if previous_visibility and previous_visibility != "archive":
+                update_markdown_frontmatter_value(content_path, "previous_visibility", previous_visibility)
+            update_markdown_frontmatter_value(content_path, "visibility", "archive")
+            upsert_node_file_in_conn(conn, content_path)
+            conn.commit()
+    return get_node(slug)
+
+
+@app.post("/api/nodes/{slug}/unarchive")
+def unarchive_node(slug: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE slug = ?", (slug,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Node not found")
+        content_path = CONTENT_ROOT / row["path"]
+        if not content_path.is_file():
+            raise HTTPException(status_code=404, detail="Node source file not found")
+        with restore_file_on_failure(content_path):
+            previous_visibility = read_markdown_frontmatter_value(content_path, "previous_visibility") or "support"
+            if previous_visibility in {"archive", "trash"}:
+                previous_visibility = "support"
             update_markdown_frontmatter_value(content_path, "visibility", previous_visibility)
             remove_markdown_frontmatter_key(content_path, "previous_visibility")
             upsert_node_file_in_conn(conn, content_path)

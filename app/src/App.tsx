@@ -199,11 +199,36 @@ type SystemMetrics = {
     content_bytes: number
     db_bytes: number
     generated_bytes: number
+    project_related_bytes: number
+    github_repo_bytes: number
+    github_repo_fallback_tracked_bytes: number
+    partitions: StoragePartition[]
+    exclusive_partitions: StoragePartition[]
+    explained_project_bytes: number
   }
   paths: {
+    project: string
     content: string
     db: string
     generated: string
+  }
+  github: {
+    bytes: number
+    source: string
+    url: string
+    message: string
+    fallback_tracked_bytes: number
+    cached?: boolean
+  }
+  collected_at?: string
+  collection_ms?: number
+  cached?: boolean
+  refreshing?: boolean
+  cache?: {
+    cached: boolean
+    refreshing: boolean
+    ttl_seconds: number
+    refresh_after: string
   }
   ai: {
     ok: boolean
@@ -215,6 +240,15 @@ type SystemMetrics = {
     base_url?: string
     codex_home?: string
   }
+}
+
+type StoragePartition = {
+  key: string
+  label: string
+  bytes: number
+  path: string
+  summary: string
+  kind: string
 }
 
 type ApiSystemMetricsResponse = SystemMetrics
@@ -322,6 +356,8 @@ type LineDiffSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 const SYSTEM_AREAS = ['all', 'archive', 'trash']
+const READ_MARK_DELAY_MS = Number(import.meta.env.VITE_READ_MARK_DELAY_MS ?? '20000')
+const READ_MARK_MIN_INTERVAL_SECONDS = 300
 
 const areaLabels: Record<string, string> = {
   all: 'All nodes',
@@ -436,6 +472,39 @@ function formatTraceTime(isoTime?: string) {
     minute: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+function formatBeijingDateTime(isoTime?: string) {
+  if (!isoTime) return 'unknown Beijing time'
+  const date = new Date(isoTime)
+  if (Number.isNaN(date.getTime())) return 'unknown Beijing time'
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+function partitionColor(index: number) {
+  const colors = ['#fcd535', '#0ecb81', '#60a5fa', '#f97316', '#c084fc', '#f43f5e', '#94a3b8']
+  return colors[index % colors.length]
+}
+
+function pieGradient(partitions: StoragePartition[], totalBytes: number) {
+  if (!totalBytes || !partitions.length) return 'conic-gradient(rgba(252, 213, 53, 0.22) 0 360deg)'
+  let cursor = 0
+  const stops = partitions.map((partition, index) => {
+    const start = cursor
+    const size = Math.max(0, (partition.bytes / totalBytes) * 360)
+    cursor += size
+    return `${partitionColor(index)} ${start.toFixed(2)}deg ${cursor.toFixed(2)}deg`
+  })
+  return `conic-gradient(${stops.join(', ')})`
 }
 
 function formatBytes(bytes: number) {
@@ -1202,6 +1271,7 @@ function App() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
+  const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
 
   const deferredQuery = useDeferredValue(query)
 
@@ -1211,13 +1281,13 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (viewMode !== 'nodes' || !selectedNode?.slug || selectedNode.slug !== selectedSlug) return
+    if (viewMode !== 'nodes' || !isFocusMode || !selectedNode?.slug || selectedNode.slug !== selectedSlug) return
     let isActive = true
     const markRead = async () => {
       try {
         const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/read`, {
           read_at: new Date().toISOString(),
-          min_interval_seconds: 60,
+          min_interval_seconds: READ_MARK_MIN_INTERVAL_SECONDS,
         })
         if (!isActive) return
         setSelectedNode((current) => (current?.slug === data.node.slug ? data.node : current))
@@ -1226,11 +1296,12 @@ function App() {
         // Reading should not fail just because the activity trace could not be updated.
       }
     }
-    markRead()
+    const timer = window.setTimeout(markRead, READ_MARK_DELAY_MS)
     return () => {
       isActive = false
+      window.clearTimeout(timer)
     }
-  }, [selectedNode?.slug, selectedSlug, viewMode])
+  }, [isFocusMode, selectedNode?.slug, selectedSlug, viewMode])
 
   const navigateToNode = (slug: string, options: { focus?: boolean; replace?: boolean } = {}) => {
     navigate(
@@ -1340,8 +1411,8 @@ function App() {
         } else if (viewMode === 'graph') {
           const cacheKey = `${location.pathname}?page=${graphPage}`
           const cached = graphCache[cacheKey]
+          setGraphPayload(cached ?? null)
           if (cached) {
-            setGraphPayload(cached)
             return
           }
           const data = await fetchJson<ApiGraphResponse>(graphApiPath(location.pathname, graphPage))
@@ -1398,6 +1469,32 @@ function App() {
       isActive = false
     }
   }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, query, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'health' || !systemMetrics?.cache?.refreshing) return
+    let isActive = true
+    const timer = window.setInterval(async () => {
+      try {
+        const metricsData = await fetchJson<ApiSystemMetricsResponse>('/api/system/metrics')
+        if (!isActive) return
+        startTransition(() => {
+          setSystemMetrics(metricsData)
+        })
+        if (!metricsData.cache?.refreshing) {
+          window.clearInterval(timer)
+        }
+      } catch (loadError) {
+        if (isActive) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to refresh health metrics')
+        }
+      }
+    }, 4000)
+
+    return () => {
+      isActive = false
+      window.clearInterval(timer)
+    }
+  }, [systemMetrics?.cache?.refreshing, viewMode])
 
   useEffect(() => {
     let isActive = true
@@ -1701,6 +1798,13 @@ function App() {
   const totalStorageBytes = systemMetrics
     ? systemMetrics.storage.content_bytes + systemMetrics.storage.db_bytes + systemMetrics.storage.generated_bytes
     : 0
+  const projectRelatedBytes = systemMetrics?.storage.project_related_bytes ?? totalStorageBytes
+  const storagePartitions = [...(systemMetrics?.storage.exclusive_partitions ?? [])].sort(
+    (left, right) => right.bytes - left.bytes,
+  )
+  const metricPartitions = [...(systemMetrics?.storage.partitions ?? [])].sort(
+    (left, right) => right.bytes - left.bytes,
+  )
 
   const activeAiJobs = aiJobs.filter((job) =>
     ['queued', 'solving', 'draft_ready', 'failed'].includes(job.status),
@@ -1717,7 +1821,7 @@ function App() {
     }
     return left.localeCompare(right)
   })
-  const sidebarAreas = ['all', ...contentAreas, 'archive', 'trash']
+  const systemSidebarAreas = ['archive', 'trash']
   const areaCounts = new Map<string, number>()
   areaCounts.set('all', areaSystemCounts.all ?? 0)
   areaCounts.set('archive', areaSystemCounts.archive ?? 0)
@@ -1768,9 +1872,7 @@ function App() {
       : viewMode === 'graph'
         ? graphPayload?.children.length ?? 0
         : viewMode === 'health'
-          ? systemMetrics
-            ? 1
-            : 0
+          ? storagePartitions.length
       : viewMode === 'quizzes'
         ? filteredQuizzes.length
         : filteredNodes.length
@@ -1780,7 +1882,7 @@ function App() {
       : viewMode === 'graph'
         ? graphPayload?.pagination.total ?? 0
         : viewMode === 'health'
-          ? 1
+          ? storagePartitions.length
       : viewMode === 'quizzes'
         ? quizzes.length
         : nodes.length
@@ -2454,6 +2556,50 @@ function App() {
     }
   }
 
+  const moveSelectedNodeToArchive = async () => {
+    if (!selectedNode) return
+    if (!window.confirm(`Move "${selectedNode.title}" to Archive?`)) return
+    try {
+      setActionNotice('Moving node to Archive...')
+      const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/archive`, {})
+      setSelectedNode(data.node)
+      setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
+      await refreshAreas()
+      exitEditMode(false)
+      setActionNotice('Node moved to Archive. Restore it from Archive if needed.')
+      navigateToArea('archive')
+    } catch (archiveError) {
+      const message = archiveError instanceof Error ? archiveError.message : 'Unable to move node to Archive'
+      setActionNotice(message)
+      setError(message)
+    }
+  }
+
+  const restoreSelectedNodeFromArchive = async () => {
+    if (!selectedNode) return
+    try {
+      setActionNotice('Restoring node from Archive...')
+      const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/unarchive`, {})
+      setSelectedNode(data.node)
+      setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
+      await refreshAreas()
+      exitEditMode(false)
+      setActionNotice('Node restored from Archive.')
+      navigate(
+        `/nodes/${encodeURIComponent(data.node.slug)}${routeSearch({
+          activeArea: data.node.area,
+          activeTrack: data.node.track,
+          query,
+          isFocusMode: true,
+        })}`,
+      )
+    } catch (archiveError) {
+      const message = archiveError instanceof Error ? archiveError.message : 'Unable to restore node from Archive'
+      setActionNotice(message)
+      setError(message)
+    }
+  }
+
   const permanentlyDeleteSelectedNode = async () => {
     if (!selectedNode) return
     if (!window.confirm(`Permanently delete "${selectedNode.title}"? This cannot be undone.`)) return
@@ -2483,7 +2629,7 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -2502,7 +2648,27 @@ function App() {
         </section>
 
         <nav className="area-nav">
-          {sidebarAreas.map((area) => (
+          <button
+            type="button"
+            className={activeArea === 'all' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigateToArea('all')
+            }}
+          >
+            <span>{areaLabels.all}</span>
+            <strong>{areaCounts.get('all') ?? 0}</strong>
+          </button>
+          <button
+            type="button"
+            className="area-collapse-toggle"
+            onClick={() => setIsAreaNavExpanded((current) => !current)}
+            aria-expanded={isAreaNavExpanded}
+          >
+            <span>Knowledge areas</span>
+            <strong>{isAreaNavExpanded ? 'Hide' : 'Show'}</strong>
+          </button>
+          {isAreaNavExpanded && contentAreas.map((area) => (
             <button
               key={area}
               type="button"
@@ -2516,6 +2682,20 @@ function App() {
               <strong>
                 {areaCounts.get(area) ?? 0}
               </strong>
+            </button>
+          ))}
+          {systemSidebarAreas.map((area) => (
+            <button
+              key={area}
+              type="button"
+              className={area === activeArea ? 'active' : ''}
+              onClick={() => {
+                if (!exitEditingBeforeNavigation()) return
+                navigateToArea(area)
+              }}
+            >
+              <span>{areaLabels[area] ?? slugTitle(area)}</span>
+              <strong>{areaCounts.get(area) ?? 0}</strong>
             </button>
           ))}
         </nav>
@@ -2542,33 +2722,26 @@ function App() {
           >
             Q Queue
           </button>
-        </section>
-
-        <section className="system-note">
-          <h2>Current loop</h2>
-          <p>Markdown stays source of truth. SQLite powers search. React is the daily surface.</p>
-          <div className="loop-actions">
-            <button
-              type="button"
-              className={viewMode === 'graph' ? 'active' : ''}
-              onClick={() => {
-                if (!exitEditingBeforeNavigation()) return
-                navigate('/graph')
-              }}
-            >
-              Knowledge navigator
-            </button>
-            <button
-              type="button"
-              className={viewMode === 'health' ? 'active' : ''}
-              onClick={() => {
-                if (!exitEditingBeforeNavigation()) return
-                navigate('/health')
-              }}
-            >
-              System health
-            </button>
-          </div>
+          <button
+            type="button"
+            className={viewMode === 'graph' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigate('/graph')
+            }}
+          >
+            Knowledge navigator
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'health' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigate('/health')
+            }}
+          >
+            System health
+          </button>
         </section>
       </aside>
 
@@ -2582,77 +2755,80 @@ function App() {
         />
       ) : (
       <section className="node-column" aria-label="Knowledge nodes">
-        <header className="search-header">
-          <label htmlFor="node-search">
-            {viewMode === 'question-queue'
-              ? 'Question queue'
-              : viewMode === 'health'
-                  ? 'Program health'
-              : viewMode === 'quizzes'
-                ? 'Quiz search'
-                : 'Global search'}
-          </label>
-          <input
-            id="node-search"
-            value={query}
-            onChange={(event) => {
-              const nextQuery = event.target.value
-              if (viewMode === 'quizzes') {
-                navigate(
-                  `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
-                    activeArea,
-                    activeTrack,
-                    query: nextQuery,
-                    isFocusMode,
-                  })}`,
-                  { replace: true },
-                )
-              } else if (viewMode === 'question-queue') {
-                navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
-              } else if (viewMode === 'health') {
-                navigate('/health', { replace: true })
-              } else {
-                navigate(
-                  `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
-                    activeArea,
-                    activeTrack,
-                    query: nextQuery,
-                    isFocusMode,
-                  })}`,
-                  { replace: true },
-                )
-              }
-            }}
-            placeholder={
-              viewMode === 'question-queue'
-                ? 'Open questions are loaded directly...'
-                : viewMode === 'health'
-                    ? 'Health is live metrics; search is disabled here.'
+        {viewMode === 'health' ? (
+          <header className="search-header cockpit-header">
+            <p className="eyebrow">Health metrics</p>
+            <h2>Storage ledger</h2>
+            <p>
+              {isLoading
+                ? 'Loading health metrics...'
+                : `${visibleCount} size partitions, sorted by local footprint.`}
+            </p>
+          </header>
+        ) : (
+          <header className="search-header">
+            <label htmlFor="node-search">
+              {viewMode === 'question-queue'
+                ? 'Question queue'
                 : viewMode === 'quizzes'
-                ? 'Search quiz prompts, tags, answers...'
-                : 'Search concepts, tags, summaries...'
-            }
-            disabled={viewMode === 'health'}
-          />
-          <p>
-            {isLoading
-              ? 'Loading index...'
-              : `${visibleCount} visible of ${totalCount} indexed ${
-                  viewMode === 'question-queue'
-                    ? 'open questions'
-                    : viewMode === 'health'
-                        ? 'health dashboards'
-                    : viewMode === 'quizzes'
-                      ? 'quizzes'
-                      : 'nodes'
-                }`}
-          </p>
-          {viewMode === 'nodes' && (
-            <button type="button" className="focus-toggle new-node-toggle" onClick={openNewNodeForm}>
-              {isNewNodeOpen ? 'Close new node' : '+ New node'}
-            </button>
-          )}
-        </header>
+                  ? 'Quiz search'
+                  : 'Global search'}
+            </label>
+            <input
+              id="node-search"
+              value={query}
+              onChange={(event) => {
+                const nextQuery = event.target.value
+                if (viewMode === 'quizzes') {
+                  navigate(
+                    `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                      activeArea,
+                      activeTrack,
+                      query: nextQuery,
+                      isFocusMode,
+                    })}`,
+                    { replace: true },
+                  )
+                } else if (viewMode === 'question-queue') {
+                  navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
+                } else {
+                  navigate(
+                    `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                      activeArea,
+                      activeTrack,
+                      query: nextQuery,
+                      isFocusMode,
+                    })}`,
+                    { replace: true },
+                  )
+                }
+              }}
+              placeholder={
+                viewMode === 'question-queue'
+                  ? 'Open questions are loaded directly...'
+                  : viewMode === 'quizzes'
+                    ? 'Search quiz prompts, tags, answers...'
+                    : 'Search concepts, tags, summaries...'
+              }
+            />
+            <p>
+              {isLoading
+                ? 'Loading index...'
+                : `${visibleCount} visible of ${totalCount} indexed ${
+                    viewMode === 'question-queue'
+                      ? 'open questions'
+                      : viewMode === 'quizzes'
+                        ? 'quizzes'
+                        : 'nodes'
+                  }`}
+            </p>
+            {viewMode === 'nodes' && (
+              <button type="button" className="focus-toggle new-node-toggle" onClick={openNewNodeForm}>
+                {isNewNodeOpen ? 'Close new node' : '+ New node'}
+              </button>
+            )}
+          </header>
+        )}
 
         {viewMode === 'nodes' && isNewNodeOpen && (
           <section className="new-node-panel" aria-label="Create new node">
@@ -2896,27 +3072,74 @@ function App() {
                 )
               })
             : viewMode === 'health'
-              ? (
-                  <>
-                    <article className="node-card compact-card">
-                      <span className="node-meta">content / markdown source</span>
-                      <strong>{systemMetrics ? formatBytes(systemMetrics.storage.content_bytes) : 'Loading...'}</strong>
-                      <span>{systemMetrics?.paths.content ?? 'Content directory metrics are loading.'}</span>
-                    </article>
-                    <article className="node-card compact-card">
-                      <span className="node-meta">sqlite / local index</span>
-                      <strong>{systemMetrics ? formatBytes(systemMetrics.storage.db_bytes) : 'Loading...'}</strong>
-                      <span>{systemMetrics?.paths.db ?? 'SQLite path is loading.'}</span>
-                    </article>
-                    <article className="node-card compact-card">
-                      <span className="node-meta">ai / jobs</span>
-                      <strong>{systemMetrics?.counts.active_ai_jobs ?? 0} active</strong>
-                      <span>
-                        {systemMetrics?.ai.message ?? 'AI preflight will appear after metrics load.'}
-                      </span>
-                    </article>
-                  </>
-                )
+              ? systemMetrics
+                ? (
+                    <>
+                      <article className="node-card compact-card health-summary-card">
+                        <span className="node-meta">project related files</span>
+                        <strong>{formatBytes(projectRelatedBytes)}</strong>
+                        <span>
+                          Exclusive partitions explain {formatBytes(systemMetrics.storage.explained_project_bytes)}.
+                        </span>
+                        <span>
+                          {systemMetrics.cache?.refreshing
+                            ? 'Background refresh is running; cached/fallback data is shown now.'
+                            : systemMetrics.cache?.cached
+                              ? `Update: ${formatBeijingDateTime(systemMetrics.collected_at)} Beijing`
+                              : 'Fresh fallback returned immediately; full scan will update the cache.'}
+                        </span>
+                      </article>
+                      <article className="node-card compact-card health-summary-card">
+                        <span className="node-meta">github upload size</span>
+                        <strong>{formatBytes(systemMetrics.storage.github_repo_bytes)}</strong>
+                        <span>
+                          {systemMetrics.github.source === 'github-api'
+                            ? 'Remote repository size reported by GitHub.'
+                            : 'Fallback estimate from local tracked files.'}
+                        </span>
+                      </article>
+                      {storagePartitions.map((partition) => {
+                        const percent = projectRelatedBytes ? (partition.bytes / projectRelatedBytes) * 100 : 0
+                        return (
+                          <article className="node-card compact-card health-partition-card" key={partition.key}>
+                            <div className="partition-card-head">
+                              <div>
+                                <span className="node-meta">{partition.kind}</span>
+                                <strong>{partition.label}</strong>
+                              </div>
+                              <span className="partition-percent">{percent.toFixed(1)}%</span>
+                            </div>
+                            <div className="health-meter">
+                              <span style={{ width: `${Math.max(3, percent)}%` }} />
+                            </div>
+                            <span>{formatBytes(partition.bytes)} · {partition.summary}</span>
+                            <span className="path-note">{partition.path}</span>
+                          </article>
+                        )
+                      })}
+                      <article className="node-card compact-card health-summary-card">
+                        <span className="node-meta">metric index</span>
+                        <strong>{metricPartitions.length} tracked metrics</strong>
+                        <span>
+                          {metricPartitions
+                            .slice(0, 4)
+                            .map((partition) => `${partition.label}: ${formatBytes(partition.bytes)}`)
+                            .join(' / ')}
+                        </span>
+                      </article>
+                      <article className="node-card compact-card health-summary-card">
+                        <span className="node-meta">knowledge inventory</span>
+                        <strong>{systemMetrics.counts.nodes} nodes · {systemMetrics.counts.quizzes} quizzes</strong>
+                        <span>{systemMetrics.counts.open_questions} open questions</span>
+                      </article>
+                      <article className="node-card compact-card health-summary-card">
+                        <span className="node-meta">ai workflow</span>
+                        <strong>{systemMetrics.counts.active_ai_jobs} active · {systemMetrics.counts.failed_ai_jobs} failed</strong>
+                        <span>{systemMetrics.ai.message}</span>
+                      </article>
+                    </>
+                  )
+                : <p className="detail-loading">Loading health metrics...</p>
             : viewMode === 'quizzes'
             ? filteredQuizzes.map((quiz) => (
                 <button
@@ -2959,6 +3182,17 @@ function App() {
 
       {viewMode !== 'graph' && (
       <aside className="detail-panel" aria-label="Node detail">
+        {(viewMode === 'nodes' || viewMode === 'quizzes') && (selectedNode || selectedQuiz) && !isEditMode && !isFocusMode && (
+          <button
+            type="button"
+            className="focus-edge-toggle"
+            onClick={toggleFocusRoute}
+            aria-label="Focus reading"
+            title="Focus reading"
+          >
+            <span aria-hidden="true" />
+          </button>
+        )}
         {viewMode === 'question-queue' ? (
           <div className="queue-detail">
             <h2>Q Queue</h2>
@@ -3062,69 +3296,67 @@ function App() {
                 A local observability cockpit for content size, SQLite growth, AI job health, and future
                 maintenance warnings.
               </p>
+              {systemMetrics?.cache && (
+                <p className="cache-note">
+                  {systemMetrics.cache.refreshing
+                    ? 'Heavy storage scan is refreshing in the background.'
+                    : systemMetrics.cache.cached
+                      ? 'Using cached storage metrics.'
+                      : 'Showing immediate fallback metrics while the first heavy scan is queued.'}
+                  {typeof systemMetrics.collection_ms === 'number' && systemMetrics.collection_ms > 0
+                    ? ` Last scan took ${systemMetrics.collection_ms} ms.`
+                    : ''}
+                  {` Update: ${formatBeijingDateTime(systemMetrics.collected_at)} Beijing.`}
+                </p>
+              )}
             </section>
             {systemMetrics ? (
               <>
-                <section className="health-grid" aria-label="Storage usage">
-                  <article className="health-card accent-card">
-                    <p className="eyebrow">Total local footprint</p>
-                    <h3>{formatBytes(totalStorageBytes)}</h3>
-                    <p>Tracked across content, SQLite, and generated app artifacts.</p>
-                  </article>
-                  <article className="health-card">
-                    <p className="eyebrow">Content</p>
-                    <h3>{formatBytes(systemMetrics.storage.content_bytes)}</h3>
-                    <div className="health-meter">
-                      <span
-                        style={{
-                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.content_bytes / totalStorageBytes) * 100) : 0}%`,
-                        }}
-                      />
+                <section className="health-pie-panel" aria-label="Storage distribution">
+                  <div
+                    className="storage-pie"
+                    style={{ background: pieGradient(storagePartitions, projectRelatedBytes) }}
+                    aria-hidden="true"
+                  >
+                    <div className="pie-center">
+                      <span>Total</span>
+                      <strong>{formatBytes(projectRelatedBytes)}</strong>
+                      <small>{formatBytes(systemMetrics.storage.explained_project_bytes)} explained</small>
                     </div>
-                    <p>{systemMetrics.paths.content}</p>
-                  </article>
-                  <article className="health-card">
-                    <p className="eyebrow">SQLite DB</p>
-                    <h3>{formatBytes(systemMetrics.storage.db_bytes)}</h3>
-                    <div className="health-meter">
-                      <span
-                        style={{
-                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.db_bytes / totalStorageBytes) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <p>{systemMetrics.paths.db}</p>
-                  </article>
-                  <article className="health-card">
-                    <p className="eyebrow">Generated</p>
-                    <h3>{formatBytes(systemMetrics.storage.generated_bytes)}</h3>
-                    <div className="health-meter">
-                      <span
-                        style={{
-                          width: `${totalStorageBytes ? Math.max(4, (systemMetrics.storage.generated_bytes / totalStorageBytes) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <p>{systemMetrics.paths.generated}</p>
-                  </article>
+                  </div>
+                  <div className="pie-legend">
+                    <p className="eyebrow">Size-sorted distribution</p>
+                    {storagePartitions.map((partition, index) => {
+                      const percent = projectRelatedBytes ? (partition.bytes / projectRelatedBytes) * 100 : 0
+                      return (
+                        <div className="legend-row" key={partition.key}>
+                          <span className="legend-dot" style={{ background: partitionColor(index) }} />
+                          <span>{partition.label}</span>
+                          <strong>{percent.toFixed(1)}%</strong>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </section>
-                <section className="detail-section split">
-                  <div className="health-card">
-                    <p className="eyebrow">Knowledge inventory</p>
+                <section className="health-grid compact-health-grid" aria-label="Upload and metrics">
+                  <article className="health-card accent-card">
+                    <p className="eyebrow">Git upload estimate</p>
+                    <h3>{formatBytes(systemMetrics.storage.github_repo_bytes)}</h3>
+                    <p>
+                      {systemMetrics.github.message} Current source: {systemMetrics.github.source}. Local tracked
+                      files: {formatBytes(systemMetrics.storage.github_repo_fallback_tracked_bytes)}.
+                    </p>
+                  </article>
+                  <article className="health-card">
+                    <p className="eyebrow">Metric index</p>
                     <ul className="metric-list">
-                      <li><strong>{systemMetrics.counts.nodes}</strong> nodes</li>
-                      <li><strong>{systemMetrics.counts.quizzes}</strong> quizzes</li>
-                      <li><strong>{systemMetrics.counts.open_questions}</strong> open reader questions</li>
+                      {metricPartitions.map((partition) => (
+                        <li key={partition.key}>
+                          <strong>{formatBytes(partition.bytes)}</strong> {partition.label}
+                        </li>
+                      ))}
                     </ul>
-                  </div>
-                  <div className="health-card">
-                    <p className="eyebrow">AI workflow</p>
-                    <ul className="metric-list">
-                      <li><strong>{systemMetrics.counts.active_ai_jobs}</strong> active jobs</li>
-                      <li><strong>{systemMetrics.counts.failed_ai_jobs}</strong> failed jobs</li>
-                      <li><strong>{systemMetrics.ai.ok ? 'Ready' : 'Needs setup'}</strong> {systemMetrics.ai.message}</li>
-                    </ul>
-                  </div>
+                  </article>
                 </section>
               </>
             ) : (
@@ -3480,6 +3712,21 @@ function App() {
                   )}
                 </div>
               </section>
+
+              {selectedNode.visibility !== 'trash' && (
+                <section className="detail-section archive-actions" aria-label="Archive actions">
+                  <p className="eyebrow">Archive</p>
+                  {selectedNode.visibility === 'archive' ? (
+                    <button type="button" className="focus-toggle" onClick={restoreSelectedNodeFromArchive}>
+                      Restore from archive
+                    </button>
+                  ) : (
+                    <button type="button" className="focus-toggle" onClick={moveSelectedNodeToArchive}>
+                      Move to archive
+                    </button>
+                  )}
+                </section>
+              )}
 
               <section className="detail-section reading-trace" aria-label="Node reading trace">
                 <div>
