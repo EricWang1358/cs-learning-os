@@ -109,6 +109,7 @@ TRACK_LABELS = {
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$", re.MULTILINE)
 SAFE_SLUG_RE = re.compile(r"[^a-z0-9-]+")
 NODE_SORT_OPTIONS = {"relevance", "last-edit", "last-read", "order", "alphabet"}
+QUIZ_SORT_OPTIONS = {"relevance", "last-edit", "difficulty", "order", "alphabet"}
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -937,6 +938,10 @@ def safe_node_sort(value: str, default: str = "order") -> str:
     return value if value in NODE_SORT_OPTIONS else default
 
 
+def safe_quiz_sort(value: str, default: str = "order") -> str:
+    return value if value in QUIZ_SORT_OPTIONS else default
+
+
 def node_sort_order(sort: str, include_rank: bool = False) -> str:
     if sort == "relevance" and include_rank:
         return "rank, n.title COLLATE NOCASE"
@@ -949,11 +954,35 @@ def node_sort_order(sort: str, include_rank: bool = False) -> str:
     return "n.area, n.track, n.display_order, n.title COLLATE NOCASE"
 
 
+def quiz_difficulty_order(alias: str = "q") -> str:
+    return (
+        f"CASE LOWER({alias}.difficulty) "
+        "WHEN 'easy' THEN 1 "
+        "WHEN 'medium' THEN 2 "
+        "WHEN 'hard' THEN 3 "
+        "ELSE 4 END"
+    )
+
+
+def quiz_sort_order(sort: str, include_rank: bool = False) -> str:
+    difficulty_order = quiz_difficulty_order("q")
+    if sort == "relevance" and include_rank:
+        return f"rank, q.title COLLATE NOCASE"
+    if sort == "last-edit":
+        return "q.updated_at DESC, q.title COLLATE NOCASE"
+    if sort == "difficulty":
+        return f"{difficulty_order}, q.area, q.display_order, q.title COLLATE NOCASE"
+    if sort == "alphabet":
+        return "q.title COLLATE NOCASE, q.area, q.display_order"
+    return f"q.area, q.display_order, {difficulty_order}, q.title COLLATE NOCASE"
+
+
 def row_to_quiz(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
         "title": row["title"],
         "area": row["area"],
+        "display_order": row["display_order"],
         "status": row["status"],
         "visibility": row["visibility"],
         "difficulty": row["difficulty"],
@@ -2615,16 +2644,18 @@ def list_area_tracks(area: str) -> dict:
 def list_quizzes(
     area: Optional[str] = None,
     visibility: Optional[str] = None,
+    sort: str = Query(default="order"),
 ) -> dict:
-    query = "SELECT * FROM quizzes WHERE 1 = 1"
+    selected_sort = safe_quiz_sort(sort, "order")
+    query = "SELECT q.* FROM quizzes q WHERE 1 = 1"
     params: list[str] = []
     if area:
-        query += " AND area = ?"
+        query += " AND q.area = ?"
         params.append(area)
     if visibility:
-        query += " AND visibility = ?"
+        query += " AND q.visibility = ?"
         params.append(visibility)
-    query += " ORDER BY area, difficulty, title"
+    query += f" ORDER BY {quiz_sort_order(selected_sort)}"
 
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -2712,8 +2743,27 @@ def update_quiz_body(quiz_id: str, payload: BodyUpdate) -> dict:
 
 
 @app.get("/api/quiz-search")
-def search_quizzes(q: str = Query(default="", min_length=0)) -> dict:
+def search_quizzes(
+    q: str = Query(default="", min_length=0),
+    sort: str = Query(default="relevance"),
+    area: Optional[str] = None,
+    visibility: Optional[str] = None,
+    difficulty: Optional[str] = None,
+) -> dict:
     term = q.strip()
+    selected_sort = safe_quiz_sort(sort, "relevance" if term else "order")
+    filters = []
+    params: list[str] = []
+    if area:
+        filters.append("q.area = ?")
+        params.append(area)
+    if visibility:
+        filters.append("q.visibility = ?")
+        params.append(visibility)
+    if difficulty:
+        filters.append("q.difficulty = ?")
+        params.append(difficulty)
+    filter_sql = f" AND {' AND '.join(filters)}" if filters else ""
     with get_conn() as conn:
         if term:
             fts_query = build_fts_query(term)
@@ -2721,37 +2771,53 @@ def search_quizzes(q: str = Query(default="", min_length=0)) -> dict:
             if fts_query:
                 try:
                     rows = conn.execute(
-                        """
+                        f"""
                         SELECT q.*, bm25(quiz_fts) AS rank
                         FROM quiz_fts
                         JOIN quizzes q ON q.id = quiz_fts.id
                         WHERE quiz_fts MATCH ?
-                        ORDER BY rank, q.title
+                        {filter_sql}
+                        ORDER BY {quiz_sort_order(selected_sort, include_rank=True)}
                         LIMIT 50
                         """,
-                        (fts_query,),
+                        (fts_query, *params),
                     ).fetchall()
                 except sqlite3.OperationalError:
                     rows = []
             if not rows:
                 pattern = like_term(term)
                 rows = conn.execute(
-                    """
-                    SELECT DISTINCT q.*
+                    f"""
+                    SELECT q.*
                     FROM quizzes q
-                    LEFT JOIN quiz_tags qt ON qt.quiz_id = q.id
-                    WHERE q.title LIKE ? ESCAPE '\\'
-                       OR q.summary LIKE ? ESCAPE '\\'
-                       OR q.body LIKE ? ESCAPE '\\'
-                       OR qt.tag_name LIKE ? ESCAPE '\\'
-                    ORDER BY q.area, q.title
+                    WHERE (
+                        q.title LIKE ? ESCAPE '\\'
+                        OR q.summary LIKE ? ESCAPE '\\'
+                        OR q.body LIKE ? ESCAPE '\\'
+                        OR EXISTS (
+                          SELECT 1
+                          FROM quiz_tags qt
+                          WHERE qt.quiz_id = q.id
+                            AND qt.tag_name LIKE ? ESCAPE '\\'
+                        )
+                    )
+                    {filter_sql}
+                    ORDER BY {quiz_sort_order(selected_sort if selected_sort != 'relevance' else 'order')}
                     LIMIT 50
                     """,
-                    (pattern, pattern, pattern, pattern),
+                    (pattern, pattern, pattern, pattern, *params),
                 ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM quizzes ORDER BY area, difficulty, title LIMIT 50"
+                f"""
+                SELECT q.*
+                FROM quizzes q
+                WHERE 1 = 1
+                {filter_sql}
+                ORDER BY {quiz_sort_order(selected_sort)}
+                LIMIT 50
+                """,
+                params,
             ).fetchall()
 
     return {"quizzes": [row_to_quiz(row) for row in rows]}

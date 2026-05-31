@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     area TEXT NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 1000,
     status TEXT NOT NULL,
     visibility TEXT NOT NULL,
     difficulty TEXT NOT NULL,
@@ -172,6 +173,12 @@ def initialize(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE nodes ADD COLUMN track TEXT NOT NULL DEFAULT 'general'")
     if "display_order" not in existing_columns:
         conn.execute("ALTER TABLE nodes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
+
+    quiz_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(quizzes)").fetchall()
+    }
+    if "display_order" not in quiz_columns:
+        conn.execute("ALTER TABLE quizzes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
 
     ai_job_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(ai_jobs)").fetchall()

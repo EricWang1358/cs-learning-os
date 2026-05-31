@@ -284,6 +284,7 @@ def main() -> int:
     assert quiz_detail.status_code == 200, quiz_detail.text
     quiz_payload = quiz_detail.json()["quiz"]
     assert quiz_payload["id"] == "x86-rax-trace-leaq-jump"
+    assert "display_order" in quiz_payload
     assert "body" in quiz_payload
     assert "linked_nodes" in quiz_payload
     linked_slugs = {link["slug"] for link in quiz_payload["linked_nodes"]}
@@ -294,6 +295,12 @@ def main() -> int:
     assert any(
         quiz["id"] == "x86-rax-trace-leaq-jump"
         for quiz in quiz_search.json()["quizzes"]
+    )
+    quiz_alpha = client.get("/api/quiz-search", params={"q": "%rax", "sort": "alphabet"})
+    assert quiz_alpha.status_code == 200, quiz_alpha.text
+    assert any(
+        quiz["id"] == "x86-rax-trace-leaq-jump"
+        for quiz in quiz_alpha.json()["quizzes"]
     )
 
     ai_revision = client.post(

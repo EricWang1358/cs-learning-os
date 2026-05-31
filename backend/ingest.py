@@ -40,6 +40,7 @@ class Quiz:
     id: str
     title: str
     area: str
+    display_order: int
     status: str
     visibility: str
     difficulty: str
@@ -164,6 +165,7 @@ def read_quizzes(content_root: Path) -> list[Quiz]:
                 id=quiz_id,
                 title=str(meta.get("title") or path.stem.replace("-", " ").title()),
                 area=str(meta.get("area") or path.parent.name),
+                display_order=int(meta.get("display_order") or meta.get("order") or 1000),
                 status=str(meta.get("status") or "seed"),
                 visibility=str(meta.get("visibility") or "practice"),
                 difficulty=str(meta.get("difficulty") or "medium"),
@@ -262,13 +264,14 @@ def ingest(content_root: Path, db_path: Path) -> int:
             conn.execute(
                 """
                 INSERT INTO quizzes (
-                    id, title, area, status, visibility, difficulty, summary, body, path, weight, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, title, area, display_order, status, visibility, difficulty, summary, body, path, weight, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     quiz.id,
                     quiz.title,
                     quiz.area,
+                    quiz.display_order,
                     quiz.status,
                     quiz.visibility,
                     quiz.difficulty,

@@ -14,6 +14,17 @@ import hljs from 'highlight.js/lib/core'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
+import { SearchHeaderControls } from './SearchHeaderControls'
+import {
+  defaultNodeSort,
+  defaultQuizSort,
+  parseNodeSort,
+  parseQuizSort,
+  visibleNodeSortOptions,
+  visibleQuizSortOptions,
+  type NodeSortKey,
+  type QuizSortKey,
+} from './searchSort'
 
 type NodeSummary = {
   slug: string
@@ -70,6 +81,7 @@ type QuizSummary = {
   id: string
   title: string
   area: string
+  display_order: number
   status: string
   visibility: string
   difficulty: string
@@ -297,7 +309,6 @@ class ApiRequestError extends Error {
 }
 
 type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
-type NodeSortKey = 'relevance' | 'last-edit' | 'last-read' | 'order' | 'alphabet'
 type AiDraftScope = 'question' | 'selected' | 'page'
 
 type TocItem = {
@@ -383,24 +394,6 @@ const trackLabels: Record<string, string> = {
   networking: 'Networking',
 }
 
-const nodeSortOptions: Array<{ value: NodeSortKey; label: string }> = [
-  { value: 'relevance', label: 'Relevance' },
-  { value: 'last-edit', label: 'Last edit' },
-  { value: 'last-read', label: 'Last read' },
-  { value: 'order', label: 'Learning order' },
-  { value: 'alphabet', label: 'A-Z' },
-]
-
-function defaultNodeSort(query: string): NodeSortKey {
-  return query.trim() ? 'relevance' : 'order'
-}
-
-function parseNodeSort(value: string | null, query: string): NodeSortKey {
-  if (value === 'relevance' && !query.trim()) return 'order'
-  if (value && nodeSortOptions.some((option) => option.value === value)) return value as NodeSortKey
-  return defaultNodeSort(query)
-}
-
 function routeFromLocation(pathname: string, search: string) {
   const params = new URLSearchParams(search)
   const nodeMatch = pathname.match(/^\/nodes\/([^/]+)$/)
@@ -427,6 +420,7 @@ function routeFromLocation(pathname: string, search: string) {
     activeTrack: params.get('track') || 'all',
     query,
     nodeSort: parseNodeSort(params.get('sort'), query),
+    quizSort: parseQuizSort(params.get('sort'), query),
     graphPage: Number(params.get('page') || '1'),
     isFocusMode: params.get('focus') === '1',
   }
@@ -439,12 +433,14 @@ function routeSearch(options: {
   isFocusMode?: boolean
   page?: number
   nodeSort?: NodeSortKey
+  quizSort?: QuizSortKey
 }) {
   const params = new URLSearchParams()
   if (options.activeArea && options.activeArea !== 'all') params.set('area', options.activeArea)
   if (options.activeTrack && options.activeTrack !== 'all') params.set('track', options.activeTrack)
   if (options.query) params.set('q', options.query)
   if (options.nodeSort && options.nodeSort !== defaultNodeSort(options.query ?? '')) params.set('sort', options.nodeSort)
+  if (options.quizSort && options.quizSort !== defaultQuizSort(options.query ?? '')) params.set('sort', options.quizSort)
   if (options.isFocusMode) params.set('focus', '1')
   if (options.page && options.page > 1) params.set('page', String(options.page))
   const value = params.toString()
@@ -1261,9 +1257,9 @@ function App() {
   const activeTrack = routeState.activeTrack
   const query = routeState.query
   const nodeSort = routeState.nodeSort
-  const availableNodeSortOptions = query.trim()
-    ? nodeSortOptions
-    : nodeSortOptions.filter((option) => option.value !== 'relevance')
+  const quizSort = routeState.quizSort
+  const availableNodeSortOptions = visibleNodeSortOptions(query)
+  const availableQuizSortOptions = visibleQuizSortOptions(query)
   const graphPage = routeState.graphPage
   const isFocusMode = routeState.isFocusMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
@@ -1362,6 +1358,7 @@ function App() {
         activeArea,
         activeTrack,
         query,
+        quizSort,
         isFocusMode: options.focus ?? isFocusMode,
       })}`,
       { replace: options.replace },
@@ -1415,11 +1412,12 @@ function App() {
         setIsLoading(true)
         setError('')
         if (viewMode === 'quizzes') {
+          const quizSortParam = encodeURIComponent(quizSort)
           const data = deferredQuery.trim()
             ? await fetchJson<ApiQuizzesResponse>(
-                `/api/quiz-search?q=${encodeURIComponent(deferredQuery.trim())}`,
+                `/api/quiz-search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${quizSortParam}`,
               )
-            : await fetchJson<ApiQuizzesResponse>('/api/quizzes')
+            : await fetchJson<ApiQuizzesResponse>(`/api/quizzes?sort=${quizSortParam}`)
 
           if (!isActive) return
 
@@ -1431,6 +1429,7 @@ function App() {
                   activeArea,
                   activeTrack,
                   query,
+                  quizSort,
                   isFocusMode,
                 })}`,
                 { replace: true },
@@ -1510,7 +1509,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, viewMode])
+  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, quizSort, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'health' || !systemMetrics?.cache?.refreshing) return
@@ -2750,7 +2749,7 @@ function App() {
             className={viewMode === 'quizzes' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
-              navigate(`/quizzes${routeSearch({ query })}`)
+              navigate(`/quizzes${routeSearch({ query, quizSort })}`)
             }}
           >
             Practice / Quiz Bank
@@ -2809,100 +2808,78 @@ function App() {
             </p>
           </header>
         ) : (
-          <header className="search-header">
-            <label htmlFor="node-search">
-              {viewMode === 'question-queue'
-                ? 'Question queue'
-                : viewMode === 'quizzes'
-                  ? 'Quiz search'
-                  : 'Global search'}
-            </label>
-            <div className="search-row">
-              <input
-                id="node-search"
-                value={query}
-                onChange={(event) => {
-                  const nextQuery = event.target.value
-                  if (viewMode === 'quizzes') {
-                    navigate(
-                      `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
-                        activeArea,
-                        activeTrack,
-                        query: nextQuery,
-                        isFocusMode,
-                      })}`,
-                      { replace: true },
-                    )
-                  } else if (viewMode === 'question-queue') {
-                    navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
-                  } else {
-                    const nextSort = nodeSort === defaultNodeSort(query) ? defaultNodeSort(nextQuery) : nodeSort
-                    navigate(
-                      `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
-                        activeArea,
-                        activeTrack,
-                        query: nextQuery,
-                        nodeSort: nextSort,
-                        isFocusMode,
-                      })}`,
-                      { replace: true },
-                    )
-                  }
-                }}
-                placeholder={
-                  viewMode === 'question-queue'
-                    ? 'Open questions are loaded directly...'
-                    : viewMode === 'quizzes'
-                      ? 'Search quiz prompts, tags, answers...'
-                      : 'Search concepts, tags, summaries...'
-                }
-              />
-              {viewMode === 'nodes' && (
-                <label className="sort-control" htmlFor="node-sort">
-                  <span>Sort</span>
-                  <select
-                    id="node-sort"
-                    value={nodeSort}
-                    onChange={(event) => {
-                      const nextSort = event.target.value as NodeSortKey
-                      navigate(
-                        `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
-                          activeArea,
-                          activeTrack,
-                          query,
-                          nodeSort: nextSort,
-                          isFocusMode,
-                        })}`,
-                        { replace: true },
-                      )
-                    }}
-                  >
-                    {availableNodeSortOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-            <p>
-              {isLoading
-                ? 'Loading index...'
-                : `${visibleCount} visible of ${totalCount} indexed ${
-                    viewMode === 'question-queue'
-                      ? 'open questions'
-                      : viewMode === 'quizzes'
-                        ? 'quizzes'
-                        : 'nodes'
-                  }`}
-            </p>
-            {viewMode === 'nodes' && (
-              <button type="button" className="focus-toggle new-node-toggle" onClick={openNewNodeForm}>
-                {isNewNodeOpen ? 'Close new node' : '+ New node'}
-              </button>
-            )}
-          </header>
+          <SearchHeaderControls
+            mode={
+              viewMode === 'quizzes'
+                ? 'quizzes'
+                : viewMode === 'question-queue'
+                  ? 'question-queue'
+                  : 'nodes'
+            }
+            query={query}
+            nodeSort={nodeSort}
+            quizSort={quizSort}
+            nodeSortOptions={availableNodeSortOptions}
+            quizSortOptions={availableQuizSortOptions}
+            isLoading={isLoading}
+            visibleCount={visibleCount}
+            totalCount={totalCount}
+            isNewNodeOpen={isNewNodeOpen}
+            onNewNodeToggle={openNewNodeForm}
+            onQueryChange={(nextQuery) => {
+              if (viewMode === 'quizzes') {
+                const nextSort = quizSort === defaultQuizSort(query) ? defaultQuizSort(nextQuery) : quizSort
+                navigate(
+                  `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                    activeArea,
+                    activeTrack,
+                    query: nextQuery,
+                    quizSort: nextSort,
+                    isFocusMode,
+                  })}`,
+                  { replace: true },
+                )
+              } else if (viewMode === 'question-queue') {
+                navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
+              } else {
+                const nextSort = nodeSort === defaultNodeSort(query) ? defaultNodeSort(nextQuery) : nodeSort
+                navigate(
+                  `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                    activeArea,
+                    activeTrack,
+                    query: nextQuery,
+                    nodeSort: nextSort,
+                    isFocusMode,
+                  })}`,
+                  { replace: true },
+                )
+              }
+            }}
+            onNodeSortChange={(nextSort) => {
+              navigate(
+                `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                  activeArea,
+                  activeTrack,
+                  query,
+                  nodeSort: nextSort,
+                  isFocusMode,
+                })}`,
+                { replace: true },
+              )
+            }}
+            onQuizSortChange={(nextSort) => {
+              navigate(
+                `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                  activeArea,
+                  activeTrack,
+                  query,
+                  quizSort: nextSort,
+                  isFocusMode,
+                })}`,
+                { replace: true },
+              )
+            }}
+          />
         )}
 
         {viewMode === 'nodes' && isNewNodeOpen && (
