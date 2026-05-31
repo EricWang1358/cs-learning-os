@@ -28,6 +28,7 @@ class Node:
     summary: str
     body: str
     path: str
+    updated_at: str
     tags: list[str]
     prerequisites: list[str]
     related: list[str]
@@ -45,10 +46,19 @@ class Quiz:
     summary: str
     body: str
     path: str
+    updated_at: str
     weight: int
     tags: list[str]
     linked_nodes: list[str]
     sources: list[str]
+
+
+def strip_utf8_bom(text: str) -> str:
+    return text[1:] if text.startswith("\ufeff") else text
+
+
+def file_updated_at(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
 
 
 def parse_scalar(value: str) -> Any:
@@ -64,6 +74,7 @@ def parse_scalar(value: str) -> Any:
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+    text = strip_utf8_bom(text)
     match = FRONTMATTER_RE.match(text)
     if not match:
         return {}, text
@@ -125,6 +136,7 @@ def read_nodes(content_root: Path) -> list[Node]:
                 summary=str(meta.get("summary") or ""),
                 body=body.strip(),
                 path=rel_path,
+                updated_at=file_updated_at(path),
                 tags=as_list(meta.get("tags")),
                 prerequisites=as_list(meta.get("prerequisites")),
                 related=as_list(meta.get("related")),
@@ -158,6 +170,7 @@ def read_quizzes(content_root: Path) -> list[Quiz]:
                 summary=str(meta.get("summary") or ""),
                 body=body.strip(),
                 path=rel_path,
+                updated_at=file_updated_at(path),
                 weight=int(meta.get("weight") or 1),
                 tags=as_list(meta.get("tags")),
                 linked_nodes=as_list(meta.get("linked_nodes")),
@@ -172,7 +185,6 @@ def ingest(content_root: Path, db_path: Path) -> int:
     initialize(conn)
     nodes = read_nodes(content_root)
     quizzes = read_quizzes(content_root)
-    now = datetime.now(timezone.utc).isoformat()
 
     with conn:
         conn.execute("DELETE FROM quiz_fts")
@@ -206,7 +218,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
                     node.summary,
                     node.body,
                     node.path,
-                    now,
+                    node.updated_at,
                 ),
             )
 
@@ -264,7 +276,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
                     quiz.body,
                     quiz.path,
                     quiz.weight,
-                    now,
+                    quiz.updated_at,
                 ),
             )
 

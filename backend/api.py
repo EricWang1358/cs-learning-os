@@ -108,6 +108,7 @@ TRACK_LABELS = {
 }
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$", re.MULTILINE)
 SAFE_SLUG_RE = re.compile(r"[^a-z0-9-]+")
+NODE_SORT_OPTIONS = {"relevance", "last-edit", "last-read", "order", "alphabet"}
 
 app = FastAPI(title="CS Learning OS API")
 app.add_middleware(
@@ -932,6 +933,22 @@ def row_to_node(row: sqlite3.Row) -> dict:
     return node
 
 
+def safe_node_sort(value: str, default: str = "order") -> str:
+    return value if value in NODE_SORT_OPTIONS else default
+
+
+def node_sort_order(sort: str, include_rank: bool = False) -> str:
+    if sort == "relevance" and include_rank:
+        return "rank, n.title COLLATE NOCASE"
+    if sort == "last-edit":
+        return "n.updated_at DESC, n.title COLLATE NOCASE"
+    if sort == "last-read":
+        return "(COALESCE(a.last_read_at, '') = '') ASC, a.last_read_at DESC, n.title COLLATE NOCASE"
+    if sort == "alphabet":
+        return "n.title COLLATE NOCASE, n.area, n.track, n.display_order"
+    return "n.area, n.track, n.display_order, n.title COLLATE NOCASE"
+
+
 def row_to_quiz(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
@@ -969,7 +986,12 @@ def slugify(value: str) -> str:
     return re.sub(r"-+", "-", slug) or "untitled-node"
 
 
+def strip_utf8_bom(text: str) -> str:
+    return text[1:] if text.startswith("\ufeff") else text
+
+
 def split_markdown_frontmatter(text: str) -> tuple[str, str]:
+    text = strip_utf8_bom(text)
     match = re.match(r"^(---\s*\n.*?\n---\s*\n)(.*)$", text, flags=re.DOTALL)
     if not match:
         return "", text
@@ -2138,16 +2160,23 @@ def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
 def list_nodes(
     area: Optional[str] = None,
     visibility: Optional[str] = None,
+    sort: str = Query(default="order"),
 ) -> dict:
-    query = "SELECT * FROM nodes WHERE 1 = 1"
+    selected_sort = safe_node_sort(sort, "order")
+    query = """
+        SELECT n.*, COALESCE(a.last_read_at, '') AS last_read_at, COALESCE(a.read_count, 0) AS read_count
+        FROM nodes n
+        LEFT JOIN node_activity a ON a.node_slug = n.slug
+        WHERE 1 = 1
+    """
     params: list[str] = []
     if area:
-        query += " AND area = ?"
+        query += " AND n.area = ?"
         params.append(area)
     if visibility:
-        query += " AND visibility = ?"
+        query += " AND n.visibility = ?"
         params.append(visibility)
-    query += " ORDER BY area, track, display_order, title"
+    query += f" ORDER BY {node_sort_order(selected_sort)}"
 
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -2487,8 +2516,9 @@ def permanently_delete_node(slug: str) -> dict:
 
 
 @app.get("/api/search")
-def search(q: str = Query(default="", min_length=0)) -> dict:
+def search(q: str = Query(default="", min_length=0), sort: str = Query(default="relevance")) -> dict:
     term = q.strip()
+    selected_sort = safe_node_sort(sort, "relevance" if term else "order")
     with get_conn() as conn:
         if term:
             fts_query = build_fts_query(term)
@@ -2496,13 +2526,14 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
             if fts_query:
                 try:
                     rows = conn.execute(
-                        """
-                        SELECT n.*, bm25(node_fts) AS rank
+                        f"""
+                        SELECT n.*, COALESCE(a.last_read_at, '') AS last_read_at, COALESCE(a.read_count, 0) AS read_count, bm25(node_fts) AS rank
                         FROM node_fts
                         JOIN nodes n ON n.slug = node_fts.slug
+                        LEFT JOIN node_activity a ON a.node_slug = n.slug
                         WHERE node_fts MATCH ?
                           AND n.visibility != 'trash'
-                        ORDER BY rank, n.title
+                        ORDER BY {node_sort_order(selected_sort, include_rank=True)}
                         LIMIT 50
                         """,
                         (fts_query,),
@@ -2512,25 +2543,37 @@ def search(q: str = Query(default="", min_length=0)) -> dict:
             if not rows:
                 pattern = like_term(term)
                 rows = conn.execute(
-                    """
-                    SELECT DISTINCT n.*
+                    f"""
+                    SELECT n.*, COALESCE(a.last_read_at, '') AS last_read_at, COALESCE(a.read_count, 0) AS read_count
                     FROM nodes n
-                    LEFT JOIN node_tags nt ON nt.node_slug = n.slug
+                    LEFT JOIN node_activity a ON a.node_slug = n.slug
                     WHERE n.visibility != 'trash'
                       AND (
                         n.title LIKE ? ESCAPE '\\'
                         OR n.summary LIKE ? ESCAPE '\\'
                         OR n.body LIKE ? ESCAPE '\\'
-                        OR nt.tag_name LIKE ? ESCAPE '\\'
+                        OR EXISTS (
+                          SELECT 1
+                          FROM node_tags nt
+                          WHERE nt.node_slug = n.slug
+                            AND nt.tag_name LIKE ? ESCAPE '\\'
+                        )
                       )
-                    ORDER BY n.area, n.title
+                    ORDER BY {node_sort_order(selected_sort if selected_sort != 'relevance' else 'order')}
                     LIMIT 50
                     """,
                     (pattern, pattern, pattern, pattern),
                 ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM nodes WHERE visibility != 'trash' ORDER BY area, track, display_order, title LIMIT 50"
+                f"""
+                SELECT n.*, COALESCE(a.last_read_at, '') AS last_read_at, COALESCE(a.read_count, 0) AS read_count
+                FROM nodes n
+                LEFT JOIN node_activity a ON a.node_slug = n.slug
+                WHERE n.visibility != 'trash'
+                ORDER BY {node_sort_order(selected_sort)}
+                LIMIT 50
+                """
             ).fetchall()
 
     return {"nodes": [row_to_node(row) for row in rows]}

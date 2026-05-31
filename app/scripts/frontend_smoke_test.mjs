@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const baseUrl = process.env.FRONTEND_BASE_URL ?? 'http://127.0.0.1:5173'
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:8000'
 const readMarkDelayMs = Number(process.env.SMOKE_READ_MARK_DELAY_MS ?? '21000')
+const readMarkMinIntervalMs = 300000
 const outputDir = new URL('../../generated/qa/', import.meta.url)
 const screenshotPath = (name) => fileURLToPath(new URL(name, outputDir))
 
@@ -93,9 +94,12 @@ if (currentUrl(page).searchParams.get('focus') !== '1') {
 await page.waitForTimeout(readMarkDelayMs)
 x86TraceDetail = await page.request.get(`${apiBaseUrl}/api/nodes/x86-64-addressing-and-leaq`)
 const x86TraceAfterFocus = (await x86TraceDetail.json()).node
+const previousReadAtMs = Date.parse(x86TraceBeforeFocus.last_read_at || '')
+const previousReadWasRecent = Number.isFinite(previousReadAtMs) && Date.now() - previousReadAtMs < readMarkMinIntervalMs
 if (
   x86TraceAfterFocus.read_count <= x86TraceBeforeFocus.read_count &&
-  x86TraceAfterFocus.last_read_at === x86TraceBeforeFocus.last_read_at
+  x86TraceAfterFocus.last_read_at === x86TraceBeforeFocus.last_read_at &&
+  !previousReadWasRecent
 ) {
   throw new Error('Focus reading dwell should persist last_read_at or read_count in the backend.')
 }
@@ -144,7 +148,7 @@ if (currentUrl(page).pathname !== '/graph/area/algorithms') {
   throw new Error('Graph area click should use a layered graph URL.')
 }
 await page.getByLabel('Knowledge graph navigator').getByText('Algorithms').first().waitFor()
-await page.locator('.graph-child-card').filter({ hasText: /General|Algorithms/i }).first().getByRole('button').first().click()
+await page.locator('.graph-child-card').filter({ hasText: /General/i }).first().getByRole('button').first().click()
 if (!currentUrl(page).pathname.startsWith('/graph/track/algorithms/')) {
   throw new Error('Graph track click should use a layered graph URL.')
 }

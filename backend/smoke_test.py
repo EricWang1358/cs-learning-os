@@ -100,6 +100,11 @@ def main() -> int:
     assert search.status_code == 200, search.text
     assert any(node["slug"] == "binary-search" for node in search.json()["nodes"])
 
+    alpha_nodes = client.get("/api/nodes", params={"sort": "alphabet"})
+    assert alpha_nodes.status_code == 200, alpha_nodes.text
+    alpha_titles = [node["title"] for node in alpha_nodes.json()["nodes"]]
+    assert alpha_titles == sorted(alpha_titles, key=str.casefold)
+
     detail = client.get("/api/nodes/binary-search")
     assert detail.status_code == 200, detail.text
     payload = detail.json()["node"]
@@ -137,6 +142,14 @@ def main() -> int:
     assert read_backwards.status_code == 200, read_backwards.text
     assert read_backwards.json()["node"]["read_count"] == read_count_once + 1
     assert read_backwards.json()["node"]["last_read_at"] == "2026-05-30T00:02:00+00:00"
+
+    last_read_nodes = client.get("/api/nodes", params={"sort": "last-read"})
+    assert last_read_nodes.status_code == 200, last_read_nodes.text
+    assert last_read_nodes.json()["nodes"][0]["slug"] == "binary-search"
+
+    last_edit_search = client.get("/api/search", params={"q": "binary", "sort": "last-edit"})
+    assert last_edit_search.status_code == 200, last_edit_search.text
+    assert any(node["slug"] == "binary-search" for node in last_edit_search.json()["nodes"])
 
     reader_question = client.post(
         "/api/reader-questions",

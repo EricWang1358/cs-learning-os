@@ -373,7 +373,15 @@
   font-weight: 800;
 }
 
+.search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 158px);
+  gap: 10px;
+  align-items: end;
+}
+
 .search-header input,
+.sort-control select,
 .reader-question-panel textarea,
 .markdown-editor textarea {
   width: 100%;
@@ -389,7 +397,42 @@
   padding: 13px 14px;
 }
 
+.sort-control {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sort-control select {
+  appearance: none;
+  cursor: pointer;
+  background:
+    linear-gradient(135deg, rgba(252, 213, 53, 0.14), transparent 46%),
+    #0b0e11;
+  color: var(--ink-strong);
+  font: 12px/1.2 var(--mono);
+  font-weight: 900;
+  padding: 13px 32px 13px 12px;
+}
+
+.sort-control::after {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  color: var(--accent);
+  content: "v";
+  font-size: 12px;
+  pointer-events: none;
+}
+
 .search-header input:focus,
+.sort-control select:focus,
 .reader-question-panel textarea:focus,
 .markdown-editor textarea:focus {
   border-color: var(--accent);
@@ -1819,6 +1862,10 @@
 
   .search-header {
     position: static;
+  }
+
+  .search-row {
+    grid-template-columns: 1fr;
   }
 
   .split {

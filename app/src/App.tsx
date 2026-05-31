@@ -297,6 +297,7 @@ class ApiRequestError extends Error {
 }
 
 type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
+type NodeSortKey = 'relevance' | 'last-edit' | 'last-read' | 'order' | 'alphabet'
 type AiDraftScope = 'question' | 'selected' | 'page'
 
 type TocItem = {
@@ -382,6 +383,24 @@ const trackLabels: Record<string, string> = {
   networking: 'Networking',
 }
 
+const nodeSortOptions: Array<{ value: NodeSortKey; label: string }> = [
+  { value: 'relevance', label: 'Relevance' },
+  { value: 'last-edit', label: 'Last edit' },
+  { value: 'last-read', label: 'Last read' },
+  { value: 'order', label: 'Learning order' },
+  { value: 'alphabet', label: 'A-Z' },
+]
+
+function defaultNodeSort(query: string): NodeSortKey {
+  return query.trim() ? 'relevance' : 'order'
+}
+
+function parseNodeSort(value: string | null, query: string): NodeSortKey {
+  if (value === 'relevance' && !query.trim()) return 'order'
+  if (value && nodeSortOptions.some((option) => option.value === value)) return value as NodeSortKey
+  return defaultNodeSort(query)
+}
+
 function routeFromLocation(pathname: string, search: string) {
   const params = new URLSearchParams(search)
   const nodeMatch = pathname.match(/^\/nodes\/([^/]+)$/)
@@ -391,6 +410,7 @@ function routeFromLocation(pathname: string, search: string) {
   const isGraph = pathname === '/graph' || pathname.startsWith('/graph/')
   const isHealth = pathname === '/health'
 
+  const query = params.get('q') || ''
   return {
     viewMode: isGraph
       ? 'graph' as ViewMode
@@ -405,7 +425,8 @@ function routeFromLocation(pathname: string, search: string) {
     selectedQuizId: quizMatch ? decodeURIComponent(quizMatch[1]) : '',
     activeArea: params.get('area') || 'all',
     activeTrack: params.get('track') || 'all',
-    query: params.get('q') || '',
+    query,
+    nodeSort: parseNodeSort(params.get('sort'), query),
     graphPage: Number(params.get('page') || '1'),
     isFocusMode: params.get('focus') === '1',
   }
@@ -417,11 +438,13 @@ function routeSearch(options: {
   query?: string
   isFocusMode?: boolean
   page?: number
+  nodeSort?: NodeSortKey
 }) {
   const params = new URLSearchParams()
   if (options.activeArea && options.activeArea !== 'all') params.set('area', options.activeArea)
   if (options.activeTrack && options.activeTrack !== 'all') params.set('track', options.activeTrack)
   if (options.query) params.set('q', options.query)
+  if (options.nodeSort && options.nodeSort !== defaultNodeSort(options.query ?? '')) params.set('sort', options.nodeSort)
   if (options.isFocusMode) params.set('focus', '1')
   if (options.page && options.page > 1) params.set('page', String(options.page))
   const value = params.toString()
@@ -1237,6 +1260,10 @@ function App() {
   const activeArea = routeState.activeArea
   const activeTrack = routeState.activeTrack
   const query = routeState.query
+  const nodeSort = routeState.nodeSort
+  const availableNodeSortOptions = query.trim()
+    ? nodeSortOptions
+    : nodeSortOptions.filter((option) => option.value !== 'relevance')
   const graphPage = routeState.graphPage
   const isFocusMode = routeState.isFocusMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
@@ -1322,6 +1349,7 @@ function App() {
         activeArea,
         activeTrack,
         query,
+        nodeSort,
         isFocusMode: options.focus ?? isFocusMode,
       })}`,
       { replace: options.replace },
@@ -1364,9 +1392,9 @@ function App() {
   const navigateToArea = (area: string) => {
     const targetSlug = selectedSlug || nodes[0]?.slug
     if (targetSlug) {
-      navigate(`/nodes/${encodeURIComponent(targetSlug)}${routeSearch({ activeArea: area })}`)
+      navigate(`/nodes/${encodeURIComponent(targetSlug)}${routeSearch({ activeArea: area, nodeSort })}`)
     } else {
-      navigate(`/nodes${routeSearch({ activeArea: area })}`)
+      navigate(`/nodes${routeSearch({ activeArea: area, nodeSort })}`)
     }
   }
 
@@ -1447,9 +1475,9 @@ function App() {
         } else {
           const data = deferredQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
-                `/api/search?q=${encodeURIComponent(deferredQuery.trim())}`,
+                `/api/search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${encodeURIComponent(nodeSort)}`,
               )
-            : await fetchJson<ApiNodesResponse>('/api/nodes')
+            : await fetchJson<ApiNodesResponse>(`/api/nodes?sort=${encodeURIComponent(nodeSort)}`)
 
           if (!isActive) return
 
@@ -1461,6 +1489,7 @@ function App() {
                   activeArea,
                   activeTrack,
                   query,
+                  nodeSort,
                   isFocusMode,
                 })}`,
                 { replace: true },
@@ -1481,7 +1510,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, query, viewMode])
+  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'health' || !systemMetrics?.cache?.refreshing) return
@@ -1551,6 +1580,7 @@ function App() {
               `/nodes/${encodeURIComponent(fallbackSlug)}${routeSearch({
                 activeArea,
                 query,
+                nodeSort,
                 isFocusMode,
               })}`,
               { replace: true },
@@ -1569,7 +1599,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, isFocusMode, navigate, nodes, query, selectedSlug, viewMode])
+  }, [activeArea, activeTrack, isFocusMode, navigate, nodeSort, nodes, query, selectedSlug, viewMode])
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -2787,43 +2817,75 @@ function App() {
                   ? 'Quiz search'
                   : 'Global search'}
             </label>
-            <input
-              id="node-search"
-              value={query}
-              onChange={(event) => {
-                const nextQuery = event.target.value
-                if (viewMode === 'quizzes') {
-                  navigate(
-                    `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
-                      activeArea,
-                      activeTrack,
-                      query: nextQuery,
-                      isFocusMode,
-                    })}`,
-                    { replace: true },
-                  )
-                } else if (viewMode === 'question-queue') {
-                  navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
-                } else {
-                  navigate(
-                    `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
-                      activeArea,
-                      activeTrack,
-                      query: nextQuery,
-                      isFocusMode,
-                    })}`,
-                    { replace: true },
-                  )
+            <div className="search-row">
+              <input
+                id="node-search"
+                value={query}
+                onChange={(event) => {
+                  const nextQuery = event.target.value
+                  if (viewMode === 'quizzes') {
+                    navigate(
+                      `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                        activeArea,
+                        activeTrack,
+                        query: nextQuery,
+                        isFocusMode,
+                      })}`,
+                      { replace: true },
+                    )
+                  } else if (viewMode === 'question-queue') {
+                    navigate(`/queue${routeSearch({ query: nextQuery })}`, { replace: true })
+                  } else {
+                    const nextSort = nodeSort === defaultNodeSort(query) ? defaultNodeSort(nextQuery) : nodeSort
+                    navigate(
+                      `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                        activeArea,
+                        activeTrack,
+                        query: nextQuery,
+                        nodeSort: nextSort,
+                        isFocusMode,
+                      })}`,
+                      { replace: true },
+                    )
+                  }
+                }}
+                placeholder={
+                  viewMode === 'question-queue'
+                    ? 'Open questions are loaded directly...'
+                    : viewMode === 'quizzes'
+                      ? 'Search quiz prompts, tags, answers...'
+                      : 'Search concepts, tags, summaries...'
                 }
-              }}
-              placeholder={
-                viewMode === 'question-queue'
-                  ? 'Open questions are loaded directly...'
-                  : viewMode === 'quizzes'
-                    ? 'Search quiz prompts, tags, answers...'
-                    : 'Search concepts, tags, summaries...'
-              }
-            />
+              />
+              {viewMode === 'nodes' && (
+                <label className="sort-control" htmlFor="node-sort">
+                  <span>Sort</span>
+                  <select
+                    id="node-sort"
+                    value={nodeSort}
+                    onChange={(event) => {
+                      const nextSort = event.target.value as NodeSortKey
+                      navigate(
+                        `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                          activeArea,
+                          activeTrack,
+                          query,
+                          nodeSort: nextSort,
+                          isFocusMode,
+                        })}`,
+                        { replace: true },
+                      )
+                    }}
+                  >
+                    {availableNodeSortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
             <p>
               {isLoading
                 ? 'Loading index...'
@@ -2933,6 +2995,7 @@ function App() {
                         activeArea,
                         activeTrack: track.track,
                         query,
+                        nodeSort,
                         isFocusMode,
                       })}`,
                       { replace: true },
