@@ -31,6 +31,7 @@ app/                 React + Vite frontend
 backend/             FastAPI API, SQLite schema, Markdown ingest
 data/                Private runtime data root, ignored by Git
 data/content/        Current private Markdown knowledge base
+data/content/assets/ Private tutorial images and other content-owned media
 data/knowledge.db    Current private SQLite index
 content-demo/        Small demo Markdown content tracked by Git
 content/             Legacy ignored local content copy; do not use for new notes
@@ -117,6 +118,7 @@ data\knowledge.db
 Directory roles:
 
 - `data/content/` is the active private learning library for normal local use.
+- `data/content/assets/` stores private tutorial images served by FastAPI through `/content-assets/...`.
 - `data/knowledge.db` is the generated SQLite index for that private library.
 - `data/nodes/` or `data/quizzes/` at the data-root level are invalid orphan locations. They are not the normal runtime content root and should be migrated or quarantined before ingesting.
 - `content-demo/` is a small tracked demo library for clean checkouts and tests.
@@ -306,6 +308,7 @@ Architecture principle:
 - Frontend and backend code are the app shell.
 - `content-demo/` is tiny synthetic demo data, not a real knowledge base.
 - `data/content/` and `data/knowledge.db` are the default private runtime user data.
+- `data/content/assets/` is the default private media store for tutorial screenshots and diagrams.
 - Root-level `data/nodes/` and `data/quizzes/` are not valid app data layout; real content belongs under `data/content/nodes/` and `data/content/quizzes/`.
 - `content/` is an ignored legacy local copy, not the normal write target.
 - Different users should be able to run the same app against different content directories and databases.

@@ -26,10 +26,10 @@ Requirements:
 - Do not use vague filler such as "understand the concept" without showing what changes in code, registers, memory, output, or reasoning.
 
 Image rule:
-- Store web-visible tutorial images under `app/public/images/<topic>/`.
+- Store real tutorial images under `<active-content-root>/assets/<topic>/`, usually `data/content/assets/<topic>/`.
 - Use lowercase kebab-case filenames, for example `bomblab-prep-02.png`.
 - Avoid spaces, parentheses, Chinese punctuation, URL-encoded filenames, and local absolute paths.
-- Reference images with root-relative Markdown paths, for example `![GDB startup screen](/images/bomblab/bomblab-prep-03.png)`.
+- Reference images with content-asset Markdown paths, for example `![GDB startup screen](/content-assets/bomblab/bomblab-prep-03.png)`.
 - Put captions as short italic paragraphs immediately after the image.
 - Use images selectively; each image should explain a step, visual state, or mental model.
 - After adding images, rebuild/ingest and visually check focus reading for overflow.

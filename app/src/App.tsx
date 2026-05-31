@@ -851,12 +851,14 @@ function MarkdownView({
             return <h3 id={id}>{children}</h3>
           },
           img({ alt, src, title }) {
+            const rawSrc = typeof src === 'string' ? src : ''
+            const imageSrc = rawSrc.startsWith('/content-assets/') ? `${API_BASE}${rawSrc}` : rawSrc
             return (
               <img
                 alt={alt ?? ''}
                 decoding="async"
                 loading="lazy"
-                src={typeof src === 'string' ? src : ''}
+                src={imageSrc}
                 title={typeof title === 'string' ? title : undefined}
               />
             )

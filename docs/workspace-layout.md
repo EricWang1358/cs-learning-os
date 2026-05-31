@@ -11,6 +11,7 @@ Recommended layout:
     backend/
     data/                # Private Markdown, SQLite DB, screenshots, ignored by Git
       content/           # Active local notes and quiz bank
+        assets/          # Private tutorial images served by /content-assets
       knowledge.db       # Generated local SQLite index
       nodes/             # Invalid if present: orphaned root-level content
       quizzes/           # Invalid if present: orphaned root-level content
@@ -24,6 +25,7 @@ Current app rules:
 - `cs-learning-os/` is the reusable app shell.
 - `cs-learning-os/data/` is private user data and is ignored by Git.
 - `cs-learning-os/data/content/` is the default active content root for your real nodes and quizzes.
+- `cs-learning-os/data/content/assets/` is the default private media root for tutorial images.
 - `cs-learning-os/data/nodes/` and `cs-learning-os/data/quizzes/` should not exist in normal operation. They mean some run used `data/` itself as `CS_LEARNING_CONTENT` instead of `data/content/`.
 - `cs-learning-os/content-demo/` is intentionally small and tracked so another machine can boot the app without your private notes.
 - `cs-learning-os/content/` may still exist locally as an ignored legacy copy. Treat it as migration residue unless an environment variable explicitly selects it.

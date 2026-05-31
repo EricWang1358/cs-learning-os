@@ -18,6 +18,7 @@ from typing import Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 try:
@@ -72,6 +73,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")).resolve()
+CONTENT_ASSETS_ROOT = (CONTENT_ROOT / "assets").resolve()
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 logger = logging.getLogger("cs_learning.api")
 GRAPH_PAGE_SIZE = 12
@@ -120,6 +122,23 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     start_system_metrics_background_refresh()
+
+
+@app.get("/content-assets/{asset_path:path}")
+def get_content_asset(asset_path: str):
+    if not asset_path or "\x00" in asset_path:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    asset = (CONTENT_ASSETS_ROOT / asset_path).resolve()
+    try:
+        asset.relative_to(CONTENT_ASSETS_ROOT)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Asset not found") from None
+
+    if not asset.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return FileResponse(asset)
 
 
 class ReaderQuestionCreate(BaseModel):

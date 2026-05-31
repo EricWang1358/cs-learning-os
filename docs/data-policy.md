@@ -53,13 +53,14 @@ The frontend and backend should be reusable across different users.
 Use these names consistently:
 
 - `data/content/`: the current private Markdown knowledge base for normal local runs.
+- `data/content/assets/`: private tutorial media, served by the backend through `/content-assets/...`.
 - `data/knowledge.db`: the generated SQLite index for `data/content/`.
 - `data/nodes/` and `data/quizzes/`: invalid root-level orphan locations. Do not write there; inspect, migrate, or quarantine if they appear.
 - `content-demo/`: tiny Git-tracked synthetic demo data for clean installs, smoke tests, and fallback behavior.
 - `content/`: ignored legacy local copy from earlier iterations. It should not receive new notes unless `CS_LEARNING_CONTENT` explicitly points there for a one-off migration.
 - `var/knowledge.db`: ignored demo or fallback SQLite index, usually regenerated from `content-demo/`.
 
-New notes, quizzes, sources, trash entries, and reader-question workflows should target the active content root, not a hard-coded folder name.
+New notes, quizzes, sources, assets, trash entries, and reader-question workflows should target the active content root, not a hard-coded folder name.
 
 Runtime data is selected by:
 
