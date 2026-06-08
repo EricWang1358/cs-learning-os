@@ -17,7 +17,7 @@
 }
 
 .workspace-shell.focus-mode {
-  grid-template-columns: 0 0 minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace-shell.graph-mode {
@@ -44,6 +44,7 @@
 
 .workspace-shell.focus-mode .sidebar,
 .workspace-shell.focus-mode .node-column {
+  display: none;
   visibility: hidden;
   overflow: hidden;
   padding: 0;
@@ -51,6 +52,7 @@
 }
 
 .workspace-shell.focus-mode .detail-panel {
+  grid-column: 1;
   display: grid;
   grid-template-columns: minmax(180px, 220px) minmax(620px, 850px) minmax(260px, 320px);
   justify-content: center;
