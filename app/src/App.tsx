@@ -374,7 +374,6 @@ type LineDiffSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 const SYSTEM_AREAS = ['all', 'archive', 'trash']
-const READ_MARK_DELAY_MS = Number(import.meta.env.VITE_READ_MARK_DELAY_MS ?? '20000')
 const READ_MARK_MIN_INTERVAL_SECONDS = 300
 
 const areaLabels: Record<string, string> = {
@@ -1377,6 +1376,7 @@ function App() {
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
+  const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
   const deferredQuery = useDeferredValue(query)
@@ -1391,6 +1391,7 @@ function App() {
     let isActive = true
     const markRead = async () => {
       try {
+        setReadTraceError('')
         const data = await postJson<ApiNodeResponse>(`/api/nodes/${selectedNode.slug}/read`, {
           read_at: new Date().toISOString(),
           min_interval_seconds: READ_MARK_MIN_INTERVAL_SECONDS,
@@ -1398,14 +1399,14 @@ function App() {
         if (!isActive) return
         setSelectedNode((current) => (current?.slug === data.node.slug ? data.node : current))
         setNodes((current) => current.map((node) => (node.slug === data.node.slug ? data.node : node)))
-      } catch {
-        // Reading should not fail just because the activity trace could not be updated.
+      } catch (readError) {
+        if (!isActive) return
+        setReadTraceError(readError instanceof Error ? readError.message : 'Unable to update reading trace')
       }
     }
-    const timer = window.setTimeout(markRead, READ_MARK_DELAY_MS)
+    markRead()
     return () => {
       isActive = false
-      window.clearTimeout(timer)
     }
   }, [isFocusMode, selectedNode?.slug, selectedSlug, viewMode])
 
@@ -3894,6 +3895,7 @@ function App() {
                     <dd>{selectedNode.read_count ?? 0}</dd>
                   </div>
                 </dl>
+                {readTraceError && <p className="inline-error">{readTraceError}</p>}
               </section>
 
               {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
