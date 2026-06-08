@@ -1378,7 +1378,6 @@ function App() {
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
-  const nodeListKeyRef = useRef('')
 
   const deferredQuery = useDeferredValue(query)
 
@@ -1544,7 +1543,6 @@ function App() {
             setSystemMetrics(metricsData)
           })
         } else {
-          const nodeListKey = `${activeArea}|${activeTrack}|${deferredQuery.trim()}|${nodeSort}`
           const data = deferredQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
                 `/api/search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${encodeURIComponent(nodeSort)}`,
@@ -1556,14 +1554,11 @@ function App() {
           startTransition(() => {
             setNodes(data.nodes)
             const topSlug = data.nodes[0]?.slug
-            const didNodeListKeyChange = nodeListKeyRef.current !== nodeListKey
-            nodeListKeyRef.current = nodeListKey
             const shouldOpenTopNode =
               topSlug &&
               (
                 location.pathname === '/' ||
-                location.pathname === '/nodes' ||
-                (didNodeListKeyChange && viewMode === 'nodes' && selectedSlug && selectedSlug !== topSlug)
+                location.pathname === '/nodes'
               )
             if (shouldOpenTopNode) {
               navigate(
@@ -2964,26 +2959,24 @@ function App() {
             }}
             onNodeSortChange={(nextSort) => {
               navigate(
-                `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                `/nodes${routeSearch({
                   activeArea,
                   activeTrack,
                   query,
                   nodeSort: nextSort,
                   isFocusMode,
                 })}`,
-                { replace: true },
               )
             }}
             onQuizSortChange={(nextSort) => {
               navigate(
-                `${selectedQuizId ? `/quizzes/${encodeURIComponent(selectedQuizId)}` : '/quizzes'}${routeSearch({
+                `/quizzes${routeSearch({
                   activeArea,
                   activeTrack,
                   query,
                   quizSort: nextSort,
                   isFocusMode,
                 })}`,
-                { replace: true },
               )
             }}
           />
