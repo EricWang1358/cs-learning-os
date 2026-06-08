@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState, useDeferredValue, type ReactNode } from 'react'
+import { startTransition, useEffect, useRef, useState, useDeferredValue, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import bash from 'highlight.js/lib/languages/bash'
 import c from 'highlight.js/lib/languages/c'
@@ -332,6 +332,12 @@ type MarkdownSection = {
 
 type SectionEditDraft = MarkdownSection & {
   draft: string
+}
+
+type ReadingReturnAnchor = {
+  headingId: string
+  headingIndex: number
+  mode: 'section-end' | 'heading-start'
 }
 
 const codeHighlightLanguages = {
@@ -1246,6 +1252,69 @@ function scrollToLocationHash() {
   return true
 }
 
+function markdownHeadingElements() {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '.detail-main .markdown-body h1[id], .detail-main .markdown-body h2[id], .detail-main .markdown-body h3[id]',
+    ),
+  )
+}
+
+function activeReadingAnchor(mode: ReadingReturnAnchor['mode']): ReadingReturnAnchor | null {
+  const headings = markdownHeadingElements()
+  if (!headings.length) return null
+
+  const viewportMarker = Math.max(96, window.innerHeight * 0.22)
+  let activeHeadingIndex = 0
+  for (let index = 0; index < headings.length; index += 1) {
+    const heading = headings[index]
+    if (heading.getBoundingClientRect().top <= viewportMarker) {
+      activeHeadingIndex = index
+    } else {
+      break
+    }
+  }
+  return {
+    headingId: headings[activeHeadingIndex].id,
+    headingIndex: activeHeadingIndex,
+    mode,
+  }
+}
+
+function sectionReadingAnchor(body: string, section: MarkdownSection, mode: ReadingReturnAnchor['mode']): ReadingReturnAnchor | null {
+  const headings = parseMarkdownHeadings(body)
+  const headingIndex = headings.findIndex((heading) => heading.lineNumber === section.startLine)
+  if (headingIndex === -1) return null
+  return {
+    headingId: headings[headingIndex].id,
+    headingIndex,
+    mode,
+  }
+}
+
+function sectionEndForHeading(heading: HTMLElement): HTMLElement {
+  let cursor = heading.nextElementSibling as HTMLElement | null
+  let lastContent = heading
+  while (cursor && !/^H[1-3]$/.test(cursor.tagName)) {
+    lastContent = cursor
+    cursor = cursor.nextElementSibling as HTMLElement | null
+  }
+  return lastContent
+}
+
+function restoreReadingAnchor(anchor: ReadingReturnAnchor) {
+  const headings = markdownHeadingElements()
+  const heading = document.getElementById(anchor.headingId)
+    ?? headings[Math.min(anchor.headingIndex, Math.max(0, headings.length - 1))]
+  if (!heading) return false
+
+  const target = anchor.mode === 'section-end'
+    ? sectionEndForHeading(heading as HTMLElement)
+    : heading
+  target.scrollIntoView({ behavior: 'auto', block: anchor.mode === 'section-end' ? 'end' : 'start' })
+  return true
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -1308,6 +1377,7 @@ function App() {
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
+  const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
   const deferredQuery = useDeferredValue(query)
 
@@ -1768,14 +1838,24 @@ function App() {
     if (!hasLoadedBody) return
 
     requestAnimationFrame(() => {
+      const returnAnchor = readingReturnAnchorRef.current
+      if (returnAnchor) {
+        if (restoreReadingAnchor(returnAnchor)) {
+          readingReturnAnchorRef.current = null
+          return
+        }
+        if (isEditMode || sectionEditDraft) return
+      }
       if (!scrollToLocationHash()) {
         scrollDetailToTop()
       }
     })
   }, [
+    isEditMode,
     location.hash,
     location.pathname,
     location.search,
+    sectionEditDraft,
     selectedNode?.body,
     selectedNode?.slug,
     selectedQuiz?.body,
@@ -2379,6 +2459,8 @@ function App() {
       setActionNotice('Markdown body is still loading; try Edit mode again in a moment.')
       return
     }
+    const currentScrollTop = window.scrollY
+    readingReturnAnchorRef.current = activeReadingAnchor('section-end')
     setEditDraft(body)
     setEditModeError('')
     setSectionEditDraft(null)
@@ -2390,9 +2472,16 @@ function App() {
       toggleFocusRoute()
     }
     setIsEditMode(true)
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: currentScrollTop, behavior: 'auto' })
+    })
   }
 
   const startSectionEdit = (section: MarkdownSection) => {
+    const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
+    if (body) {
+      readingReturnAnchorRef.current = sectionReadingAnchor(body, section, 'heading-start')
+    }
     setSectionEditDraft({ ...section, draft: section.text })
     setSectionEditError('')
     setActionNotice('')
@@ -2412,6 +2501,10 @@ function App() {
       !window.confirm('Discard unsaved section edits?')
     ) {
       return
+    }
+    const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
+    if (body && sectionEditDraft) {
+      readingReturnAnchorRef.current = sectionReadingAnchor(body, sectionEditDraft, 'heading-start')
     }
     setSectionEditDraft(null)
     setSectionEditError('')
@@ -2447,6 +2540,7 @@ function App() {
       sectionEditDraft.endLine,
       draft,
     )
+    readingReturnAnchorRef.current = sectionReadingAnchor(currentBody, sectionEditDraft, 'section-end')
 
     try {
       setIsEditSaving(true)
