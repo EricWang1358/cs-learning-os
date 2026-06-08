@@ -1378,6 +1378,7 @@ function App() {
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
+  const nodeListKeyRef = useRef('')
 
   const deferredQuery = useDeferredValue(query)
 
@@ -1543,6 +1544,7 @@ function App() {
             setSystemMetrics(metricsData)
           })
         } else {
+          const nodeListKey = `${activeArea}|${activeTrack}|${deferredQuery.trim()}|${nodeSort}`
           const data = deferredQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
                 `/api/search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${encodeURIComponent(nodeSort)}`,
@@ -1553,9 +1555,19 @@ function App() {
 
           startTransition(() => {
             setNodes(data.nodes)
-            if ((location.pathname === '/' || location.pathname === '/nodes') && data.nodes[0]?.slug) {
+            const topSlug = data.nodes[0]?.slug
+            const didNodeListKeyChange = nodeListKeyRef.current !== nodeListKey
+            nodeListKeyRef.current = nodeListKey
+            const shouldOpenTopNode =
+              topSlug &&
+              (
+                location.pathname === '/' ||
+                location.pathname === '/nodes' ||
+                (didNodeListKeyChange && viewMode === 'nodes' && selectedSlug && selectedSlug !== topSlug)
+              )
+            if (shouldOpenTopNode) {
               navigate(
-                `/nodes/${encodeURIComponent(data.nodes[0].slug)}${routeSearch({
+                `/nodes/${encodeURIComponent(topSlug)}${routeSearch({
                   activeArea,
                   activeTrack,
                   query,
@@ -1580,7 +1592,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, quizSort, viewMode])
+  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, quizSort, selectedSlug, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'health' || !systemMetrics?.cache?.refreshing) return
