@@ -1304,8 +1304,8 @@ function sectionEndForHeading(heading: HTMLElement): HTMLElement {
 
 function restoreReadingAnchor(anchor: ReadingReturnAnchor) {
   const headings = markdownHeadingElements()
-  const heading = document.getElementById(anchor.headingId)
-    ?? headings[Math.min(anchor.headingIndex, Math.max(0, headings.length - 1))]
+  const fallbackIndex = Math.max(0, Math.min(anchor.headingIndex - 1, headings.length - 1))
+  const heading = document.getElementById(anchor.headingId) ?? headings[fallbackIndex]
   if (!heading) return false
 
   const target = anchor.mode === 'section-end'
