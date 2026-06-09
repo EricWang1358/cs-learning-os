@@ -43,6 +43,31 @@ generated/           QA screenshots and generated artifacts, ignored by Git
 .venv/               Project Python virtual environment, ignored by Git
 ```
 
+## Explanatory Text Navigation
+
+Use this table as the project reading map. It intentionally focuses on explanatory project texts, not the private learning-node library under `data/content/`.
+
+| Text | Use it for | Current status |
+| --- | --- | --- |
+| [README.md](README.md) | Start here for setup, runtime paths, workflow, AI draft behavior, graph/health routes, and Git/data policy. | Current top-level guide. |
+| [docs/使用说明书.md](docs/使用说明书.md) | End-user walkthrough for launch, reading, focus mode, Q Queue, edit mode, quiz bank, and agent operating rules. | Useful but needs encoding cleanup before it is a reliable published manual. |
+| [docs/state-machine.md](docs/state-machine.md) | The most current engineering policy for route state, edit/review flows, reader questions, AI jobs, reading activity, graph, health, and app-store readiness. | Current architecture guardrail and best source for bug triage. |
+| [docs/data-policy.md](docs/data-policy.md) | Rules for separating app shell, demo content, private content, generated files, and local-only artifacts. | Current policy; keep aligned with `README.md` and `skill/`. |
+| [docs/workspace-layout.md](docs/workspace-layout.md) | Expected folder layout when this repo lives inside a larger coursework workspace. | Current policy for path hygiene and migration checks. |
+| [docs/content-standards.md](docs/content-standards.md) | Human-facing rules for Standard A knowledge nodes and Standard Q quiz items. | Current content quality gate. |
+| [skill/SKILL.md](skill/SKILL.md) | Agent-facing workflow for maintaining the private knowledge map, resolving content roots, adding nodes/quizzes, and using tutorial images. | Current operational rulebook for Codex-style assistants. |
+| [skill/references/architecture.md](skill/references/architecture.md) | Why the knowledge map uses small Markdown nodes, generated indexes, and LLM judgment only for curation decisions. | Current skill reference. |
+| [skill/references/content-standards.md](skill/references/content-standards.md) | Agent-facing expanded version of Standard A/Q, private path rules, image rules, and placement gates. | Current skill reference; overlaps with `docs/content-standards.md`. |
+| [skill/references/curation-rules.md](skill/references/curation-rules.md) | Rules for `core`/`support`/`archive`, splitting nodes, handling reader questions, and adding quiz items. | Current skill reference. |
+| [skill/references/node-schema.md](skill/references/node-schema.md) | Required and optional Markdown frontmatter fields plus the default body template. | Current skill reference. |
+| [docs/navigation-design.md](docs/navigation-design.md) | Rationale for `area`, `track`, `order`, prerequisites, and future portal metadata. | Still valid, but now only a compact companion to implemented navigation and graph routes. |
+| [docs/quiz-bank-design.md](docs/quiz-bank-design.md) | Original separation between concept nodes and quiz items, plus future quiz attempt/review tables. | Still valid as design intent; implementation has moved forward. |
+| [docs/design-decisions.md](docs/design-decisions.md) | Early dated decisions about project shape, stack, storage, and first React scope. | Historical log; prefer newer README/state-machine docs for current behavior. |
+| [docs/implementation-log.md](docs/implementation-log.md) | Chronological implementation record through the early app and AI-job milestones. | Historical record; not a current source of truth. |
+| [content-demo/index.md](content-demo/index.md) | Explains why tracked demo content is intentionally tiny. | Current demo-data note. |
+| [app/README.md](app/README.md) | Vite template notes. | Outdated for this project; replace with a CS Learning OS frontend guide. |
+| [app/DESIGN.md](app/DESIGN.md) | Large Binance-style UI design analysis. | Likely unrelated or stale; either archive, rename, or replace with the actual Learning OS design system. |
+
 ## Local Setup
 
 Use a project-level Python virtual environment.
@@ -335,6 +360,28 @@ Ignored:
 - private or bulky content libraries
 
 This keeps GitHub clean while allowing large local databases, screenshots, downloaded references, and generated artifacts to live on the machine.
+
+## Documentation-Driven Improvements
+
+These follow from the explanatory texts above and should be treated as the next cleanup and product-hardening backlog.
+
+| Area | Evidence | Recommended improvement |
+| --- | --- | --- |
+| README navigation | The project now has many explanatory docs with overlapping authority. | Keep this navigation table updated whenever a new project-level doc is added or a stale doc is retired. |
+| User manual | `docs/使用说明书.md` is mojibake in the current checkout. | Re-save it as UTF-8 and update it to cover the current sort/search/focus-reading behavior. |
+| Frontend docs | `app/README.md` is still the default Vite template. | Replace it with a frontend-specific guide: routes, state ownership, dev scripts, test commands, and component-splitting plan. |
+| Design docs | `app/DESIGN.md` describes a Binance-style financial UI, not the current Learning OS interface. | Move it to an archive/reference folder if still useful, or replace it with the real Learning OS visual system and layout rules. |
+| `App.tsx` size | `docs/state-machine.md` names growing `App.tsx` complexity as a current risk. | Split route shells, search controls, queue cards, markdown editor, AI job panel, graph/health views, and API client helpers into separate files. |
+| UI state correctness | State-machine docs call out edit/review/queue flows as fragile when treated as ad hoc local state. | Add typed reducers or small state machines for edit mode, AI draft review, Q Queue jobs, and focus-reading restoration. |
+| Smoke reliability | Frontend smoke tests can time out waiting for real Codex draft generation. | Prefer fake/deterministic Codex mode for routine smoke tests; reserve real provider checks for explicit preflight or release gates. |
+| Search and list scale | State-machine docs warn that long lists are not virtualized. | Add virtualization or pagination before nodes, quizzes, or queue items grow into the hundreds. |
+| Health diagnostics | README and state-machine docs expect `/health` to detect stale indexes, failed jobs, storage growth, backup age, and provider readiness. | Expand health from metrics display into actionable diagnostics with clear remediation text. |
+| AI policy | State-machine docs mention future `docs/ai-policy.md`. | Add a short AI policy covering provider selection, model defaults, preflight behavior, token/privacy boundaries, retries, and retention. |
+| Release discipline | State-machine docs mention future `docs/release-checklist.md`. | Add a release checklist for lint/build/smoke, stale generated files, private-data checks, and app-store-style state-flow review. |
+| Quiz review roadmap | Quiz docs describe attempts, correctness history, daily review, and weak-topic summaries. | Implement `quiz_attempts`, `review_queue`, hide/show answer, correctness buttons, and weak-topic summaries after current navigation bugs settle. |
+| Content standards duplication | `docs/content-standards.md` and `skill/references/content-standards.md` overlap. | Decide which is canonical, then make the other explicitly derived or agent-specific to reduce drift. |
+| Navigation metadata | `docs/navigation-design.md` proposes future `content/portals/*.yaml`. | Add portal metadata only after area/track/order friction is real; until then keep inferred navigation simple. |
+| Data hygiene | Data-policy docs warn that `data/nodes/`, `data/quizzes/`, and `content/` are migration residues. | Add a health warning or script check that flags invalid content roots before ingest writes new material. |
 
 ## Roadmap
 
