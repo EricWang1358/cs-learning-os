@@ -189,6 +189,20 @@ def ingest(content_root: Path, db_path: Path) -> int:
     quizzes = read_quizzes(content_root)
 
     with conn:
+        preserved_node_activity = {
+            row["node_slug"]: {
+                "last_read_at": row["last_read_at"],
+                "read_count": row["read_count"],
+                "updated_at": row["updated_at"],
+            }
+            for row in conn.execute(
+                """
+                SELECT node_slug, last_read_at, read_count, updated_at
+                FROM node_activity
+                """
+            )
+        }
+
         conn.execute("DELETE FROM quiz_fts")
         conn.execute("DELETE FROM quiz_sources")
         conn.execute("DELETE FROM quiz_links")
@@ -258,6 +272,27 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (node.slug, node.title, node.summary, node.body, " ".join(node.tags)),
+            )
+
+        node_slugs = {node.slug for node in nodes}
+        for node_slug, activity in preserved_node_activity.items():
+            if node_slug not in node_slugs:
+                continue
+            conn.execute(
+                """
+                INSERT INTO node_activity (node_slug, last_read_at, read_count, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(node_slug) DO UPDATE SET
+                    last_read_at = excluded.last_read_at,
+                    read_count = excluded.read_count,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    node_slug,
+                    activity["last_read_at"],
+                    activity["read_count"],
+                    activity["updated_at"],
+                ),
             )
 
         for quiz in quizzes:

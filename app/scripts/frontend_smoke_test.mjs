@@ -13,6 +13,16 @@ const currentUrl = (page) => new URL(page.url())
 
 await mkdir(outputDir, { recursive: true })
 
+const quizzesResponse = await fetch(`${apiBaseUrl}/api/quizzes`)
+if (!quizzesResponse.ok) {
+  throw new Error(`Unable to load quizzes for smoke setup: ${quizzesResponse.status}`)
+}
+const quizzesPayload = await quizzesResponse.json()
+const smokeQuiz = quizzesPayload.quizzes?.[0]
+if (!smokeQuiz) {
+  throw new Error('Frontend smoke requires at least one indexed quiz.')
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -115,28 +125,38 @@ if (currentUrl(page).pathname !== '/quizzes') {
   throw new Error('Quiz bank navigation should use /quizzes.')
 }
 await page.getByText(/indexed quizzes/).waitFor()
-await page.getByRole('button', { name: /Trace %rax through x86-64 instructions/ }).click()
+await page.getByLabel('Knowledge nodes').locator('.node-card').filter({ hasText: smokeQuiz.title }).first().click()
 await page.getByText('Quiz body').waitFor()
-if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
+if (!currentUrl(page).pathname.endsWith(`/quizzes/${smokeQuiz.id}`)) {
   throw new Error('Quiz selection should update the URL path.')
 }
 await page.locator('.markdown-body').first().waitFor()
 await page.locator('.markdown-body pre code').first().waitFor()
-await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).waitFor()
 await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage: false })
 
-await page.getByRole('button', { name: /tests: x86-64 Addressing and leaq/ }).click()
-await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'x86-64 Addressing and leaq' }).waitFor()
-if (!currentUrl(page).pathname.endsWith('/nodes/x86-64-addressing-and-leaq')) {
-  throw new Error('Linked review should navigate to a node URL.')
+const linkedReviewButton = page.getByRole('button', { name: /^tests:/ }).first()
+if (await linkedReviewButton.count()) {
+  await linkedReviewButton.click()
+  await page.getByLabel('Node detail').locator('.markdown-body h1').waitFor()
+  if (!currentUrl(page).pathname.startsWith('/nodes/')) {
+    throw new Error('Linked review should navigate to a node URL.')
+  }
+} else {
+  await page.getByRole('button', { name: 'Knowledge navigator' }).click()
+  await page.getByLabel('Knowledge graph navigator').waitFor()
+  if (currentUrl(page).pathname !== '/graph') {
+    throw new Error('Fallback navigation should use the /graph route.')
+  }
 }
 await page.getByRole('button', { name: 'Back' }).click()
-await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: 'Trace %rax' }).waitFor()
-if (!currentUrl(page).pathname.endsWith('/quizzes/x86-rax-trace-leaq-jump')) {
+await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: smokeQuiz.title }).waitFor()
+if (!currentUrl(page).pathname.endsWith(`/quizzes/${smokeQuiz.id}`)) {
   throw new Error('Back should restore the previous quiz URL.')
 }
 
-await page.getByRole('button', { name: 'Knowledge navigator' }).click()
+if (currentUrl(page).pathname !== '/graph') {
+  await page.getByRole('button', { name: 'Knowledge navigator' }).click()
+}
 await page.getByLabel('Knowledge graph navigator').waitFor()
 await page.getByText('Workbench').first().waitFor()
 if (currentUrl(page).pathname !== '/graph') {

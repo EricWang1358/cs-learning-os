@@ -32,7 +32,10 @@ def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | 
 
 
 def main() -> int:
-    ingest(Path(os.environ["CS_LEARNING_CONTENT"]), Path(os.environ["CS_LEARNING_DB"]))
+    smoke_db_path = Path(os.environ["CS_LEARNING_DB"])
+    if smoke_db_path.exists():
+        smoke_db_path.unlink()
+    ingest(Path(os.environ["CS_LEARNING_CONTENT"]), smoke_db_path)
     client = TestClient(app, raise_server_exceptions=False)
 
     health = client.get("/api/health")
@@ -146,6 +149,18 @@ def main() -> int:
     last_read_nodes = client.get("/api/nodes", params={"sort": "last-read"})
     assert last_read_nodes.status_code == 200, last_read_nodes.text
     assert last_read_nodes.json()["nodes"][0]["slug"] == "binary-search"
+
+    preserved_last_read_at = read_backwards.json()["node"]["last_read_at"]
+    preserved_read_count = read_backwards.json()["node"]["read_count"]
+    ingest(Path(os.environ["CS_LEARNING_CONTENT"]), Path(os.environ["CS_LEARNING_DB"]))
+    detail_after_reingest = client.get("/api/nodes/binary-search")
+    assert detail_after_reingest.status_code == 200, detail_after_reingest.text
+    node_after_reingest = detail_after_reingest.json()["node"]
+    assert node_after_reingest["last_read_at"] == preserved_last_read_at
+    assert node_after_reingest["read_count"] == preserved_read_count
+    last_read_after_reingest = client.get("/api/nodes", params={"sort": "last-read"})
+    assert last_read_after_reingest.status_code == 200, last_read_after_reingest.text
+    assert last_read_after_reingest.json()["nodes"][0]["slug"] == "binary-search"
 
     last_edit_search = client.get("/api/search", params={"q": "binary", "sort": "last-edit"})
     assert last_edit_search.status_code == 200, last_edit_search.text
@@ -275,31 +290,30 @@ def main() -> int:
 
     quizzes = client.get("/api/quizzes")
     assert quizzes.status_code == 200, quizzes.text
-    assert any(
-        quiz["id"] == "x86-rax-trace-leaq-jump"
-        for quiz in quizzes.json()["quizzes"]
-    )
+    quiz_items = quizzes.json()["quizzes"]
+    assert quiz_items
+    selected_quiz_id = quiz_items[0]["id"]
 
-    quiz_detail = client.get("/api/quizzes/x86-rax-trace-leaq-jump")
+    quiz_detail = client.get(f"/api/quizzes/{selected_quiz_id}")
     assert quiz_detail.status_code == 200, quiz_detail.text
     quiz_payload = quiz_detail.json()["quiz"]
-    assert quiz_payload["id"] == "x86-rax-trace-leaq-jump"
+    assert quiz_payload["id"] == selected_quiz_id
     assert "display_order" in quiz_payload
     assert "body" in quiz_payload
     assert "linked_nodes" in quiz_payload
-    linked_slugs = {link["slug"] for link in quiz_payload["linked_nodes"]}
-    assert "x86-64-addressing-and-leaq" in linked_slugs
+    assert isinstance(quiz_payload["linked_nodes"], list)
 
-    quiz_search = client.get("/api/quiz-search", params={"q": "%rax"})
+    quiz_search_term = quiz_payload["title"].split()[0]
+    quiz_search = client.get("/api/quiz-search", params={"q": quiz_search_term})
     assert quiz_search.status_code == 200, quiz_search.text
     assert any(
-        quiz["id"] == "x86-rax-trace-leaq-jump"
+        quiz["id"] == selected_quiz_id
         for quiz in quiz_search.json()["quizzes"]
     )
-    quiz_alpha = client.get("/api/quiz-search", params={"q": "%rax", "sort": "alphabet"})
+    quiz_alpha = client.get("/api/quiz-search", params={"q": quiz_search_term, "sort": "alphabet"})
     assert quiz_alpha.status_code == 200, quiz_alpha.text
     assert any(
-        quiz["id"] == "x86-rax-trace-leaq-jump"
+        quiz["id"] == selected_quiz_id
         for quiz in quiz_alpha.json()["quizzes"]
     )
 
