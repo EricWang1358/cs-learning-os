@@ -11,6 +11,37 @@ const screenshotPath = (name) => fileURLToPath(new URL(name, outputDir))
 
 const currentUrl = (page) => new URL(page.url())
 
+async function waitForFakeCodexDraft(questionCard) {
+  const reviewDraftButton = questionCard.locator('button.text-link', { hasText: /^Review draft$/ })
+  const failedStatus = questionCard.getByText(/AI job needs attention|Codex CLI|OpenAI API|fake Codex failure|timed out|not configured/i)
+
+  try {
+    await Promise.race([
+      reviewDraftButton.waitFor({ timeout: 30000 }),
+      failedStatus.waitFor({ timeout: 30000 }).then(async () => {
+        const failureText = (await questionCard.textContent())?.replace(/\s+/g, ' ').trim()
+        throw new Error(
+          [
+            'Frontend smoke expected deterministic fake Codex mode, but the AI draft job failed.',
+            'Start or restart the backend with CS_LEARNING_AI_PROVIDER=codex-cli and CS_LEARNING_CODEX_FAKE=success before running npm run test:smoke.',
+            failureText ? `Job card: ${failureText}` : '',
+          ].filter(Boolean).join(' '),
+        )
+      }),
+    ])
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Frontend smoke expected deterministic fake Codex mode')) {
+      throw error
+    }
+    throw new Error(
+      [
+        'Timed out waiting for the fake Codex draft used by frontend smoke.',
+        'This usually means the backend was not started with CS_LEARNING_AI_PROVIDER=codex-cli and CS_LEARNING_CODEX_FAKE=success, or the AI worker is stuck on a real provider call.',
+      ].join(' '),
+    )
+  }
+}
+
 await mkdir(outputDir, { recursive: true })
 
 const quizzesResponse = await fetch(`${apiBaseUrl}/api/quizzes`)
@@ -320,7 +351,7 @@ await page.goto(`${baseUrl}/queue`, { waitUntil: 'networkidle' })
 const crudQuestionCard = page.locator('.question-card', { hasText: crudSmokeQuestion }).first()
 await crudQuestionCard.waitFor()
 await crudQuestionCard.locator('button.text-link', { hasText: /^Draft$/ }).click()
-await crudQuestionCard.locator('button.text-link', { hasText: /^Review draft$/ }).waitFor({ timeout: 30000 })
+await waitForFakeCodexDraft(crudQuestionCard)
 await crudQuestionCard.locator('button.text-link', { hasText: /^Review draft$/ }).click()
 await page.getByLabel('Markdown editor').waitFor()
 await page.getByText('Patch ops: 1').waitFor()

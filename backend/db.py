@@ -153,6 +153,15 @@ CREATE TABLE IF NOT EXISTS node_activity (
     read_count INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_reader_questions_status_created
+ON reader_questions(status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_jobs_status_updated
+ON ai_jobs(status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_job_events_job_id
+ON ai_job_events(job_id, id);
 """
 
 

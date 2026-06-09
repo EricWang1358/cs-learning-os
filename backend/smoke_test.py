@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,22 @@ def main() -> int:
     if smoke_db_path.exists():
         smoke_db_path.unlink()
     ingest(Path(os.environ["CS_LEARNING_CONTENT"]), smoke_db_path)
+    with sqlite3.connect(smoke_db_path) as conn:
+        index_names = {
+            row[0]
+            for row in conn.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'index'
+                """
+            )
+        }
+    assert {
+        "idx_reader_questions_status_created",
+        "idx_ai_jobs_status_updated",
+        "idx_ai_job_events_job_id",
+    }.issubset(index_names)
     client = TestClient(app, raise_server_exceptions=False)
 
     health = client.get("/api/health")
