@@ -52,6 +52,7 @@ Use this table as the project reading map. It intentionally focuses on explanato
 | [README.md](README.md) | Start here for setup, runtime paths, workflow, AI draft behavior, graph/health routes, and Git/data policy. | Current top-level guide. |
 | [docs/使用说明书.md](docs/使用说明书.md) | End-user walkthrough for launch, reading, focus mode, Q Queue, edit mode, quiz bank, and agent operating rules. | Useful but needs encoding cleanup before it is a reliable published manual. |
 | [docs/state-machine.md](docs/state-machine.md) | The most current engineering policy for route state, edit/review flows, reader questions, AI jobs, reading activity, graph, health, and app-store readiness. | Current architecture guardrail and best source for bug triage. |
+| [docs/worker-protocol.md](docs/worker-protocol.md) | Coordinator/worker collaboration protocol for reducing context loss, state regressions, and token waste as the project grows. | Current development-process guide. |
 | [docs/data-policy.md](docs/data-policy.md) | Rules for separating app shell, demo content, private content, generated files, and local-only artifacts. | Current policy; keep aligned with `README.md` and `skill/`. |
 | [docs/workspace-layout.md](docs/workspace-layout.md) | Expected folder layout when this repo lives inside a larger coursework workspace. | Current policy for path hygiene and migration checks. |
 | [docs/content-standards.md](docs/content-standards.md) | Human-facing rules for Standard A knowledge nodes and Standard Q quiz items. | Current content quality gate. |
@@ -368,6 +369,7 @@ These follow from the explanatory texts above and should be treated as the next 
 | Area | Evidence | Recommended improvement |
 | --- | --- | --- |
 | README navigation | The project now has many explanatory docs with overlapping authority. | Keep this navigation table updated whenever a new project-level doc is added or a stale doc is retired. |
+| Worker coordination | Future changes will cross frontend, backend, content, docs, and QA state. | Use `docs/worker-protocol.md` to route work through narrow workers with compact handoffs instead of one agent rereading the whole repo. |
 | User manual | `docs/使用说明书.md` is mojibake in the current checkout. | Re-save it as UTF-8 and update it to cover the current sort/search/focus-reading behavior. |
 | Frontend docs | `app/README.md` is still the default Vite template. | Replace it with a frontend-specific guide: routes, state ownership, dev scripts, test commands, and component-splitting plan. |
 | Design docs | `app/DESIGN.md` describes a Binance-style financial UI, not the current Learning OS interface. | Move it to an archive/reference folder if still useful, or replace it with the real Learning OS visual system and layout rules. |
