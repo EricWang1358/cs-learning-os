@@ -18,298 +18,41 @@ import { SearchHeaderControls } from './SearchHeaderControls'
 import {
   defaultNodeSort,
   defaultQuizSort,
-  parseNodeSort,
-  parseQuizSort,
   visibleNodeSortOptions,
   visibleQuizSortOptions,
-  type NodeSortKey,
-  type QuizSortKey,
 } from './searchSort'
-
-type NodeSummary = {
-  slug: string
-  title: string
-  area: string
-  track: string
-  display_order: number
-  status: string
-  visibility: string
-  summary: string
-  path: string
-  updated_at: string
-  last_read_at?: string
-  read_count?: number
-}
-
-type NodeDetail = NodeSummary & {
-  body: string
-  tags: string[]
-  links: Array<{ target: string; kind: string }>
-  sources: Array<{ source: string; source_type: string; note: string }>
-  open_question_count: number
-}
-
-type ApiNodesResponse = {
-  nodes: NodeSummary[]
-}
-
-type AreaSummary = {
-  area: string
-  label: string
-  node_count: number
-  first_order: number
-}
-
-type ApiAreasResponse = {
-  areas: AreaSummary[]
-  system: Record<string, number>
-}
-
-type ApiNodeResponse = {
-  node: NodeDetail
-}
-
-type NodeCreateDraft = {
-  title: string
-  area: string
-  track: string
-  summary: string
-  tags: string
-}
-
-type QuizSummary = {
-  id: string
-  title: string
-  area: string
-  display_order: number
-  status: string
-  visibility: string
-  difficulty: string
-  summary: string
-  path: string
-  weight: number
-  updated_at: string
-}
-
-type QuizDetail = QuizSummary & {
-  body: string
-  tags: string[]
-  linked_nodes: Array<{ slug: string; kind: string; title: string }>
-  sources: Array<{ source: string; source_type: string; note: string }>
-  open_question_count: number
-}
-
-type ApiQuizzesResponse = {
-  quizzes: QuizSummary[]
-}
-
-type ApiQuizResponse = {
-  quiz: QuizDetail
-}
-
-type TrackSummary = {
-  track: string
-  label: string
-  node_count: number
-  first_order: number
-}
-
-type ApiTracksResponse = {
-  area: string
-  tracks: TrackSummary[]
-}
-
-type ReaderQuestion = {
-  id: number
-  target_type: 'node' | 'quiz'
-  target_id: string
-  question: string
-  status: string
-  created_at: string
-  resolved_at: string
-  resolution_note: string
-}
-
-type ApiReaderQuestionsResponse = {
-  questions: ReaderQuestion[]
-}
-
-type ApiReaderQuestionResponse = {
-  question: ReaderQuestion
-}
-
-type AiRevision = {
-  revised_body: string
-  patch_ops: Array<{
-    op: 'replace' | 'append_after' | 'append_end'
-    section: string
-    find: string
-    replace: string
-  }>
-  summary: string
-  rationale: string[]
-  changed_sections: string[]
-  resolved_question_ids: number[]
-  suggested_new_nodes: string[]
-  model: string
-  provider: string
-}
-
-type AiJob = {
-  id: number
-  target_type: 'node' | 'quiz'
-  target_id: string
-  question_ids: number[]
-  provider: string
-  model: string
-  status: string
-  stage: string
-  instruction: string
-  error: string
-  error_summary: string
-  error_code: string
-  retry_of: number | null
-  attempt: number
-  base_body_hash: string
-  created_at: string
-  updated_at: string
-  completed_at: string
-  started_at: string
-  revision?: AiRevision
-}
-
-type ApiAiJobResponse = {
-  job: AiJob
-}
-
-type ApiAiJobsResponse = {
-  jobs: AiJob[]
-}
-
-type AiJobEvent = {
-  id: number
-  job_id: number
-  level: string
-  stage: string
-  message: string
-  created_at: string
-}
-
-type ApiAiJobEventsResponse = {
-  events: AiJobEvent[]
-}
-
-type SystemMetrics = {
-  counts: {
-    nodes: number
-    quizzes: number
-    open_questions: number
-    active_ai_jobs: number
-    failed_ai_jobs: number
-  }
-  storage: {
-    content_bytes: number
-    db_bytes: number
-    generated_bytes: number
-    project_related_bytes: number
-    github_repo_bytes: number
-    github_repo_fallback_tracked_bytes: number
-    partitions: StoragePartition[]
-    exclusive_partitions: StoragePartition[]
-    explained_project_bytes: number
-  }
-  paths: {
-    project: string
-    content: string
-    db: string
-    generated: string
-  }
-  github: {
-    bytes: number
-    source: string
-    url: string
-    message: string
-    fallback_tracked_bytes: number
-    cached?: boolean
-  }
-  collected_at?: string
-  collection_ms?: number
-  cached?: boolean
-  refreshing?: boolean
-  cache?: {
-    cached: boolean
-    refreshing: boolean
-    ttl_seconds: number
-    refresh_after: string
-  }
-  ai: {
-    ok: boolean
-    message: string
-    provider?: string
-    checks?: Record<string, boolean>
-    model?: string
-    model_provider?: string
-    base_url?: string
-    codex_home?: string
-  }
-}
-
-type StoragePartition = {
-  key: string
-  label: string
-  bytes: number
-  path: string
-  summary: string
-  kind: string
-}
-
-type ApiSystemMetricsResponse = SystemMetrics
-
-type GraphItem = {
-  type: 'root' | 'area' | 'track' | 'node' | 'heading'
-  id: string
-  label: string
-  meta: string
-  hint: string
-  child_count: number
-  has_children: boolean
-  href: string
-  level?: number
-}
-
-type GraphPayload = {
-  center: GraphItem
-  path: GraphItem[]
-  children: GraphItem[]
-  pagination: {
-    page: number
-    page_size: number
-    total: number
-    total_pages: number
-    has_prev: boolean
-    has_next: boolean
-  }
-  actions: Array<{ kind: string; label: string; href: string }>
-}
-
-type ApiGraphResponse = GraphPayload
-
-type ApiErrorBody = {
-  detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
-}
-
-class ApiRequestError extends Error {
-  status: number
-
-  constructor(status: number, message: string) {
-    super(message)
-    this.name = 'ApiRequestError'
-    this.status = status
-  }
-}
-
-type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
-type AiDraftScope = 'question' | 'selected' | 'page'
+import { API_BASE, ApiRequestError, deleteJson, fetchJson, postJson, putJson } from './lib/apiClient'
+import { graphApiPath, routeFromLocation, routeSearch } from './lib/routes'
+import type {
+  AiDraftScope,
+  AiJob,
+  AiJobEvent,
+  AiRevision,
+  ApiAiJobEventsResponse,
+  ApiAiJobResponse,
+  ApiAiJobsResponse,
+  ApiAreasResponse,
+  ApiGraphResponse,
+  ApiNodeResponse,
+  ApiNodesResponse,
+  ApiQuizResponse,
+  ApiQuizzesResponse,
+  ApiReaderQuestionResponse,
+  ApiReaderQuestionsResponse,
+  ApiSystemMetricsResponse,
+  ApiTracksResponse,
+  AreaSummary,
+  GraphPayload,
+  NodeCreateDraft,
+  NodeDetail,
+  NodeSummary,
+  QuizDetail,
+  QuizSummary,
+  ReaderQuestion,
+  StoragePartition,
+  SystemMetrics,
+  TrackSummary,
+} from './types/api'
 
 type TocItem = {
   id: string
@@ -372,7 +115,6 @@ type LineDiffSummary = {
   rows: LineDiffRow[]
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 const SYSTEM_AREAS = ['all', 'archive', 'trash']
 const READ_MARK_MIN_INTERVAL_SECONDS = 300
 
@@ -397,65 +139,6 @@ const trackLabels: Record<string, string> = {
   'x86-64-assembly': 'x86-64 assembly',
   'bomb-lab': 'Bomb Lab',
   networking: 'Networking',
-}
-
-function routeFromLocation(pathname: string, search: string) {
-  const params = new URLSearchParams(search)
-  const nodeMatch = pathname.match(/^\/nodes\/([^/]+)$/)
-  const quizMatch = pathname.match(/^\/quizzes\/([^/]+)$/)
-  const isQuizList = pathname === '/quizzes'
-  const isQueue = pathname === '/queue'
-  const isGraph = pathname === '/graph' || pathname.startsWith('/graph/')
-  const isHealth = pathname === '/health'
-
-  const query = params.get('q') || ''
-  return {
-    viewMode: isGraph
-      ? 'graph' as ViewMode
-      : isHealth
-        ? 'health' as ViewMode
-        : isQueue
-          ? 'question-queue' as ViewMode
-          : quizMatch || isQuizList
-            ? 'quizzes' as ViewMode
-            : 'nodes' as ViewMode,
-    selectedSlug: nodeMatch ? decodeURIComponent(nodeMatch[1]) : '',
-    selectedQuizId: quizMatch ? decodeURIComponent(quizMatch[1]) : '',
-    activeArea: params.get('area') || 'all',
-    activeTrack: params.get('track') || 'all',
-    query,
-    nodeSort: parseNodeSort(params.get('sort'), query),
-    quizSort: parseQuizSort(params.get('sort'), query),
-    graphPage: Number(params.get('page') || '1'),
-    isFocusMode: params.get('focus') === '1',
-  }
-}
-
-function routeSearch(options: {
-  activeArea?: string
-  activeTrack?: string
-  query?: string
-  isFocusMode?: boolean
-  page?: number
-  nodeSort?: NodeSortKey
-  quizSort?: QuizSortKey
-}) {
-  const params = new URLSearchParams()
-  if (options.activeArea && options.activeArea !== 'all') params.set('area', options.activeArea)
-  if (options.activeTrack && options.activeTrack !== 'all') params.set('track', options.activeTrack)
-  if (options.query) params.set('q', options.query)
-  if (options.nodeSort && options.nodeSort !== defaultNodeSort(options.query ?? '')) params.set('sort', options.nodeSort)
-  if (options.quizSort && options.quizSort !== defaultQuizSort(options.query ?? '')) params.set('sort', options.quizSort)
-  if (options.isFocusMode) params.set('focus', '1')
-  if (options.page && options.page > 1) params.set('page', String(options.page))
-  const value = params.toString()
-  return value ? `?${value}` : ''
-}
-
-function graphApiPath(pathname: string, page: number) {
-  const search = routeSearch({ page })
-  if (pathname === '/graph') return `/api/graph${search}`
-  return `/api${pathname}${search}`
 }
 
 function slugTitle(slug: string) {
@@ -713,69 +396,6 @@ function buildLineDiffSummary(before: string, after: string, maxRows = 80): Line
   }
 
   return { added, removed, rows }
-}
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`)
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, await responseErrorMessage(response))
-  }
-  return response.json() as Promise<T>
-}
-
-async function postJson<T>(path: string, payload: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, await responseErrorMessage(response))
-  }
-  return response.json() as Promise<T>
-}
-
-async function putJson<T>(path: string, payload: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, await responseErrorMessage(response))
-  }
-  return response.json() as Promise<T>
-}
-
-async function deleteJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'DELETE',
-  })
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, await responseErrorMessage(response))
-  }
-  return response.json() as Promise<T>
-}
-
-async function responseErrorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as ApiErrorBody
-    if (body.detail) {
-      if (Array.isArray(body.detail)) {
-        const details = body.detail
-          .map((item) => {
-            const field = item.loc?.filter((part) => part !== 'body').join('.') || 'request'
-            return `${field}: ${item.msg || item.type || 'invalid value'}`
-          })
-          .join('; ')
-        return `Request failed ${response.status}: ${details}`
-      }
-      return `Request failed ${response.status}: ${body.detail}`
-    }
-  } catch {
-    // Fall through to the generic message when the backend did not return JSON.
-  }
-  return `Request failed: ${response.status} ${response.statusText}`.trim()
 }
 
 function MarkdownView({

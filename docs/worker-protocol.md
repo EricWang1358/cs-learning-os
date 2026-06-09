@@ -40,6 +40,30 @@ Unrelated dirty files:
 
 Keep the context pack under roughly 120 lines. Link to docs instead of copying long sections.
 
+## App.tsx Split Context Pack
+
+Use this compact pack before refactoring `App.tsx`. It is a reminder, not a replacement for `docs/state-machine.md`.
+
+Objective: split `App.tsx` without changing state semantics.
+
+Relevant files: `app/src/App.tsx`, route helpers/components introduced by the split, API client modules touched by those components, `docs/state-machine.md`.
+
+State invariants:
+
+- URL is canonical for selected node, selected quiz, queue, graph, health, area, track, search query, focus mode, and Markdown section hash.
+- Browser Back must restore the route, selected item, `?focus=1`, and `#section-...` target together.
+- Navigation without a hash must clear stale section hashes and reset detail scroll to top; graph and health must not inherit node hashes or focus state.
+- Focus reading is a reading mode, not just a layout flag. It must preserve route/shareability and only record durable reads after the intended dwell/debounce path.
+- Edit mode is transient UI state. Link navigation while editing must exit edit mode or confirm discard, and focus mode must not hide save/cancel/review controls.
+- AI review is human-gated. Drafts must never auto-save; only `draft_ready` jobs can be applied; failed, cancelled, rejected, or retried jobs must not resolve reader questions.
+- AI apply must wait for backend success before treating Markdown, SQLite/FTS, job status, and linked questions as updated.
+
+Known risks: duplicated route parsing after extraction, stale hash scroll effects, hidden edit controls in focus layout, queue/question state being resolved too early, and components assuming backend writes succeeded before refreshed data returns.
+
+Allowed write scope: prefer `app/src` for split work plus narrow docs updates. Do not change backend contracts unless a Backend Worker owns the handoff.
+
+Verification required: run the narrow frontend checks available in the repo, then smoke browser Back/hash/focus-reading, edit cancel/save, and AI review apply/reject paths if the touched code can affect them.
+
 ## Worker Roles
 
 | Worker | Scope | Must not do |
@@ -91,4 +115,3 @@ Avoid dumping raw logs. Summarize failures with the command, failure point, and 
 4. Add deterministic smoke mode for AI draft workflows.
 5. Expand `/health` into actionable diagnostics.
 6. Add `docs/ai-policy.md` and `docs/release-checklist.md`.
-

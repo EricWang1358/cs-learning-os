@@ -1,0 +1,275 @@
+export type NodeSummary = {
+  slug: string
+  title: string
+  area: string
+  track: string
+  display_order: number
+  status: string
+  visibility: string
+  summary: string
+  path: string
+  updated_at: string
+  last_read_at?: string
+  read_count?: number
+}
+
+export type NodeDetail = NodeSummary & {
+  body: string
+  tags: string[]
+  links: Array<{ target: string; kind: string }>
+  sources: Array<{ source: string; source_type: string; note: string }>
+  open_question_count: number
+}
+
+export type ApiNodesResponse = {
+  nodes: NodeSummary[]
+}
+
+export type AreaSummary = {
+  area: string
+  label: string
+  node_count: number
+  first_order: number
+}
+
+export type ApiAreasResponse = {
+  areas: AreaSummary[]
+  system: Record<string, number>
+}
+
+export type ApiNodeResponse = {
+  node: NodeDetail
+}
+
+export type NodeCreateDraft = {
+  title: string
+  area: string
+  track: string
+  summary: string
+  tags: string
+}
+
+export type QuizSummary = {
+  id: string
+  title: string
+  area: string
+  display_order: number
+  status: string
+  visibility: string
+  difficulty: string
+  summary: string
+  path: string
+  weight: number
+  updated_at: string
+}
+
+export type QuizDetail = QuizSummary & {
+  body: string
+  tags: string[]
+  linked_nodes: Array<{ slug: string; kind: string; title: string }>
+  sources: Array<{ source: string; source_type: string; note: string }>
+  open_question_count: number
+}
+
+export type ApiQuizzesResponse = {
+  quizzes: QuizSummary[]
+}
+
+export type ApiQuizResponse = {
+  quiz: QuizDetail
+}
+
+export type TrackSummary = {
+  track: string
+  label: string
+  node_count: number
+  first_order: number
+}
+
+export type ApiTracksResponse = {
+  area: string
+  tracks: TrackSummary[]
+}
+
+export type ReaderQuestion = {
+  id: number
+  target_type: 'node' | 'quiz'
+  target_id: string
+  question: string
+  status: string
+  created_at: string
+  resolved_at: string
+  resolution_note: string
+}
+
+export type ApiReaderQuestionsResponse = {
+  questions: ReaderQuestion[]
+}
+
+export type ApiReaderQuestionResponse = {
+  question: ReaderQuestion
+}
+
+export type AiRevision = {
+  revised_body: string
+  patch_ops: Array<{
+    op: 'replace' | 'append_after' | 'append_end'
+    section: string
+    find: string
+    replace: string
+  }>
+  summary: string
+  rationale: string[]
+  changed_sections: string[]
+  resolved_question_ids: number[]
+  suggested_new_nodes: string[]
+  model: string
+  provider: string
+}
+
+export type AiJob = {
+  id: number
+  target_type: 'node' | 'quiz'
+  target_id: string
+  question_ids: number[]
+  provider: string
+  model: string
+  status: string
+  stage: string
+  instruction: string
+  error: string
+  error_summary: string
+  error_code: string
+  retry_of: number | null
+  attempt: number
+  base_body_hash: string
+  created_at: string
+  updated_at: string
+  completed_at: string
+  started_at: string
+  revision?: AiRevision
+}
+
+export type ApiAiJobResponse = {
+  job: AiJob
+}
+
+export type ApiAiJobsResponse = {
+  jobs: AiJob[]
+}
+
+export type AiJobEvent = {
+  id: number
+  job_id: number
+  level: string
+  stage: string
+  message: string
+  created_at: string
+}
+
+export type ApiAiJobEventsResponse = {
+  events: AiJobEvent[]
+}
+
+export type SystemMetrics = {
+  counts: {
+    nodes: number
+    quizzes: number
+    open_questions: number
+    active_ai_jobs: number
+    failed_ai_jobs: number
+  }
+  storage: {
+    content_bytes: number
+    db_bytes: number
+    generated_bytes: number
+    project_related_bytes: number
+    github_repo_bytes: number
+    github_repo_fallback_tracked_bytes: number
+    partitions: StoragePartition[]
+    exclusive_partitions: StoragePartition[]
+    explained_project_bytes: number
+  }
+  paths: {
+    project: string
+    content: string
+    db: string
+    generated: string
+  }
+  github: {
+    bytes: number
+    source: string
+    url: string
+    message: string
+    fallback_tracked_bytes: number
+    cached?: boolean
+  }
+  collected_at?: string
+  collection_ms?: number
+  cached?: boolean
+  refreshing?: boolean
+  cache?: {
+    cached: boolean
+    refreshing: boolean
+    ttl_seconds: number
+    refresh_after: string
+  }
+  ai: {
+    ok: boolean
+    message: string
+    provider?: string
+    checks?: Record<string, boolean>
+    model?: string
+    model_provider?: string
+    base_url?: string
+    codex_home?: string
+  }
+}
+
+export type StoragePartition = {
+  key: string
+  label: string
+  bytes: number
+  path: string
+  summary: string
+  kind: string
+}
+
+export type ApiSystemMetricsResponse = SystemMetrics
+
+export type GraphItem = {
+  type: 'root' | 'area' | 'track' | 'node' | 'heading'
+  id: string
+  label: string
+  meta: string
+  hint: string
+  child_count: number
+  has_children: boolean
+  href: string
+  level?: number
+}
+
+export type GraphPayload = {
+  center: GraphItem
+  path: GraphItem[]
+  children: GraphItem[]
+  pagination: {
+    page: number
+    page_size: number
+    total: number
+    total_pages: number
+    has_prev: boolean
+    has_next: boolean
+  }
+  actions: Array<{ kind: string; label: string; href: string }>
+}
+
+export type ApiGraphResponse = GraphPayload
+
+export type ApiErrorBody = {
+  detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
+}
+
+export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
+
+export type AiDraftScope = 'question' | 'selected' | 'page'
