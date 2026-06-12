@@ -71,6 +71,8 @@ Initial direction:
 
 Decision: Markdown remains the source of truth; SQLite is the index, query, and acceleration layer.
 
+Status: superseded for long-term runtime architecture by the 2026-06-12 data policy. Markdown remains a first-class portable learning package/projection, while SQLite/domain store becomes the operational authority for product state and write coordination.
+
 Reasoning:
 - Markdown is readable, Git-friendly, and easy for LLM-assisted maintenance.
 - SQLite provides faster search, filtering, detail lookup, and future recommendation support.
@@ -180,3 +182,93 @@ Observed result:
 Reasoning:
 - Latest Vite templates require a newer Node version than `v20.17.0`.
 - `nvm` keeps version switching possible instead of manually overwriting Node.
+
+## 2026-06-12: Product Positioning
+
+Decision: upgrade the product direction to a `Local-first personal learning OS`.
+
+Reasoning:
+- The primary user is one learner operating a personal knowledge, review, search, and planning system.
+- Cloud/SaaS is not a current use case.
+- Keep architecture habits that are not SaaS-hostile: clear API boundaries, portable data, explicit contracts, and replaceable adapters.
+- Do not optimize the core workflow around accounts, tenancy, billing, hosted sync, or team administration.
+
+## 2026-06-12: Architecture Core
+
+Decision: the current goal is to extract a presentable `Local-first Learning OS Architecture Core`, not just clean up a large messy codebase.
+
+Reasoning:
+- Refactoring should make the product idea easier to explain, demo, and extend.
+- The architecture core should foreground local data ownership, learning workflows, search, review, provenance, and workflow-level state.
+- Cleanup work is valuable only when it clarifies the core model, reduces coupling, or makes the local-first learning loop more demonstrable.
+
+## 2026-06-12: Dependency Strategy
+
+Decision: use mature libraries for mature general problems, while keeping core product semantics under project control.
+
+Reasoning:
+- Use libraries for solved infrastructure problems such as routing, HTTP serving, SQLite access, parsing, testing, and build tooling.
+- Own the domain language around nodes, reviews, learning state, provenance, source traces, and workflow orchestration.
+- Avoid building fragile custom tools only to stay lightweight.
+- Avoid piling on frameworks when typed local code and a small library are enough.
+
+## 2026-06-12: Frontend State Architecture
+
+Decision: split frontend state by workflow and state owner, not by incidental visual component boundaries.
+
+Initial direction:
+- Use React built-in typed reducers, context, and custom hooks first.
+- Keep state close to the workflow that owns it: search, node detail, review, planning, ingestion status, and settings.
+- Introduce a heavier state library only after repeated cross-workflow coordination makes the need concrete.
+
+Reasoning:
+- Visual component splits do not reliably match product state ownership.
+- Typed reducers and hooks are enough for the current app scale and keep the state model inspectable while the architecture core stabilizes.
+
+## 2026-06-12: Backend Evolution
+
+Decision: keep the backend as `thin api.py + domain services`.
+
+Initial direction:
+- `api.py` should expose routes, validate request/response boundaries, and delegate real work.
+- Domain services should own ingestion, search, node lookup, scheduling, and recommendation logic.
+- Do not change frameworks or start a large backend rewrite in the current phase.
+
+Reasoning:
+- The existing FastAPI + SQLite direction still fits the local-first product.
+- Thin routes plus explicit services make the architecture easier to test, explain, and split without a big-bang rewrite.
+
+## 2026-06-12: Learning Algorithm Scope
+
+Decision: an Anki-like scheduler is sufficient for the main learning loop.
+
+Reasoning:
+- The core product needs predictable spaced repetition, review state, and lightweight scheduling before advanced optimization.
+- FSRS, embeddings, and adaptive ML features are not part of the mainline architecture now.
+- Advanced algorithms can be explored later behind clear interfaces if the product loop proves the need.
+
+## 2026-06-12: Search Architecture
+
+Decision: use SQLite FTS/BM25 as the core search capability.
+
+Initial direction:
+- Keep full-text search local, inspectable, and dependency-light through SQLite FTS.
+- Treat semantic search and embeddings as optional future adapters.
+- Do not make embeddings a core dependency for search, ranking, or basic navigation.
+
+Reasoning:
+- FTS/BM25 is strong enough for the first searchable personal learning OS.
+- Adapter boundaries preserve future semantic search options without forcing model infrastructure into the core.
+
+## 2026-06-12: Refactoring Strategy
+
+Decision: use a strangler split strategy instead of a big-bang rewrite.
+
+Initial direction:
+- Extract stable domain services and typed contracts one workflow at a time.
+- Keep the app runnable while each slice moves behind clearer boundaries.
+- Prefer small, testable migrations that preserve behavior over broad rewrites.
+
+Reasoning:
+- The project is evolving from a working local learning system into a clearer architecture core.
+- Strangler split keeps learning data, demos, and workflows usable while reducing coupling.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -113,6 +114,55 @@ def slug_from_path(path: Path) -> str:
     return path.stem.lower().replace(" ", "-")
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def record_content_file(
+    conn,
+    content_root: Path,
+    path: Path,
+    target_type: str,
+    target_id: str,
+    status: str = "indexed",
+    error: str = "",
+) -> None:
+    stat = path.stat()
+    rel_path = path.relative_to(content_root).as_posix()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO content_files (
+            path, target_type, target_id, mtime_ns, size_bytes, sha256, status, last_ingested_at, error
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(path) DO UPDATE SET
+            target_type = excluded.target_type,
+            target_id = excluded.target_id,
+            mtime_ns = excluded.mtime_ns,
+            size_bytes = excluded.size_bytes,
+            sha256 = excluded.sha256,
+            status = excluded.status,
+            last_ingested_at = excluded.last_ingested_at,
+            error = excluded.error
+        """,
+        (
+            rel_path,
+            target_type,
+            target_id,
+            stat.st_mtime_ns,
+            stat.st_size,
+            file_sha256(path),
+            status,
+            now,
+            error,
+        ),
+    )
+
+
 def read_nodes(content_root: Path) -> list[Node]:
     nodes_root = content_root / "nodes"
     nodes: list[Node] = []
@@ -215,6 +265,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
         conn.execute("DELETE FROM node_tags")
         conn.execute("DELETE FROM tags")
         conn.execute("DELETE FROM nodes")
+        conn.execute("UPDATE content_files SET status = 'missing'")
 
         for node in nodes:
             conn.execute(
@@ -273,6 +324,7 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 """,
                 (node.slug, node.title, node.summary, node.body, " ".join(node.tags)),
             )
+            record_content_file(conn, content_root, content_root / node.path, "node", node.slug)
 
         node_slugs = {node.slug for node in nodes}
         for node_slug, activity in preserved_node_activity.items():
@@ -347,6 +399,23 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (quiz.id, quiz.title, quiz.summary, quiz.body, " ".join(quiz.tags)),
+            )
+            record_content_file(conn, content_root, content_root / quiz.path, "quiz", quiz.id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        for key, value in {
+            "last_full_ingest_at": now,
+            "last_ingest_content_root": str(content_root),
+        }.items():
+            conn.execute(
+                """
+                INSERT INTO schema_meta (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                (key, value, now),
             )
 
     conn.close()

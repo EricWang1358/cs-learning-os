@@ -1,20 +1,8 @@
-import { startTransition, useEffect, useRef, useState, useDeferredValue, type ReactNode } from 'react'
+import { lazy, startTransition, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import bash from 'highlight.js/lib/languages/bash'
-import c from 'highlight.js/lib/languages/c'
-import cpp from 'highlight.js/lib/languages/cpp'
-import javascript from 'highlight.js/lib/languages/javascript'
-import json from 'highlight.js/lib/languages/json'
-import markdown from 'highlight.js/lib/languages/markdown'
-import powershell from 'highlight.js/lib/languages/powershell'
-import python from 'highlight.js/lib/languages/python'
-import typescript from 'highlight.js/lib/languages/typescript'
-import x86asm from 'highlight.js/lib/languages/x86asm'
-import hljs from 'highlight.js/lib/core'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import './App.css'
-import { GraphNavigator } from './components/GraphNavigator'
+import { QuestionQueueDetail } from './components/QuestionQueueDetail'
+import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
 import {
   defaultNodeSort,
@@ -22,7 +10,16 @@ import {
   visibleNodeSortOptions,
   visibleQuizSortOptions,
 } from './searchSort'
-import { API_BASE, ApiRequestError, deleteJson, fetchJson, postJson, putJson } from './lib/apiClient'
+import { ApiRequestError, deleteJson, fetchJson, postJson, putJson } from './lib/apiClient'
+import { clearStoredEditDraft, readStoredEditDraft, writeStoredEditDraft } from './lib/editDraftStorage'
+import {
+  buildTableOfContents,
+  replaceMarkdownLineRange,
+  sectionReadingAnchor,
+  type MarkdownSection,
+  type ReadingReturnAnchor,
+  type SectionEditDraft,
+} from './lib/markdown'
 import { graphApiPath, routeFromLocation, routeSearch } from './lib/routes'
 import type {
   AiDraftScope,
@@ -55,55 +52,13 @@ import type {
   TrackSummary,
 } from './types/api'
 
-type TocItem = {
-  id: string
-  level: 1 | 2 | 3
-  text: string
-}
+const GraphNavigator = lazy(() =>
+  import('./components/GraphNavigator').then((module) => ({ default: module.GraphNavigator })),
+)
 
-type ParsedHeading = TocItem & {
-  lineNumber: number
-}
-
-type MarkdownSection = {
-  startLine: number
-  endLine: number
-  isEditable: boolean
-  level: 0 | 1 | 2
-  text: string
-  title: string
-}
-
-type SectionEditDraft = MarkdownSection & {
-  draft: string
-}
-
-type ReadingReturnAnchor = {
-  headingId: string
-  headingIndex: number
-  mode: 'section-end' | 'heading-start'
-}
-
-const codeHighlightLanguages = {
-  asm: x86asm,
-  bash,
-  c,
-  cpp,
-  javascript,
-  json,
-  markdown,
-  powershell,
-  python,
-  sh: bash,
-  shell: bash,
-  ts: typescript,
-  typescript,
-  x86asm,
-}
-
-Object.entries(codeHighlightLanguages).forEach(([name, language]) => {
-  hljs.registerLanguage(name, language)
-})
+const MarkdownView = lazy(() =>
+  import('./components/MarkdownView').then((module) => ({ default: module.MarkdownView })),
+)
 
 type LineDiffRow = {
   kind: 'same' | 'added' | 'removed'
@@ -227,133 +182,6 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`
 }
 
-function plainMarkdownText(text: string) {
-  return text.replace(/`([^`]+)`/g, '$1').replace(/\*\*([^*]+?)\*\*/g, '$1')
-}
-
-function reactNodeText(value: ReactNode): string {
-  if (value === null || value === undefined || typeof value === 'boolean') return ''
-  if (typeof value === 'string' || typeof value === 'number') return String(value)
-  if (Array.isArray(value)) return value.map(reactNodeText).join('')
-  if (typeof value === 'object' && 'props' in value) {
-    const props = value.props as { children?: ReactNode }
-    return reactNodeText(props.children)
-  }
-  return ''
-}
-
-function headingId(text: string, index: number) {
-  const base = plainMarkdownText(text)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return `section-${base || 'heading'}-${index}`
-}
-
-function markdownNodeLine(node: unknown) {
-  const positionedNode = node as { position?: { start?: { line?: number } } }
-  return positionedNode.position?.start?.line
-}
-
-function markdownContentLines(body: string) {
-  let isInCodeFence = false
-  return body.split('\n').map((line, index) => {
-    if (/^\s*```/.test(line)) {
-      const result = { isCode: true, line, lineNumber: index + 1 }
-      isInCodeFence = !isInCodeFence
-      return result
-    }
-    return { isCode: isInCodeFence, line, lineNumber: index + 1 }
-  })
-}
-
-function parseMarkdownHeadings(body: string): ParsedHeading[] {
-  let headingIndex = 0
-  return markdownContentLines(body).flatMap(({ isCode, line, lineNumber }) => {
-    if (isCode) return []
-    const heading = line.trim().match(/^(#{1,3})\s+(.+)$/)
-    if (!heading) return []
-    const text = plainMarkdownText(heading[2].trim())
-    const item = {
-      id: headingId(text, headingIndex),
-      level: heading[1].length as 1 | 2 | 3,
-      lineNumber,
-      text,
-    }
-    headingIndex += 1
-    return [item]
-  })
-}
-
-function splitMarkdownSections(body: string): MarkdownSection[] {
-  const lines = body.split('\n')
-  const editableHeadings = markdownContentLines(body)
-    .filter((item) => !item.isCode)
-    .flatMap((item) => {
-      const heading = item.line.trim().match(/^(#{1,2})\s+(.+)$/)
-      if (!heading) return []
-      return [
-        {
-          ...item,
-          level: heading[1].length as 1 | 2,
-          title: plainMarkdownText(heading[2].trim()),
-        },
-      ]
-    })
-
-  if (!editableHeadings.length) {
-    return [
-      {
-        startLine: 1,
-        endLine: lines.length,
-        isEditable: false,
-        level: 0,
-        text: body,
-        title: 'Full note',
-      },
-    ]
-  }
-
-  const sections: MarkdownSection[] = []
-  const firstHeading = editableHeadings[0]
-  if (firstHeading.lineNumber > 1) {
-    sections.push({
-      startLine: 1,
-      endLine: firstHeading.lineNumber - 1,
-      isEditable: false,
-      level: 0,
-      text: lines.slice(0, firstHeading.lineNumber - 1).join('\n'),
-      title: 'Before first heading',
-    })
-  }
-
-  return [
-    ...sections,
-    ...editableHeadings.map((heading, index) => {
-      const nextHeading = editableHeadings[index + 1]
-      const endLine = nextHeading ? nextHeading.lineNumber - 1 : lines.length
-      const text = lines.slice(heading.lineNumber - 1, endLine).join('\n')
-      return {
-        startLine: heading.lineNumber,
-        endLine,
-        isEditable: true,
-        level: heading.level,
-        text,
-        title: heading.title,
-      }
-    }),
-  ]
-}
-
-function replaceMarkdownLineRange(body: string, startLine: number, endLine: number, replacement: string) {
-  const lines = body.split('\n')
-  return [
-    ...lines.slice(0, startLine - 1),
-    ...replacement.split('\n'),
-    ...lines.slice(endLine),
-  ].join('\n')
-}
-
 function buildLineDiffSummary(before: string, after: string, maxRows = 80): LineDiffSummary {
   const beforeLines = before.trim().split('\n')
   const afterLines = after.trim().split('\n')
@@ -397,172 +225,6 @@ function buildLineDiffSummary(before: string, after: string, maxRows = 80): Line
   }
 
   return { added, removed, rows }
-}
-
-function MarkdownView({
-  body,
-  editingSection,
-  isSectionSaving,
-  onCancelSectionEdit,
-  onChangeSectionDraft,
-  onSaveSectionEdit,
-  onStartSectionEdit,
-  sectionEditError,
-}: {
-  body: string
-  editingSection?: SectionEditDraft | null
-  isSectionSaving?: boolean
-  onCancelSectionEdit?: () => void
-  onChangeSectionDraft?: (draft: string) => void
-  onSaveSectionEdit?: () => void
-  onStartSectionEdit?: (section: MarkdownSection) => void
-  sectionEditError?: string
-}) {
-  const sections = splitMarkdownSections(body)
-  const shouldRenderBySection = Boolean(editingSection)
-  const headingIdsByLine = new Map(parseMarkdownHeadings(body).map((heading) => [heading.lineNumber, heading.id]))
-  const sectionsByStartLine = new Map(sections.map((section) => [section.startLine, section]))
-
-  const renderMarkdown = (markdownBody: string, lineOffset = 1) => {
-    return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          code({ children, className }) {
-            const language = /language-([a-zA-Z0-9_-]+)/.exec(className ?? '')?.[1]
-            const code = reactNodeText(children).replace(/\n$/, '')
-            if (!language || !hljs.getLanguage(language)) {
-              return <code className={className}>{children}</code>
-            }
-            const highlighted = hljs.highlight(code, { language, ignoreIllegals: true }).value
-            return (
-              <code
-                className={`hljs language-${language}`}
-                dangerouslySetInnerHTML={{ __html: highlighted }}
-              />
-            )
-          },
-          h1({ children, node }) {
-            const text = plainMarkdownText(reactNodeText(children))
-            const localLineNumber = markdownNodeLine(node) ?? -1
-            const lineNumber = localLineNumber + lineOffset - 1
-            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
-            const section = sectionsByStartLine.get(lineNumber)
-            return (
-              <h1 className={section?.isEditable ? 'editable-heading' : undefined} id={id}>
-                <span>{children}</span>
-                {section?.isEditable && onStartSectionEdit && (
-                  <button
-                    type="button"
-                    className="section-edit-button"
-                    aria-label={`Edit section: ${section.title}`}
-                    title="Edit this section"
-                    onClick={() => onStartSectionEdit(section)}
-                  >
-                    Edit
-                  </button>
-                )}
-              </h1>
-            )
-          },
-          h2({ children, node }) {
-            const text = plainMarkdownText(reactNodeText(children))
-            const localLineNumber = markdownNodeLine(node) ?? -1
-            const lineNumber = localLineNumber + lineOffset - 1
-            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
-            const section = sectionsByStartLine.get(lineNumber)
-            return (
-              <h2 className={section?.isEditable ? 'editable-heading' : undefined} id={id}>
-                <span>{children}</span>
-                {section?.isEditable && onStartSectionEdit && (
-                  <button
-                    type="button"
-                    className="section-edit-button"
-                    aria-label={`Edit section: ${section.title}`}
-                    title="Edit this section"
-                    onClick={() => onStartSectionEdit(section)}
-                  >
-                    Edit
-                  </button>
-                )}
-              </h2>
-            )
-          },
-          h3({ children, node }) {
-            const text = plainMarkdownText(reactNodeText(children))
-            const localLineNumber = markdownNodeLine(node) ?? -1
-            const lineNumber = localLineNumber + lineOffset - 1
-            const id = headingIdsByLine.get(lineNumber) ?? headingId(text, 0)
-            return <h3 id={id}>{children}</h3>
-          },
-          img({ alt, src, title }) {
-            const rawSrc = typeof src === 'string' ? src : ''
-            const imageSrc = rawSrc.startsWith('/content-assets/') ? `${API_BASE}${rawSrc}` : rawSrc
-            return (
-              <img
-                alt={alt ?? ''}
-                decoding="async"
-                loading="lazy"
-                src={imageSrc}
-                title={typeof title === 'string' ? title : undefined}
-              />
-            )
-          },
-        }}
-      >
-        {markdownBody}
-      </ReactMarkdown>
-    )
-  }
-
-  const renderSectionEditor = (section: SectionEditDraft) => (
-    <div className="markdown-section-editor" id={headingIdsByLine.get(section.startLine)} key={`edit-${section.startLine}`}>
-      <div className="section-editor-header">
-        <p className="eyebrow">Editing section</p>
-        <strong>{section.title}</strong>
-      </div>
-      <textarea
-        aria-label={`Edit Markdown section: ${section.title}`}
-        value={section.draft}
-        onChange={(event) => onChangeSectionDraft?.(event.target.value)}
-      />
-      {sectionEditError && <p className="section-editor-error">{sectionEditError}</p>}
-      <div className="section-editor-actions">
-        <button
-          type="button"
-          className="focus-toggle"
-          disabled={isSectionSaving}
-          onClick={onSaveSectionEdit}
-        >
-          {isSectionSaving ? 'Saving...' : 'Save section'}
-        </button>
-        <button
-          type="button"
-          className="focus-toggle"
-          disabled={isSectionSaving}
-          onClick={onCancelSectionEdit}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="markdown-body">
-      {shouldRenderBySection
-        ? sections.map((section) =>
-            editingSection?.startLine === section.startLine
-              ? renderSectionEditor(editingSection)
-              : <div className="markdown-section" key={section.startLine}>{renderMarkdown(section.text, section.startLine)}</div>,
-          )
-        : renderMarkdown(body)}
-    </div>
-  )
-}
-
-function buildTableOfContents(body: string): TocItem[] {
-  return parseMarkdownHeadings(body).map(({ id, level, text }) => ({ id, level, text }))
 }
 
 function MarkdownToc({ body }: { body: string }) {
@@ -735,17 +397,6 @@ function activeReadingAnchor(mode: ReadingReturnAnchor['mode']): ReadingReturnAn
   return {
     headingId: headings[activeHeadingIndex].id,
     headingIndex: activeHeadingIndex,
-    mode,
-  }
-}
-
-function sectionReadingAnchor(body: string, section: MarkdownSection, mode: ReadingReturnAnchor['mode']): ReadingReturnAnchor | null {
-  const headings = parseMarkdownHeadings(body)
-  const headingIndex = headings.findIndex((heading) => heading.lineNumber === section.startLine)
-  if (headingIndex === -1) return null
-  return {
-    headingId: headings[headingIndex].id,
-    headingIndex,
     mode,
   }
 }
@@ -1501,11 +1152,31 @@ function App() {
         : !visibleReaderQuestions.length && !questionDraft.trim()
           ? 'Add or save a question first, then draft with AI.'
           : ''
+  const editTargetType = viewMode === 'quizzes' ? 'quiz' : viewMode === 'nodes' ? 'node' : null
+  const editTargetId = editTargetType === 'quiz' ? selectedQuizId : editTargetType === 'node' ? selectedSlug : null
+  const editTargetBody = editTargetType === 'quiz' ? selectedQuiz?.body : editTargetType === 'node' ? selectedNode?.body : ''
+  const editTargetBodyHash = editTargetType === 'quiz'
+    ? selectedQuiz?.body_hash
+    : editTargetType === 'node'
+      ? selectedNode?.body_hash
+      : ''
+
+  useEffect(() => {
+    if (!isEditMode || !editTargetType || !editTargetId || !editTargetBodyHash || activeAiJob?.status === 'draft_ready') return
+    if (editDraft === editTargetBody) {
+      clearStoredEditDraft(editTargetType, editTargetId)
+      return
+    }
+    writeStoredEditDraft(editTargetType, editTargetId, editTargetBodyHash, editDraft)
+  }, [activeAiJob?.status, editDraft, editTargetBody, editTargetBodyHash, editTargetId, editTargetType, isEditMode])
 
   const exitEditMode = (shouldConfirm = true) => {
     if (!isEditMode) return true
     if (shouldConfirm && editDraft.trim() && !window.confirm('Discard unsaved Markdown edits?')) {
       return false
+    }
+    if (shouldConfirm && editTargetType && editTargetId) {
+      clearStoredEditDraft(editTargetType, editTargetId)
     }
     setIsEditMode(false)
     setEditDraft('')
@@ -1921,14 +1592,15 @@ function App() {
   }
 
   const startEditMode = () => {
-    const body = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
-    if (!body) {
+    if (!editTargetType || !editTargetId || !editTargetBody || !editTargetBodyHash) {
       setActionNotice('Markdown body is still loading; try Edit mode again in a moment.')
       return
     }
     const currentScrollTop = window.scrollY
     readingReturnAnchorRef.current = activeReadingAnchor('section-end')
-    setEditDraft(body)
+    const storedDraft = readStoredEditDraft(editTargetType, editTargetId, editTargetBodyHash)
+    setEditDraft(storedDraft?.body ?? editTargetBody)
+    setActionNotice(storedDraft ? `Restored unsaved draft from ${formatTraceTime(storedDraft.savedAt)}.` : '')
     setEditModeError('')
     setSectionEditDraft(null)
     setSectionEditError('')
@@ -2016,11 +1688,13 @@ function App() {
       if (viewMode === 'quizzes' && selectedQuizId) {
         const data = await putJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}/body`, {
           body,
+          base_body_hash: selectedQuiz?.body_hash ?? '',
         })
         setSelectedQuiz(data.quiz)
       } else if (selectedSlug) {
         const data = await putJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}/body`, {
           body,
+          base_body_hash: selectedNode?.body_hash ?? '',
         })
         setSelectedNode(data.node)
       }
@@ -2054,9 +1728,13 @@ function App() {
           current.map((item) => (item.id === activeAiJob.id ? applied.job : item)),
         )
         if (viewMode === 'quizzes') {
-          setSelectedQuiz((current) => (current ? { ...current, body } : current))
-        } else {
-          setSelectedNode((current) => (current ? { ...current, body } : current))
+          if (selectedQuizId) {
+            const data = await fetchJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}`)
+            setSelectedQuiz(data.quiz)
+          }
+        } else if (selectedSlug) {
+          const data = await fetchJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}`)
+          setSelectedNode(data.node)
         }
         setReaderQuestions((current) =>
           current.filter((item) => !activeAiJob.question_ids.includes(item.id)),
@@ -2067,11 +1745,13 @@ function App() {
         if (viewMode === 'quizzes' && selectedQuizId) {
           const data = await putJson<ApiQuizResponse>(`/api/quizzes/${selectedQuizId}/body`, {
             body,
+            base_body_hash: selectedQuiz?.body_hash ?? '',
           })
           setSelectedQuiz(data.quiz)
         } else if (selectedSlug) {
           const data = await putJson<ApiNodeResponse>(`/api/nodes/${selectedSlug}/body`, {
             body,
+            base_body_hash: selectedNode?.body_hash ?? '',
           })
           setSelectedNode(data.node)
         }
@@ -2092,6 +1772,9 @@ function App() {
         if (targetId) {
           adjustOpenQuestionCount(targetType, targetId, -aiRevision.resolved_question_ids.length)
         }
+      }
+      if (editTargetType && editTargetId) {
+        clearStoredEditDraft(editTargetType, editTargetId)
       }
       exitEditMode(false)
     } catch (saveError) {
@@ -2349,13 +2032,21 @@ function App() {
       </aside>
 
       {viewMode === 'graph' ? (
-        <GraphNavigator
-          payload={graphPayload}
-          isLoading={isLoading}
-          error={error}
-          onNavigate={navigateGraph}
-          onPage={navigateGraphPage}
-        />
+        <Suspense
+          fallback={
+            <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">
+              <p className="detail-loading">Loading graph navigator...</p>
+            </section>
+          }
+        >
+          <GraphNavigator
+            payload={graphPayload}
+            isLoading={isLoading}
+            error={error}
+            onNavigate={navigateGraph}
+            onPage={navigateGraphPage}
+          />
+        </Suspense>
       ) : (
       <section className="node-column" aria-label="Knowledge nodes">
         {viewMode === 'health' ? (
@@ -2806,99 +2497,20 @@ function App() {
           </button>
         )}
         {viewMode === 'question-queue' ? (
-          <div className="queue-detail">
-            <h2>Q Queue</h2>
-            <p>
-              Track open questions and AI jobs together. Drafts wait here until you explicitly review and
-              save them.
-            </p>
-            <section className="detail-section">
-              <h3>Open questions</h3>
-              {readerQuestions.length ? (
-                <div className="job-list">
-                  {readerQuestions.map((item) => (
-                    <article className="ai-revision-card compact-card" key={item.id}>
-                      <p className="eyebrow">
-                        Q #{item.id} / {item.target_type} / {item.target_id} / {item.status}
-                      </p>
-                      <h3>{item.question}</h3>
-                      <div className="question-card-actions">
-                        <button type="button" className="focus-toggle" onClick={() => openQuestionTarget(item)}>
-                          Open target
-                        </button>
-                        <button type="button" className="focus-toggle" onClick={() => dismissReaderQuestion(item)}>
-                          Dismiss
-                        </button>
-                        <button type="button" className="focus-toggle danger-button" onClick={() => deleteReaderQuestion(item)}>
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>No open reader questions.</p>
-              )}
-            </section>
-            <section className="detail-section">
-              <h3>AI jobs</h3>
-              {activeAiJobs.length ? (
-                <div className="job-list">
-                  {activeAiJobs.map((job) => (
-                    <article className="ai-revision-card" key={job.id}>
-                      <p className="eyebrow">
-                        Job #{job.id} / {job.target_type} / {job.target_id}
-                      </p>
-                      <h3>{job.status}: {job.stage}</h3>
-                      {job.revision?.summary && <p>{job.revision.summary}</p>}
-                      {(job.error_summary || job.error) && (
-                        <p className="ai-status error">{job.error_summary || job.error}</p>
-                      )}
-                      <div className="question-card-actions">
-                        {job.status === 'draft_ready' && job.revision && (
-                          <button type="button" className="focus-toggle ai-action" onClick={() => reviewAiJob(job)}>
-                            Review draft
-                          </button>
-                        )}
-                        <button type="button" className="focus-toggle" onClick={() => openJobTarget(job)}>
-                          Open target
-                        </button>
-                        {job.status === 'failed' && (
-                          <button type="button" className="focus-toggle ai-action" onClick={() => retryAiJob(job)}>
-                            Retry
-                          </button>
-                        )}
-                        {job.status === 'draft_ready' && (
-                          <button type="button" className="focus-toggle" onClick={() => rejectAiJob(job)}>
-                            Reject draft
-                          </button>
-                        )}
-                        <button type="button" className="focus-toggle" onClick={() => loadJobEvents(job)}>
-                          Show events
-                        </button>
-                        {['queued', 'solving'].includes(job.status) && (
-                          <button type="button" className="focus-toggle" onClick={() => cancelAiJob(job)}>
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      {jobEvents[job.id]?.length > 0 && (
-                        <ol className="job-event-list">
-                          {jobEvents[job.id].map((event) => (
-                            <li key={event.id}>
-                              <strong>{event.stage}</strong>: {event.message}
-                            </li>
-                          ))}
-                        </ol>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>No AI jobs yet.</p>
-              )}
-            </section>
-          </div>
+          <QuestionQueueDetail
+            activeAiJobs={activeAiJobs}
+            jobEvents={jobEvents}
+            readerQuestions={readerQuestions}
+            onCancelAiJob={cancelAiJob}
+            onDeleteReaderQuestion={deleteReaderQuestion}
+            onDismissReaderQuestion={dismissReaderQuestion}
+            onLoadJobEvents={loadJobEvents}
+            onOpenJobTarget={openJobTarget}
+            onOpenQuestionTarget={openQuestionTarget}
+            onRejectAiJob={rejectAiJob}
+            onRetryAiJob={retryAiJob}
+            onReviewAiJob={reviewAiJob}
+          />
         ) : viewMode === 'health' ? (
           <div className="health-detail">
             <section className="detail-heading health-heading">
@@ -3064,6 +2676,7 @@ function App() {
                     {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
+                  <Suspense fallback={<p className="detail-loading">Loading Markdown renderer...</p>}>
                   <MarkdownView
                     body={selectedQuiz.body}
                     editingSection={sectionEditDraft}
@@ -3077,6 +2690,7 @@ function App() {
                     onStartSectionEdit={startSectionEdit}
                     sectionEditError={sectionEditError}
                   />
+                  </Suspense>
                 )}
               </section>
 
@@ -3121,52 +2735,26 @@ function App() {
               {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
             </div>
             {isFocusMode && !isEditMode && (
-              <aside className="reader-question-panel" aria-label="Reader questions">
-                <div>
-                  <p className="eyebrow">Q to be solved</p>
-                  <h3>What is unclear?</h3>
-                  <p>
-                    Save questions while reading. Later, ask the LLM to fold them back into the
-                    tutorial.
-                  </p>
-                </div>
-                <textarea
-                  value={questionDraft}
-                  onChange={(event) => {
-                    setQuestionFeedback('')
-                    setQuestionDraft(event.target.value)
-                  }}
-                  placeholder="Example: Why does sete write only %al here?"
-                />
-                {(readerQuestionHint || aiDraftHint) && (
-                  <p className={questionFeedback ? 'inline-success' : 'inline-hint'}>
-                    {questionFeedback || aiDraftHint || readerQuestionHint}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="focus-toggle"
-                  disabled={isQuestionSaving}
-                  onClick={submitReaderQuestion}
-                >
-                  {isQuestionSaving ? 'Saving...' : 'Save question'}
-                </button>
-                <button
-                  type="button"
-                  className="focus-toggle ai-action"
-                  disabled={isAiRevising}
-                  onClick={requestAiRevision}
-                >
-                  {isAiRevising ? 'Drafting...' : 'Draft with AI'}
-                </button>
-                {aiStatus && <p className={aiStatusClass}>{aiStatusText}</p>}
-                <div className="reader-question-list">
-                  <strong>{openQuestionCount} open</strong>
-                  {visibleReaderQuestions.map((item) => (
-                    <p key={item.id}>{item.question}</p>
-                  ))}
-                </div>
-              </aside>
+              <ReaderQuestionPanel
+                aiDraftHint={aiDraftHint}
+                aiStatus={aiStatus}
+                aiStatusClass={aiStatusClass}
+                aiStatusText={aiStatusText}
+                isAiRevising={isAiRevising}
+                isQuestionSaving={isQuestionSaving}
+                openQuestionCount={openQuestionCount}
+                placeholder="Example: Why does sete write only %al here?"
+                questionDraft={questionDraft}
+                questionFeedback={questionFeedback}
+                readerQuestionHint={readerQuestionHint}
+                visibleReaderQuestions={visibleReaderQuestions}
+                onDraftWithAi={requestAiRevision}
+                onQuestionDraftChange={(value) => {
+                  setQuestionFeedback('')
+                  setQuestionDraft(value)
+                }}
+                onSubmitQuestion={submitReaderQuestion}
+              />
             )}
           </>
         ) : viewMode === 'nodes' && selectedNode?.slug === selectedSlug ? (
@@ -3271,6 +2859,7 @@ function App() {
                     {aiStatus && !aiRevision && <p className={aiStatusClass}>{aiStatusText}</p>}
                   </div>
                 ) : (
+                  <Suspense fallback={<p className="detail-loading">Loading Markdown renderer...</p>}>
                   <MarkdownView
                     body={selectedNode.body}
                     editingSection={sectionEditDraft}
@@ -3284,6 +2873,7 @@ function App() {
                     onStartSectionEdit={startSectionEdit}
                     sectionEditError={sectionEditError}
                   />
+                  </Suspense>
                 )}
               </section>
 
@@ -3365,52 +2955,26 @@ function App() {
               {isDetailLoading && <p className="detail-loading">Refreshing detail...</p>}
             </div>
             {isFocusMode && !isEditMode && (
-              <aside className="reader-question-panel" aria-label="Reader questions">
-                <div>
-                  <p className="eyebrow">Q to be solved</p>
-                  <h3>What is unclear?</h3>
-                  <p>
-                    Save questions while reading. Later, ask the LLM to fold them back into the
-                    tutorial.
-                  </p>
-                </div>
-                <textarea
-                  value={questionDraft}
-                  onChange={(event) => {
-                    setQuestionFeedback('')
-                    setQuestionDraft(event.target.value)
-                  }}
-                  placeholder="Example: This explanation skips why %eax changes here."
-                />
-                {(readerQuestionHint || aiDraftHint) && (
-                  <p className={questionFeedback ? 'inline-success' : 'inline-hint'}>
-                    {questionFeedback || aiDraftHint || readerQuestionHint}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="focus-toggle"
-                  disabled={isQuestionSaving}
-                  onClick={submitReaderQuestion}
-                >
-                  {isQuestionSaving ? 'Saving...' : 'Save question'}
-                </button>
-                <button
-                  type="button"
-                  className="focus-toggle ai-action"
-                  disabled={isAiRevising}
-                  onClick={requestAiRevision}
-                >
-                  {isAiRevising ? 'Drafting...' : 'Draft with AI'}
-                </button>
-                {aiStatus && <p className={aiStatusClass}>{aiStatusText}</p>}
-                <div className="reader-question-list">
-                  <strong>{openQuestionCount} open</strong>
-                  {visibleReaderQuestions.map((item) => (
-                    <p key={item.id}>{item.question}</p>
-                  ))}
-                </div>
-              </aside>
+              <ReaderQuestionPanel
+                aiDraftHint={aiDraftHint}
+                aiStatus={aiStatus}
+                aiStatusClass={aiStatusClass}
+                aiStatusText={aiStatusText}
+                isAiRevising={isAiRevising}
+                isQuestionSaving={isQuestionSaving}
+                openQuestionCount={openQuestionCount}
+                placeholder="Example: This explanation skips why %eax changes here."
+                questionDraft={questionDraft}
+                questionFeedback={questionFeedback}
+                readerQuestionHint={readerQuestionHint}
+                visibleReaderQuestions={visibleReaderQuestions}
+                onDraftWithAi={requestAiRevision}
+                onQuestionDraftChange={(value) => {
+                  setQuestionFeedback('')
+                  setQuestionDraft(value)
+                }}
+                onSubmitQuestion={submitReaderQuestion}
+              />
             )}
           </>
         ) : (

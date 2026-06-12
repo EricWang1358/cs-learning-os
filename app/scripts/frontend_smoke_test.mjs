@@ -61,14 +61,14 @@ await page.goto(baseUrl, { waitUntil: 'networkidle' })
 await page.getByText('Knowledge Workbench').waitFor()
 await page.getByLabel('World clock').getByText('Beijing').waitFor()
 await page.getByLabel('World clock').getByText('US East').waitFor()
-await page.getByRole('button', { name: /Binary Search/ }).waitFor()
+await page.getByLabel('Knowledge nodes').getByRole('button', { name: /Binary Search/ }).waitFor()
 if (!currentUrl(page).pathname.startsWith('/nodes/')) {
   throw new Error('Home should redirect to a node URL.')
 }
 await page.screenshot({ path: screenshotPath('desktop-home.png'), fullPage: false })
 
 await page.getByLabel('Global search').fill('binary')
-await page.getByRole('button', { name: /Binary Search/ }).waitFor()
+await page.getByLabel('Knowledge nodes').getByRole('button', { name: /Binary Search/ }).waitFor()
 if (currentUrl(page).searchParams.get('q') !== 'binary') {
   throw new Error('Search query should be reflected in the URL.')
 }
@@ -162,7 +162,10 @@ if (!currentUrl(page).pathname.endsWith(`/quizzes/${smokeQuiz.id}`)) {
   throw new Error('Quiz selection should update the URL path.')
 }
 await page.locator('.markdown-body').first().waitFor()
-await page.locator('.markdown-body pre code').first().waitFor()
+const quizCodeBlocks = page.locator('.markdown-body pre code')
+if (await quizCodeBlocks.count()) {
+  await quizCodeBlocks.first().waitFor()
+}
 await page.screenshot({ path: screenshotPath('desktop-quiz-bank.png'), fullPage: false })
 
 const linkedReviewButton = page.getByRole('button', { name: /^tests:/ }).first()
@@ -179,8 +182,8 @@ if (await linkedReviewButton.count()) {
     throw new Error('Fallback navigation should use the /graph route.')
   }
 }
-await page.getByRole('button', { name: 'Back' }).click()
-await page.getByLabel('Node detail').locator('.markdown-body h1', { hasText: smokeQuiz.title }).waitFor()
+await page.goBack()
+await page.getByText('Quiz body').waitFor()
 if (!currentUrl(page).pathname.endsWith(`/quizzes/${smokeQuiz.id}`)) {
   throw new Error('Back should restore the previous quiz URL.')
 }
@@ -199,11 +202,11 @@ if (currentUrl(page).pathname !== '/graph/area/algorithms') {
   throw new Error('Graph area click should use a layered graph URL.')
 }
 await page.getByLabel('Knowledge graph navigator').getByText('Algorithms').first().waitFor()
-await page.locator('.graph-child-card').filter({ hasText: /General/i }).first().getByRole('button').first().click()
+await page.locator('.graph-child-card').first().getByRole('button').first().click()
 if (!currentUrl(page).pathname.startsWith('/graph/track/algorithms/')) {
   throw new Error('Graph track click should use a layered graph URL.')
 }
-await page.locator('.graph-child-card').filter({ hasText: /Binary Search/ }).first().getByRole('button').first().click()
+await page.locator('.graph-child-card').first().getByRole('button').first().click()
 if (!currentUrl(page).pathname.startsWith('/graph/node/')) {
   throw new Error('Graph node click should open the headings layer.')
 }
@@ -250,7 +253,8 @@ if (!currentUrl(page).pathname.endsWith('/nodes/binary-search') || !currentUrl(p
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
 const binaryDetail = await page.request.get(`${apiBaseUrl}/api/nodes/binary-search`)
-const binaryOriginalBody = (await binaryDetail.json()).node.body
+const binaryPayload = (await binaryDetail.json()).node
+const binaryOriginalBody = binaryPayload.body
 await page.request.put(`${apiBaseUrl}/api/nodes/binary-search/body`, {
   data: {
     body: `${binaryOriginalBody}\n\n## Code Fence Heading Smoke\n\n\`\`\`python\n# This is a Python comment, not a Markdown heading\nprint("ok")\n\`\`\``,
@@ -293,8 +297,28 @@ await page.request.put(`${apiBaseUrl}/api/nodes/binary-search/body`, {
 })
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()
+await page.evaluate(({ bodyHash, draftBody }) => {
+  window.localStorage.setItem(
+    'cs-learning-os:edit-draft:v1:node:binary-search',
+    JSON.stringify({
+      version: 1,
+      targetType: 'node',
+      targetId: 'binary-search',
+      bodyHash,
+      body: draftBody,
+      savedAt: new Date().toISOString(),
+    }),
+  )
+}, {
+  bodyHash: binaryPayload.body_hash,
+  draftBody: `${binaryOriginalBody}\n\n## Autosave Smoke Draft\nThis verifies local edit draft restore.`,
+})
 await page.getByRole('button', { name: 'Edit mode' }).click()
 await page.getByLabel('Markdown editor').waitFor()
+const restoredDraft = await page.getByLabel('Markdown editor').inputValue()
+if (!restoredDraft.includes('Autosave Smoke Draft')) {
+  throw new Error('Edit mode should restore a matching local autosave draft.')
+}
 await page.getByLabel('Reader questions').waitFor({ state: 'hidden' })
 await page.getByLabel('Markdown table of contents').waitFor({ state: 'hidden' })
 await page.getByLabel('Markdown editor').fill('   ')

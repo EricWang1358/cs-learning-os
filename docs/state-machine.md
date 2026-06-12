@@ -24,7 +24,8 @@ Responsibilities:
 
 - Own visible modes: node reading, quiz reading, focus mode, edit mode, Q Queue, AI draft review, knowledge graph, and program health.
 - Make URL route the source of truth for selected node/quiz/queue and focus mode.
-- Treat edit mode as transient UI state, not canonical content state.
+- Treat edit mode as a protected workflow: explicit Save is the only canonical write, while local draft autosave prevents losing in-progress intent.
+- Keep local drafts, AI drafts, and canonical Markdown separated until the user explicitly applies or saves.
 - Never save AI output automatically.
 - Always show user-controllable actions: review, apply, reject, retry, delete, dismiss.
 - Show progress and failure states instead of silent background work.
@@ -46,6 +47,8 @@ Current risks:
 
 Recommended next actions:
 
+- Evolve frontend state around explicit owners: `ReaderWorkflow`, `EditorWorkflow`, `AIJobWorkflow`, `GraphWorkflow`, `LibraryWorkflow`, and `HealthWorkflow`.
+- Start that split with typed reducers, context providers, and hooks before introducing heavier state libraries.
 - Split `App.tsx` into route shells, queue components, markdown editor, AI job panel, and API client modules.
 - Add typed UI state reducers for edit/review/queue flows.
 - Continue expanding `/health` into a status cockpit fed by backend health, metrics, and AI preflight.
@@ -57,8 +60,8 @@ The data layer is local-first.
 
 Canonical stores:
 
-- Markdown files under the configured content directory are the human-editable source of knowledge.
-- SQLite `knowledge.db` is the query/index/cache layer.
+- Markdown files under the configured content directory are the human-editable learning package/projection for content portability, manual inspection, and import/export.
+- SQLite `knowledge.db` and the domain store are the long-term operational authority for product state, write coordination, query/index/cache state, and repair status.
 - SQLite FTS tables power search.
 - `reader_questions` stores unresolved or resolved reading questions.
 - `ai_jobs` stores durable AI work requests and their outcomes.
@@ -73,6 +76,7 @@ Data ownership rules:
 - `knowledge.db` belongs outside Git by default.
 - Demo content is tiny and safe to commit.
 - Applying an AI draft must update Markdown source and SQLite rows in one backend transaction path.
+- All body writes, including manual Save and AI apply, must go through a shared `ContentWriteService` path so hash checks, snapshots, DB updates, FTS refresh, graph invalidation, and question resolution stay consistent.
 - Reader questions should stay `open` until a draft is actually applied.
 - Node creation, trash, restore, and permanent delete must go through backend APIs so Markdown files, SQLite rows, FTS, graph cache, and area metadata stay aligned.
 - Reading activity is app data, not Markdown content. It belongs in SQLite so future spaced repetition and review scheduling can use it.
@@ -81,6 +85,7 @@ Transaction and compensation rules:
 
 - SQLite transactions protect database mutations only; Markdown file writes need explicit compensation.
 - For body edits, AI apply, create, trash, and restore, the backend snapshots the original file text before writing. If DB mutation or commit fails, it restores the original file text.
+- Body writes must compare the caller's base hash or version against the current indexed content before writing; conflicts return a reviewable conflict response instead of overwriting.
 - For create, failure removes the newly created file if it did not exist before.
 - For permanent delete, first move the Markdown file into a local staging trash, then commit SQLite deletion, then remove the staged file. If DB commit fails, move the file back.
 - No frontend state should assume success until the backend returns the updated object or `{ ok: true }`.
@@ -99,6 +104,7 @@ Recommended next actions:
 - Add `schema_meta(version, migrated_at)` for explicit DB migrations.
 - Add `content_snapshots` or filesystem backup before write operations.
 - Add retention policy for `ai_jobs` and `ai_job_events`: keep two months, always keep abnormal/error jobs until acknowledged.
+- Replace full re-ingest as the default path with an incremental derived-index pipeline: content hash/version changes enqueue invalidation work, then FTS, graph cache, media metadata, and area counts refresh from that queue.
 - Add incremental ingest by file path and mtime/content hash.
 - Add indexes for queue views:
 
@@ -121,10 +127,11 @@ Current strategies:
 
 - Content Standard A: bilingual practical exam note.
 - Content Standard Q: quiz-bank item with prompt, answer, explanation, plain explanation, what this tests, linked review.
-- AI provider strategy: default to Codex CLI with dynamic third-party provider config.
+- AI provider strategy: default to Codex CLI with dynamic third-party provider config, but keep providers as adapters behind the durable AI job state machine.
 - Patch strategy: prefer compact `patch_ops`; compose final body server-side; require human review.
 - Safety strategy: reject unsafe replace patches and stale body hashes.
 - Q strategy: questions are not resolved until applied.
+- Learning scheduler strategy: use a simple Anki-like spaced repetition loop as the main review scheduler; avoid adding FSRS, semantic scheduling, or ML ranking until basic review events and outcomes prove insufficient.
 
 Needed strategy files or tables:
 
@@ -279,10 +286,12 @@ Future review rules:
 - Spaced repetition should use `node_activity` plus quiz outcomes, not Markdown timestamps alone.
 - `last_read_at` is not the same as mastery. It is only an exposure signal.
 - Future scheduling should store review events separately once answers, confidence, and weights exist.
+- The release-track scheduler should stay Anki-like: due date, interval, ease/confidence, lapses, and recent quiz/read evidence are enough for the first durable learning loop.
+- FSRS, semantic similarity, embeddings, and ML ranking are explicitly out of scope until the simple scheduler has real outcome data and visible failure modes.
 
 ## AI Job State Machine
 
-AI jobs represent durable background work.
+AI jobs represent durable background work. The durable state machine owns lifecycle, retries, cancellation, validation, and apply readiness; model providers are adapters that can fail without changing content.
 
 ```mermaid
 stateDiagram-v2
@@ -318,7 +327,8 @@ Invariants:
 
 - Only `draft_ready` can be applied.
 - Applying must check `base_body_hash`.
-- Applying must write Markdown, update SQLite/FTS, update job status, and resolve linked questions together.
+- Applying must go through `ContentWriteService`, check the current content version/hash, write Markdown, update SQLite/FTS, update job status, and resolve linked questions together.
+- Provider adapters may create candidate output only; they must not write Markdown, resolve questions, or mark jobs applied.
 - Failed/cancelled/rejected jobs must not resolve questions.
 - Retried jobs must point to their predecessor through `retry_of`.
 - Event logs must record each important transition.
@@ -387,12 +397,13 @@ stateDiagram-v2
 
 Patch rules:
 
+- AI apply must be patch/review-first. Silent overwrite is not allowed, even when the model returns a full `revised_body`.
 - Prefer small patches, but not tiny `find` strings that only match a heading.
 - `replace` must match the complete old block being replaced.
 - `replace` must not keep a duplicate copy of the old block after the new block.
 - `append_after` is acceptable for additive clarifications, but not for replacing an existing section.
 - `append_end` is acceptable for low-risk additions or smoke tests.
-- Full `revised_body` is the fallback when exact patching is unsafe.
+- Full `revised_body` is the fallback when exact patching is unsafe, but it still becomes a reviewable diff and must pass version conflict checks before apply.
 
 Current validators:
 
@@ -413,7 +424,7 @@ Recommended next validators:
 
 ## Edit Mode State Machine
 
-Edit mode is local UI state.
+Edit mode is local UI state, but it is a protected workflow rather than a disposable toggle.
 
 ```mermaid
 stateDiagram-v2
@@ -422,6 +433,8 @@ stateDiagram-v2
     reading --> ai_running: Draft with AI
     ai_running --> reading: job persisted, user may continue
     reading --> reviewing_draft: Review draft
+    editing --> draft_autosaved: local draft autosave
+    draft_autosaved --> editing: restore draft
     editing --> saving_manual: Save Markdown without AI job
     reviewing_draft --> saving_ai: Save Markdown for AI job
     saving_manual --> reading: write success
@@ -434,10 +447,14 @@ stateDiagram-v2
 
 Invariants:
 
+- Manual edits require explicit Save before they become canonical content.
+- Local draft autosave must preserve editing intent across refresh, node switching, failed saves, and AI job failure.
+- Local drafts are separate from canonical Markdown and from AI drafts; saving one must not silently replace another.
 - User edits should never be lost because a draft fails.
-- Link navigation while editing must exit edit mode or confirm discard.
+- Link navigation while editing must restore the relevant local draft, exit edit mode only after explicit discard, or confirm the transition.
 - Focus mode should not hide essential edit/review controls.
 - Applying an AI draft should not resolve questions until backend confirms success.
+- Version conflicts keep the user's draft/review open and show the current canonical content instead of overwriting either side.
 
 ## Route And Navigation State
 
@@ -500,10 +517,12 @@ Current implementation:
 
 Future graph rules:
 
+- Graph defaults to viewport/ego-network loading around the current route, area, track, or selected node; it must not load the entire knowledge graph by default.
 - Lazy-load WebGL or Three.js only when `/graph` is opened.
 - Build graph edges from links, tags, prerequisites, review history, and embeddings rather than hardcoded UI arrays.
 - Keep click-through to canonical `/nodes/:slug` and `/quizzes/:quizId`.
 - Keep node and heading layers paginated at 12 visible cards unless user testing proves more is still readable.
+- Use cursor/page keys for graph expansion so memory grows with the visible neighborhood, not total content size.
 
 Future health rules:
 
@@ -529,7 +548,7 @@ Current performance profile:
 
 Near-term optimizations:
 
-- Incremental ingest by file hash or modified time.
+- Incremental ingest by content hash/version, with invalidation queue processing for FTS, graph, media metadata, area counts, and cached health summaries.
 - Keep heavy diagnostics behind TTL caches, explicit refresh actions, or background workers.
 - Add queue indexes listed in the data layer section.
 - Add indexes for `node_activity(last_read_at)` once review scheduling queries exist.
@@ -539,6 +558,14 @@ Near-term optimizations:
 - Lazy-load heavy graph rendering dependencies from the `/graph` route only.
 - Limit Q Queue results to recent/abnormal by default.
 - Add `limit` and `cursor` query params for jobs/questions.
+- Set explicit cache ceilings for graph payloads, health snapshots, AI job lists, rendered Markdown, and media thumbnails.
+- Re-run expensive diagnostics only on demand or as lightweight background refreshes, not on every navigation.
+
+Local low-memory release gate:
+
+- The app must remain usable on constrained local machines with route-level lazy loading, paginated data fetching, virtualized long lists, and bounded in-memory caches.
+- Graph, Library, Q Queue, Health, and AI history views must prove they can open without loading all nodes, all jobs, all rendered Markdown, or all graph edges.
+- Release smoke should include a large synthetic content set and verify first paint, route changes, graph open, health open, and edit save without memory spikes or UI stalls.
 
 AI/token optimizations:
 
@@ -567,6 +594,7 @@ Required before app-store-style distribution:
 - Offline/read-only mode that works without AI.
 - Backup/restore/export/import.
 - Crash-safe writes with snapshots.
+- Protected edit workflow: explicit Save, local draft autosave, conflict recovery, and no silent AI overwrite.
 - Accessibility pass for keyboard navigation, focus indicators, color contrast, and screen-reader labels.
 - Privacy policy explaining local storage and AI-provider transmission.
 - Dependency/license inventory.
@@ -580,6 +608,10 @@ Recommended release gates:
 - Search works on clean demo data and private data.
 - App can start with empty content directory.
 - App can recover from corrupt DB by re-ingesting Markdown.
+- Low-memory gate passes with lazy loading, pagination, virtualization for long lists, bounded caches, and no full-graph default load.
+- Incremental ingest/index gate passes: hash/version changes enqueue invalidation and refresh FTS, graph, media, and area metadata without full re-indexing ordinary edits.
+- Edit recovery gate passes: refresh, node switch, failed save, AI failure, and conflict detection preserve the user's local draft intent.
+- Scheduler gate stays simple: Anki-like due review works without requiring FSRS, semantic ranking, embeddings, or ML.
 
 ## Vibe-Coding Risk Controls For This Project
 
@@ -601,7 +633,9 @@ Risk controls still needed:
 - Process-tree kill on cancel/timeout.
 - Security linting and dependency audit in CI.
 - Content-standard lint.
-- Incremental ingest and backup before writes.
+- Protected editor draft autosave and explicit-save recovery tests.
+- Incremental ingest/index invalidation queue and backup before writes.
+- Low-memory release smoke with pagination, virtualization, lazy loading, cache ceilings, and on-demand diagnostics.
 - Release checklist and privacy policy.
 
 ## Source Notes On Vibe-Coding Risks

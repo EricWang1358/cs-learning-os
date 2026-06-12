@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+SCHEMA_VERSION = "2"
+PACKAGE_FORMAT_VERSION = "1"
 
 
 SCHEMA = """
@@ -154,6 +159,45 @@ CREATE TABLE IF NOT EXISTS node_activity (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_files (
+    path TEXT PRIMARY KEY,
+    target_type TEXT NOT NULL DEFAULT '',
+    target_id TEXT NOT NULL DEFAULT '',
+    mtime_ns INTEGER NOT NULL DEFAULT 0,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    sha256 TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'indexed',
+    last_ingested_at TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS review_queue (
+    target_type TEXT NOT NULL CHECK(target_type IN ('node', 'quiz')),
+    target_id TEXT NOT NULL,
+    due_at TEXT NOT NULL,
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease_factor REAL NOT NULL DEFAULT 2.5,
+    reps INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (target_type, target_id)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    grade TEXT NOT NULL CHECK(grade IN ('again', 'hard', 'good', 'easy')),
+    answered_at TEXT NOT NULL,
+    elapsed_ms INTEGER NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_reader_questions_status_created
 ON reader_questions(status, created_at DESC);
 
@@ -162,6 +206,12 @@ ON ai_jobs(status, updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ai_job_events_job_id
 ON ai_job_events(job_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_review_queue_due
+ON review_queue(due_at, target_type, target_id);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_answered
+ON quiz_attempts(quiz_id, answered_at DESC);
 """
 
 
@@ -202,4 +252,20 @@ def initialize(conn: sqlite3.Connection) -> None:
     for column, statement in migrations.items():
         if column not in ai_job_columns:
             conn.execute(statement)
+
+    now = datetime.now(timezone.utc).isoformat()
+    for key, value in {
+        "schema_version": SCHEMA_VERSION,
+        "package_format_version": PACKAGE_FORMAT_VERSION,
+    }.items():
+        conn.execute(
+            """
+            INSERT INTO schema_meta (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            (key, value, now),
+        )
     conn.commit()

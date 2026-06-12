@@ -48,6 +48,87 @@ Examples:
 
 The frontend and backend should be reusable across different users.
 
+Current product line:
+
+- The mainline product is a Local Lite personal learning OS.
+- Cloud and SaaS deployment are not current requirements.
+- Keep architecture not SaaS-hostile, but do not optimize this policy around hosted multi-tenant operation.
+
+## Runtime Authority vs Learning Packages
+
+SQLite/domain store is the long-term runtime authority for product behavior.
+
+It should own normalized state, IDs, relations, review scheduling, import status, repair status, and write coordination.
+
+Markdown plus media remains a first-class portable learning package/projection. It is not being deprecated.
+
+Use Markdown packages for:
+
+- import and export
+- manual editing
+- reviewable diffs
+- portability between machines or tools
+- readable fallback when the app is absent
+
+The package format should be Anki-like rather than a loose folder convention:
+
+- manifest
+- package version
+- content and media hashes
+- stable media references
+- import report
+- repair report when needed
+
+This keeps Markdown useful as a durable interchange format while SQLite/domain store remains the app's operational source of truth.
+
+## Local Lite Resource Policy
+
+The app must fit ordinary local PC constraints, including low-memory machines.
+
+Do not keep the whole content AST, image set, or graph resident in memory as a normal background state.
+
+Images are assets, not inline runtime blobs.
+
+For media-heavy content:
+
+- track assets through manifest entries
+- verify with hashes
+- generate thumbnails when useful
+- lazy load full images
+- avoid eager decoding or indexing of every image
+
+Repair, export, import, and package verification should run on demand. Prefer streaming or incremental work over server-style resident workers.
+
+## Content Write Rule
+
+`ContentWriteService` is the only content write entry point.
+
+All content mutations should flow through it:
+
+- UI edits
+- AI apply operations
+- imports
+- repair operations
+- future sync merges
+
+This rule exists so IDs, hashes, manifests, projections, import reports, and runtime state stay coherent.
+
+No feature should write Markdown, package manifests, media references, or runtime content state through a side path.
+
+## Backup, Export, Import, and Repair
+
+Backup, export, import, and repair are core product capabilities.
+
+They should be reliable, inspectable, and friendly to personal local use.
+
+Local execution should stay light:
+
+- start only when requested or clearly scheduled by the user
+- avoid server-style always-on workers
+- process large packages incrementally when possible
+- keep reports that explain what changed, what failed, and what was skipped
+- use `ContentWriteService` for any content mutation
+
 ## Content Directory Roles
 
 Use these names consistently:

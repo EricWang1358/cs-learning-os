@@ -165,3 +165,180 @@ def recover_stale_ai_jobs(conn_factory, cutoff_seconds: int) -> None:
         conn.commit()
     for job_id in stale_ids:
         add_ai_job_event(conn_factory, job_id, "stale_failed", "Marked stale after local worker recovery.", "warning")
+
+
+def create_ai_job(
+    conn,
+    target_type: str,
+    target_id: str,
+    question_ids: list[int],
+    question: str,
+    instruction: str,
+    draft_body: str,
+    provider: str,
+    model: str,
+    base_body_hash: str,
+):
+    if target_type == "node":
+        exists = conn.execute("SELECT 1 FROM nodes WHERE slug = ?", (target_id,)).fetchone()
+    else:
+        exists = conn.execute("SELECT 1 FROM quizzes WHERE id = ?", (target_id,)).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="target not found")
+
+    now = utc_now()
+    persisted_question_ids = list(dict.fromkeys(question_ids))
+    clean_question = question.strip()
+    if clean_question:
+        cursor = conn.execute(
+            """
+            INSERT INTO reader_questions (target_type, target_id, question, status, created_at)
+            VALUES (?, ?, ?, 'queued', ?)
+            """,
+            (target_type, target_id, clean_question, now),
+        )
+        persisted_question_ids.append(cursor.lastrowid)
+
+    cursor = conn.execute(
+        """
+        INSERT INTO ai_jobs (
+            target_type, target_id, question_ids, provider, model, status, stage,
+            instruction, draft_body, created_at, updated_at, base_body_hash
+        )
+        VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?)
+        """,
+        (
+            target_type,
+            target_id,
+            json.dumps(persisted_question_ids),
+            provider,
+            model,
+            instruction,
+            draft_body,
+            now,
+            now,
+            base_body_hash,
+        ),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()
+
+
+def list_ai_jobs(conn, target_type: str | None = None, target_id: str | None = None, status: str | None = None):
+    query = "SELECT * FROM ai_jobs WHERE 1 = 1"
+    params: list[str] = []
+    if target_type:
+        if target_type not in {"node", "quiz"}:
+            raise HTTPException(status_code=400, detail="target_type must be node or quiz")
+        query += " AND target_type = ?"
+        params.append(target_type)
+    if target_id:
+        query += " AND target_id = ?"
+        params.append(target_id)
+    if status == "active":
+        query += " AND status IN ('queued', 'solving', 'draft_ready', 'failed')"
+    elif status:
+        query += " AND status = ?"
+        params.append(status)
+    query += " ORDER BY updated_at DESC, id DESC LIMIT 50"
+    return conn.execute(query, params).fetchall()
+
+
+def list_ai_job_events(conn, job_id: int):
+    get_ai_job_or_404(conn, job_id)
+    return conn.execute(
+        """
+        SELECT id, job_id, level, stage, message, created_at
+        FROM ai_job_events
+        WHERE job_id = ?
+        ORDER BY id
+        """,
+        (job_id,),
+    ).fetchall()
+
+
+def cancel_ai_job(conn, job_id: int):
+    now = utc_now()
+    row = get_ai_job_or_404(conn, job_id)
+    if row["status"] in {"draft_ready", "failed", "cancelled", "applied", "rejected", "retried"}:
+        raise HTTPException(status_code=400, detail=f"cannot cancel {row['status']} job")
+    conn.execute(
+        """
+        UPDATE ai_jobs
+        SET status = 'cancelled',
+            stage = 'cancelled',
+            updated_at = ?,
+            completed_at = ?
+        WHERE id = ?
+        """,
+        (now, now, job_id),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+
+
+def reject_ai_job(conn, job_id: int, reason: str = ""):
+    now = utc_now()
+    row = get_ai_job_or_404(conn, job_id)
+    if row["status"] != "draft_ready":
+        raise HTTPException(status_code=400, detail=f"cannot reject {row['status']} job")
+    note = reason.strip() or "Draft rejected by human review"
+    conn.execute(
+        """
+        UPDATE ai_jobs
+        SET status = 'rejected',
+            stage = 'rejected',
+            error = ?,
+            updated_at = ?,
+            completed_at = ?
+        WHERE id = ?
+        """,
+        (note, now, now, job_id),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+
+
+def retry_ai_job(conn, job_id: int, provider: str, model: str):
+    now = utc_now()
+    row = get_ai_job_or_404(conn, job_id)
+    if row["status"] != "failed":
+        raise HTTPException(status_code=400, detail=f"cannot retry {row['status']} job")
+
+    conn.execute(
+        """
+        UPDATE ai_jobs
+        SET status = 'retried',
+            stage = 'retried',
+            updated_at = ?,
+            completed_at = ?
+        WHERE id = ?
+        """,
+        (now, now, job_id),
+    )
+
+    cursor = conn.execute(
+        """
+        INSERT INTO ai_jobs (
+            target_type, target_id, question_ids, provider, model, status, stage,
+            instruction, draft_body, created_at, updated_at, retry_of, attempt, base_body_hash
+        )
+        VALUES (?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            row["target_type"],
+            row["target_id"],
+            row["question_ids"],
+            provider,
+            model,
+            row["instruction"],
+            row["draft_body"],
+            now,
+            now,
+            row["id"],
+            int(row["attempt"] or 1) + 1,
+            row["base_body_hash"],
+        ),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (cursor.lastrowid,)).fetchone()

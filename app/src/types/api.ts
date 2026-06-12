@@ -15,6 +15,7 @@ export type NodeSummary = {
 
 export type NodeDetail = NodeSummary & {
   body: string
+  body_hash: string
   tags: string[]
   links: Array<{ target: string; kind: string }>
   sources: Array<{ source: string; source_type: string; note: string }>
@@ -65,6 +66,7 @@ export type QuizSummary = {
 
 export type QuizDetail = QuizSummary & {
   body: string
+  body_hash: string
   tags: string[]
   linked_nodes: Array<{ slug: string; kind: string; title: string }>
   sources: Array<{ source: string; source_type: string; note: string }>

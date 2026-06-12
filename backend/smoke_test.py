@@ -16,7 +16,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 from ingest import ingest
 from api import app
 from patch_policy import apply_patch_ops
-import api as api_module
+import content_write_service
 
 
 def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
@@ -68,6 +68,9 @@ def main() -> int:
     assert metrics_payload["storage"]["github_repo_fallback_tracked_bytes"] >= 0
     assert "cache" in metrics_payload
     assert "refreshing" in metrics_payload["cache"]
+    assert "schema" in metrics_payload
+    assert metrics_payload["schema"]["schema_version"]["value"]
+    assert "due_reviews" in metrics_payload["counts"]
     assert "collected_at" in metrics_payload
     partition_keys = {partition["key"] for partition in metrics_payload["storage"]["partitions"]}
     assert {"content", "sqlite-db", "generated"}.issubset(partition_keys)
@@ -78,6 +81,21 @@ def main() -> int:
         assert any(key in exclusive_keys for key in {"repo-app", "repo-backend", "repo-content"})
     assert metrics_payload["storage"]["explained_project_bytes"] >= metrics_payload["storage"]["project_related_bytes"]
     assert metrics_payload["github"]["source"] in {"github-api", "git-tracked-fallback", "git-tracked-local", "pending-cache"}
+
+    schema = client.get("/api/system/schema")
+    assert schema.status_code == 200, schema.text
+    assert schema.json()["schema"]["package_format_version"]["value"]
+
+    repair = client.get("/api/system/repair")
+    assert repair.status_code == 200, repair.text
+    assert "issues" in repair.json()
+
+    manifest = client.get("/api/package/export")
+    assert manifest.status_code == 200, manifest.text
+    manifest_payload = manifest.json()["manifest"]
+    assert manifest_payload["package_format_version"] == "1"
+    assert manifest_payload["counts"]["nodes"] >= 2
+    assert any(item["path"].endswith(".md") for item in manifest_payload["files"])
 
     preflight = client.get("/api/ai/preflight")
     assert preflight.status_code == 200, preflight.text
@@ -132,6 +150,7 @@ def main() -> int:
     assert "track" in payload
     assert "display_order" in payload
     assert "body" in payload
+    assert "body_hash" in payload
     assert "tags" in payload
     assert "sources" in payload
     assert "open_question_count" in payload
@@ -250,12 +269,22 @@ def main() -> int:
 
     binary_path = Path(os.environ["CS_LEARNING_CONTENT"]) / payload["path"]
     original_file_text = binary_path.read_text(encoding="utf-8")
-    original_update_node_body = api_module.update_node_body_in_conn
+    stale_update = client.put(
+        "/api/nodes/binary-search/body",
+        json={
+            "body": original_body + "\n\n## Stale Edit\nThis must be rejected.",
+            "base_body_hash": "not-the-current-body-hash",
+        },
+    )
+    assert stale_update.status_code == 409, stale_update.text
+    assert binary_path.read_text(encoding="utf-8") == original_file_text
+
+    original_update_node_body = content_write_service.update_node_body_in_conn
 
     def failing_update_node_body(*args, **kwargs):
         raise RuntimeError("simulated DB failure after file write")
 
-    api_module.update_node_body_in_conn = failing_update_node_body
+    content_write_service.update_node_body_in_conn = failing_update_node_body
     try:
         failed_update = client.put(
             "/api/nodes/binary-search/body",
@@ -263,7 +292,7 @@ def main() -> int:
         )
         assert failed_update.status_code == 500, failed_update.text
     finally:
-        api_module.update_node_body_in_conn = original_update_node_body
+        content_write_service.update_node_body_in_conn = original_update_node_body
     assert binary_path.read_text(encoding="utf-8") == original_file_text
 
     created = client.post(
@@ -317,8 +346,21 @@ def main() -> int:
     assert quiz_payload["id"] == selected_quiz_id
     assert "display_order" in quiz_payload
     assert "body" in quiz_payload
+    assert "body_hash" in quiz_payload
     assert "linked_nodes" in quiz_payload
     assert isinstance(quiz_payload["linked_nodes"], list)
+
+    original_quiz_body = quiz_payload["body"]
+    edited_quiz_body = original_quiz_body + "\n\n## Quiz Smoke Edit\nThis temporary edit verifies quiz save support."
+    update_quiz = client.put(
+        f"/api/quizzes/{selected_quiz_id}/body",
+        json={"body": edited_quiz_body, "base_body_hash": quiz_payload["body_hash"]},
+    )
+    assert update_quiz.status_code == 200, update_quiz.text
+    assert "Quiz Smoke Edit" in update_quiz.json()["quiz"]["body"]
+    restore_quiz = client.put(f"/api/quizzes/{selected_quiz_id}/body", json={"body": original_quiz_body})
+    assert restore_quiz.status_code == 200, restore_quiz.text
+    assert restore_quiz.json()["quiz"]["body"] == original_quiz_body
 
     quiz_search_term = quiz_payload["title"].split()[0]
     quiz_search = client.get("/api/quiz-search", params={"q": quiz_search_term})
@@ -333,6 +375,37 @@ def main() -> int:
         quiz["id"] == selected_quiz_id
         for quiz in quiz_alpha.json()["quizzes"]
     )
+
+    quiz_attempt = client.post(
+        f"/api/quizzes/{selected_quiz_id}/attempts",
+        json={"grade": "good", "elapsed_ms": 1200, "note": "Smoke review attempt"},
+    )
+    assert quiz_attempt.status_code == 200, quiz_attempt.text
+    good_review = quiz_attempt.json()["review"]
+    assert good_review["target_id"] == selected_quiz_id
+    assert good_review["interval_days"] >= 2.5
+    assert good_review["ease_factor"] == 2.5
+    assert good_review["reps"] == 1
+
+    repeat_attempt = client.post(
+        f"/api/quizzes/{selected_quiz_id}/attempts",
+        json={"grade": "again", "elapsed_ms": 800},
+    )
+    assert repeat_attempt.status_code == 200, repeat_attempt.text
+    repeat_review = repeat_attempt.json()["review"]
+    assert repeat_review["interval_days"] <= 0.02
+    assert repeat_review["ease_factor"] < good_review["ease_factor"]
+    assert repeat_review["reps"] == 0
+    assert repeat_review["lapses"] == 1
+
+    invalid_attempt = client.post(
+        f"/api/quizzes/{selected_quiz_id}/attempts",
+        json={"grade": "perfect", "elapsed_ms": 1},
+    )
+    assert invalid_attempt.status_code == 422, invalid_attempt.text
+    due_reviews = client.get("/api/review/due")
+    assert due_reviews.status_code == 200, due_reviews.text
+    assert "reviews" in due_reviews.json()
 
     ai_revision = client.post(
         "/api/ai/revise",
