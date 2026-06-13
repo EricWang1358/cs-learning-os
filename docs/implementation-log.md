@@ -800,3 +800,41 @@ Verified:
 Team workflow:
 - Used parallel subagents for bounded component implementation and verification reconnaissance.
 - Main integration retained ownership of route wiring, backend queue behavior, smoke tests, and final verification.
+
+## 2026-06-13: Backend Controller Split
+
+Completed:
+- Reduced `backend/api.py` to a composition root:
+  - app creation
+  - CORS setup
+  - runtime path configuration
+  - SQLite connection factory
+  - router registration
+  - startup hook
+- Removed business route handlers from `api.py`.
+- Added route modules by product boundary:
+  - `asset_router.py`
+  - `system_router.py`
+  - `productization_router.py`
+  - `ai_router.py`
+  - `node_router.py`
+  - `quiz_router.py`
+  - `graph_router.py`
+  - `reader_question_router.py`
+- Added shared HTTP boundary modules:
+  - `api_models.py`
+  - `api_serializers.py`
+- Extracted heavy health metrics behavior into `system_metrics_service.py`.
+- Kept write-sensitive behavior on existing service paths:
+  - node/quiz body writes still use `ContentWriteService`
+  - node lifecycle writes still use `node_lifecycle_service`
+  - AI job state changes still use `ai_job_service`
+
+Self-check:
+- `api.py` contains no `@app.get`, `@app.post`, `@app.put`, or `@app.delete` business endpoints.
+- Existing public routes are preserved through routers.
+- Backend smoke confirms the old API contract still works.
+
+Verified:
+- `.venv\Scripts\python.exe -m py_compile backend\api.py backend\api_models.py backend\api_serializers.py backend\asset_router.py backend\system_metrics_service.py backend\system_router.py backend\productization_router.py backend\ai_router.py backend\node_router.py backend\quiz_router.py backend\graph_router.py backend\reader_question_router.py backend\smoke_test.py`
+- `.venv\Scripts\python.exe backend\smoke_test.py`
