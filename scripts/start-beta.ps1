@@ -3,7 +3,8 @@ param(
     [int]$FrontendPort = 5173,
     [string]$DataRoot = "",
     [switch]$NoBrowser,
-    [switch]$Detached
+    [switch]$Detached,
+    [switch]$SkipBootstrap
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,31 @@ $ContentDir = Join-Path $ResolvedDataRoot "content"
 $DbPath = Join-Path $ResolvedDataRoot "knowledge.db"
 $GeneratedRoot = Join-Path $ResolvedDataRoot "generated"
 $ExportRoot = Join-Path $ResolvedDataRoot "exports"
+
+if (-not $SkipBootstrap) {
+    $verifyArgs = @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", (Join-Path $Root "scripts\verify-beta.ps1"),
+        "-ApiPort", "$ApiPort",
+        "-FrontendPort", "$FrontendPort",
+        "-DataRoot", $ResolvedDataRoot,
+        "-Strict"
+    )
+    & powershell.exe @verifyArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "Beta verification found missing dependencies. Running bootstrap..."
+        $bootstrapArgs = @(
+            "-ExecutionPolicy", "Bypass",
+            "-File", (Join-Path $Root "scripts\bootstrap-beta.ps1"),
+            "-DataRoot", $ResolvedDataRoot
+        )
+        & powershell.exe @bootstrapArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Bootstrap failed. Review the messages above, install missing Python/Node prerequisites if needed, then rerun."
+        }
+    }
+}
 
 New-Item -ItemType Directory -Force -Path $ResolvedDataRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $GeneratedRoot | Out-Null

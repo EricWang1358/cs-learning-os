@@ -39,19 +39,20 @@ def create_system_router(
     @router.get("/health")
     def health() -> dict:
         recover_stale_ai_jobs()
+        enabled = ai_enabled()
         return {
             "ok": True,
             "profile": app_profile(),
             "beta": beta_mode(),
             "ai": {
                 "provider": ai_provider_name(),
-                "enabled": ai_enabled(),
-                "configured": ai_enabled() and (codex_is_configured() if ai_provider_name() == "codex-cli" else openai_is_configured()),
+                "enabled": enabled,
+                "configured": enabled and (codex_is_configured() if ai_provider_name() == "codex-cli" else openai_is_configured()),
                 "model": codex_model_name() if ai_provider_name() == "codex-cli" else openai_model_name(),
-                "codex_cli": codex_cli_path(),
-                "codex_model_provider": codex_model_provider_name(),
-                "codex_base_url": codex_base_url() if ai_provider_name() == "codex-cli" else "",
-                "codex_home": str(codex_job_home()) if ai_provider_name() == "codex-cli" else "",
+                "codex_cli": codex_cli_path() if enabled else "",
+                "codex_model_provider": codex_model_provider_name() if enabled else "",
+                "codex_base_url": codex_base_url() if enabled and ai_provider_name() == "codex-cli" else "",
+                "codex_home": str(codex_job_home()) if enabled and ai_provider_name() == "codex-cli" else "",
             },
         }
 

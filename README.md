@@ -176,7 +176,21 @@ For a lightweight Windows desktop beta that can be sent to a friend, use:
 .\scripts\start-beta.ps1
 ```
 
-or double-click `启动 Learning OS Beta.cmd`.
+or double-click `启动 Learning OS Beta.cmd`. The launcher first verifies the local beta environment. If the project venv, backend packages, or frontend packages are missing, it runs `scripts/bootstrap-beta.ps1` before starting the app.
+
+To install or repair dependencies without starting the app, use:
+
+```powershell
+.\scripts\bootstrap-beta.ps1
+```
+
+or double-click `安装或修复 Learning OS Beta.cmd`.
+
+To inspect a machine without installing anything:
+
+```powershell
+.\scripts\verify-beta.ps1
+```
 
 The beta profile keeps app code and user data separate:
 
@@ -187,7 +201,7 @@ The beta profile keeps app code and user data separate:
 - Runtime cache: `%USERPROFILE%\CSLearningOS\generated`
 - AI: disabled by default through `CS_LEARNING_AI_ENABLED=false`
 
-This is a script-launched local web desktop beta, not a signed Electron/Tauri/App Store package. It is intended for friend testing before full installer work.
+This is a self-checking, script-launched local web desktop beta, not a signed Electron/Tauri/App Store package. It is intended for friend testing before full installer work.
 
 Manual startup is also supported.
 
