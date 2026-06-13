@@ -50,6 +50,7 @@ try:
     from . import learning_service
     from . import maintenance_service
     from . import node_lifecycle_service
+    from .productization_router import create_productization_router
     from . import reader_question_service
     from . import search_service
 except ImportError:
@@ -82,6 +83,7 @@ except ImportError:
     import learning_service
     import maintenance_service
     import node_lifecycle_service
+    from productization_router import create_productization_router
     import reader_question_service
     import search_service
 
@@ -204,6 +206,9 @@ def get_conn() -> sqlite3.Connection:
     conn = connect(DB_PATH)
     initialize(conn)
     return conn
+
+
+app.include_router(create_productization_router(get_conn, CONTENT_ROOT, ROOT / "generated" / "exports"))
 
 
 def directory_size(path: Path) -> int:
@@ -1162,29 +1167,6 @@ def system_metrics(background_tasks: BackgroundTasks, refresh: bool = Query(Fals
         "ai": ai_payload,
         "schema": meta,
     }
-
-
-@app.get("/api/system/schema")
-def system_schema() -> dict:
-    with get_conn() as conn:
-        return {"schema": maintenance_service.schema_meta(conn)}
-
-
-@app.get("/api/system/repair")
-def system_repair_report() -> dict:
-    with get_conn() as conn:
-        return maintenance_service.repair_report(conn, CONTENT_ROOT)
-
-
-@app.get("/api/package/export")
-def package_export_manifest(write: bool = Query(False)) -> dict:
-    with get_conn() as conn:
-        manifest = maintenance_service.content_manifest(conn, CONTENT_ROOT)
-    if write:
-        path = ROOT / "generated" / "exports" / "learning-package-manifest.json"
-        maintenance_service.write_manifest(path, manifest)
-        manifest["written_to"] = str(path)
-    return {"manifest": manifest}
 
 
 @app.get("/api/review/due")

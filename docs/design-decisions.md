@@ -281,6 +281,56 @@ Recommended answer:
 - Yes, consider LLMwiki.
 - No, do not let it replace the local-first core, SQLite/domain state, Markdown package format, or Anki-like review scheduler.
 
+Product position:
+- LLMwiki is a productization/export capability inside the local learning OS.
+- It is not the homepage, not a second database, and not a required AI dependency.
+- First implementation should be export-only and local-only.
+
+Where it lives:
+- User surface: `System Health`.
+- Route: `/health`.
+- Section: `LLM Wiki pack`, near `Package Export`.
+- Backend API: `GET /api/llmwiki/export`, registered by `backend/productization_router.py`.
+- Export generation service: `backend/maintenance_service.py`.
+- Written output when requested: `generated/exports/llmwiki-pack.json`.
+- Runtime authority remains SQLite/domain state.
+- Portable content remains Markdown plus assets.
+
+Where to click:
+1. Open the app.
+2. Click `System health` in the left sidebar.
+3. Find the `LLM Wiki pack` section.
+4. Click `Export LLM Wiki pack`.
+5. Read the confirmation path shown in the inline health notice.
+6. Use the generated JSON pack with an external LLM/wiki tool, or keep it as an audit-ready local package summary.
+
+How to use it:
+- Use `Export LLM Wiki pack` when you want a compact, LLM-readable map of the current learning package.
+- The pack includes item metadata, stable paths, hashes, tags, links, sources, file references, counts, and usage policy.
+- The first version does not write Markdown, import edits, run embeddings, or start a background indexer.
+- If an external LLMwiki tool produces suggested changes, bring them back as an explicit report; accepted changes must later go through `ContentWriteService`.
+
+Plain-language usage:
+- Think of it as a table of contents plus checksum sheet for the whole local knowledge base.
+- It tells an LLM what exists, where each Markdown file lives, how items connect, and which media files are referenced.
+- It intentionally does not dump every Markdown body into the file. That keeps the local PC lighter and avoids pushing the full private corpus into a prompt by accident.
+- A good workflow is: export the pack, ask an LLM which files or topics matter, then open only the selected Markdown notes in the app or editor.
+- Use it for audits, summaries, planning, dependency maps, migration planning, or future LLMwiki adapters.
+- Do not use it as the source of truth. If content changes are accepted later, they must still be applied through the app write path.
+
+Data flow:
+
+```text
+System health
+  -> LLM Wiki pack
+  -> Export LLM Wiki pack
+  -> GET /api/llmwiki/export?write=true
+  -> generated/exports/llmwiki-pack.json
+  -> optional external LLM/wiki tool
+  -> future audit/import report
+  -> ContentWriteService for accepted writes
+```
+
 Target role:
 - Export a clean LLM-readable package from the current knowledge base.
 - Import or repair content through the same package and `ContentWriteService` path.
@@ -304,6 +354,22 @@ Memory and local PC policy:
 - LLMwiki support must be lazy and on-demand.
 - Indexes should be incremental, hash-aware, and rebuildable.
 - The app should load summaries, manifests, or selected chunks instead of resident full-corpus ASTs.
+- Images and media stay as asset references and hashes in the pack, not as inline runtime blobs.
+- No permanent background daemon is allowed in the local-lite baseline.
+
+Subagent assessment:
+- Product/UI assessment: reuse the existing `/health` cockpit because this is a productization/export operation, not daily reading or edit mode.
+- Backend/data assessment: define a small read-only export API that reuses package manifest, hashes, links, sources, and content metadata.
+- Documentation assessment: expand this decision with exact user path, click target, usage flow, external-project boundary, memory policy, and open decisions.
+
+Implemented first slice:
+- `backend/productization_router.py` owns the productization/export API boundary.
+- `GET /api/llmwiki/export` returns a local `pack`.
+- `GET /api/llmwiki/export?write=true` writes `generated/exports/llmwiki-pack.json`.
+- `api.py` registers the router but does not implement LLMwiki export logic.
+- `/health` shows an `LLM Wiki pack` panel.
+- The user clicks `System health` -> `LLM Wiki pack` -> `Export LLM Wiki pack`.
+- Browser smoke verifies the panel and export action.
 
 Future interface sketch:
 
@@ -318,3 +384,6 @@ Learning OS domain store
 Open decision:
 - If LLMwiki means a specific external project or file format, evaluate its schema and license before binding to it.
 - If LLMwiki means a general LLM-friendly wiki layer, implement it first as a local export/import adapter.
+- Decide whether the next slice should add `chunks/*.md`, `report.json`, import/repair review UI, or a specific external LLMwiki connector.
+- Decide whether review state and reader questions belong in the pack by default or behind an explicit privacy toggle.
+- Decide whether image support should stay reference-only or generate thumbnails/alt text on demand.

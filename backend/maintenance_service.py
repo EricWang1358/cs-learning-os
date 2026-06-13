@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 PACKAGE_FORMAT_VERSION = "1"
+LLMWIKI_FORMAT_VERSION = "1"
 
 
 def utc_now() -> str:
@@ -57,6 +58,174 @@ def content_manifest(conn: sqlite3.Connection, content_root: Path) -> dict:
         "content_root": str(content_root),
         "counts": counts,
         "files": files,
+    }
+
+
+def _rows_to_list(rows: list[sqlite3.Row]) -> list[dict]:
+    return [dict(row) for row in rows]
+
+
+def _group_values(rows: list[sqlite3.Row], key_column: str, value_column: str) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for row in rows:
+        grouped.setdefault(row[key_column], []).append(row[value_column])
+    return grouped
+
+
+def llmwiki_pack(conn: sqlite3.Connection, content_root: Path) -> dict:
+    manifest = content_manifest(conn, content_root)
+    nodes = _rows_to_list(
+        conn.execute(
+            """
+            SELECT slug, title, area, track, display_order, status, visibility, summary, path, updated_at
+            FROM nodes
+            ORDER BY area, track, display_order, title
+            """
+        ).fetchall()
+    )
+    quizzes = _rows_to_list(
+        conn.execute(
+            """
+            SELECT id, title, area, display_order, status, visibility, difficulty, summary, path, weight, updated_at
+            FROM quizzes
+            ORDER BY area, display_order, title
+            """
+        ).fetchall()
+    )
+
+    node_tags = _group_values(
+        conn.execute(
+            """
+            SELECT node_slug AS slug, tag_name AS tag
+            FROM node_tags
+            ORDER BY node_slug, tag_name
+            """
+        ).fetchall(),
+        "slug",
+        "tag",
+    )
+    quiz_tags = _group_values(
+        conn.execute(
+            """
+            SELECT quiz_id AS id, tag_name AS tag
+            FROM quiz_tags
+            ORDER BY quiz_id, tag_name
+            """
+        ).fetchall(),
+        "id",
+        "tag",
+    )
+    node_links = _group_values(
+        conn.execute(
+            """
+            SELECT source_slug AS slug, kind || ':' || target_slug AS link
+            FROM links
+            ORDER BY source_slug, kind, target_slug
+            """
+        ).fetchall(),
+        "slug",
+        "link",
+    )
+    quiz_links = _group_values(
+        conn.execute(
+            """
+            SELECT quiz_id AS id, kind || ':' || node_slug AS link
+            FROM quiz_links
+            ORDER BY quiz_id, kind, node_slug
+            """
+        ).fetchall(),
+        "id",
+        "link",
+    )
+    source_rows = conn.execute(
+        """
+        SELECT 'node' AS target_type, node_slug AS target_id, source, source_type, note
+        FROM sources
+        UNION ALL
+        SELECT 'quiz' AS target_type, quiz_id AS target_id, source, source_type, note
+        FROM quiz_sources
+        ORDER BY target_type, target_id, source
+        """
+    ).fetchall()
+    sources: dict[tuple[str, str], list[dict]] = {}
+    for row in source_rows:
+        sources.setdefault((row["target_type"], row["target_id"]), []).append(
+            {"source": row["source"], "source_type": row["source_type"], "note": row["note"]}
+        )
+
+    file_hashes = {item["path"]: item["sha256"] for item in manifest["files"]}
+    node_items = [
+        {
+            **node,
+            "type": "node",
+            "id": node["slug"],
+            "tags": node_tags.get(node["slug"], []),
+            "links": node_links.get(node["slug"], []),
+            "sources": sources.get(("node", node["slug"]), []),
+            "sha256": file_hashes.get(node["path"], ""),
+        }
+        for node in nodes
+    ]
+    quiz_items = [
+        {
+            **quiz,
+            "type": "quiz",
+            "id": quiz["id"],
+            "tags": quiz_tags.get(quiz["id"], []),
+            "links": quiz_links.get(quiz["id"], []),
+            "sources": sources.get(("quiz", quiz["id"]), []),
+            "sha256": file_hashes.get(quiz["path"], ""),
+        }
+        for quiz in quizzes
+    ]
+
+    asset_files = [item for item in manifest["files"] if item["path"].startswith("assets/")]
+    markdown_files = [item for item in manifest["files"] if item["path"].endswith(".md")]
+
+    return {
+        "llmwiki_format_version": LLMWIKI_FORMAT_VERSION,
+        "package_format_version": PACKAGE_FORMAT_VERSION,
+        "generated_at": utc_now(),
+        "profile": "local-llmwiki-pack",
+        "content_root": str(content_root),
+        "output": {
+            "default_path": "generated/exports/llmwiki-pack.json",
+            "write_trigger": "GET /api/llmwiki/export?write=true",
+            "preview_trigger": "GET /api/llmwiki/export",
+        },
+        "usage": {
+            "entrypoint": "System health > LLM Wiki pack > Export LLM Wiki pack",
+            "purpose": "On-demand LLM-readable index of Markdown package items, hashes, links, sources, and asset references.",
+            "write_policy": "Read-only export. Accepted imports or repairs must flow through ContentWriteService.",
+        },
+        "memory_policy": {
+            "includes_full_body": False,
+            "asset_policy": "Assets are referenced by path and hash; binary/image bytes are never inlined.",
+            "loading": "Generated on demand from SQLite rows and file hashes; no resident LLMwiki index is kept in memory.",
+        },
+        "counts": {
+            **manifest["counts"],
+            "items": len(node_items) + len(quiz_items),
+            "markdown_files": len(markdown_files),
+            "asset_references": len(asset_files),
+        },
+        "report": {
+            "added": 0,
+            "updated": 0,
+            "skipped": 0,
+            "failed": 0,
+            "stale": 0,
+            "repaired": 0,
+            "exported_items": len(node_items) + len(quiz_items),
+            "exported_files": len(manifest["files"]),
+            "body_fields_omitted": len(node_items) + len(quiz_items),
+            "warnings": [
+                "This is a read-only LLMwiki projection. Import and repair workflows are intentionally not enabled yet.",
+                "Use file paths and hashes to request selected Markdown bodies instead of loading the full corpus into an LLM context.",
+            ],
+        },
+        "items": [*node_items, *quiz_items],
+        "files": manifest["files"],
     }
 
 

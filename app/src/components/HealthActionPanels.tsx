@@ -16,6 +16,24 @@ export type PackageManifestEntry = {
   note?: string
 }
 
+export type LlmWikiPackSummary = {
+  formatVersion: string
+  profile: string
+  itemCount: number
+  fileCount: number
+  markdownFileCount: number
+  nodeCount: number
+  quizCount: number
+  assetCount: number
+  outputPath: string
+  includesFullBody: boolean
+  usage: string
+  memoryPolicy: string
+  generatedAt?: string
+  writtenTo?: string
+  warnings?: string[]
+}
+
 export type AiPreflightCheck = {
   id: string
   label: string
@@ -47,12 +65,14 @@ export type HealthActionPanelsProps = {
   integrityIssues?: HealthIssue[]
   repairIssues?: HealthIssue[]
   packageManifest?: PackageManifestEntry[]
+  llmWikiPack?: LlmWikiPackSummary
   aiPreflightChecks?: AiPreflightCheck[]
   schemaMetadata?: SchemaMetadataItem[]
   contentIndex?: ContentIndexSummary
   onRepairIssue?: (issue: HealthIssue) => void
   onInspectIssue?: (issue: HealthIssue) => void
   onExportPackage?: () => void
+  onExportLlmWikiPack?: () => void
   onRunAiPreflight?: () => void
   onRefreshSchemaMetadata?: () => void
   onRefreshContentIndex?: () => void
@@ -115,7 +135,9 @@ export function HealthActionPanels({
   aiPreflightChecks = [],
   contentIndex,
   integrityIssues = [],
+  llmWikiPack,
   onExportPackage,
+  onExportLlmWikiPack,
   onInspectIssue,
   onRefreshContentIndex,
   onRefreshSchemaMetadata,
@@ -198,6 +220,64 @@ export function HealthActionPanels({
           </ul>
         ) : (
           <p>No package manifest supplied.</p>
+        )}
+      </section>
+
+      <section className="detail-section" aria-label="LLM Wiki pack">
+        <div className="detail-toolbar">
+          <h3>LLM Wiki pack</h3>
+          {onExportLlmWikiPack && (
+            <button type="button" className="focus-toggle ai-action" onClick={onExportLlmWikiPack}>
+              Export LLM Wiki pack
+            </button>
+          )}
+        </div>
+        {llmWikiPack ? (
+          <>
+            <div className="tag-row">
+              <span>v{llmWikiPack.formatVersion}</span>
+              <span>{llmWikiPack.profile}</span>
+              <span>{formatCount(llmWikiPack.itemCount)} items</span>
+              <span>{formatCount(llmWikiPack.fileCount)} files</span>
+              {llmWikiPack.writtenTo && <span>Written {llmWikiPack.writtenTo}</span>}
+            </div>
+            <ul className="metric-list">
+              <li>
+                <strong>{formatCount(llmWikiPack.nodeCount)}</strong> nodes
+              </li>
+              <li>
+                <strong>{formatCount(llmWikiPack.quizCount)}</strong> quizzes
+              </li>
+              <li>
+                <strong>{formatCount(llmWikiPack.assetCount)}</strong> asset references
+              </li>
+              <li>
+                <strong>{formatCount(llmWikiPack.markdownFileCount)}</strong> Markdown files
+              </li>
+              <li>
+                <strong>{llmWikiPack.outputPath}</strong> output path
+              </li>
+              <li>
+                <strong>{llmWikiPack.includesFullBody ? 'yes' : 'no'}</strong> includes full body
+              </li>
+              {llmWikiPack.generatedAt && (
+                <li>
+                  <strong>{llmWikiPack.generatedAt}</strong> generated
+                </li>
+              )}
+            </ul>
+            <p>{llmWikiPack.usage}</p>
+            <p>{llmWikiPack.memoryPolicy}</p>
+            {llmWikiPack.warnings?.length ? (
+              <ul className="metric-list">
+                {llmWikiPack.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : (
+          <p>Export on demand when an LLM or wiki tool needs a compact map of this local learning package.</p>
         )}
       </section>
 

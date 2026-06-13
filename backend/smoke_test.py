@@ -97,6 +97,25 @@ def main() -> int:
     assert manifest_payload["counts"]["nodes"] >= 2
     assert any(item["path"].endswith(".md") for item in manifest_payload["files"])
 
+    llmwiki = client.get("/api/llmwiki/export")
+    assert llmwiki.status_code == 200, llmwiki.text
+    llmwiki_payload = llmwiki.json()["pack"]
+    assert llmwiki_payload["llmwiki_format_version"] == "1"
+    assert llmwiki_payload["profile"] == "local-llmwiki-pack"
+    assert llmwiki_payload["counts"]["items"] >= llmwiki_payload["counts"]["nodes"]
+    assert llmwiki_payload["counts"]["markdown_files"] >= llmwiki_payload["counts"]["nodes"]
+    assert llmwiki_payload["output"]["default_path"] == "generated/exports/llmwiki-pack.json"
+    assert llmwiki_payload["usage"]["entrypoint"] == "System health > LLM Wiki pack > Export LLM Wiki pack"
+    assert llmwiki_payload["memory_policy"]["includes_full_body"] is False
+    assert llmwiki_payload["report"]["exported_items"] == llmwiki_payload["counts"]["items"]
+    assert {"added", "updated", "skipped", "failed", "stale", "repaired"}.issubset(llmwiki_payload["report"])
+    assert any(item["type"] == "node" and item["sha256"] for item in llmwiki_payload["items"])
+    llmwiki_write = client.get("/api/llmwiki/export", params={"write": "true"})
+    assert llmwiki_write.status_code == 200, llmwiki_write.text
+    llmwiki_written_path = Path(llmwiki_write.json()["pack"]["written_to"])
+    assert llmwiki_written_path.exists()
+    assert llmwiki_written_path.name == "llmwiki-pack.json"
+
     preflight = client.get("/api/ai/preflight")
     assert preflight.status_code == 200, preflight.text
     assert "ok" in preflight.json()

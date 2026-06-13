@@ -261,6 +261,76 @@ export type ApiPackageExportResponse = {
   manifest: PackageManifest
 }
 
+export type LlmWikiPackItem = {
+  type: 'node' | 'quiz'
+  id: string
+  title: string
+  area: string
+  track?: string
+  display_order: number
+  status: string
+  visibility: string
+  difficulty?: string
+  summary: string
+  path: string
+  updated_at: string
+  sha256: string
+  tags: string[]
+  links: string[]
+  sources: Array<{
+    source: string
+    source_type: string
+    note: string
+  }>
+}
+
+export type LlmWikiPack = {
+  llmwiki_format_version: string
+  package_format_version: string
+  generated_at: string
+  profile: string
+  content_root: string
+  output: {
+    default_path: string
+    preview_trigger: string
+    write_trigger: string
+  }
+  usage: {
+    entrypoint: string
+    purpose: string
+    write_policy: string
+  }
+  memory_policy: {
+    includes_full_body: boolean
+    asset_policy: string
+    loading: string
+  }
+  counts: PackageManifest['counts'] & {
+    items: number
+    markdown_files: number
+    asset_references: number
+  }
+  report: {
+    added: number
+    updated: number
+    skipped: number
+    failed: number
+    stale: number
+    repaired: number
+    exported_items: number
+    exported_files: number
+    body_fields_omitted: number
+    warnings: string[]
+  }
+  items: LlmWikiPackItem[]
+  files: PackageManifestFile[]
+  written_to?: string
+}
+
+export type ApiLlmWikiExportResponse = {
+  pack: LlmWikiPack
+}
+
 export type ApiAiPreflightResponse = {
   provider: string
   ok: boolean

@@ -35,6 +35,7 @@ import type {
   ApiAreasResponse,
   ApiDueReviewsResponse,
   ApiGraphResponse,
+  ApiLlmWikiExportResponse,
   ApiNodeResponse,
   ApiNodesResponse,
   ApiPackageExportResponse,
@@ -495,6 +496,7 @@ function App() {
   const [systemRepair, setSystemRepair] = useState<ApiSystemRepairResponse | null>(null)
   const [systemSchema, setSystemSchema] = useState<ApiSystemSchemaResponse | null>(null)
   const [packageExport, setPackageExport] = useState<ApiPackageExportResponse | null>(null)
+  const [llmWikiExport, setLlmWikiExport] = useState<ApiLlmWikiExportResponse | null>(null)
   const [aiPreflight, setAiPreflight] = useState<ApiAiPreflightResponse | null>(null)
   const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([])
   const [selectedReviewQuiz, setSelectedReviewQuiz] = useState<QuizDetail | null>(null)
@@ -1161,6 +1163,25 @@ function App() {
         },
       ]
     : []
+  const llmWikiPackSummary = llmWikiExport
+    ? {
+        formatVersion: llmWikiExport.pack.llmwiki_format_version,
+        profile: llmWikiExport.pack.profile,
+        itemCount: llmWikiExport.pack.counts.items,
+        fileCount: llmWikiExport.pack.counts.files,
+        markdownFileCount: llmWikiExport.pack.counts.markdown_files,
+        nodeCount: llmWikiExport.pack.counts.nodes,
+        quizCount: llmWikiExport.pack.counts.quizzes,
+        assetCount: llmWikiExport.pack.counts.asset_references,
+        outputPath: llmWikiExport.pack.written_to ?? llmWikiExport.pack.output.default_path,
+        includesFullBody: llmWikiExport.pack.memory_policy.includes_full_body,
+        usage: llmWikiExport.pack.usage.purpose,
+        memoryPolicy: llmWikiExport.pack.memory_policy.loading,
+        generatedAt: formatBeijingDateTime(llmWikiExport.pack.generated_at),
+        writtenTo: llmWikiExport.pack.written_to,
+        warnings: llmWikiExport.pack.report.warnings,
+      }
+    : undefined
   const aiPreflightChecks = aiPreflight
     ? [
         {
@@ -2082,6 +2103,16 @@ function App() {
     }
   }
 
+  const exportLlmWikiPack = async () => {
+    try {
+      const data = await fetchJson<ApiLlmWikiExportResponse>('/api/llmwiki/export?write=true')
+      setLlmWikiExport(data)
+      setHealthActionNotice(data.pack.written_to ? `LLM Wiki pack written to ${data.pack.written_to}` : 'LLM Wiki pack refreshed.')
+    } catch (exportError) {
+      setHealthActionNotice(exportError instanceof Error ? exportError.message : 'Unable to export LLM Wiki pack')
+    }
+  }
+
   const runAiPreflight = async () => {
     try {
       const data = await fetchJson<ApiAiPreflightResponse>('/api/ai/preflight')
@@ -2859,10 +2890,12 @@ function App() {
                   integrityIssues={healthIssues}
                   repairIssues={healthIssues}
                   packageManifest={packageManifestEntries}
+                  llmWikiPack={llmWikiPackSummary}
                   aiPreflightChecks={aiPreflightChecks}
                   schemaMetadata={schemaMetadata}
                   contentIndex={contentIndexSummary}
                   onExportPackage={exportPackageManifest}
+                  onExportLlmWikiPack={exportLlmWikiPack}
                   onRunAiPreflight={runAiPreflight}
                   onRefreshSchemaMetadata={() => {
                     refreshHealthActions().catch((refreshError) => {
