@@ -123,7 +123,7 @@ def due_reviews(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
     now = utc_now()
     rows = conn.execute(
         """
-        SELECT rq.*, q.title, q.area, q.difficulty
+        SELECT rq.*, q.title, q.area, q.difficulty, q.summary
         FROM review_queue rq
         LEFT JOIN quizzes q ON rq.target_type = 'quiz' AND rq.target_id = q.id
         WHERE rq.due_at <= ?
@@ -132,4 +132,32 @@ def due_reviews(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
         """,
         (now, max(1, min(limit, 200))),
     ).fetchall()
-    return [dict(row) for row in rows]
+    reviews = [dict(row) for row in rows]
+    remaining = max(0, max(1, min(limit, 200)) - len(reviews))
+    if remaining:
+        fresh_rows = conn.execute(
+            """
+            SELECT
+                'quiz' AS target_type,
+                q.id AS target_id,
+                '' AS due_at,
+                0.0 AS interval_days,
+                2.5 AS ease_factor,
+                0 AS reps,
+                0 AS lapses,
+                '' AS updated_at,
+                q.title,
+                q.area,
+                q.difficulty,
+                q.summary
+            FROM quizzes q
+            LEFT JOIN review_queue rq ON rq.target_type = 'quiz' AND rq.target_id = q.id
+            WHERE rq.target_id IS NULL
+              AND q.visibility NOT IN ('archive', 'trash')
+            ORDER BY q.display_order, q.title
+            LIMIT ?
+            """,
+            (remaining,),
+        ).fetchall()
+        reviews.extend(dict(row) for row in fresh_rows)
+    return reviews

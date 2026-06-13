@@ -1,6 +1,8 @@
 import { lazy, startTransition, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
+import { DailyReviewPanel, type DailyReviewRating } from './components/DailyReviewPanel'
+import { HealthActionPanels } from './components/HealthActionPanels'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
@@ -29,14 +31,20 @@ import type {
   ApiAiJobEventsResponse,
   ApiAiJobResponse,
   ApiAiJobsResponse,
+  ApiAiPreflightResponse,
   ApiAreasResponse,
+  ApiDueReviewsResponse,
   ApiGraphResponse,
   ApiNodeResponse,
   ApiNodesResponse,
+  ApiPackageExportResponse,
   ApiQuizResponse,
+  ApiQuizAttemptResponse,
   ApiQuizzesResponse,
   ApiReaderQuestionResponse,
   ApiReaderQuestionsResponse,
+  ApiSystemRepairResponse,
+  ApiSystemSchemaResponse,
   ApiSystemMetricsResponse,
   ApiTracksResponse,
   AreaSummary,
@@ -47,6 +55,7 @@ import type {
   QuizDetail,
   QuizSummary,
   ReaderQuestion,
+  ReviewQueueItem,
   StoragePartition,
   SystemMetrics,
   TrackSummary,
@@ -483,6 +492,17 @@ function App() {
   const [questionScopes, setQuestionScopes] = useState<Record<number, AiDraftScope>>({})
   const [jobEvents, setJobEvents] = useState<Record<number, AiJobEvent[]>>({})
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
+  const [systemRepair, setSystemRepair] = useState<ApiSystemRepairResponse | null>(null)
+  const [systemSchema, setSystemSchema] = useState<ApiSystemSchemaResponse | null>(null)
+  const [packageExport, setPackageExport] = useState<ApiPackageExportResponse | null>(null)
+  const [aiPreflight, setAiPreflight] = useState<ApiAiPreflightResponse | null>(null)
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([])
+  const [selectedReviewQuiz, setSelectedReviewQuiz] = useState<QuizDetail | null>(null)
+  const [selectedReviewId, setSelectedReviewId] = useState('')
+  const [reviewError, setReviewError] = useState('')
+  const [isReviewQuizLoading, setIsReviewQuizLoading] = useState(false)
+  const [isReviewRating, setIsReviewRating] = useState(false)
+  const [healthActionNotice, setHealthActionNotice] = useState('')
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
@@ -629,6 +649,16 @@ function App() {
             setReaderQuestions(questionsData.questions)
             setAiJobs(jobsData.jobs)
           })
+        } else if (viewMode === 'review') {
+          const data = await fetchJson<ApiDueReviewsResponse>('/api/review/due?limit=50')
+
+          if (!isActive) return
+
+          startTransition(() => {
+            setReviewQueue(data.reviews)
+            setSelectedReviewId((current) => current || data.reviews[0]?.target_id || '')
+            setReviewError('')
+          })
         } else if (viewMode === 'graph') {
           const cacheKey = `${location.pathname}?page=${graphPage}`
           const cached = graphCache[cacheKey]
@@ -645,12 +675,22 @@ function App() {
             setGraphCache((current) => ({ ...current, [cacheKey]: data }))
           })
         } else if (viewMode === 'health') {
-          const metricsData = await fetchJson<ApiSystemMetricsResponse>('/api/system/metrics')
+          const [metricsData, repairData, schemaData, manifestData, preflightData] = await Promise.all([
+            fetchJson<ApiSystemMetricsResponse>('/api/system/metrics'),
+            fetchJson<ApiSystemRepairResponse>('/api/system/repair'),
+            fetchJson<ApiSystemSchemaResponse>('/api/system/schema'),
+            fetchJson<ApiPackageExportResponse>('/api/package/export'),
+            fetchJson<ApiAiPreflightResponse>('/api/ai/preflight'),
+          ])
 
           if (!isActive) return
 
           startTransition(() => {
             setSystemMetrics(metricsData)
+            setSystemRepair(repairData)
+            setSystemSchema(schemaData)
+            setPackageExport(manifestData)
+            setAiPreflight(preflightData)
           })
         } else {
           const data = deferredQuery.trim()
@@ -847,6 +887,34 @@ function App() {
   }, [selectedQuizId])
 
   useEffect(() => {
+    if (viewMode !== 'review' || !selectedReviewId) {
+      return
+    }
+
+    let isActive = true
+
+    async function loadReviewQuiz() {
+      try {
+        setIsReviewQuizLoading(true)
+        const data = await fetchJson<ApiQuizResponse>(`/api/quizzes/${selectedReviewId}`)
+        if (isActive) setSelectedReviewQuiz(data.quiz)
+      } catch (loadError) {
+        if (isActive) {
+          setReviewError(loadError instanceof Error ? loadError.message : 'Unable to load review quiz')
+        }
+      } finally {
+        if (isActive) setIsReviewQuizLoading(false)
+      }
+    }
+
+    loadReviewQuiz()
+
+    return () => {
+      isActive = false
+    }
+  }, [selectedReviewId, viewMode])
+
+  useEffect(() => {
     if (viewMode === 'question-queue') return
 
     const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
@@ -1035,6 +1103,96 @@ function App() {
     return quiz.area === activeArea && quiz.visibility !== 'archive'
   })
 
+  const reviewItems = reviewQueue.map((review) => ({
+    id: `${review.target_type}-${review.target_id}`,
+    quizId: review.target_id,
+    title: review.title,
+    summary: review.summary,
+    area: review.area,
+    difficulty: review.difficulty,
+    dueAt: review.due_at ? formatBeijingDateTime(review.due_at) : 'new',
+    intervalLabel: review.reps ? `${review.reps} reps / ${review.interval_days.toFixed(1)}d` : 'new card',
+  }))
+
+  const selectedReviewItem = reviewQueue.find((review) => review.target_id === selectedReviewId) ?? reviewQueue[0] ?? null
+  const selectedDailyReviewQuiz = selectedReviewQuiz
+    ? {
+        id: selectedReviewQuiz.id,
+        title: selectedReviewQuiz.title,
+        summary: selectedReviewQuiz.summary,
+        area: selectedReviewQuiz.area,
+        difficulty: selectedReviewQuiz.difficulty,
+        body: selectedReviewQuiz.body,
+        answer: 'Review the revealed Markdown answer and explanation, then grade this card.',
+        tags: selectedReviewQuiz.tags,
+        openQuestionCount: selectedReviewQuiz.open_question_count,
+      }
+    : null
+  const repairIssues = systemRepair?.issues ?? []
+  const healthIssues = repairIssues.map((issue, index) => ({
+    id: `${issue.kind}-${issue.target_id ?? issue.path ?? index}`,
+    title: issue.kind,
+    summary: issue.path || issue.target_slug || issue.link_kind || 'Inspect this local data consistency warning.',
+    severity: issue.severity,
+    target: [issue.target_type, issue.target_id].filter(Boolean).join(':') || issue.source_slug,
+    actionLabel: issue.severity === 'error' ? 'Inspect' : 'Review',
+  }))
+  const schemaMetadata = Object.entries(systemSchema?.schema ?? {}).map(([key, meta]) => ({
+    id: key,
+    label: key,
+    value: meta.value,
+    note: meta.updated_at ? `updated ${formatBeijingDateTime(meta.updated_at)}` : '',
+  }))
+  const packageManifestEntries = packageExport
+    ? [
+        {
+          id: 'package-format',
+          label: 'package format',
+          value: packageExport.manifest.package_format_version,
+          note: `${packageExport.manifest.counts.files} files`,
+        },
+        { id: 'nodes', label: 'nodes', value: String(packageExport.manifest.counts.nodes) },
+        { id: 'quizzes', label: 'quizzes', value: String(packageExport.manifest.counts.quizzes) },
+        {
+          id: 'markdown',
+          label: 'Markdown files',
+          value: String(packageExport.manifest.files.filter((file) => file.path.endsWith('.md')).length),
+          note: packageExport.manifest.files.find((file) => file.path.endsWith('.md'))?.path ?? '',
+        },
+      ]
+    : []
+  const aiPreflightChecks = aiPreflight
+    ? [
+        {
+          id: 'provider',
+          label: aiPreflight.provider,
+          ok: aiPreflight.ok,
+          message: aiPreflight.message,
+        },
+        ...Object.entries(aiPreflight.checks ?? {}).map(([key, ok]) => ({
+          id: key,
+          label: key,
+          ok,
+          message: ok ? 'configured' : 'not configured',
+        })),
+      ]
+    : []
+  const contentIndexSummary = systemMetrics
+    ? {
+        totalItems: systemMetrics.counts.nodes + systemMetrics.counts.quizzes,
+        indexedItems: (packageExport?.manifest.counts.nodes ?? systemMetrics.counts.nodes)
+          + (packageExport?.manifest.counts.quizzes ?? systemMetrics.counts.quizzes),
+        staleItems: repairIssues.filter((issue) => issue.kind === 'content_hash_mismatch' || issue.kind.includes('stale')).length,
+        lastIndexedAt: systemMetrics.collected_at ? formatBeijingDateTime(systemMetrics.collected_at) : '',
+        entries: [
+          { id: 'nodes', label: 'nodes', count: systemMetrics.counts.nodes },
+          { id: 'quizzes', label: 'quizzes', count: systemMetrics.counts.quizzes },
+          { id: 'due-reviews', label: 'due reviews', count: systemMetrics.counts.due_reviews },
+          { id: 'open-questions', label: 'open questions', count: systemMetrics.counts.open_questions },
+        ],
+      }
+    : undefined
+
   const totalStorageBytes = systemMetrics
     ? systemMetrics.storage.content_bytes + systemMetrics.storage.db_bytes + systemMetrics.storage.generated_bytes
     : 0
@@ -1106,26 +1264,22 @@ function App() {
     })
     .sort((left, right) => right.sort.localeCompare(left.sort))
 
-  const visibleCount =
-    viewMode === 'question-queue'
-      ? queueItems.length
-      : viewMode === 'graph'
-        ? graphPayload?.children.length ?? 0
-        : viewMode === 'health'
-          ? storagePartitions.length
-      : viewMode === 'quizzes'
-        ? filteredQuizzes.length
-        : filteredNodes.length
-  const totalCount =
-    viewMode === 'question-queue'
-      ? totalQueueItems
-      : viewMode === 'graph'
-        ? graphPayload?.pagination.total ?? 0
-        : viewMode === 'health'
-          ? storagePartitions.length
-      : viewMode === 'quizzes'
-        ? quizzes.length
-        : nodes.length
+  const visibleCount = (() => {
+    if (viewMode === 'question-queue') return queueItems.length
+    if (viewMode === 'graph') return graphPayload?.children.length ?? 0
+    if (viewMode === 'health') return storagePartitions.length
+    if (viewMode === 'review') return reviewQueue.length
+    if (viewMode === 'quizzes') return filteredQuizzes.length
+    return filteredNodes.length
+  })()
+  const totalCount = (() => {
+    if (viewMode === 'question-queue') return totalQueueItems
+    if (viewMode === 'graph') return graphPayload?.pagination.total ?? 0
+    if (viewMode === 'health') return storagePartitions.length
+    if (viewMode === 'review') return reviewQueue.length
+    if (viewMode === 'quizzes') return quizzes.length
+    return nodes.length
+  })()
   const visibleTracks =
     viewMode === 'nodes' && !SYSTEM_AREAS.includes(activeArea) ? tracks : []
   const visibleReaderQuestions = readerQuestions
@@ -1905,6 +2059,63 @@ function App() {
     }
   }
 
+  const refreshHealthActions = async () => {
+    const [repairData, schemaData, manifestData, preflightData] = await Promise.all([
+      fetchJson<ApiSystemRepairResponse>('/api/system/repair'),
+      fetchJson<ApiSystemSchemaResponse>('/api/system/schema'),
+      fetchJson<ApiPackageExportResponse>('/api/package/export'),
+      fetchJson<ApiAiPreflightResponse>('/api/ai/preflight'),
+    ])
+    setSystemRepair(repairData)
+    setSystemSchema(schemaData)
+    setPackageExport(manifestData)
+    setAiPreflight(preflightData)
+  }
+
+  const exportPackageManifest = async () => {
+    try {
+      const data = await fetchJson<ApiPackageExportResponse>('/api/package/export?write=true')
+      setPackageExport(data)
+      setHealthActionNotice(data.manifest.written_to ? `Manifest written to ${data.manifest.written_to}` : 'Package manifest refreshed.')
+    } catch (exportError) {
+      setHealthActionNotice(exportError instanceof Error ? exportError.message : 'Unable to export package manifest')
+    }
+  }
+
+  const runAiPreflight = async () => {
+    try {
+      const data = await fetchJson<ApiAiPreflightResponse>('/api/ai/preflight')
+      setAiPreflight(data)
+      setHealthActionNotice(data.message)
+    } catch (preflightError) {
+      setHealthActionNotice(preflightError instanceof Error ? preflightError.message : 'Unable to run AI preflight')
+    }
+  }
+
+  const submitReviewRating = async (rating: DailyReviewRating) => {
+    const quizId = selectedReviewQuiz?.id ?? selectedReviewItem?.target_id
+    if (!quizId) return
+    try {
+      setIsReviewRating(true)
+      setReviewError('')
+      await postJson<ApiQuizAttemptResponse>(`/api/quizzes/${quizId}/attempts`, {
+        grade: rating,
+        elapsed_ms: 0,
+        note: 'Daily review',
+      })
+      const data = await fetchJson<ApiDueReviewsResponse>('/api/review/due?limit=50')
+      setReviewQueue(data.reviews)
+      const nextId = data.reviews.find((item) => item.target_id !== quizId)?.target_id ?? data.reviews[0]?.target_id ?? ''
+      setSelectedReviewId(nextId)
+      setSelectedReviewQuiz(null)
+      setActionNotice(`Review recorded: ${rating}.`)
+    } catch (reviewSaveError) {
+      setReviewError(reviewSaveError instanceof Error ? reviewSaveError.message : 'Unable to record review')
+    } finally {
+      setIsReviewRating(false)
+    }
+  }
+
   const openQuestionCount =
     viewMode === 'quizzes'
       ? selectedQuiz?.open_question_count ?? 0
@@ -2000,6 +2211,16 @@ function App() {
           </button>
           <button
             type="button"
+            className={viewMode === 'review' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigate('/review')
+            }}
+          >
+            Daily review
+          </button>
+          <button
+            type="button"
             className={viewMode === 'question-queue' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
@@ -2057,6 +2278,16 @@ function App() {
               {isLoading
                 ? 'Loading health metrics...'
                 : `${visibleCount} size partitions, sorted by local footprint.`}
+            </p>
+          </header>
+        ) : viewMode === 'review' ? (
+          <header className="search-header cockpit-header">
+            <p className="eyebrow">Daily review</p>
+            <h2>Review Queue</h2>
+            <p>
+              {isLoading
+                ? 'Loading due reviews...'
+                : `${reviewQueue.length} due or new quiz cards ready.`}
             </p>
           </header>
         ) : (
@@ -2242,7 +2473,21 @@ function App() {
         )}
 
         <div className="node-list">
-          {viewMode === 'question-queue'
+          {viewMode === 'review'
+            ? reviewItems.map((review) => (
+                <button
+                  key={review.id}
+                  type="button"
+                  className={`node-card ${review.quizId === selectedReviewId ? 'selected' : ''}`}
+                  onClick={() => setSelectedReviewId(review.quizId)}
+                >
+                  <span className="node-meta">{review.area} / {review.difficulty} / {review.intervalLabel}</span>
+                  <strong>{review.title}</strong>
+                  {review.summary && <span>{review.summary}</span>}
+                  <span>Due {review.dueAt}</span>
+                </button>
+              ))
+            : viewMode === 'question-queue'
             ? queueItems.map((item) => {
                 if (item.kind === 'question') {
                   const linkedJob = item.job
@@ -2496,7 +2741,34 @@ function App() {
             <span aria-hidden="true" />
           </button>
         )}
-        {viewMode === 'question-queue' ? (
+        {viewMode === 'review' ? (
+          <DailyReviewPanel
+            reviews={reviewItems}
+            selectedQuiz={selectedDailyReviewQuiz}
+            isReviewsLoading={isLoading}
+            isQuizLoading={isReviewQuizLoading}
+            isRating={isReviewRating}
+            reviewsError={reviewError}
+            quizError={reviewError}
+            onSelectReview={(review) => setSelectedReviewId(review.quizId)}
+            onRateReview={(rating) => submitReviewRating(rating)}
+            renderQuizBody={({ quiz, isAnswerRevealed, onRevealAnswer }) =>
+              isAnswerRevealed ? (
+                <Suspense fallback={<p className="detail-loading">Loading Markdown renderer...</p>}>
+                  <MarkdownView body={quiz.body ?? ''} />
+                </Suspense>
+              ) : (
+                <div className="empty-state">
+                  <h2>Recall first</h2>
+                  <p>Try to answer from memory before revealing the Markdown explanation.</p>
+                  <button type="button" className="focus-toggle ai-action" onClick={onRevealAnswer}>
+                    Reveal answer
+                  </button>
+                </div>
+              )
+            }
+          />
+        ) : viewMode === 'question-queue' ? (
           <QuestionQueueDetail
             activeAiJobs={activeAiJobs}
             jobEvents={jobEvents}
@@ -2582,6 +2854,29 @@ function App() {
                     </ul>
                   </article>
                 </section>
+                {healthActionNotice && <p className="inline-hint">{healthActionNotice}</p>}
+                <HealthActionPanels
+                  integrityIssues={healthIssues}
+                  repairIssues={healthIssues}
+                  packageManifest={packageManifestEntries}
+                  aiPreflightChecks={aiPreflightChecks}
+                  schemaMetadata={schemaMetadata}
+                  contentIndex={contentIndexSummary}
+                  onExportPackage={exportPackageManifest}
+                  onRunAiPreflight={runAiPreflight}
+                  onRefreshSchemaMetadata={() => {
+                    refreshHealthActions().catch((refreshError) => {
+                      setHealthActionNotice(refreshError instanceof Error ? refreshError.message : 'Unable to refresh health data')
+                    })
+                  }}
+                  onRefreshContentIndex={() => {
+                    refreshHealthActions().catch((refreshError) => {
+                      setHealthActionNotice(refreshError instanceof Error ? refreshError.message : 'Unable to refresh health data')
+                    })
+                  }}
+                  onInspectIssue={(issue) => setHealthActionNotice(issue.summary || issue.title)}
+                  onRepairIssue={(issue) => setHealthActionNotice(`Manual repair required: ${issue.title}`)}
+                />
               </>
             ) : (
               <p className="detail-loading">Loading health metrics...</p>

@@ -272,3 +272,49 @@ Initial direction:
 Reasoning:
 - The project is evolving from a working local learning system into a clearer architecture core.
 - Strangler split keeps learning data, demos, and workflows usable while reducing coupling.
+
+## 2026-06-13: LLMwiki Integration Boundary
+
+Decision: treat LLMwiki as a future optional knowledge projection or adapter, not as the runtime authority.
+
+Recommended answer:
+- Yes, consider LLMwiki.
+- No, do not let it replace the local-first core, SQLite/domain state, Markdown package format, or Anki-like review scheduler.
+
+Target role:
+- Export a clean LLM-readable package from the current knowledge base.
+- Import or repair content through the same package and `ContentWriteService` path.
+- Provide an optional retrieval/index layer for AI-assisted reading, Q Queue work, or content audits.
+- Stay detachable so the app remains usable when LLMwiki is absent.
+
+Non-goals for the current phase:
+- Do not introduce a permanent background indexing daemon.
+- Do not require embeddings or semantic search for normal navigation.
+- Do not move private user data into a hosted LLMwiki service by default.
+- Do not bypass Markdown package hashes, manifest checks, or SQLite review state.
+
+Architecture guardrails:
+- The runtime authority remains the SQLite/domain store.
+- Markdown plus assets remain the portable learning package.
+- `ContentWriteService` remains the only write path for content mutations.
+- LLMwiki import/export should produce explicit reports: added, updated, skipped, failed, stale, and repaired.
+- Large media should stay as asset references, not inline LLM context blobs.
+
+Memory and local PC policy:
+- LLMwiki support must be lazy and on-demand.
+- Indexes should be incremental, hash-aware, and rebuildable.
+- The app should load summaries, manifests, or selected chunks instead of resident full-corpus ASTs.
+
+Future interface sketch:
+
+```text
+Learning OS domain store
+  -> package/export manifest
+  -> LLMwiki adapter
+  -> optional retrieval/audit/report output
+  -> ContentWriteService for accepted imports or repairs
+```
+
+Open decision:
+- If LLMwiki means a specific external project or file format, evaluate its schema and license before binding to it.
+- If LLMwiki means a general LLM-friendly wiki layer, implement it first as a local export/import adapter.

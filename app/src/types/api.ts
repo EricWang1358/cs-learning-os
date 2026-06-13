@@ -173,6 +173,107 @@ export type ApiAiJobEventsResponse = {
   events: AiJobEvent[]
 }
 
+export type ReviewQueueItem = {
+  target_type: 'quiz'
+  target_id: string
+  due_at: string
+  interval_days: number
+  ease_factor: number
+  reps: number
+  lapses: number
+  updated_at: string
+  title: string
+  area: string
+  difficulty: string
+  summary: string
+}
+
+export type ApiDueReviewsResponse = {
+  reviews: ReviewQueueItem[]
+}
+
+export type ReviewScheduleRecord = {
+  target_type: 'quiz'
+  target_id: string
+  due_at: string
+  interval_days: number
+  ease_factor: number
+  reps: number
+  lapses: number
+  updated_at: string
+}
+
+export type ApiQuizAttemptResponse = {
+  attempt_id: number
+  review: ReviewScheduleRecord
+}
+
+export type SchemaMetaItem = {
+  value: string
+  updated_at: string
+}
+
+export type ApiSystemSchemaResponse = {
+  schema: Record<string, SchemaMetaItem>
+}
+
+export type RepairIssue = {
+  severity: 'info' | 'warning' | 'error'
+  kind: string
+  target_type?: string
+  target_id?: string
+  path?: string
+  source_slug?: string
+  target_slug?: string
+  link_kind?: string
+  [key: string]: unknown
+}
+
+export type ApiSystemRepairResponse = {
+  ok: boolean
+  generated_at: string
+  issue_count: number
+  issues: RepairIssue[]
+}
+
+export type PackageManifestFile = {
+  path: string
+  size_bytes: number
+  mtime_ns: number
+  sha256: string
+}
+
+export type PackageManifest = {
+  package_format_version: string
+  generated_at: string
+  content_root: string
+  counts: {
+    nodes: number
+    quizzes: number
+    assets: number
+    files: number
+  }
+  files: PackageManifestFile[]
+  written_to?: string
+}
+
+export type ApiPackageExportResponse = {
+  manifest: PackageManifest
+}
+
+export type ApiAiPreflightResponse = {
+  provider: string
+  ok: boolean
+  checks?: Record<string, boolean>
+  codex_cli?: string
+  model?: string
+  model_provider?: string
+  base_url?: string
+  codex_home?: string
+  ran_model: boolean
+  message: string
+}
+
 export type SystemMetrics = {
   counts: {
     nodes: number
@@ -180,6 +281,7 @@ export type SystemMetrics = {
     open_questions: number
     active_ai_jobs: number
     failed_ai_jobs: number
+    due_reviews: number
   }
   storage: {
     content_bytes: number
@@ -272,6 +374,6 @@ export type ApiErrorBody = {
   detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'graph' | 'health'
+export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'graph' | 'health'
 
 export type AiDraftScope = 'question' | 'selected' | 'page'

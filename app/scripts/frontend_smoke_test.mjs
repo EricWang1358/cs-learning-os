@@ -220,7 +220,24 @@ if (currentUrl(page).pathname !== '/health') {
 }
 await page.locator('.health-card').filter({ hasText: 'Project related files' }).first().waitFor()
 await page.locator('.health-card').filter({ hasText: 'Git upload estimate' }).first().waitFor()
+await page.getByLabel('Health repair').waitFor()
+await page.getByLabel('Package export').waitFor()
+await page.getByLabel('AI preflight').waitFor()
+await page.getByLabel('Schema and content index').waitFor()
 await page.screenshot({ path: screenshotPath('desktop-system-health.png'), fullPage: false })
+
+await page.getByRole('button', { name: 'Daily review' }).click()
+await page.getByRole('heading', { name: 'Review Queue' }).waitFor()
+await page.getByLabel('Daily review workspace').waitFor()
+await page.getByLabel('Daily review queue').waitFor()
+if (currentUrl(page).pathname !== '/review') {
+  throw new Error('Daily review should use the /review route.')
+}
+await page.getByLabel('Selected quiz review').getByRole('button', { name: 'Reveal answer' }).first().click()
+await page.locator('.markdown-body').first().waitFor()
+await page.getByLabel('Review rating').getByRole('button', { name: 'Good' }).click()
+await page.waitForTimeout(500)
+await page.screenshot({ path: screenshotPath('desktop-daily-review.png'), fullPage: false })
 
 await page.goto(`${baseUrl}/nodes/binary-search?focus=1`, { waitUntil: 'networkidle' })
 await page.locator('.markdown-body h1', { hasText: 'Binary Search' }).waitFor()

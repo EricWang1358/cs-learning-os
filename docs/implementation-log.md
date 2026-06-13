@@ -755,3 +755,48 @@ Completed:
 
 Verified:
 - Backend smoke test covers the lightweight preflight endpoint.
+
+## 2026-06-13: Productization Panels and Daily Review
+
+Completed:
+- Added a first-class Daily Review route at `/review`.
+- Added a Daily Review sidebar entry and URL route parsing.
+- Added a reusable `DailyReviewPanel` component with:
+  - due/new quiz card list
+  - selected quiz review workspace
+  - reveal-before-rating behavior
+  - `Again`, `Hard`, `Good`, and `Easy` rating actions
+- Extended `GET /api/review/due` so the queue includes due review rows plus fresh unqueued quiz cards.
+- Added typed frontend API contracts for review queue items, quiz attempts, system repair, schema metadata, package export, and AI preflight.
+- Added a reusable `HealthActionPanels` component under System Health with:
+  - repair and integrity issue panels
+  - package export manifest panel
+  - AI preflight panel
+  - schema metadata panel
+  - content index summary panel
+- Extended browser smoke coverage for:
+  - `/review`
+  - reveal-and-rate Daily Review flow
+  - health repair panel
+  - package export panel
+  - AI preflight panel
+  - schema/content index panel
+
+Architecture notes:
+- The scheduler remains intentionally Anki-like and lightweight.
+- Daily Review uses existing quiz IDs and `review_queue` state instead of adding a heavy recommendation engine.
+- The health panels expose deployability and productization diagnostics without changing the local-first data policy.
+- Edit-mode smoke coverage remains in place; this change did not route edits through new side paths.
+
+Verified:
+- `npm run lint`
+- `npm run build`
+- `python -m py_compile backend/api.py backend/learning_service.py backend/smoke_test.py`
+- `.venv\Scripts\python.exe backend\smoke_test.py`
+- `node --check app/scripts/frontend_smoke_test.mjs`
+- Full browser frontend smoke test against temporary FastAPI, Vite, and isolated smoke SQLite database
+- `git diff --check`
+
+Team workflow:
+- Used parallel subagents for bounded component implementation and verification reconnaissance.
+- Main integration retained ownership of route wiring, backend queue behavior, smoke tests, and final verification.

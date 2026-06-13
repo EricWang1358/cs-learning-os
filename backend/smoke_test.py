@@ -350,6 +350,18 @@ def main() -> int:
     assert "linked_nodes" in quiz_payload
     assert isinstance(quiz_payload["linked_nodes"], list)
 
+    fresh_reviews = client.get("/api/review/due")
+    assert fresh_reviews.status_code == 200, fresh_reviews.text
+    fresh_reviews_payload = fresh_reviews.json()
+    assert "reviews" in fresh_reviews_payload
+    assert fresh_reviews_payload["reviews"]
+    fresh_review_item = fresh_reviews_payload["reviews"][0]
+    assert fresh_review_item["target_type"] == "quiz"
+    assert fresh_review_item["target_id"]
+    assert fresh_review_item["title"]
+    assert "summary" in fresh_review_item
+    assert "interval_days" in fresh_review_item
+
     original_quiz_body = quiz_payload["body"]
     edited_quiz_body = original_quiz_body + "\n\n## Quiz Smoke Edit\nThis temporary edit verifies quiz save support."
     update_quiz = client.put(
@@ -405,7 +417,8 @@ def main() -> int:
     assert invalid_attempt.status_code == 422, invalid_attempt.text
     due_reviews = client.get("/api/review/due")
     assert due_reviews.status_code == 200, due_reviews.text
-    assert "reviews" in due_reviews.json()
+    due_reviews_payload = due_reviews.json()
+    assert "reviews" in due_reviews_payload
 
     ai_revision = client.post(
         "/api/ai/revise",
