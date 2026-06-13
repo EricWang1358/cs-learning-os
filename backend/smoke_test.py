@@ -11,6 +11,7 @@ os.environ["CS_LEARNING_DB"] = str(ROOT / "generated" / "smoke" / "knowledge.db"
 from fastapi.testclient import TestClient
 
 os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
+os.environ["CS_LEARNING_AI_ENABLED"] = "true"
 os.environ.pop("OPENAI_API_KEY", None)
 
 from ingest import ingest
@@ -119,7 +120,25 @@ def main() -> int:
     preflight = client.get("/api/ai/preflight")
     assert preflight.status_code == 200, preflight.text
     assert "ok" in preflight.json()
+    assert preflight.json()["enabled"] is True
     assert preflight.json()["ran_model"] is False
+
+    os.environ["CS_LEARNING_AI_ENABLED"] = "false"
+    disabled_preflight = client.get("/api/ai/preflight")
+    assert disabled_preflight.status_code == 200, disabled_preflight.text
+    assert disabled_preflight.json()["enabled"] is False
+    blocked_job = client.post(
+        "/api/ai/jobs",
+        json={
+            "target_type": "node",
+            "target_id": "project-crud-app",
+            "question_ids": [],
+            "question": "Blocked smoke question.",
+            "instruction": "This must not create a job.",
+        },
+    )
+    assert blocked_job.status_code == 403, blocked_job.text
+    os.environ["CS_LEARNING_AI_ENABLED"] = "true"
 
     nodes = client.get("/api/nodes")
     assert nodes.status_code == 200, nodes.text

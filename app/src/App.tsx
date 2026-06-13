@@ -326,11 +326,13 @@ function DraftConflictCard({
   onQueue,
   onFreshDraft,
   isBusy,
+  isFreshDraftEnabled,
 }: {
   message: string
   onQueue: () => void
   onFreshDraft: () => void
   isBusy: boolean
+  isFreshDraftEnabled: boolean
 }) {
   return (
     <section className="draft-conflict-card" aria-label="AI draft conflict">
@@ -341,8 +343,8 @@ function DraftConflictCard({
         <button type="button" className="focus-toggle" onClick={onQueue}>
           Return to Q Queue
         </button>
-        <button type="button" className="focus-toggle ai-action" disabled={isBusy} onClick={onFreshDraft}>
-          {isBusy ? 'Creating...' : 'Create fresh draft'}
+        <button type="button" className="focus-toggle ai-action" disabled={isBusy || !isFreshDraftEnabled} onClick={onFreshDraft}>
+          {!isFreshDraftEnabled ? 'AI disabled' : isBusy ? 'Creating...' : 'Create fresh draft'}
         </button>
       </div>
     </section>
@@ -1304,6 +1306,8 @@ function App() {
   const visibleTracks =
     viewMode === 'nodes' && !SYSTEM_AREAS.includes(activeArea) ? tracks : []
   const visibleReaderQuestions = readerQuestions
+  const aiEnabled = aiPreflight?.enabled !== false
+  const aiDisabledMessage = aiPreflight?.message || 'AI drafting is disabled for this beta. Questions are still saved locally.'
   const isAiJobRunning = Boolean(activeAiJob && ['queued', 'solving'].includes(activeAiJob.status))
   const activeAiJobStartedAt = activeAiJob ? new Date(activeAiJob.started_at || activeAiJob.created_at).getTime() : Number.NaN
   const aiElapsedSeconds = isAiJobRunning && !Number.isNaN(activeAiJobStartedAt)
@@ -1320,7 +1324,9 @@ function App() {
         ? 'Write a question before saving or drafting.'
         : '')
   const aiDraftHint =
-    isAiRevising
+    !aiEnabled
+      ? 'AI drafting is off for this beta. Save questions locally and review them later.'
+      : isAiRevising
       ? 'Creating a draft job...'
       : isAiJobRunning
         ? 'An AI job is already running for this target. Check Q Queue for progress.'
@@ -1421,6 +1427,11 @@ function App() {
   }
 
   const draftQuestionFromQueue = async (question: ReaderQuestion) => {
+    if (!aiEnabled) {
+      setAiStatus(aiDisabledMessage)
+      setError('')
+      return
+    }
     const scope = questionScopes[question.id] ?? 'question'
     const targetType = question.target_type
     const targetId = question.target_id
@@ -1568,6 +1579,11 @@ function App() {
   }
 
   const retryAiJob = async (job: AiJob) => {
+    if (!aiEnabled) {
+      setAiStatus(aiDisabledMessage)
+      setError('')
+      return
+    }
     try {
       setAiStatus(`Retrying job #${job.id}...`)
       const data = await postJson<ApiAiJobResponse>(`/api/ai/jobs/${job.id}/retry`, {})
@@ -1585,6 +1601,10 @@ function App() {
 
   const createFreshDraftFromConflict = async () => {
     if (!activeAiJob) return
+    if (!aiEnabled) {
+      setAiStatus(aiDisabledMessage)
+      return
+    }
     const questionIds = activeAiJob.question_ids
     setDraftConflict('')
     setAiRevision(null)
@@ -1706,6 +1726,11 @@ function App() {
   }
 
   const requestAiRevision = async () => {
+    if (!aiEnabled) {
+      setQuestionFeedback(aiDisabledMessage)
+      setAiStatus(aiDisabledMessage)
+      return
+    }
     const targetType = viewMode === 'quizzes' ? 'quiz' : 'node'
     const targetId = viewMode === 'quizzes' ? selectedQuizId : selectedSlug
     const currentBody = viewMode === 'quizzes' ? selectedQuiz?.body : selectedNode?.body
@@ -2571,10 +2596,10 @@ function App() {
                             <button
                               type="button"
                               className="text-link"
-                              disabled={isAiRevising}
+                              disabled={!aiEnabled || isAiRevising}
                               onClick={() => draftQuestionFromQueue(item.question)}
                             >
-                              Draft
+                              {aiEnabled ? 'Draft' : 'AI disabled'}
                             </button>
                           </>
                         )}
@@ -2584,8 +2609,8 @@ function App() {
                           </button>
                         )}
                         {linkedJob?.status === 'failed' && (
-                          <button type="button" className="text-link" onClick={() => retryAiJob(linkedJob)}>
-                            Retry
+                          <button type="button" className="text-link" disabled={!aiEnabled} onClick={() => retryAiJob(linkedJob)}>
+                            {aiEnabled ? 'Retry' : 'Retry disabled'}
                           </button>
                         )}
                         <button
@@ -2637,8 +2662,8 @@ function App() {
                         </button>
                       )}
                       {item.job.status === 'failed' && (
-                        <button type="button" className="text-link" onClick={() => retryAiJob(item.job)}>
-                          Retry
+                        <button type="button" className="text-link" disabled={!aiEnabled} onClick={() => retryAiJob(item.job)}>
+                          {aiEnabled ? 'Retry' : 'Retry disabled'}
                         </button>
                       )}
                       {['queued', 'solving'].includes(item.job.status) && (
@@ -2892,6 +2917,7 @@ function App() {
                   packageManifest={packageManifestEntries}
                   llmWikiPack={llmWikiPackSummary}
                   aiPreflightChecks={aiPreflightChecks}
+                  aiPreflightEnabled={aiEnabled}
                   schemaMetadata={schemaMetadata}
                   contentIndex={contentIndexSummary}
                   onExportPackage={exportPackageManifest}
@@ -2998,6 +3024,7 @@ function App() {
                         onQueue={returnToQueueFromConflict}
                         onFreshDraft={createFreshDraftFromConflict}
                         isBusy={isAiRevising}
+                        isFreshDraftEnabled={aiEnabled}
                       />
                     )}
                     {aiRevision && <AiRevisionCard revision={aiRevision} diff={aiDraftDiff} />}
@@ -3065,6 +3092,7 @@ function App() {
             {isFocusMode && !isEditMode && (
               <ReaderQuestionPanel
                 aiDraftHint={aiDraftHint}
+                aiEnabled={aiEnabled}
                 aiStatus={aiStatus}
                 aiStatusClass={aiStatusClass}
                 aiStatusText={aiStatusText}
@@ -3181,6 +3209,7 @@ function App() {
                         onQueue={returnToQueueFromConflict}
                         onFreshDraft={createFreshDraftFromConflict}
                         isBusy={isAiRevising}
+                        isFreshDraftEnabled={aiEnabled}
                       />
                     )}
                     {aiRevision && <AiRevisionCard revision={aiRevision} diff={aiDraftDiff} />}
@@ -3285,6 +3314,7 @@ function App() {
             {isFocusMode && !isEditMode && (
               <ReaderQuestionPanel
                 aiDraftHint={aiDraftHint}
+                aiEnabled={aiEnabled}
                 aiStatus={aiStatus}
                 aiStatusClass={aiStatusClass}
                 aiStatusText={aiStatusText}

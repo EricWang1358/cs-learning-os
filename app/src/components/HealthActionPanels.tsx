@@ -69,6 +69,7 @@ export type HealthActionPanelsProps = {
   aiPreflightChecks?: AiPreflightCheck[]
   schemaMetadata?: SchemaMetadataItem[]
   contentIndex?: ContentIndexSummary
+  aiPreflightEnabled?: boolean
   onRepairIssue?: (issue: HealthIssue) => void
   onInspectIssue?: (issue: HealthIssue) => void
   onExportPackage?: () => void
@@ -133,6 +134,7 @@ function renderIssueList({
 
 export function HealthActionPanels({
   aiPreflightChecks = [],
+  aiPreflightEnabled = true,
   contentIndex,
   integrityIssues = [],
   llmWikiPack,
@@ -167,7 +169,7 @@ export function HealthActionPanels({
         </article>
         <article className="health-card">
           <p className="eyebrow">AI preflight</p>
-          <h3>{failedPreflightChecks ? `${failedPreflightChecks} blocked` : 'Ready'}</h3>
+          <h3>{!aiPreflightEnabled ? 'Disabled' : failedPreflightChecks ? `${failedPreflightChecks} blocked` : 'Ready'}</h3>
           <p>{aiPreflightChecks.length ? `${formatCount(aiPreflightChecks.length)} checks configured.` : 'No checks supplied.'}</p>
         </article>
         <article className="health-card">
@@ -285,8 +287,8 @@ export function HealthActionPanels({
         <div className="detail-toolbar">
           <h3>AI Preflight</h3>
           {onRunAiPreflight && (
-            <button type="button" className="focus-toggle ai-action" onClick={onRunAiPreflight}>
-              Run preflight
+            <button type="button" className="focus-toggle ai-action" disabled={!aiPreflightEnabled} onClick={onRunAiPreflight}>
+              {aiPreflightEnabled ? 'Run preflight' : 'AI disabled'}
             </button>
           )}
         </div>

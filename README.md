@@ -50,7 +50,7 @@ Use this table as the project reading map. It intentionally focuses on explanato
 | Text | Use it for | Current status |
 | --- | --- | --- |
 | [README.md](README.md) | Start here for setup, runtime paths, workflow, AI draft behavior, graph/health routes, and Git/data policy. | Current top-level guide. |
-| [docs/使用说明书.md](docs/使用说明书.md) | End-user walkthrough for launch, reading, focus mode, Q Queue, edit mode, quiz bank, and agent operating rules. | Useful but needs encoding cleanup before it is a reliable published manual. |
+| [docs/使用说明书.md](docs/使用说明书.md) | End-user walkthrough for launch, reading, focus mode, Q Queue, edit mode, quiz bank, beta data paths, and AI-disabled friend testing. | Current user manual. |
 | [docs/state-machine.md](docs/state-machine.md) | The most current engineering policy for route state, edit/review flows, reader questions, AI jobs, reading activity, graph, health, and app-store readiness. | Current architecture guardrail and best source for bug triage. |
 | [docs/worker-protocol.md](docs/worker-protocol.md) | Coordinator/worker collaboration protocol for reducing context loss, state regressions, and token waste as the project grows. | Current development-process guide. |
 | [docs/data-policy.md](docs/data-policy.md) | Rules for separating app shell, demo content, private content, generated files, and local-only artifacts. | Current policy; keep aligned with `README.md` and `skill/`. |
@@ -167,6 +167,27 @@ To only stop the local dev servers:
 ```powershell
 .\scripts\stop-dev.ps1
 ```
+
+## Friend Desktop Beta
+
+For a lightweight Windows desktop beta that can be sent to a friend, use:
+
+```powershell
+.\scripts\start-beta.ps1
+```
+
+or double-click `启动 Learning OS Beta.cmd`.
+
+The beta profile keeps app code and user data separate:
+
+- Data root: `%USERPROFILE%\CSLearningOS`
+- Content root: `%USERPROFILE%\CSLearningOS\content`
+- SQLite DB: `%USERPROFILE%\CSLearningOS\knowledge.db`
+- Exports: `%USERPROFILE%\CSLearningOS\exports`
+- Runtime cache: `%USERPROFILE%\CSLearningOS\generated`
+- AI: disabled by default through `CS_LEARNING_AI_ENABLED=false`
+
+This is a script-launched local web desktop beta, not a signed Electron/Tauri/App Store package. It is intended for friend testing before full installer work.
 
 Manual startup is also supported.
 
@@ -370,7 +391,7 @@ These follow from the explanatory texts above and should be treated as the next 
 | --- | --- | --- |
 | README navigation | The project now has many explanatory docs with overlapping authority. | Keep this navigation table updated whenever a new project-level doc is added or a stale doc is retired. |
 | Worker coordination | Future changes will cross frontend, backend, content, docs, and QA state. | Use `docs/worker-protocol.md` to route work through narrow workers with compact handoffs instead of one agent rereading the whole repo. |
-| User manual | `docs/使用说明书.md` is mojibake in the current checkout. | Re-save it as UTF-8 and update it to cover the current sort/search/focus-reading behavior. |
+| User manual | `docs/使用说明书.md` now covers beta launch, data paths, focus reading, Q Queue, edit mode, review, health, and AI-disabled testing. | Keep it aligned with every friend-beta or packaging change. |
 | Frontend docs | `app/README.md` is still the default Vite template. | Replace it with a frontend-specific guide: routes, state ownership, dev scripts, test commands, and component-splitting plan. |
 | Design docs | `app/DESIGN.md` describes a Binance-style financial UI, not the current Learning OS interface. | Move it to an archive/reference folder if still useful, or replace it with the real Learning OS visual system and layout rules. |
 | `App.tsx` size | `docs/state-machine.md` names growing `App.tsx` complexity as a current risk. | Split route shells, search controls, queue cards, markdown editor, AI job panel, graph/health views, and API client helpers into separate files. |

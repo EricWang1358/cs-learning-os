@@ -334,6 +334,7 @@ export type ApiLlmWikiExportResponse = {
 export type ApiAiPreflightResponse = {
   provider: string
   ok: boolean
+  enabled?: boolean
   checks?: Record<string, boolean>
   codex_cli?: string
   model?: string
@@ -390,6 +391,7 @@ export type SystemMetrics = {
   }
   ai: {
     ok: boolean
+    enabled?: boolean
     message: string
     provider?: string
     checks?: Record<string, boolean>

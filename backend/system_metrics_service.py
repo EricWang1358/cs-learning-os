@@ -17,11 +17,18 @@ class SystemMetricsService:
     github_ttl_seconds = 3600
     cache_max_stale_seconds = 86400
 
-    def __init__(self, project_root: Path, content_root: Path, db_path: Path, logger: logging.Logger) -> None:
+    def __init__(
+        self,
+        project_root: Path,
+        content_root: Path,
+        db_path: Path,
+        logger: logging.Logger,
+        generated_root: Path | None = None,
+    ) -> None:
         self.project_root = project_root.resolve()
         self.content_root = content_root.resolve()
         self.db_path = db_path.resolve()
-        self.generated_dir = self.project_root / "generated"
+        self.generated_dir = (generated_root or self.project_root / "generated").resolve()
         self.cache_path = self.generated_dir / "health-metrics-cache.json"
         self.logger = logger
         self.cache: dict[str, object] = {"payload": None, "collected_at": 0.0}

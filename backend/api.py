@@ -28,6 +28,7 @@ try:
     from .productization_router import create_productization_router
     from .quiz_router import create_quiz_router
     from .reader_question_router import create_reader_question_router
+    from .runtime_config import ai_enabled, app_profile, beta_mode
     from .system_metrics_service import SystemMetricsService
     from .system_router import create_system_router
 except ImportError:
@@ -50,6 +51,7 @@ except ImportError:
     from productization_router import create_productization_router
     from quiz_router import create_quiz_router
     from reader_question_router import create_reader_question_router
+    from runtime_config import ai_enabled, app_profile, beta_mode
     from system_metrics_service import SystemMetricsService
     from system_router import create_system_router
 
@@ -59,6 +61,8 @@ CONTENT_ROOT = Path(os.environ.get("CS_LEARNING_CONTENT", ROOT / "content-demo")
 CONTENT_ASSETS_ROOT = (CONTENT_ROOT / "assets").resolve()
 DB_PATH = Path(os.environ.get("CS_LEARNING_DB", ROOT / "var" / "knowledge.db")).resolve()
 EXPORT_ROOT = ROOT / "generated" / "exports"
+EXPORT_ROOT = Path(os.environ.get("CS_LEARNING_EXPORT_ROOT", EXPORT_ROOT)).resolve()
+GENERATED_ROOT = Path(os.environ.get("CS_LEARNING_GENERATED_ROOT", ROOT / "generated")).resolve()
 
 logger = logging.getLogger("cs_learning.api")
 app = FastAPI(title="CS Learning OS API")
@@ -78,7 +82,7 @@ app.add_middleware(
 ai_provider_name = ai_revision_service.ai_provider_name
 openai_is_configured = ai_revision_service.openai_is_configured
 openai_model_name = ai_revision_service.openai_model_name
-metrics_service = SystemMetricsService(ROOT, CONTENT_ROOT, DB_PATH, logger)
+metrics_service = SystemMetricsService(ROOT, CONTENT_ROOT, DB_PATH, logger, GENERATED_ROOT)
 
 
 def get_conn() -> sqlite3.Connection:
@@ -111,6 +115,9 @@ app.include_router(
         codex_cli_path,
         codex_job_home,
         codex_preflight,
+        ai_enabled,
+        app_profile,
+        beta_mode,
     )
 )
 app.include_router(
@@ -121,6 +128,7 @@ app.include_router(
         ai_provider_name,
         openai_model_name,
         codex_model_name,
+        ai_enabled,
     )
 )
 app.include_router(create_node_router(get_conn, CONTENT_ROOT))

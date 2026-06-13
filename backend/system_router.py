@@ -30,6 +30,9 @@ def create_system_router(
     codex_cli_path: Callable[[], str],
     codex_job_home: Callable[[], object],
     codex_preflight: Callable[..., dict],
+    ai_enabled: Callable[[], bool],
+    app_profile: Callable[[], str],
+    beta_mode: Callable[[], bool],
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["system"])
 
@@ -38,9 +41,12 @@ def create_system_router(
         recover_stale_ai_jobs()
         return {
             "ok": True,
+            "profile": app_profile(),
+            "beta": beta_mode(),
             "ai": {
                 "provider": ai_provider_name(),
-                "configured": codex_is_configured() if ai_provider_name() == "codex-cli" else openai_is_configured(),
+                "enabled": ai_enabled(),
+                "configured": ai_enabled() and (codex_is_configured() if ai_provider_name() == "codex-cli" else openai_is_configured()),
                 "model": codex_model_name() if ai_provider_name() == "codex-cli" else openai_model_name(),
                 "codex_cli": codex_cli_path(),
                 "codex_model_provider": codex_model_provider_name(),
@@ -52,10 +58,21 @@ def create_system_router(
     @router.get("/ai/preflight")
     def ai_preflight(run_model: bool = False) -> dict:
         provider = ai_provider_name()
+        if not ai_enabled():
+            return {
+                "provider": provider,
+                "ok": False,
+                "enabled": False,
+                "checks": {"ai_enabled": False},
+                "model": codex_model_name() if provider == "codex-cli" else openai_model_name(),
+                "ran_model": False,
+                "message": "AI features are disabled for this beta profile. Configure CS_LEARNING_AI_ENABLED=true only on a trusted local machine.",
+            }
         if provider == "codex-cli":
-            return {"provider": provider, **codex_preflight(run_model=run_model)}
+            return {"provider": provider, "enabled": True, **codex_preflight(run_model=run_model)}
         return {
             "provider": provider,
+            "enabled": True,
             "ok": openai_is_configured(),
             "checks": {"openai_api_key": openai_is_configured()},
             "model": openai_model_name(),
@@ -90,10 +107,19 @@ def create_system_router(
         elif refresh:
             background_tasks.add_task(metrics_service.refresh_cache)
             heavy_metrics["refreshing"] = True
-        ai_payload = codex_preflight(run_model=False) if ai_provider_name() == "codex-cli" else {
-            "ok": openai_is_configured(),
-            "message": "OpenAI API key is configured." if openai_is_configured() else "OPENAI_API_KEY is not configured.",
-        }
+        if not ai_enabled():
+            ai_payload = {
+                "ok": False,
+                "enabled": False,
+                "provider": ai_provider_name(),
+                "message": "AI features are disabled for this beta profile.",
+            }
+        else:
+            ai_payload = codex_preflight(run_model=False) if ai_provider_name() == "codex-cli" else {
+                "ok": openai_is_configured(),
+                "enabled": True,
+                "message": "OpenAI API key is configured." if openai_is_configured() else "OPENAI_API_KEY is not configured.",
+            }
         return {
             "counts": counts,
             **heavy_metrics,

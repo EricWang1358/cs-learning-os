@@ -54,6 +54,7 @@ def create_ai_router(
     ai_provider_name: Callable[[], str],
     openai_model_name: Callable[[], str],
     codex_model_name: Callable[[], str],
+    ai_enabled: Callable[[], bool],
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["ai"])
 
@@ -65,6 +66,16 @@ def create_ai_router(
 
     def ensure_job_can_write(job_id: int) -> sqlite3.Row:
         return service_ensure_job_can_write(get_conn, job_id)
+
+    def ensure_ai_enabled() -> None:
+        if not ai_enabled():
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "AI features are disabled for this beta profile. "
+                    "Enable CS_LEARNING_AI_ENABLED=true only on a trusted local machine."
+                ),
+            )
 
     def load_ai_target(
         conn: sqlite3.Connection,
@@ -193,6 +204,7 @@ def create_ai_router(
 
     @router.post("/ai/revise")
     def revise_with_ai(payload: AiReviseRequest) -> dict:
+        ensure_ai_enabled()
         provider = ai_provider_name()
         logger.info(
             "AI revision requested provider=%s target_type=%s target_id=%s question_ids=%s",
@@ -235,6 +247,7 @@ def create_ai_router(
 
     @router.post("/ai/jobs")
     def create_ai_job(payload: AiJobCreate, background_tasks: BackgroundTasks) -> dict:
+        ensure_ai_enabled()
         with get_conn() as conn:
             base_body = payload.draft_body.strip()
             if not base_body:
@@ -306,6 +319,7 @@ def create_ai_router(
 
     @router.post("/ai/jobs/{job_id}/retry")
     def retry_ai_job(job_id: int, background_tasks: BackgroundTasks) -> dict:
+        ensure_ai_enabled()
         with get_conn() as conn:
             new_row = ai_job_service.retry_ai_job(
                 conn,

@@ -2,6 +2,7 @@ import type { ReaderQuestion } from '../types/api'
 
 export function ReaderQuestionPanel({
   aiDraftHint,
+  aiEnabled,
   aiStatus,
   aiStatusClass,
   aiStatusText,
@@ -18,6 +19,7 @@ export function ReaderQuestionPanel({
   onSubmitQuestion,
 }: {
   aiDraftHint: string
+  aiEnabled: boolean
   aiStatus: string
   aiStatusClass: string
   aiStatusText: string
@@ -64,10 +66,10 @@ export function ReaderQuestionPanel({
       <button
         type="button"
         className="focus-toggle ai-action"
-        disabled={isAiRevising}
+        disabled={!aiEnabled || isAiRevising}
         onClick={onDraftWithAi}
       >
-        {isAiRevising ? 'Drafting...' : 'Draft with AI'}
+        {!aiEnabled ? 'AI disabled' : isAiRevising ? 'Drafting...' : 'Draft with AI'}
       </button>
       {aiStatus && <p className={aiStatusClass}>{aiStatusText}</p>}
       <div className="reader-question-list">
