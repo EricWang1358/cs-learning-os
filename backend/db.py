@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 PACKAGE_FORMAT_VERSION = "1"
 
 
@@ -198,6 +198,22 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     note TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS bite_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL CHECK(source_type IN ('node', 'quiz')),
+    source_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    area TEXT NOT NULL DEFAULT '',
+    difficulty TEXT NOT NULL DEFAULT '',
+    prompt TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    hint TEXT NOT NULL DEFAULT '',
+    explanation_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archive')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_reader_questions_status_created
 ON reader_questions(status, created_at DESC);
 
@@ -212,6 +228,9 @@ ON review_queue(due_at, target_type, target_id);
 
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_answered
 ON quiz_attempts(quiz_id, answered_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_bite_cards_status_updated
+ON bite_cards(status, updated_at DESC);
 """
 
 

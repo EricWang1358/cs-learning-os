@@ -208,6 +208,53 @@ export type ApiQuizAttemptResponse = {
   review: ReviewScheduleRecord
 }
 
+export type DailyBite = {
+  id: string
+  card_id: number | null
+  source_type: 'node' | 'quiz'
+  source_id: string
+  title: string
+  area: string
+  difficulty: string
+  prompt: string
+  answer: string
+  hint: string
+  explanation: string[]
+  summary: string
+  linked_nodes: Array<{ slug: string; kind: string; title: string }>
+  open_quiz_path: string
+  open_node_path: string
+  status: 'generated' | 'active' | 'archive'
+  created_at: string
+  updated_at: string
+}
+
+export type ApiBiteResponse = {
+  bite: DailyBite
+  next_cursor: string
+}
+
+export type ApiBitesResponse = {
+  bites: DailyBite[]
+}
+
+export type ApiBiteCardResponse = {
+  bite: DailyBite
+}
+
+export type BiteCardPayload = {
+  source_type: 'node' | 'quiz'
+  source_id: string
+  title: string
+  area: string
+  difficulty: string
+  prompt: string
+  answer: string
+  hint: string
+  explanation: string[]
+  status?: 'active' | 'archive'
+}
+
 export type SchemaMetaItem = {
   value: string
   updated_at: string
@@ -446,6 +493,6 @@ export type ApiErrorBody = {
   detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'graph' | 'health'
+export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health'
 
 export type AiDraftScope = 'question' | 'selected' | 'page'

@@ -1,6 +1,7 @@
 import { lazy, startTransition, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
+import { DailyBitePanel } from './components/DailyBitePanel'
 import { DailyReviewPanel, type DailyReviewRating } from './components/DailyReviewPanel'
 import { HealthActionPanels } from './components/HealthActionPanels'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
@@ -452,6 +453,7 @@ function App() {
   const availableQuizSortOptions = visibleQuizSortOptions(query)
   const graphPage = routeState.graphPage
   const isFocusMode = routeState.isFocusMode
+  const isWidgetMode = routeState.isWidgetMode
   const [nodes, setNodes] = useState<NodeSummary[]>([])
   const [areas, setAreas] = useState<AreaSummary[]>([])
   const [areaSystemCounts, setAreaSystemCounts] = useState<Record<string, number>>({})
@@ -574,6 +576,10 @@ function App() {
     navigate(`/queue${routeSearch({ query })}`)
   }
 
+  const navigateToBite = () => {
+    navigate('/bite')
+  }
+
   const refreshAreas = async () => {
     const data = await fetchJson<ApiAreasResponse>('/api/areas')
     setAreas(data.areas)
@@ -663,6 +669,8 @@ function App() {
             setSelectedReviewId((current) => current || data.reviews[0]?.target_id || '')
             setReviewError('')
           })
+        } else if (viewMode === 'bite') {
+          setError('')
         } else if (viewMode === 'graph') {
           const cacheKey = `${location.pathname}?page=${graphPage}`
           const cached = graphCache[cacheKey]
@@ -1292,6 +1300,7 @@ function App() {
     if (viewMode === 'graph') return graphPayload?.children.length ?? 0
     if (viewMode === 'health') return storagePartitions.length
     if (viewMode === 'review') return reviewQueue.length
+    if (viewMode === 'bite') return 1
     if (viewMode === 'quizzes') return filteredQuizzes.length
     return filteredNodes.length
   })()
@@ -1300,6 +1309,7 @@ function App() {
     if (viewMode === 'graph') return graphPayload?.pagination.total ?? 0
     if (viewMode === 'health') return storagePartitions.length
     if (viewMode === 'review') return reviewQueue.length
+    if (viewMode === 'bite') return 1
     if (viewMode === 'quizzes') return quizzes.length
     return nodes.length
   })()
@@ -2182,7 +2192,7 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -2267,6 +2277,16 @@ function App() {
           </button>
           <button
             type="button"
+            className={viewMode === 'bite' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigateToBite()
+            }}
+          >
+            Daily Bite
+          </button>
+          <button
+            type="button"
             className={viewMode === 'review' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
@@ -2335,6 +2355,12 @@ function App() {
                 ? 'Loading health metrics...'
                 : `${visibleCount} size partitions, sorted by local footprint.`}
             </p>
+          </header>
+        ) : viewMode === 'bite' ? (
+          <header className="search-header cockpit-header">
+            <p className="eyebrow">Daily Bite</p>
+            <h2>One Blank</h2>
+            <p>Lightweight recall, linked back to your quiz Markdown.</p>
           </header>
         ) : viewMode === 'review' ? (
           <header className="search-header cockpit-header">
@@ -2543,6 +2569,14 @@ function App() {
                   <span>Due {review.dueAt}</span>
                 </button>
               ))
+            : viewMode === 'bite'
+            ? (
+                <article className="node-card selected bite-list-card">
+                  <span className="node-meta">Micro drill</span>
+                  <strong>Daily Bite</strong>
+                  <span>One fill-in blank pulled from your quiz bank.</span>
+                </article>
+              )
             : viewMode === 'question-queue'
             ? queueItems.map((item) => {
                 if (item.kind === 'question') {
@@ -2797,7 +2831,12 @@ function App() {
             <span aria-hidden="true" />
           </button>
         )}
-        {viewMode === 'review' ? (
+        {viewMode === 'bite' ? (
+          <DailyBitePanel
+            onOpenQuiz={(quizId) => navigateToQuiz(quizId, { focus: true })}
+            onOpenNode={(slug) => navigateToNode(slug, { focus: true })}
+          />
+        ) : viewMode === 'review' ? (
           <DailyReviewPanel
             reviews={reviewItems}
             selectedQuiz={selectedDailyReviewQuiz}

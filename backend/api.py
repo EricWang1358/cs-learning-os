@@ -13,6 +13,7 @@ try:
     from . import ai_revision_service
     from .asset_router import create_asset_router
     from .ai_router import create_ai_router
+    from .bite_router import create_bite_router
     from .codex_service import (
         codex_base_url,
         codex_cli_path,
@@ -36,6 +37,7 @@ except ImportError:
     import ai_revision_service
     from asset_router import create_asset_router
     from ai_router import create_ai_router
+    from bite_router import create_bite_router
     from codex_service import (
         codex_base_url,
         codex_cli_path,
@@ -133,6 +135,7 @@ app.include_router(
 )
 app.include_router(create_node_router(get_conn, CONTENT_ROOT))
 app.include_router(create_quiz_router(get_conn, CONTENT_ROOT))
+app.include_router(create_bite_router(get_conn))
 app.include_router(create_graph_router(get_conn))
 app.include_router(create_reader_question_router(get_conn))
 

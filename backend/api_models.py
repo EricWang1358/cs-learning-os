@@ -65,3 +65,26 @@ class QuizAttemptCreate(BaseModel):
     grade: str = Field(pattern="^(again|hard|good|easy)$")
     elapsed_ms: int = Field(default=0, ge=0)
     note: str = ""
+
+
+class BiteCardCreate(BaseModel):
+    source_type: str = Field(pattern="^(node|quiz)$")
+    source_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    area: str = ""
+    difficulty: str = ""
+    prompt: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    hint: str = ""
+    explanation: list[str] = []
+
+
+class BiteCardUpdate(BaseModel):
+    title: str = Field(min_length=1)
+    area: str = ""
+    difficulty: str = ""
+    prompt: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    hint: str = ""
+    explanation: list[str] = []
+    status: str = Field(default="active", pattern="^(active|archive)$")

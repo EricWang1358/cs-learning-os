@@ -388,6 +388,65 @@ def main() -> int:
     assert "linked_nodes" in quiz_payload
     assert isinstance(quiz_payload["linked_nodes"], list)
 
+    daily_bite = client.get("/api/bite/daily", params={"day": "2026-06-14"})
+    assert daily_bite.status_code == 200, daily_bite.text
+    bite_payload = daily_bite.json()
+    bite = bite_payload["bite"]
+    assert bite["source_type"] == "quiz"
+    assert bite["source_id"]
+    assert bite["prompt"]
+    assert "____" in bite["prompt"]
+    assert bite["answer"]
+    assert len(bite["explanation"]) == 3
+    assert "next_cursor" in bite_payload
+
+    bite_cards = client.get("/api/bites")
+    assert bite_cards.status_code == 200, bite_cards.text
+    assert "bites" in bite_cards.json()
+    created_bite = client.post(
+        "/api/bites",
+        json={
+            "source_type": "quiz",
+            "source_id": selected_quiz_id,
+            "title": "Smoke custom bite",
+            "area": "cs-fundamentals",
+            "difficulty": "easy",
+            "prompt": "____ verifies Daily Bite CRUD.",
+            "answer": "Smoke",
+            "hint": "It is the test name.",
+            "explanation": ["Create works.", "Update works.", "Delete archives."],
+        },
+    )
+    assert created_bite.status_code == 200, created_bite.text
+    created_bite_payload = created_bite.json()["bite"]
+    assert created_bite_payload["card_id"]
+    custom_bite_id = created_bite_payload["card_id"]
+    read_bite = client.get(f"/api/bites/{custom_bite_id}")
+    assert read_bite.status_code == 200, read_bite.text
+    assert read_bite.json()["bite"]["prompt"].startswith("____")
+    updated_bite = client.put(
+        f"/api/bites/{custom_bite_id}",
+        json={
+            "title": "Smoke custom bite updated",
+            "area": "cs-fundamentals",
+            "difficulty": "easy",
+            "prompt": "____ verifies Daily Bite update.",
+            "answer": "Update",
+            "hint": "CRUD letter U.",
+            "explanation": ["Updated prompt.", "Updated answer.", "Still linked to quiz."],
+            "status": "active",
+        },
+    )
+    assert updated_bite.status_code == 200, updated_bite.text
+    assert updated_bite.json()["bite"]["answer"] == "Update"
+    archived_bite = client.delete(f"/api/bites/{custom_bite_id}")
+    assert archived_bite.status_code == 200, archived_bite.text
+    assert archived_bite.json()["bite"]["status"] == "archive"
+
+    next_bite = client.get("/api/bite/next", params={"cursor": bite_payload["next_cursor"]})
+    assert next_bite.status_code == 200, next_bite.text
+    assert next_bite.json()["bite"]["source_type"] == "quiz"
+
     fresh_reviews = client.get("/api/review/due")
     assert fresh_reviews.status_code == 200, fresh_reviews.text
     fresh_reviews_payload = fresh_reviews.json()
