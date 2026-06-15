@@ -113,13 +113,14 @@ level: intro
 
 ## Standard Q: Quiz Bank Item
 
-Use Standard Q for fixed practice questions, exam screenshots, daily review candidates, and anything where the learner should answer before reading the explanation.
+Use Standard Q for fixed practice questions, exam screenshots, daily review candidates, Daily Bite candidates, and anything where the learner should answer before reading the explanation.
 
 Data rule:
 - Store quiz items under `<active-content-root>/quizzes/<area>/`, usually `data/content/quizzes/<area>/` for real local data.
 - Keep quiz items separate from knowledge nodes.
 - Link quiz items to knowledge nodes with `linked_nodes`.
 - Use `weight` as a future scheduling hint, but do not overfit the first version.
+- Make quiz Markdown deterministic enough for Daily Bite extraction; do not depend on AI-only card generation.
 
 Required frontmatter:
 
@@ -144,13 +145,16 @@ Required body:
 # Title
 
 ## Prompt
-The question exactly enough to practice from.
+The question exactly enough to practice from. Use numbered items when the quiz can become multiple Daily Bite cards.
 
 ## Answer
-Final answer first.
+Final answer first. Match numbered answers to numbered prompt items when possible.
+
+## Hint
+One sentence that helps recall the answer without giving it away.
 
 ## Explanation
-Step-by-step reasoning.
+Start with three short sentences that can stand alone in Daily Bite, then continue with step-by-step reasoning if needed.
 
 ## Plain Explanation
 Explain the trick or mental model.
@@ -164,6 +168,8 @@ Mention linked nodes and why to review them.
 
 Quality rules:
 - Prefer one core skill per quiz item.
+- Prefer one Daily Bite-sized recall target per numbered prompt item.
+- Keep each answer line short enough to type: command, term, invariant, formula, or one compact phrase.
 - Include tempting wrong answers when they teach a useful distinction.
 - If an answer is uncertain from the screenshot, mark the quiz as needing confirmation instead of inventing certainty.
 - Keep the prompt reproducible without needing the original image.
@@ -171,3 +177,37 @@ Quality rules:
 - Add a "How To Think" or equivalent walkthrough when the solution depends on recognizing noise, calling convention, or a non-obvious instruction pattern.
 - Use `Shark Tank Passcode: process_code and is_valid_code` as the quality bar: final answer first, then exhaustive but readable reasoning, then plain explanation, then linked review.
 - If the quiz requires a concept that is not already explained deeply enough, update or create the linked Standard A node before claiming the quiz is complete.
+
+### Daily Bite-Friendly Quiz Pattern
+
+Use this pattern when the quiz should feed the `/bite` widget cleanly:
+
+```markdown
+## Prompt
+
+1. What command/concept/invariant fills this blank: ____?
+
+## Answer
+
+1. short answer
+
+## Hint
+
+One sentence hint.
+
+## Explanation
+
+First sentence gives the direct reason.
+Second sentence connects it to the linked node or source quiz.
+Third sentence names the common mistake.
+
+Then add deeper reasoning if the full quiz needs it.
+```
+
+Daily Bite extraction contract:
+- `## Prompt` supplies the micro-question.
+- `## Answer` supplies the expected typed answer.
+- `## Hint` supplies the hint.
+- The first three concise `## Explanation` sentences supply the widget explanation.
+- Numbered prompt/answer pairs let one larger quiz produce multiple bite-sized recall targets.
+- Custom Bite edits live in SQLite `bite_cards`; they are local runtime cards and must not be treated as the source of truth for durable study content.

@@ -34,7 +34,8 @@ The LLM is responsible for judgment calls:
 8. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
 9. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
 10. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
-11. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index only for the selected content root when the map has changed.
+11. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
+12. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index only for the selected content root when the map has changed.
 
 ## Map Operations
 
@@ -56,6 +57,20 @@ Before writing a file:
 - Never add real personal study material to `content-demo/`; it is only for small demo and smoke-test fixtures.
 
 After writing or moving content, rebuild the selected SQLite index with the same content root and database path used by the app.
+
+## Daily Bite Authoring Rule
+
+Daily Bite is the lightweight recall surface for this learning OS. It can derive a one-blank micro-card from quiz Markdown, and it can also store user-edited custom Bite cards in SQLite `bite_cards`.
+
+When the user asks for addictive daily practice, bite-sized review, flashcards, Anki-like cards, or daily questions:
+- Prefer creating or improving Standard Q quiz Markdown first, not isolated app-shell data.
+- Shape the quiz so Daily Bite can extract one prompt, one answer, one hint, and three concise explanation lines.
+- Use numbered Prompt and Answer pairs when a quiz contains multiple small recall items.
+- Keep answer lines short enough to be typed into a fill-in blank.
+- Add a `## Hint` section when the answer is not inferable from the prompt.
+- Put the first three `## Explanation` sentences in a concise form before any deeper walkthrough.
+- Do not require AI generation for Daily Bite; the card must work offline from Markdown.
+- Treat custom Bite CRUD as a local runtime layer. Editing or archiving a custom Bite must not mutate the source quiz Markdown.
 
 ## Tutorial Image Rule
 
