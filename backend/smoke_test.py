@@ -443,6 +443,32 @@ def main() -> int:
     assert archived_bite.status_code == 200, archived_bite.text
     assert archived_bite.json()["bite"]["status"] == "archive"
 
+    choice_bite = client.post(
+        "/api/bites",
+        json={
+            "source_type": "quiz",
+            "source_id": selected_quiz_id,
+            "title": "Smoke multiple choice bite",
+            "area": "cs-fundamentals",
+            "difficulty": "easy",
+            "question_type": "multiple_choice",
+            "prompt": "Which command examines 20 4-byte words at the stack pointer?",
+            "answer": "x/20wx $rsp",
+            "options": ["x/20wx $rsp", "stepi", "disassemble", "x/s $rsp+8"],
+            "hint": "Use GDB examine memory format.",
+            "explanation": ["x means examine memory.", "20w means 20 words.", "$rsp is the stack pointer."],
+        },
+    )
+    assert choice_bite.status_code == 200, choice_bite.text
+    choice_payload = choice_bite.json()["bite"]
+    assert choice_payload["question_type"] == "multiple_choice"
+    assert "x/20wx $rsp" in choice_payload["options"]
+    choice_read = client.get(f"/api/bites/{choice_payload['card_id']}")
+    assert choice_read.status_code == 200, choice_read.text
+    assert choice_read.json()["bite"]["question_type"] == "multiple_choice"
+    archived_choice_bite = client.delete(f"/api/bites/{choice_payload['card_id']}")
+    assert archived_choice_bite.status_code == 200, archived_choice_bite.text
+
     next_bite = client.get("/api/bite/next", params={"cursor": bite_payload["next_cursor"]})
     assert next_bite.status_code == 200, next_bite.text
     assert next_bite.json()["bite"]["source_type"] == "quiz"

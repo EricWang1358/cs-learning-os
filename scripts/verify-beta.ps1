@@ -66,6 +66,7 @@ Add-Check "project-venv" (Test-Path $Python) "warning" "Project virtual environm
 Add-Check "npm-command" ([bool]$npmCommand) "error" "npm command: $npmCommand." "Install Node.js LTS from nodejs.org, then rerun bootstrap."
 Add-Check "package-lock" (Test-Path (Join-Path $AppDir "package-lock.json")) "error" "Frontend package lock is present." "Restore app/package-lock.json before packaging beta."
 Add-Check "node-modules" (Test-Path (Join-Path $AppDir "node_modules")) "warning" "Frontend node_modules path: $(Join-Path $AppDir "node_modules")." "Run .\scripts\bootstrap-beta.ps1 to install frontend dependencies."
+Add-Check "vite-command" (Test-Path (Join-Path $AppDir "node_modules\.bin\vite.cmd")) "warning" "Frontend Vite command path: $(Join-Path $AppDir "node_modules\.bin\vite.cmd")." "Run .\scripts\bootstrap-beta.ps1 to repair frontend dependencies."
 Add-Check "content-demo" (Test-Path (Join-Path $Root "content-demo")) "error" "Demo content is available for first-run copy." "Restore content-demo before packaging beta."
 Add-Check "data-root" ([bool]$ResolvedDataRoot) "error" "Beta data root: $ResolvedDataRoot." "Set -DataRoot to a writable folder."
 Add-Check "api-port" (Test-PortAvailable $ApiPort) "warning" "API port $ApiPort availability checked." "Close the process using the port or let dev.ps1 stop the local listener."
@@ -74,6 +75,16 @@ Add-Check "frontend-port" (Test-PortAvailable $FrontendPort) "warning" "Frontend
 if (Test-Path $Python) {
     $dependencyProbe = & $Python -c "import fastapi, uvicorn, openai; print('ok')" 2>&1
     Add-Check "backend-deps" ($LASTEXITCODE -eq 0) "error" "Backend dependency probe: $dependencyProbe." "Run .\scripts\bootstrap-beta.ps1 to install backend requirements."
+}
+
+if ($npmCommand -and (Test-Path (Join-Path $AppDir "package.json"))) {
+    Push-Location $AppDir
+    try {
+        $frontendProbe = & $npmCommand ls vite --depth=0 2>&1
+        Add-Check "frontend-deps" ($LASTEXITCODE -eq 0) "warning" "Frontend dependency probe: $frontendProbe." "Run .\scripts\bootstrap-beta.ps1 to repair frontend dependencies."
+    } finally {
+        Pop-Location
+    }
 }
 
 $payload = [pscustomobject]@{

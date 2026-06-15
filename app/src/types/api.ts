@@ -216,8 +216,10 @@ export type DailyBite = {
   title: string
   area: string
   difficulty: string
+  question_type: 'blank' | 'multiple_choice'
   prompt: string
   answer: string
+  options: string[]
   hint: string
   explanation: string[]
   summary: string
@@ -248,8 +250,10 @@ export type BiteCardPayload = {
   title: string
   area: string
   difficulty: string
+  question_type: 'blank' | 'multiple_choice'
   prompt: string
   answer: string
+  options: string[]
   hint: string
   explanation: string[]
   status?: 'active' | 'archive'

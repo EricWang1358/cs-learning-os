@@ -71,6 +71,13 @@ function scoreAnswer(draft: string, answer: string) {
   return 'miss' as const
 }
 
+function parseChoiceLines(value: string) {
+  return value
+    .split('\n')
+    .map((line) => line.replace(/^\s*(?:[-*]\s*)?(?:[A-Ha-h][.)]\s*)?/, '').trim())
+    .filter(Boolean)
+}
+
 function completeProgress(current: BiteProgress) {
   const today = todayKey()
   if (current.lastCompletedDate === today) return current
@@ -90,8 +97,10 @@ function draftFromBite(bite: DailyBite): BiteCardPayload {
     title: bite.title,
     area: bite.area,
     difficulty: bite.difficulty,
+    question_type: bite.question_type,
     prompt: bite.prompt,
     answer: bite.answer,
+    options: bite.options,
     hint: bite.hint,
     explanation: bite.explanation,
     status: 'active',
@@ -117,6 +126,7 @@ export function DailyBitePanel({
   const [customBites, setCustomBites] = useState<DailyBite[]>([])
   const [editDraft, setEditDraft] = useState<BiteCardPayload | null>(null)
   const [editNotice, setEditNotice] = useState('')
+  const [choiceDraft, setChoiceDraft] = useState('')
 
   const answerState = useMemo(
     () => (bite ? scoreAnswer(answerDraft, bite.answer) : 'empty'),
@@ -131,6 +141,7 @@ export function DailyBitePanel({
     setIsRevealed(false)
     setEditDraft(null)
     setEditNotice('')
+    setChoiceDraft('')
   }, [])
 
   const loadCustomBites = useCallback(async () => {
@@ -228,6 +239,34 @@ export function DailyBitePanel({
     setIsRevealed(false)
     setEditDraft(null)
     setEditNotice('')
+    setChoiceDraft('')
+  }
+
+  const openEditDraft = () => {
+    if (!bite) return
+    const draft = draftFromBite(bite)
+    setEditDraft(draft)
+    setChoiceDraft(draft.options.join('\n'))
+  }
+
+  const updateEditDraft = (patch: Partial<BiteCardPayload>) => {
+    setEditDraft((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  const updateChoiceDraft = (value: string) => {
+    setChoiceDraft(value)
+    updateEditDraft({ options: parseChoiceLines(value) })
+  }
+
+  const toggleQuestionType = (questionType: 'blank' | 'multiple_choice') => {
+    if (!editDraft) return
+    const options = questionType === 'multiple_choice'
+      ? editDraft.options.length ? editDraft.options : parseChoiceLines(choiceDraft)
+      : []
+    if (questionType === 'multiple_choice' && !choiceDraft) {
+      setChoiceDraft(options.join('\n'))
+    }
+    updateEditDraft({ question_type: questionType, options })
   }
 
   return (
@@ -251,21 +290,39 @@ export function DailyBitePanel({
           <div className="bite-meta-row">
             <span>{bite.area}</span>
             <span>{bite.difficulty}</span>
+            <span>{bite.question_type === 'multiple_choice' ? 'choice' : 'blank'}</span>
             <span>{bite.card_id ? 'custom' : 'generated'}</span>
             <span>{progress.completedCount} completed</span>
           </div>
 
           <article className="bite-question-card">
             <p>{bite.prompt}</p>
-            <input
-              value={answerDraft}
-              onChange={(event) => setAnswerDraft(event.target.value)}
-              placeholder="Type the missing answer"
-              aria-label="Daily Bite answer"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') reveal()
-              }}
-            />
+            {bite.question_type === 'multiple_choice' ? (
+              <div className="bite-choice-list" role="radiogroup" aria-label="Daily Bite choices">
+                {bite.options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={answerDraft === option ? 'selected' : ''}
+                    role="radio"
+                    aria-checked={answerDraft === option}
+                    onClick={() => setAnswerDraft(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <input
+                value={answerDraft}
+                onChange={(event) => setAnswerDraft(event.target.value)}
+                placeholder="Type the missing answer"
+                aria-label="Daily Bite answer"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') reveal()
+                }}
+              />
+            )}
             <div className="bite-actions">
               <button
                 type="button"
@@ -331,7 +388,14 @@ export function DailyBitePanel({
                 <button
                   type="button"
                   className="focus-toggle"
-                  onClick={() => setEditDraft((current) => (current ? null : draftFromBite(bite)))}
+                  onClick={() => {
+                    if (editDraft) {
+                      setEditDraft(null)
+                      setChoiceDraft('')
+                    } else {
+                      openEditDraft()
+                    }
+                  }}
                 >
                   {editDraft ? 'Close editor' : bite.card_id ? 'Edit bite' : 'Save/edit'}
                 </button>
@@ -344,39 +408,58 @@ export function DailyBitePanel({
             </div>
             {editDraft && (
               <div className="bite-edit-grid">
+                <div className="bite-type-toggle" aria-label="Bite type">
+                  <button
+                    type="button"
+                    className={editDraft.question_type === 'blank' ? 'active' : ''}
+                    onClick={() => toggleQuestionType('blank')}
+                  >
+                    Fill blank
+                  </button>
+                  <button
+                    type="button"
+                    className={editDraft.question_type === 'multiple_choice' ? 'active' : ''}
+                    onClick={() => toggleQuestionType('multiple_choice')}
+                  >
+                    Multiple choice
+                  </button>
+                </div>
                 <input
                   value={editDraft.title}
-                  onChange={(event) => setEditDraft((current) => current && { ...current, title: event.target.value })}
+                  onChange={(event) => updateEditDraft({ title: event.target.value })}
                   aria-label="Bite title"
                   placeholder="Title"
                 />
                 <input
                   value={editDraft.prompt}
-                  onChange={(event) => setEditDraft((current) => current && { ...current, prompt: event.target.value })}
+                  onChange={(event) => updateEditDraft({ prompt: event.target.value })}
                   aria-label="Bite prompt"
-                  placeholder="Prompt with ____"
+                  placeholder={editDraft.question_type === 'multiple_choice' ? 'Question prompt' : 'Prompt with ____'}
                 />
                 <input
                   value={editDraft.answer}
-                  onChange={(event) => setEditDraft((current) => current && { ...current, answer: event.target.value })}
+                  onChange={(event) => updateEditDraft({ answer: event.target.value })}
                   aria-label="Bite answer"
                   placeholder="Answer"
                 />
+                {editDraft.question_type === 'multiple_choice' && (
+                  <textarea
+                    value={choiceDraft}
+                    onChange={(event) => updateChoiceDraft(event.target.value)}
+                    aria-label="Bite options"
+                    placeholder="Choices, one per line. Include the answer."
+                  />
+                )}
                 <input
                   value={editDraft.hint}
-                  onChange={(event) => setEditDraft((current) => current && { ...current, hint: event.target.value })}
+                  onChange={(event) => updateEditDraft({ hint: event.target.value })}
                   aria-label="Bite hint"
                   placeholder="Hint"
                 />
                 <textarea
                   value={editDraft.explanation.join('\n')}
                   onChange={(event) =>
-                    setEditDraft((current) =>
-                      current && {
-                        ...current,
-                        explanation: event.target.value.split('\n').filter((line) => line.trim()),
-                      },
-                    )
+                    updateEditDraft({ explanation: event.target.value.split('\n').filter((line) => line.trim()) })
                   }
                   aria-label="Bite explanation"
                   placeholder="Three short explanation lines"

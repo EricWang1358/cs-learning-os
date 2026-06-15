@@ -1156,6 +1156,57 @@
   box-shadow: 0 0 0 3px rgba(252, 213, 53, 0.14);
 }
 
+.bite-choice-list {
+  display: grid;
+  gap: 9px;
+}
+
+.bite-choice-list button {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(11, 14, 17, 0.56);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+  line-height: 1.35;
+  padding: 12px 13px;
+  text-align: left;
+}
+
+.bite-choice-list button:hover,
+.bite-choice-list button.selected {
+  border-color: var(--accent);
+  background:
+    linear-gradient(135deg, rgba(252, 213, 53, 0.12), transparent 44%),
+    var(--surface-card);
+  color: var(--ink-strong);
+}
+
+.bite-type-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bite-type-toggle button {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
+.bite-type-toggle button.active,
+.bite-type-toggle button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .bite-note h3,
 .bite-answer h3 {
   margin: 0;

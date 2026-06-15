@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 PACKAGE_FORMAT_VERSION = "1"
 
 
@@ -205,8 +205,10 @@ CREATE TABLE IF NOT EXISTS bite_cards (
     title TEXT NOT NULL,
     area TEXT NOT NULL DEFAULT '',
     difficulty TEXT NOT NULL DEFAULT '',
+    question_type TEXT NOT NULL DEFAULT 'blank' CHECK(question_type IN ('blank', 'multiple_choice')),
     prompt TEXT NOT NULL,
     answer TEXT NOT NULL,
+    options_json TEXT NOT NULL DEFAULT '[]',
     hint TEXT NOT NULL DEFAULT '',
     explanation_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archive')),
@@ -257,6 +259,14 @@ def initialize(conn: sqlite3.Connection) -> None:
     }
     if "display_order" not in quiz_columns:
         conn.execute("ALTER TABLE quizzes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
+
+    bite_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(bite_cards)").fetchall()
+    }
+    if "question_type" not in bite_columns:
+        conn.execute("ALTER TABLE bite_cards ADD COLUMN question_type TEXT NOT NULL DEFAULT 'blank'")
+    if "options_json" not in bite_columns:
+        conn.execute("ALTER TABLE bite_cards ADD COLUMN options_json TEXT NOT NULL DEFAULT '[]'")
 
     ai_job_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(ai_jobs)").fetchall()

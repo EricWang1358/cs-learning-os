@@ -13,6 +13,7 @@ NUMBERED_ITEM_RE = re.compile(r"^\s*(\d+)[.)]\s+(.+?)(?=^\s*\d+[.)]\s+|\Z)", re.
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 MARKDOWN_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+|>\s*)")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+CHOICE_LINE_RE = re.compile(r"^\s*(?:[-*]\s*)?(?:\[[ xX]\]\s*)?(?:[A-Ha-h][\).:-]\s+)?(.+?)\s*$")
 
 
 def daily_bite(conn: sqlite3.Connection, day: Optional[str] = None) -> dict:
@@ -55,10 +56,10 @@ def create_bite_card(conn: sqlite3.Connection, payload) -> dict:
     cursor = conn.execute(
         """
         INSERT INTO bite_cards (
-            source_type, source_id, title, area, difficulty, prompt, answer, hint,
-            explanation_json, status, created_at, updated_at
+            source_type, source_id, title, area, difficulty, question_type, prompt,
+            answer, options_json, hint, explanation_json, status, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         """,
         (
             payload.source_type,
@@ -66,8 +67,10 @@ def create_bite_card(conn: sqlite3.Connection, payload) -> dict:
             payload.title.strip(),
             payload.area.strip(),
             payload.difficulty.strip(),
+            _normalized_question_type(payload.question_type, payload.options),
             payload.prompt.strip(),
             payload.answer.strip(),
+            json.dumps(_normalized_options(payload.options, payload.answer, payload.question_type)),
             payload.hint.strip(),
             json.dumps(_normalized_explanation(payload.explanation)),
             now,
@@ -86,8 +89,10 @@ def update_bite_card(conn: sqlite3.Connection, card_id: int, payload) -> dict:
         SET title = ?,
             area = ?,
             difficulty = ?,
+            question_type = ?,
             prompt = ?,
             answer = ?,
+            options_json = ?,
             hint = ?,
             explanation_json = ?,
             status = ?,
@@ -98,8 +103,10 @@ def update_bite_card(conn: sqlite3.Connection, card_id: int, payload) -> dict:
             payload.title.strip(),
             payload.area.strip(),
             payload.difficulty.strip(),
+            _normalized_question_type(payload.question_type, payload.options),
             payload.prompt.strip(),
             payload.answer.strip(),
+            json.dumps(_normalized_options(payload.options, payload.answer, payload.question_type)),
             payload.hint.strip(),
             json.dumps(_normalized_explanation(payload.explanation)),
             payload.status,
@@ -230,12 +237,17 @@ def _payload_from_row(conn: sqlite3.Connection, row: sqlite3.Row, selected_day: 
     answer_section = _section(body, "answer") or row["title"]
     explanation_section = _section(body, "explanation") or _section(body, "plain explanation") or row["summary"]
     hint_section = _section(body, "hint")
+    choices_section = _section(body, "choices") or _section(body, "options")
     pair = _select_prompt_answer_pair(row["id"], selected_day, prompt_section, answer_section)
     answer = _one_line(pair["answer"] or answer_section or row["title"], fallback=row["title"])
     prompt = _fill_blank_prompt(pair["prompt"] or prompt_section or row["summary"], answer)
     explanation = _three_sentences(explanation_section, row["summary"], row["title"])
     linked_nodes = _linked_nodes(conn, row["id"])
     hint = _first_sentence(hint_section or row["summary"]) or _fallback_hint(row, linked_nodes)
+    options = _choice_options(choices_section or pair["prompt"])
+    question_type = "multiple_choice" if len(options) >= 2 else "blank"
+    if question_type == "multiple_choice":
+        prompt = _one_line(pair["prompt"] or prompt_section or row["summary"])
 
     bite = {
         "id": f"quiz:{row['id']}",
@@ -245,8 +257,10 @@ def _payload_from_row(conn: sqlite3.Connection, row: sqlite3.Row, selected_day: 
         "title": row["title"],
         "area": row["area"],
         "difficulty": row["difficulty"],
+        "question_type": question_type,
         "prompt": prompt,
         "answer": answer,
+        "options": options,
         "hint": hint,
         "explanation": explanation,
         "summary": row["summary"],
@@ -276,8 +290,10 @@ def _card_to_bite(row: sqlite3.Row) -> dict:
         "title": row["title"],
         "area": row["area"],
         "difficulty": row["difficulty"],
+        "question_type": row["question_type"] if "question_type" in row.keys() else "blank",
         "prompt": row["prompt"],
         "answer": row["answer"],
+        "options": _decode_options(row["options_json"] if "options_json" in row.keys() else "[]"),
         "hint": row["hint"],
         "explanation": _decode_explanation(row["explanation_json"]),
         "summary": row["hint"] or row["prompt"],
@@ -342,6 +358,21 @@ def _fill_blank_prompt(prompt: str, answer: str) -> str:
             return cleaned_prompt.replace(f"`{token}`", "____", 1)
 
     return f"____ - {cleaned_prompt.rstrip('.?')}"
+
+
+def _choice_options(value: str) -> list[str]:
+    options: list[str] = []
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = CHOICE_LINE_RE.match(line)
+        if not match:
+            continue
+        option = _clean_markdown_text(match.group(1))
+        if option:
+            options.append(option)
+    return _unique_options(options)[:8]
 
 
 def _three_sentences(value: str, summary: str, title: str) -> list[str]:
@@ -418,6 +449,45 @@ def _decode_explanation(value: str) -> list[str]:
     if not isinstance(parsed, list):
         parsed = []
     return _normalized_explanation([str(item) for item in parsed])
+
+
+def _normalized_question_type(question_type: str, options: list[str]) -> str:
+    if question_type == "multiple_choice" and len(_unique_options(options)) >= 2:
+        return "multiple_choice"
+    return "blank"
+
+
+def _normalized_options(options: list[str], answer: str, question_type: str) -> list[str]:
+    if question_type != "multiple_choice":
+        return []
+    normalized = _unique_options([_clean_markdown_text(item) for item in options])
+    cleaned_answer = _clean_markdown_text(answer)
+    if cleaned_answer and cleaned_answer not in normalized:
+        normalized.insert(0, cleaned_answer)
+    return normalized[:8]
+
+
+def _decode_options(value: str) -> list[str]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        parsed = []
+    if not isinstance(parsed, list):
+        parsed = []
+    return _unique_options([_clean_markdown_text(str(item)) for item in parsed])[:8]
+
+
+def _unique_options(options: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for option in options:
+        cleaned = option.strip()
+        key = cleaned.lower()
+        if not cleaned or key in seen:
+            continue
+        seen.add(key)
+        unique.append(cleaned)
+    return unique
 
 
 def _stable_index(seed: str, count: int) -> int:

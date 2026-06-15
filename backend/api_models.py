@@ -73,8 +73,10 @@ class BiteCardCreate(BaseModel):
     title: str = Field(min_length=1)
     area: str = ""
     difficulty: str = ""
+    question_type: str = Field(default="blank", pattern="^(blank|multiple_choice)$")
     prompt: str = Field(min_length=1)
     answer: str = Field(min_length=1)
+    options: list[str] = []
     hint: str = ""
     explanation: list[str] = []
 
@@ -83,8 +85,10 @@ class BiteCardUpdate(BaseModel):
     title: str = Field(min_length=1)
     area: str = ""
     difficulty: str = ""
+    question_type: str = Field(default="blank", pattern="^(blank|multiple_choice)$")
     prompt: str = Field(min_length=1)
     answer: str = Field(min_length=1)
+    options: list[str] = []
     hint: str = ""
     explanation: list[str] = []
     status: str = Field(default="active", pattern="^(active|archive)$")
