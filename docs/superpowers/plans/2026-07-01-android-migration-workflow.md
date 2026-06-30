@@ -8,6 +8,8 @@
 
 **Tech Stack:** PowerShell, Gradle/Android project metadata, Markdown docs.
 
+**Execution status:** Completed on 2026-07-01. The checked-in Gradle wrapper installed Gradle 8.10.2, Android doctor text/JSON checks passed with explicit `JAVA_HOME` and `ANDROID_HOME`, and `android-app` built with `.\gradlew.bat assembleDebug`.
+
 ---
 
 ## File Structure
@@ -177,7 +179,7 @@ Add:
 ## A0 Local Runbook
 
 1. From the repo root, run `.\scripts\android-doctor.ps1`.
-2. If toolchain prerequisites are missing, install JDK 17+, Android Studio SDK, and Gradle or a Gradle wrapper before claiming Android build success.
+2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`; Gradle is provided by the checked-in wrapper.
 3. Start the existing web app with `.\scripts\dev.ps1 -Detached -NoBrowser`.
 4. Open `android-app/` in Android Studio and run the `app` configuration.
 5. Confirm the emulator loads `http://10.0.2.2:5173`.
@@ -272,4 +274,3 @@ Expected: one focused commit. Do not push unless separately requested.
 - Placeholder scan: no `TBD`, `TODO`, or unspecified implementation steps remain.
 - Type consistency: PowerShell parameters, field names, and file paths are consistent across tasks.
 - Scope check: changes are limited to Android workflow tooling and docs; no React or backend behavior changes are included.
-

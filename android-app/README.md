@@ -37,9 +37,18 @@ Use Android Studio or a command-line Android Gradle setup with:
 
 - JDK 17 or newer
 - Android SDK with compile SDK 35
-- Gradle available through Android Studio or a future checked-in wrapper
+- The checked-in Gradle wrapper at `android-app/gradlew.bat`
 
-This repository currently does not include a Gradle wrapper binary. Open `android-app/` in Android Studio, let it sync the Gradle project, then run the `app` configuration.
+The wrapper installs the pinned Gradle distribution on first use. Open `android-app/` in Android Studio and run the `app` configuration, or build from the command line:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+cd android-app
+.\gradlew.bat assembleDebug
+```
+
+If you prefer not to set `ANDROID_HOME`, create an ignored `android-app/local.properties` file with `sdk.dir=<your Android SDK path>`.
 
 ## Development Flow
 

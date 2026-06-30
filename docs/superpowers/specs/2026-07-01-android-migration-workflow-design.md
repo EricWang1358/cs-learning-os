@@ -145,7 +145,7 @@ The Android shell must preserve the web app's canonical state rules:
 
 Cleartext traffic is acceptable for the development emulator route only. Release-oriented work should move toward debug-only local cleartext or a manifest/resource split that prevents accidental broad cleartext permission in production.
 
-The Android workflow must record what could not be verified. Missing Android Studio, SDK, Gradle wrapper, or emulator access is a known local-toolchain limitation, not a reason to pretend the build passed.
+The Android workflow must record what could not be verified. Missing Android Studio, SDK, JDK 17+, CLI SDK/JDK bindings, or emulator access is a known local-toolchain limitation, not a reason to pretend the build passed.
 
 ## Milestones
 
@@ -204,7 +204,6 @@ Required checks for A0 work:
 
 - `.\scripts\android-doctor.ps1`
 - `cd app; npm run build` if web UI files are touched.
-- Android Studio sync or `cd android-app; .\gradlew.bat assembleDebug` if a wrapper/toolchain is available.
+- Android Studio sync or `cd android-app; .\gradlew.bat assembleDebug` when JDK 17+ and Android SDK 35 are available and visible to Gradle.
 
 If a check cannot run, the result must say why and whether the changed files were still statically inspected.
-

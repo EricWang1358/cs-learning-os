@@ -9,6 +9,7 @@ __pycache__/
 *.py[cod]
 *.apk
 *.aab
+android-app/local.properties
 
 # Generated indexes and caches
 generated/

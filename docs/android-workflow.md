@@ -67,12 +67,12 @@ Do not mix unrelated scopes in one commit unless the coordinator explicitly says
 | Android Gradle build | `cd android-app; .\gradlew.bat assembleDebug` |
 | Manual emulator route | Start web app, open Android app, confirm `http://10.0.2.2:5173` loads. |
 
-The Gradle command is future-facing until a wrapper and Android SDK are installed.
+The Gradle wrapper is checked in. The command still requires JDK 17+ and Android SDK 35 to be visible to the CLI through `JAVA_HOME`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, or ignored `android-app/local.properties`.
 
 ## A0 Local Runbook
 
 1. From the repo root, run `.\scripts\android-doctor.ps1`.
-2. If toolchain prerequisites are missing, install JDK 17+, Android Studio SDK, and Gradle or a Gradle wrapper before claiming Android build success.
+2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`; Gradle is provided by the checked-in wrapper.
 3. Start the existing web app with `.\scripts\dev.ps1 -Detached -NoBrowser`.
 4. Open `android-app/` in Android Studio and run the `app` configuration.
 5. Confirm the emulator loads `http://10.0.2.2:5173`.
