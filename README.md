@@ -28,6 +28,7 @@ This project is not just a notes folder. It is a small local knowledge app:
 
 ```text
 app/                 React + Vite frontend
+android-app/         Android migration shell and mobile productization track
 backend/             FastAPI API, SQLite schema, Markdown ingest
 data/                Private runtime data root, ignored by Git
 data/content/        Current private Markdown knowledge base
@@ -53,6 +54,7 @@ Use this table as the project reading map. It intentionally focuses on explanato
 | [docs/使用说明书.md](docs/使用说明书.md) | End-user walkthrough for launch, reading, focus mode, Q Queue, edit mode, quiz bank, beta data paths, and AI-disabled friend testing. | Current user manual. |
 | [docs/state-machine.md](docs/state-machine.md) | The most current engineering policy for route state, edit/review flows, reader questions, AI jobs, reading activity, graph, health, and app-store readiness. | Current architecture guardrail and best source for bug triage. |
 | [docs/worker-protocol.md](docs/worker-protocol.md) | Coordinator/worker collaboration protocol for reducing context loss, state regressions, and token waste as the project grows. | Current development-process guide. |
+| [docs/android-migration.md](docs/android-migration.md) | Android migration architecture, local-first/SaaS-compatible boundaries, and mobile productization gates. | Current Android migration guide. |
 | [docs/data-policy.md](docs/data-policy.md) | Rules for separating app shell, demo content, private content, generated files, and local-only artifacts. | Current policy; keep aligned with `README.md` and `skill/`. |
 | [docs/workspace-layout.md](docs/workspace-layout.md) | Expected folder layout when this repo lives inside a larger coursework workspace. | Current policy for path hygiene and migration checks. |
 | [docs/content-standards.md](docs/content-standards.md) | Human-facing rules for Standard A knowledge nodes and Standard Q quiz items. | Current content quality gate. |

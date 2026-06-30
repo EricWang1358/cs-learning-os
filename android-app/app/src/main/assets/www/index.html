@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CS Learning OS</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #0a0f11;
+        color: #f5f0dd;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 20% 10%, rgba(242, 199, 68, 0.16), transparent 32rem),
+          linear-gradient(135deg, #0a0f11, #152022);
+      }
+
+      main {
+        width: min(34rem, calc(100vw - 2rem));
+        padding: 2rem;
+        border: 1px solid rgba(245, 240, 221, 0.18);
+        border-radius: 1.5rem;
+        background: rgba(13, 20, 22, 0.82);
+        box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.35);
+      }
+
+      h1 {
+        margin: 0 0 1rem;
+        font-size: clamp(2rem, 10vw, 4rem);
+        line-height: 0.95;
+      }
+
+      p {
+        color: #b8c0bd;
+        line-height: 1.6;
+      }
+
+      code {
+        color: #ffd84d;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CS Learning OS</h1>
+      <p>The Android shell is running, but the local web app is not reachable yet.</p>
+      <p>Start the desktop development server, then reload this app. Emulator builds expect <code>http://10.0.2.2:5173</code>.</p>
+    </main>
+  </body>
+</html>

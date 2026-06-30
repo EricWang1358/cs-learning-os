@@ -1,0 +1,22 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.cslearningos.mobile"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.cslearningos.mobile"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0"
+
+        buildConfigField "String", "CS_LEARNING_WEB_URL", "\"http://10.0.2.2:5173\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
