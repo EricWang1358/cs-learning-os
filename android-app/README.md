@@ -43,6 +43,18 @@ This repository currently does not include a Gradle wrapper binary. Open `androi
 
 ## Development Flow
 
+Run the Android prerequisite check from the repo root:
+
+```powershell
+.\scripts\android-doctor.ps1
+```
+
+For worker handoffs or release scripts, use JSON mode:
+
+```powershell
+.\scripts\android-doctor.ps1 -Json
+```
+
 From the repo root, start the existing local web app:
 
 ```powershell
