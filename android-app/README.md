@@ -68,6 +68,16 @@ For worker handoffs or release scripts, use JSON mode:
 
 The APK is self-contained for this milestone. Install it on an emulator or phone, open the app, and create a Markdown node from the Home screen.
 
+## Beta Versioning
+
+The test APK version is defined in `app/build.gradle`:
+
+- `versionCode` must increase for every Android implementation commit that produces a phone-testable APK.
+- `versionName` should stay human-readable in the current beta line, such as `0.1.1`.
+- Docs-only/spec-only commits do not need a version bump unless a new APK is distributed.
+
+Build outputs such as `.apk` and `.aab` remain ignored by Git. Share or install the APK from `app/build/outputs/apk/debug/app-debug.apk`, but track which beta it is through Gradle and the commit message/handoff.
+
 ## Migration Phases
 
 1. Native offline MVP: Compose UI, Room data, Markdown CRUD, quiz/review, local search, explicit backup.

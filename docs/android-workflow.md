@@ -9,7 +9,8 @@ Keep a small shippable Android product working at all times:
 - Native Compose UI owns the phone surface.
 - Room/SQLite owns durable local state.
 - Domain services stay deterministic and testable.
-- Core reading, editing, quiz, review, search, export, and restore work without backend, account, network, or AI.
+- Core reading, editing, quiz, review, search, export, and restore work without backend, account, or AI.
+- Network permission exists for future user-configured AI/sync adapters, but no content should leave the device unless the user explicitly triggers that action.
 - Private desktop content and generated indexes are never packaged into the APK by accident.
 
 ## Required Loop
@@ -41,7 +42,7 @@ If a step cannot run locally, do not fake success. Write down the missing toolch
 
 - The Android product must not require the Python backend.
 - The Android product must not require the React app.
-- The manifest must not request network permissions until a specific sync or provider feature needs them.
+- The manifest may request `INTERNET` for user-configured AI/sync adapters, but must not enable cleartext traffic or custom network security bypasses without a documented feature need.
 - AI is optional. Users may later provide API keys or use a hosted provider, but core study flows must work without AI.
 - Domain models must not depend on a hosted account.
 - Sync is an adapter, not the source of truth.
@@ -79,8 +80,28 @@ The Gradle wrapper is checked in. The command still requires JDK 17+ and Android
 2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`.
 3. Run `cd android-app; .\gradlew.bat testDebugUnitTest`.
 4. Run `cd android-app; .\gradlew.bat assembleDebug`.
-5. Install `android-app/app/build/outputs/apk/debug/app-debug.apk` on an emulator or phone.
+5. Install over the existing app with `.\scripts\android-install-debug.ps1`; it uses `adb install -r` and preserves local data when `applicationId` and signing key stay the same.
 6. Manually smoke: create Markdown node, read it, edit it, add quiz, review it, search it, export backup, restore backup.
+
+## Beta Update Rules
+
+Android keeps app-local Room data across APK updates when all of these stay true:
+
+- The package name remains `com.cslearningos.mobile`.
+- The new APK is signed by the same key as the installed APK.
+- The APK is installed as an update, not after uninstalling.
+- Room database versions only move forward and every schema change has a migration.
+
+Debug testing can use `.\scripts\android-install-debug.ps1`. Public beta should use a stable release signing key and increment `versionCode` for each distributed build.
+
+Every Android implementation commit that produces a testable APK must update `android-app/app/build.gradle` before commit:
+
+- Increment `versionCode` by 1.
+- Increment `versionName` in the current beta line, for example `0.1.0` -> `0.1.1`.
+- Mention the APK version in the handoff/final message.
+- Do not bump the APK version for docs-only/spec-only commits unless a new APK is actually distributed.
+
+`.gitignore` must keep generated APK/AAB files, `android-app/local.properties`, build folders, private data, and local scratch material out of Git. Version identity belongs in Gradle, not in committed APK filenames.
 
 ## Decision Gates
 

@@ -2,11 +2,15 @@
 node_modules/
 .venv/
 .gradle/
+android-app/.kotlin/
 dist/
 build/
 .vite/
 __pycache__/
 *.py[cod]
+
+# Android release artifacts stay out of Git.
+# Track beta identity in android-app/app/build.gradle via versionCode/versionName.
 *.apk
 *.aab
 android-app/local.properties
@@ -17,6 +21,8 @@ var/
 data/
 !android-app/app/src/main/java/com/cslearningos/mobile/data/
 !android-app/app/src/main/java/com/cslearningos/mobile/data/**
+!android-app/app/src/test/java/com/cslearningos/mobile/data/
+!android-app/app/src/test/java/com/cslearningos/mobile/data/**
 content/
 content/index.html
 content/index.json
