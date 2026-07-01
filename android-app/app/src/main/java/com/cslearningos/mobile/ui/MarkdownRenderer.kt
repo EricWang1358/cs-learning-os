@@ -19,13 +19,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val CardShape = RoundedCornerShape(20.dp)
-private val BlockShape = RoundedCornerShape(16.dp)
+private val CardShape = RoundedCornerShape(10.dp)
+private val BlockShape = RoundedCornerShape(10.dp)
 private val PillShape = RoundedCornerShape(999.dp)
 private val ListPattern = Regex("""^(\s*)([-*+]|\d+\.)\s+(.*)$""")
 
@@ -34,6 +35,12 @@ fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = CardShape,
+                ambientColor = WorkbenchColors.Surface.copy(alpha = 0.32f),
+                spotColor = WorkbenchColors.Surface.copy(alpha = 0.38f)
+            )
             .clip(CardShape)
             .background(WorkbenchColors.SurfaceCard)
             .border(1.dp, WorkbenchColors.Line, CardShape)

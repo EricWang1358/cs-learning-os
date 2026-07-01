@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -63,8 +65,8 @@ import com.cslearningos.mobile.domain.ReviewRating
 import java.text.DateFormat
 import java.util.Date
 
-private val PanelShape = RoundedCornerShape(16.dp)
-private val CardShape = RoundedCornerShape(12.dp)
+private val PanelShape = RoundedCornerShape(14.dp)
+private val CardShape = RoundedCornerShape(10.dp)
 
 @Composable
 fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
@@ -76,11 +78,10 @@ fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
                 .fillMaxSize()
                 .workbenchGrid()
         ) {
-            val isWide = maxWidth >= 840.dp
-            if (isWide) {
-                LandscapeWorkbench(state = state, viewModel = viewModel)
-            } else {
-                PortraitWorkbench(state = state, viewModel = viewModel)
+            when {
+                maxWidth >= 1100.dp -> LandscapeWorkbench(state = state, viewModel = viewModel)
+                maxWidth >= 840.dp -> TwoPaneWorkbench(state = state, viewModel = viewModel)
+                else -> PortraitWorkbench(state = state, viewModel = viewModel)
             }
         }
     }
@@ -98,6 +99,31 @@ private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewMod
         item { StatusBanner(state.message) }
         item { ScreenContent(state, viewModel, isDetailPane = true) }
         item { Spacer(modifier = Modifier.height(28.dp)) }
+    }
+}
+
+@Composable
+private fun TwoPaneWorkbench(state: LearningUiState, viewModel: LearningViewModel) {
+    Row(modifier = Modifier.fillMaxSize()) {
+        WorkbenchSidebar(
+            state = state,
+            viewModel = viewModel,
+            modifier = Modifier
+                .width(260.dp)
+                .fillMaxHeight()
+        )
+        LazyColumn(
+            contentPadding = PaddingValues(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .background(WorkbenchColors.Surface.copy(alpha = 0.88f))
+                .border(BorderStroke(1.dp, WorkbenchColors.Line))
+        ) {
+            item { StatusBanner(state.message) }
+            item { ScreenContent(state, viewModel, isDetailPane = true) }
+        }
     }
 }
 
@@ -537,6 +563,12 @@ private fun WorkbenchCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = if (accent) 14.dp else 8.dp,
+                shape = CardShape,
+                ambientColor = WorkbenchColors.Surface.copy(alpha = 0.36f),
+                spotColor = WorkbenchColors.Surface.copy(alpha = 0.42f)
+            )
             .drawBehind {
                 if (accent) {
                     drawLine(
@@ -576,7 +608,13 @@ private fun InteractiveCard(onClick: () -> Unit, accent: Boolean, content: @Comp
     val pressed by interaction.collectIsPressedAsState()
     WorkbenchCard(
         accent = accent || pressed,
-        modifier = Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        modifier = Modifier
+            .heightIn(min = 72.dp)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            ),
         content = content
     )
 }
