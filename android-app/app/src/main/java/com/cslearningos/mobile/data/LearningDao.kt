@@ -146,6 +146,12 @@ interface LearningDao {
     @Query("DELETE FROM review_attempts")
     suspend fun deleteAllAttempts()
 
+    @Query("DELETE FROM review_states WHERE quiz_id = :quizId")
+    suspend fun deleteReviewStateForQuiz(quizId: String)
+
+    @Query("DELETE FROM review_attempts WHERE quiz_id = :quizId")
+    suspend fun deleteReviewAttemptsForQuiz(quizId: String)
+
     @Query("DELETE FROM reader_questions")
     suspend fun deleteAllReaderQuestions()
 

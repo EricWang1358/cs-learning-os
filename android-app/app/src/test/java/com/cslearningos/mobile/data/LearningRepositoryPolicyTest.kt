@@ -294,6 +294,22 @@ class LearningRepositoryPolicyTest {
             track = "memory",
             visibility = "practice"
         )
+        dao.reviewStates["quiz-1"] = ReviewStateEntity(
+            quizId = "quiz-1",
+            ease = 2.5,
+            intervalDays = 0,
+            dueAt = 1_000L,
+            lastResult = ReviewResult.again,
+            attemptCount = 0,
+            updatedAt = 1_000L
+        )
+        dao.reviewAttempts["attempt-1"] = ReviewAttemptEntity(
+            id = "attempt-1",
+            quizId = "quiz-1",
+            result = ReviewResult.hard,
+            answeredAt = 1_500L,
+            scheduledDueAt = 2_000L
+        )
 
         repository.moveNodeToTrash(node.id, now = 2_000L)
         assertEquals("trash", dao.nodes.getValue(node.id).visibility)
@@ -309,6 +325,8 @@ class LearningRepositoryPolicyTest {
         repository.permanentlyDeleteNode(node.id, now = 4_000L)
         assertEquals(4_000L, dao.nodes.getValue(node.id).deletedAt)
         assertEquals(SyncStatus.deleted, dao.nodes.getValue(node.id).syncStatus)
+        assertTrue("Permanent delete should remove orphaned review state", "quiz-1" !in dao.reviewStates)
+        assertTrue("Permanent delete should remove orphaned review attempts", dao.reviewAttempts.values.none { it.quizId == "quiz-1" })
     }
 
     @Test
@@ -343,12 +361,30 @@ class LearningRepositoryPolicyTest {
             deletedAt = null,
             isStarter = true
         )
+        dao.reviewStates["starter-quiz"] = ReviewStateEntity(
+            quizId = "starter-quiz",
+            ease = 2.5,
+            intervalDays = 0,
+            dueAt = 1_000L,
+            lastResult = ReviewResult.again,
+            attemptCount = 0,
+            updatedAt = 1_000L
+        )
+        dao.reviewAttempts["starter-attempt"] = ReviewAttemptEntity(
+            id = "starter-attempt",
+            quizId = "starter-quiz",
+            result = ReviewResult.good,
+            answeredAt = 1_500L,
+            scheduledDueAt = 3_000L
+        )
 
         repository.clearStarterContent(now = 2_000L)
 
         assertEquals(2_000L, dao.nodes.getValue("starter").deletedAt)
         assertNull(dao.nodes.getValue("user").deletedAt)
         assertEquals(2_000L, dao.quizzes.getValue("starter-quiz").deletedAt)
+        assertTrue("Starter review state should not remain in backup data", "starter-quiz" !in dao.reviewStates)
+        assertTrue("Starter review attempts should not remain in backup data", dao.reviewAttempts.values.none { it.quizId == "starter-quiz" })
     }
 
     @Test
@@ -428,6 +464,7 @@ private class FakeLearningDao : LearningDao {
     val nodes = linkedMapOf<String, LearningNodeEntity>()
     val quizzes = linkedMapOf<String, QuizItemEntity>()
     val reviewStates = linkedMapOf<String, ReviewStateEntity>()
+    val reviewAttempts = linkedMapOf<String, ReviewAttemptEntity>()
     val readerQuestions = linkedMapOf<String, ReaderQuestionEntity>()
     val captureSlips = linkedMapOf<String, CaptureSlipEntity>()
     val deletedNodeFtsIds = mutableListOf<String>()
@@ -456,8 +493,8 @@ private class FakeLearningDao : LearningDao {
     override suspend fun getAllQuizzes(): List<QuizItemEntity> = quizzes.values.toList()
     override suspend fun getStarterQuizzes(): List<QuizItemEntity> =
         quizzes.values.filter { it.isStarter && it.deletedAt == null }
-    override suspend fun getAllReviewStates(): List<ReviewStateEntity> = emptyList()
-    override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = emptyList()
+    override suspend fun getAllReviewStates(): List<ReviewStateEntity> = reviewStates.values.toList()
+    override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = reviewAttempts.values.toList()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = readerQuestions.values.toList()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = captureSlips.values.toList()
     override suspend fun upsertNode(node: LearningNodeEntity) {
@@ -475,7 +512,9 @@ private class FakeLearningDao : LearningDao {
     override suspend fun upsertReviewState(state: ReviewStateEntity) {
         reviewStates[state.quizId] = state
     }
-    override suspend fun insertAttempt(attempt: ReviewAttemptEntity) = unsupported()
+    override suspend fun insertAttempt(attempt: ReviewAttemptEntity) {
+        reviewAttempts[attempt.id] = attempt
+    }
     override suspend fun upsertNodes(nodes: List<LearningNodeEntity>) {
         nodes.forEach { this.nodes[it.id] = it }
     }
@@ -485,7 +524,9 @@ private class FakeLearningDao : LearningDao {
     override suspend fun upsertReviewStates(states: List<ReviewStateEntity>) {
         states.forEach { this.reviewStates[it.quizId] = it }
     }
-    override suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>) = unsupported()
+    override suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>) {
+        attempts.forEach { reviewAttempts[it.id] = it }
+    }
     override suspend fun upsertReaderQuestions(questions: List<ReaderQuestionEntity>) {
         questions.forEach { readerQuestions[it.id] = it }
     }
@@ -504,6 +545,12 @@ private class FakeLearningDao : LearningDao {
     override suspend fun deleteAllQuizzes() = unsupported()
     override suspend fun deleteAllReviewStates() = unsupported()
     override suspend fun deleteAllAttempts() = unsupported()
+    override suspend fun deleteReviewStateForQuiz(quizId: String) {
+        reviewStates.remove(quizId)
+    }
+    override suspend fun deleteReviewAttemptsForQuiz(quizId: String) {
+        reviewAttempts.entries.removeIf { it.value.quizId == quizId }
+    }
     override suspend fun deleteAllReaderQuestions() = unsupported()
     override suspend fun deleteAllCaptureSlips() = unsupported()
     override suspend fun deleteAllNodeFts() = unsupported()

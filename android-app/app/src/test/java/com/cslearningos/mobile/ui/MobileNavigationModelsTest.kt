@@ -21,4 +21,13 @@ class MobileNavigationModelsTest {
             tabs.map { it.contentDescription }
         )
     }
+
+    @Test
+    fun detailScreensKeepTheirParentBottomTabSelected() {
+        assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.Reader))
+        assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.Editor))
+        assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.Search))
+        assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.QuizEditor))
+        assertEquals(AppScreen.More, selectedBottomTabFor(AppScreen.Backup))
+    }
 }

@@ -131,6 +131,7 @@ class LearningRepository(private val dao: LearningDao) {
                 )
             )
             dao.deleteQuizFts(quiz.id)
+            deleteReviewDataForQuiz(quiz.id)
         }
 
         dao.getActiveReaderQuestionsForNode(node.id).forEach { question ->
@@ -165,6 +166,7 @@ class LearningRepository(private val dao: LearningDao) {
                 )
             )
             dao.deleteQuizFts(quiz.id)
+            deleteReviewDataForQuiz(quiz.id)
         }
     }
 
@@ -563,6 +565,11 @@ class LearningRepository(private val dao: LearningDao) {
                 )
             )
         }
+    }
+
+    private suspend fun deleteReviewDataForQuiz(quizId: String) {
+        dao.deleteReviewStateForQuiz(quizId)
+        dao.deleteReviewAttemptsForQuiz(quizId)
     }
 
     private fun defaultReviewState(quizId: String, now: Long): ReviewStateEntity =

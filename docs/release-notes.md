@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.8
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.8-beta`
+
+Android version:
+
+- `versionCode`: 9
+- `versionName`: `0.1.8`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added review-state cleanup when a node is permanently deleted or starter demo content is removed, preventing orphaned review state/attempt data in backups.
+- Kept mobile bottom navigation context selected for Reader, Editor, Search, Quiz Editor, Backup, and More subflows.
+- Restored AI/task notification visibility in landscape workbench layouts.
+
 ## Android Beta 0.1.7
 
 Date: 2026-07-01

@@ -72,6 +72,20 @@ fun mobileBottomNavItems(): List<MobileBottomNavItem> =
         MobileBottomNavItem("More", AppScreen.More, "Settings and data")
     )
 
+fun selectedBottomTabFor(screen: AppScreen): AppScreen =
+    when (screen) {
+        AppScreen.Home -> AppScreen.Home
+        AppScreen.Capture -> AppScreen.Capture
+        AppScreen.Library,
+        AppScreen.Reader,
+        AppScreen.Editor,
+        AppScreen.Search,
+        AppScreen.QuizEditor -> AppScreen.Library
+        AppScreen.Review -> AppScreen.Review
+        AppScreen.Backup,
+        AppScreen.More -> AppScreen.More
+    }
+
 @Composable
 fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -171,6 +185,7 @@ private fun LandscapeWorkbench(state: LearningUiState, viewModel: LearningViewMo
                 modifier = Modifier.fillMaxSize()
             ) {
                 item { StatusBanner(state.message) }
+                item { NoticeTray(state = state, viewModel = viewModel) }
                 item { ScreenContent(state, viewModel, isDetailPane = false) }
             }
         }
@@ -283,10 +298,7 @@ private fun MobileBottomNav(
         verticalAlignment = Alignment.CenterVertically
     ) {
         mobileBottomNavItems().forEach { item ->
-            val selected = when (item.screen) {
-                AppScreen.More -> state.screen == AppScreen.More || state.screen == AppScreen.Backup
-                else -> state.screen == item.screen
-            }
+            val selected = selectedBottomTabFor(state.screen) == item.screen
             BottomNavTab(
                 item = item,
                 selected = selected,
