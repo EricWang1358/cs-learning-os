@@ -28,7 +28,7 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
         SectionHeader(
             eyebrow = "quick capture",
             title = "Capture slip inbox",
-            body = "Save the smallest unclear point now. Later, turn it into a Markdown node, quiz card, or AI draft."
+            body = "Write the smallest unclear point. Then promote it to Markdown, quiz material, or an AI-reviewed draft."
         )
         CaptureComposer(state = state, viewModel = viewModel)
         AiDraftPreflight(state = state, viewModel = viewModel)
@@ -50,7 +50,7 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
             value = state.captureDraft,
             onValueChange = viewModel::setCaptureDraft,
             label = "Example: I do not understand why TLB miss triggers a page table walk.",
-            minLines = 5
+            minLines = 4
         )
         WorkbenchTextField(
             value = state.captureTopicHint,
@@ -66,12 +66,12 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
         ToolbarRow {
             WorkbenchButton("Save slip", viewModel::saveCaptureSlip, primary = true)
             WorkbenchButton(
-                text = if (state.aiProviderSettings.isConfigured) "Save for AI draft" else "Configure AI",
+                text = if (state.aiProviderSettings.isConfigured) "AI draft later" else "Set up AI",
                 onClick = if (state.aiProviderSettings.isConfigured) viewModel::saveCaptureSlipForAiDraft else viewModel::showAiServiceSettings
             )
         }
         Text(
-            text = "AI flow: save a slip first, review the preflight, optionally Validate the provider, then generate an editable Markdown node draft. Nothing is saved as a node until you review and press Save Markdown.",
+            text = "AI chain: save slip -> review preflight -> Validate if needed -> Generate -> edit Markdown -> Save. The model never creates a final node without your Save Markdown.",
             color = WorkbenchColors.Muted,
             fontSize = 13.sp,
             lineHeight = 19.sp
@@ -103,8 +103,8 @@ private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewMode
             lineHeight = 19.sp
         )
         ToolbarRow {
-            WorkbenchButton("Validate API", viewModel::validateAiSettings, enabled = !state.aiBusy)
-            WorkbenchButton("Generate draft", viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
+            WorkbenchButton("Validate", viewModel::validateAiSettings, enabled = !state.aiBusy)
+            WorkbenchButton("Generate", viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
             WorkbenchButton("Cancel", viewModel::cancelAiDraftPreflight)
         }
     }
@@ -182,9 +182,9 @@ private fun CaptureSlipCard(
             overflow = TextOverflow.Ellipsis
         )
         ToolbarRow {
-            WorkbenchButton("Turn into node", { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
+            WorkbenchButton("Make node", { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
             WorkbenchButton(
-                text = if (aiConfigured) "AI draft node" else "Configure AI",
+                text = if (aiConfigured) "AI draft" else "Set up AI",
                 onClick = if (aiConfigured) {
                     { viewModel.prepareAiDraftForSlip(slip) }
                 } else {

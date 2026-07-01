@@ -20,6 +20,27 @@ data class LibraryAreaGroup(
     val tracks: List<LibraryTrackGroup>
 )
 
+data class LibraryOverview(
+    val areaCount: Int,
+    val trackCount: Int,
+    val nodeCount: Int,
+    val featuredAreaLabel: String,
+    val structureLabel: String = "Area -> Track -> Ordered nodes"
+)
+
+fun buildLibraryOverview(nodes: List<LearningNodeEntity>): LibraryOverview {
+    val activeNodes = nodes.filter { it.deletedAt == null && it.visibility != "trash" }
+    val groups = buildLibraryGroups(activeNodes)
+    val featuredArea = groups.maxByOrNull { area -> area.tracks.sumOf { it.nodes.size } }?.area
+
+    return LibraryOverview(
+        areaCount = groups.size,
+        trackCount = groups.sumOf { it.tracks.size },
+        nodeCount = activeNodes.size,
+        featuredAreaLabel = featuredArea?.let(::readableAreaLabel) ?: "No active area"
+    )
+}
+
 fun buildLibraryGroups(nodes: List<LearningNodeEntity>): List<LibraryAreaGroup> =
     nodes
         .filter { it.deletedAt == null && it.visibility != "trash" }

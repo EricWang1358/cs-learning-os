@@ -158,7 +158,7 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
     SettingsRow(label = copy.provider) {
         WorkbenchTextField(settings.provider, viewModel::setAiProvider, "DeepSeek / OpenAI compatible")
         Text(
-            text = "Settings are auto-saved locally as you type. Use Save settings for explicit confirmation, then Validate or Pull models.",
+            text = "Auto-saved on this phone. Save confirms the current fields; Validate tests /models; Pull lists selectable model IDs.",
             color = WorkbenchColors.Muted,
             fontSize = 13.sp,
             lineHeight = 19.sp
@@ -223,7 +223,7 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
         ToolbarRow {
             WorkbenchButton("Save settings", viewModel::saveAiSettings, enabled = !state.aiBusy)
             WorkbenchButton(copy.validate, viewModel::validateAiSettings, primary = true, enabled = !state.aiBusy)
-            WorkbenchButton(copy.pullModels, viewModel::pullAiModels, enabled = !state.aiBusy)
+            WorkbenchButton("Models", viewModel::pullAiModels, enabled = !state.aiBusy)
         }
     }
 }
@@ -263,10 +263,10 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
             lineHeight = 21.sp
         )
         ToolbarRow {
-            WorkbenchButton("Full backup", viewModel::showBackup, primary = true)
-            WorkbenchButton("Export Markdown/TXT", viewModel::exportReadableMarkdown)
-            WorkbenchButton("Import preview", viewModel::showBackup)
-            WorkbenchButton("Remove demo content", viewModel::clearStarterContent, danger = true)
+            WorkbenchButton("Backup JSON", viewModel::showBackup, primary = true)
+            WorkbenchButton("Export MD/TXT", viewModel::exportReadableMarkdown)
+            WorkbenchButton("Restore JSON", viewModel::showBackup)
+            WorkbenchButton("Remove demo", viewModel::clearStarterContent, danger = true)
         }
         Text(
             text = "Trashbin: ${state.trashNodes.size} node(s)",

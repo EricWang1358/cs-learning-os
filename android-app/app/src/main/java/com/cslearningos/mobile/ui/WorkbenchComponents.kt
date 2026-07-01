@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -53,8 +55,8 @@ private val CardShape = RoundedCornerShape(10.dp)
 fun SectionHeader(eyebrow: String, title: String, body: String) {
     WorkbenchCard(accent = true) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 25.sp, fontWeight = FontWeight.Black, lineHeight = 30.sp)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 27.sp)
+        Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 20.sp)
     }
 }
 
@@ -75,7 +77,7 @@ fun DetailHeading(eyebrow: String, title: String, body: String) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 31.sp, fontWeight = FontWeight.Black, lineHeight = 35.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 26.sp, fontWeight = FontWeight.Black, lineHeight = 31.sp)
         Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
     }
 }
@@ -169,7 +171,7 @@ fun WorkbenchActionTile(
     accent: Boolean = false,
     metric: String? = null
 ) {
-    InteractiveCard(onClick = onClick, accent = accent, modifier = modifier.heightIn(min = 112.dp)) {
+    InteractiveCard(onClick = onClick, accent = accent, modifier = modifier.widthIn(min = 136.dp).heightIn(min = 106.dp)) {
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Eyebrow(eyebrow)
             if (metric != null) {
@@ -203,7 +205,7 @@ fun WorkbenchButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp),
+        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 72.dp),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
         colors = ButtonDefaults.buttonColors(
@@ -213,7 +215,13 @@ fun WorkbenchButton(
             disabledContentColor = WorkbenchColors.Muted
         )
     ) {
-        Text(text, fontWeight = FontWeight.Black)
+        Text(
+            text = text,
+            fontWeight = FontWeight.Black,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

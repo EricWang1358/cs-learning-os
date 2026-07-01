@@ -5,5 +5,5 @@ fun useCompactPortraitBrand(screen: AppScreen): Boolean =
 
 fun readerQuestionButtonLabel(openQuestionCount: Int, expanded: Boolean): String {
     val count = if (openQuestionCount > 0) " ($openQuestionCount)" else ""
-    return if (expanded) "Hide Q$count" else "Q$count"
+    return if (expanded) "Q open$count" else "Q$count"
 }

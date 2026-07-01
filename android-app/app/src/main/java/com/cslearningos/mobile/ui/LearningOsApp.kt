@@ -422,17 +422,9 @@ private fun DetailEmptyState(state: LearningUiState) {
 @Composable
 private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val groups = buildLibraryGroups(state.nodes)
+    val overview = buildLibraryOverview(state.nodes)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        WorkbenchCard(accent = true) {
-            Eyebrow("library")
-            Text("Knowledge paths", color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.Black)
-            Text(
-                "${state.nodes.size} active nodes arranged by desktop-compatible area, track, and order.",
-                color = WorkbenchColors.Muted,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-        }
+        LibraryOverviewCard(overview = overview)
         WorkbenchButton(
             text = "+ New node",
             onClick = viewModel::startNewNode,
@@ -486,6 +478,26 @@ private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LibraryOverviewCard(overview: LibraryOverview) {
+    WorkbenchCard(accent = true) {
+        Eyebrow("library")
+        Text("Knowledge map", color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        Text(
+            "Desktop-compatible structure: ${overview.structureLabel}. Start from a topic, then drill into tracks and ordered nodes.",
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 20.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            MetaPill("Areas", overview.areaCount.toString(), Modifier.weight(1f))
+            MetaPill("Tracks", overview.trackCount.toString(), Modifier.weight(1f))
+            MetaPill("Nodes", overview.nodeCount.toString(), Modifier.weight(1f))
+        }
+        MetaPill("Featured", overview.featuredAreaLabel)
     }
 }
 
@@ -599,7 +611,7 @@ private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningVie
             fontWeight = FontWeight.Black
         )
         Text(
-            text = "Save questions while reading. Later, fold them into Markdown edits or quiz cards.",
+            text = "Save questions while reading. They stay unresolved until you mark them resolved, export them, or fold them into Markdown/quiz edits.",
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -738,7 +750,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         SectionHeader(
             eyebrow = "review system",
             title = "Daily review",
-            body = "${state.dueQuizzes.size} due now / ${state.quizzes.size} total cards."
+            body = "${state.dueQuizzes.size} due now / ${state.quizzes.size} total cards. Again keeps the current card in this session; Hard and Good advance."
         )
         if (quiz == null) {
             EmptyWorkbenchCard(
@@ -789,8 +801,8 @@ private fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
             eyebrow = "local safety",
-            title = "Backup and restore",
-            body = "Export JSON when moving devices. Restore overwrites local active data, so keep a copy first."
+            title = "Backup, export, restore",
+            body = "JSON is full app recovery. Markdown/TXT is readable study material for computer editing or printing."
         )
         ToolbarRow {
             WorkbenchButton("Export JSON", viewModel::exportBackup, primary = true)

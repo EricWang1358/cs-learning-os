@@ -59,6 +59,9 @@ If a step cannot run locally, do not fake success. Write down the missing toolch
 - Review `Again` means same-session retry and should not disappear from the user's current practice loop.
 - Trash is a recovery state: active search/review should hide trashed nodes and linked quizzes, while restore should put them back into the study loop.
 - Markdown/TXT export is the phone-to-desktop fallback for users who do not want hosted sync; JSON backup remains the full recovery format.
+- Secondary mobile pages must use compact headers and short button labels. If a label can wrap awkwardly on a 360dp phone, shorten it first and rely on nearby status/help text for explanation.
+- Every AI-facing action needs a visible chain: configure provider, validate if desired, send only the selected slip, open an editable Markdown draft, then require explicit `Save Markdown`.
+- Library must show desktop-compatible structure (`area -> track -> order`) before raw node cards so the Android product does not become a flat feed.
 
 ## Strict Write Scopes
 

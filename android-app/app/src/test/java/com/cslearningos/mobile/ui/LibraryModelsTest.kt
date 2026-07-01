@@ -23,6 +23,23 @@ class LibraryModelsTest {
         assertEquals("Order 10", groups[0].tracks.single().nodes.single().meta)
     }
 
+    @Test
+    fun libraryOverviewExplainsDesktopCompatibleStructureBeforeCards() {
+        val overview = buildLibraryOverview(
+            listOf(
+                node("gdb", "GDB", "cs-fundamentals", "gdb-debugging", 20),
+                node("leaq", "leaq", "cs-fundamentals", "x86-64-assembly", 30),
+                node("binary", "Binary Search", "algorithms", "search-patterns", 10)
+            )
+        )
+
+        assertEquals(2, overview.areaCount)
+        assertEquals(3, overview.trackCount)
+        assertEquals(3, overview.nodeCount)
+        assertEquals("CS Fundamentals", overview.featuredAreaLabel)
+        assertEquals("Area -> Track -> Ordered nodes", overview.structureLabel)
+    }
+
     private fun node(id: String, title: String, area: String, track: String, order: Int) =
         LearningNodeEntity(
             id = id,

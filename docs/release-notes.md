@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.6
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.6-beta`
+
+Android version:
+
+- `versionCode`: 7
+- `versionName`: `0.1.6`
+
+Status: implementation beta.
+
+Highlights:
+
+- Hardened the Android UX logic chain against the desktop navigation contract: Library now starts with `area -> track -> order` structure instead of a flat feed.
+- Tightened secondary headers and shared buttons so phone labels stay one-line with ellipsis instead of awkward wrapping.
+- Shortened Home, Capture, More, and Data tool labels while moving explanations into nearby status/help text.
+- Clarified Capture AI flow, Reader question persistence, Backup/export roles, and Review `Again` behavior.
+
 ## Android Beta 0.1.5
 
 Date: 2026-07-01

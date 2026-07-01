@@ -1,5 +1,18 @@
 # Implementation Log
 
+## 2026-07-01: Android UX Logic Chain Hardening
+
+Completed:
+- Compared Android UX against the desktop/navigation design contracts: mobile Library now foregrounds `area -> track -> order` instead of a flat feed.
+- Tightened secondary page headers and shared button behavior so long labels stay single-line with ellipsis instead of ugly wrapping.
+- Shortened mobile action labels in Home, Capture, More, and Data tools while moving explanations into nearby status/help text.
+- Clarified Capture AI flow as `save slip -> preflight -> validate/generate -> edit Markdown -> Save Markdown`.
+- Clarified Reader question persistence and Review `Again` behavior in user-facing copy.
+- Updated Android beta metadata to `0.1.6`.
+
+Verified:
+- `.\gradlew.bat testDebugUnitTest --tests "com.cslearningos.mobile.ui.LibraryModelsTest" --tests "com.cslearningos.mobile.ui.MoreSettingsModelsTest" --tests "com.cslearningos.mobile.ui.ReaderMobileModelsTest" --tests "com.cslearningos.mobile.ui.ReviewQueueModelsTest"`
+
 ## 2026-07-01: Android AI Settings and Capture Draft Chain
 
 Completed:

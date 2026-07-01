@@ -403,7 +403,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _state.update {
                 it.copy(
                     readerQuestionDraft = "",
-                    message = "Question saved for later"
+                    message = "Question saved to unresolved reader queue"
                 )
             }
         }
@@ -931,11 +931,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             saveAiProviderSettings(next)
             current.copy(
                 aiProviderSettings = next,
-                aiServiceStatus = AiServiceStatus(
-                    kind = AiServiceStatusKind.Info,
-                    title = "$savedField saved automatically",
-                    body = "Settings are stored locally as you type. Tap Validate to test the provider before drafting."
-                ),
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Info,
+                        title = "$savedField saved automatically",
+                        body = "Settings are stored locally as you type. Validate tests the provider before Capture sends a slip."
+                    ),
                 message = ""
             )
         }

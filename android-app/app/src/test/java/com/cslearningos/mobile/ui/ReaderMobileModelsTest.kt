@@ -17,6 +17,6 @@ class ReaderMobileModelsTest {
     fun readerQuestionButtonShowsCountAndToggleState() {
         assertEquals("Q", readerQuestionButtonLabel(openQuestionCount = 0, expanded = false))
         assertEquals("Q (3)", readerQuestionButtonLabel(openQuestionCount = 3, expanded = false))
-        assertEquals("Hide Q (3)", readerQuestionButtonLabel(openQuestionCount = 3, expanded = true))
+        assertEquals("Q open (3)", readerQuestionButtonLabel(openQuestionCount = 3, expanded = true))
     }
 }

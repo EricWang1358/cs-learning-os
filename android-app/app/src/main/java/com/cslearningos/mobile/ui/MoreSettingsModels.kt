@@ -133,7 +133,7 @@ fun moreSectionSummaries(
             MoreSectionSummary(
                 id = MoreSectionId.Service,
                 title = "Service",
-                body = "Optional AI provider for future capture drafts.",
+                body = "Optional AI provider for capture drafting.",
                 value = if (aiConfigured) "Configured" else "Not configured"
             ),
             MoreSectionSummary(

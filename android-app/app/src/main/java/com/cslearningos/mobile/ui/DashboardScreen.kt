@@ -82,7 +82,7 @@ private fun DashboardHero(state: LearningUiState, viewModel: LearningViewModel) 
             minLines = 1
         )
         WorkbenchButton(
-            text = "Search local knowledge",
+            text = "Search now",
             onClick = {
                 viewModel.showSearch()
                 viewModel.runSearch()
