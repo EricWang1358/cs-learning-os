@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.4
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.4-beta`
+
+Android version:
+
+- `versionCode`: 5
+- `versionName`: `0.1.4`
+
+Status: implementation beta.
+
+Highlights:
+
+- Made AI service settings visibly auto-save and added an explicit Save settings confirmation.
+- Wired Validate and Pull models to real OpenAI-compatible `/models` requests with inline loading, success, and failure states.
+- Added pulled model chips so a returned model can be selected without retyping.
+- Completed the Capture Slip AI chain: save a slip, tap `AI draft node`, call `/chat/completions`, and open an editable Markdown node draft before saving.
+
 ## Android Beta 0.1.3
 
 Date: 2026-07-01

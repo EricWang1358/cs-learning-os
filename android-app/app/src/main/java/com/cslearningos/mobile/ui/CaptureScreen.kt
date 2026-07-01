@@ -65,10 +65,16 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
         ToolbarRow {
             WorkbenchButton("Save slip", viewModel::saveCaptureSlip, primary = true)
             WorkbenchButton(
-                text = if (state.aiProviderSettings.isConfigured) "AI draft later" else "Configure AI",
-                onClick = viewModel::showMore
+                text = if (state.aiProviderSettings.isConfigured) "Save for AI draft" else "Configure AI",
+                onClick = if (state.aiProviderSettings.isConfigured) viewModel::saveCaptureSlipForAiDraft else viewModel::showAiServiceSettings
             )
         }
+        Text(
+            text = "AI flow: save a slip first, then tap AI draft node on the inbox card. The model generates an editable Markdown node; nothing is saved as a node until you review and press Save Markdown.",
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
     }
 }
 
@@ -105,13 +111,23 @@ private fun CaptureInbox(state: LearningUiState, viewModel: LearningViewModel) {
             return@WorkbenchCard
         }
         state.captureSlips.take(8).forEach { slip ->
-            CaptureSlipCard(slip = slip, viewModel = viewModel)
+            CaptureSlipCard(
+                slip = slip,
+                viewModel = viewModel,
+                aiConfigured = state.aiProviderSettings.isConfigured,
+                aiBusy = state.aiBusy
+            )
         }
     }
 }
 
 @Composable
-private fun CaptureSlipCard(slip: CaptureSlipEntity, viewModel: LearningViewModel) {
+private fun CaptureSlipCard(
+    slip: CaptureSlipEntity,
+    viewModel: LearningViewModel,
+    aiConfigured: Boolean,
+    aiBusy: Boolean
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -135,6 +151,15 @@ private fun CaptureSlipCard(slip: CaptureSlipEntity, viewModel: LearningViewMode
         )
         ToolbarRow {
             WorkbenchButton("Turn into node", { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
+            WorkbenchButton(
+                text = if (aiConfigured) "AI draft node" else "Configure AI",
+                onClick = if (aiConfigured) {
+                    { viewModel.draftCaptureSlipWithAi(slip) }
+                } else {
+                    viewModel::showAiServiceSettings
+                },
+                enabled = !aiBusy
+            )
             WorkbenchButton("Archive", { viewModel.archiveCaptureSlip(slip) })
         }
     }

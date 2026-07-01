@@ -1,5 +1,18 @@
 # Implementation Log
 
+## 2026-07-01: Android AI Settings and Capture Draft Chain
+
+Completed:
+- Added inline AI service status so Validate and Pull models no longer feel like no-op buttons.
+- Added explicit Save settings feedback while keeping local auto-save for provider, API key, base URL, model, and thinking mode.
+- Implemented OpenAI-compatible `/models` pulling and model selection chips.
+- Implemented Capture Slip AI draft generation through `/chat/completions`; the result opens as editable Markdown before it can be saved as a node.
+- Clarified Capture UI copy so `Save for AI draft` leads to inbox card drafting instead of an unexplained future action.
+- Updated Android beta metadata to `0.1.4`.
+
+Verified:
+- `.\gradlew.bat testDebugUnitTest`
+
 ## 2026-07-01: Android More Settings Center
 
 Completed:

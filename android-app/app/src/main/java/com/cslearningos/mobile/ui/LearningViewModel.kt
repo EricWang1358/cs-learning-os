@@ -15,7 +15,10 @@ import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentImporter
 import com.cslearningos.mobile.domain.ReviewRating
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +27,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class AppScreen {
     Home,
@@ -74,6 +80,9 @@ data class LearningUiState(
     val captureSourceLabel: String = "",
     val captureType: CaptureSlipType = CaptureSlipType.unclear,
     val aiProviderSettings: AiProviderSettings = AiProviderSettings(),
+    val aiServiceStatus: AiServiceStatus = AiServiceStatus(),
+    val availableAiModels: List<String> = emptyList(),
+    val aiBusy: Boolean = false,
     val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
     val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
@@ -167,6 +176,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun showMore() {
         _state.update { it.copy(screen = AppScreen.More, message = "") }
+    }
+
+    fun showAiServiceSettings() {
+        _state.update {
+            it.copy(
+                screen = AppScreen.More,
+                expandedMoreSection = MoreSectionId.Service,
+                message = "",
+                aiServiceStatus = AiServiceStatus(
+                    kind = AiServiceStatusKind.Info,
+                    title = "Configure AI service",
+                    body = "Settings are saved automatically on this phone. Tap Save settings for confirmation, then Validate or Pull models."
+                )
+            )
+        }
     }
 
     fun startNewNode() {
@@ -392,6 +416,34 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun saveCaptureSlipForAiDraft() {
+        val snapshot = state.value
+        if (snapshot.captureDraft.isBlank()) {
+            _state.update { it.copy(message = "Write a quick note before saving it for AI drafting.") }
+            return
+        }
+        viewModelScope.launch {
+            repository.saveCaptureSlip(
+                body = snapshot.captureDraft,
+                type = snapshot.captureType,
+                topicHint = snapshot.captureTopicHint,
+                sourceLabel = snapshot.captureSourceLabel
+            )
+            _state.update {
+                it.copy(
+                    captureDraft = "",
+                    captureTopicHint = "",
+                    captureSourceLabel = "",
+                    message = if (snapshot.aiProviderSettings.isConfigured) {
+                        "Slip saved. Tap AI draft node on its inbox card."
+                    } else {
+                        "Slip saved. Configure AI before drafting."
+                    }
+                )
+            }
+        }
+    }
+
     fun archiveCaptureSlip(slip: CaptureSlipEntity) {
         viewModelScope.launch {
             repository.archiveCaptureSlip(slip.id)
@@ -411,6 +463,75 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 editorBody = draft.markdownBody,
                 message = "Review this capture draft before saving it as Markdown."
             )
+        }
+    }
+
+    fun draftCaptureSlipWithAi(slip: CaptureSlipEntity) {
+        val snapshot = state.value
+        val settings = snapshot.aiProviderSettings
+        val missing = settings.missingRequiredFields()
+        if (missing.isNotEmpty()) {
+            _state.update {
+                it.copy(
+                    screen = AppScreen.More,
+                    expandedMoreSection = MoreSectionId.Service,
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Warning,
+                        title = "AI setup needed",
+                        body = "Add ${missing.joinToString()} before generating a capture draft."
+                    ),
+                    message = "Configure AI before drafting."
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    aiBusy = true,
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Loading,
+                        title = "Drafting from capture",
+                        body = "Sending this slip to your configured OpenAI-compatible model. The result will open as an editable Markdown node draft."
+                    ),
+                    message = "Generating AI draft..."
+                )
+            }
+            runCatching {
+                requestCaptureDraft(settings = settings, slip = slip, existingNodeTitles = snapshot.nodes.map { it.title })
+            }.onSuccess { markdown ->
+                val fallbackTitle = slip.topicHint?.takeIf { it.isNotBlank() } ?: "Capture Draft"
+                _state.update {
+                    it.copy(
+                        screen = AppScreen.Editor,
+                        editorNodeId = null,
+                        editorSourceCaptureSlipId = slip.id,
+                        selectedNode = null,
+                        editorTitle = titleFromAiMarkdown(markdown, fallbackTitle),
+                        editorBody = markdown,
+                        aiBusy = false,
+                        aiServiceStatus = AiServiceStatus(
+                            kind = AiServiceStatusKind.Success,
+                            title = "AI draft ready",
+                            body = "Review the Markdown, edit anything suspicious, then Save Markdown to convert the slip into a node."
+                        ),
+                        message = "AI draft ready. Review before saving."
+                    )
+                }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        aiBusy = false,
+                        aiServiceStatus = AiServiceStatus(
+                            kind = AiServiceStatusKind.Error,
+                            title = "AI draft failed",
+                            body = error.safeAiError()
+                        ),
+                        message = "AI draft failed."
+                    )
+                }
+            }
         }
     }
 
@@ -504,23 +625,23 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setAiProvider(value: String) {
-        updateAiSettings { it.copy(provider = value) }
+        updateAiSettings(savedField = "Provider") { it.copy(provider = value) }
     }
 
     fun setAiApiKey(value: String) {
-        updateAiSettings { it.copy(apiKey = value) }
+        updateAiSettings(savedField = "API key") { it.copy(apiKey = value) }
     }
 
     fun setAiBaseUrl(value: String) {
-        updateAiSettings { it.copy(baseUrl = value) }
+        updateAiSettings(savedField = "Base URL") { it.copy(baseUrl = value) }
     }
 
     fun setAiModel(value: String) {
-        updateAiSettings { it.copy(model = value) }
+        updateAiSettings(savedField = "Model") { it.copy(model = value) }
     }
 
     fun setAiThinkingEnabled(value: Boolean) {
-        updateAiSettings { it.copy(thinkingEnabled = value) }
+        updateAiSettings(savedField = "Thinking") { it.copy(thinkingEnabled = value) }
     }
 
     fun toggleAiKeyVisibility() {
@@ -531,21 +652,149 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun validateAiSettings() {
         val settings = state.value.aiProviderSettings
+        val missing = settings.missingRequiredFields()
+        if (missing.isNotEmpty()) {
+            _state.update {
+                it.copy(
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Error,
+                        title = "AI settings incomplete",
+                        body = "Missing: ${missing.joinToString()}."
+                    ),
+                    message = "AI settings incomplete."
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    aiBusy = true,
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Loading,
+                        title = "Validating AI service",
+                        body = "Calling ${aiModelsUrl(settings.baseUrl)} with your saved API key."
+                    ),
+                    message = "Validating AI service..."
+                )
+            }
+            runCatching { fetchModelIds(settings) }
+                .onSuccess { models ->
+                    val modelNote = if (models.isEmpty()) {
+                        "The endpoint responded, but did not return model IDs."
+                    } else {
+                        "Found ${models.size} model(s). Current model: ${settings.model}."
+                    }
+                    _state.update {
+                        it.copy(
+                            aiBusy = false,
+                            availableAiModels = models,
+                            aiServiceStatus = AiServiceStatus(
+                                kind = AiServiceStatusKind.Success,
+                                title = "AI service validated",
+                                body = modelNote
+                            ),
+                            message = "AI validation succeeded."
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            aiBusy = false,
+                            aiServiceStatus = AiServiceStatus(
+                                kind = AiServiceStatusKind.Error,
+                                title = "AI validation failed",
+                                body = error.safeAiError()
+                            ),
+                            message = "AI validation failed."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun saveAiSettings() {
+        saveAiProviderSettings(state.value.aiProviderSettings)
         _state.update {
             it.copy(
-                message = if (settings.isConfigured) {
-                    "AI provider saved locally. Network validation will be enabled with the AI draft feature."
-                } else {
-                    "Add provider, API key, base URL, and model before using AI expansion."
-                }
+                aiServiceStatus = AiServiceStatus(
+                    kind = AiServiceStatusKind.Success,
+                    title = "AI settings saved",
+                    body = "Provider, API key, base URL, model, and thinking preference are saved locally on this phone."
+                ),
+                message = "AI settings saved locally."
             )
         }
     }
 
     fun pullAiModels() {
-        _state.update {
-            it.copy(message = "Model pulling is staged for the future AI adapter; no network request was sent.")
+        val settings = state.value.aiProviderSettings
+        val missing = settings.missingRequiredFields()
+        if (missing.isNotEmpty()) {
+            _state.update {
+                it.copy(
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Warning,
+                        title = "Cannot pull models yet",
+                        body = "Missing: ${missing.joinToString()}."
+                    ),
+                    message = "AI settings incomplete."
+                )
+            }
+            return
         }
+
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    aiBusy = true,
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Loading,
+                        title = "Pulling model list",
+                        body = "Calling ${aiModelsUrl(settings.baseUrl)}. If your provider blocks model listing, type the model manually."
+                    ),
+                    message = "Pulling AI models..."
+                )
+            }
+            runCatching { fetchModelIds(settings) }
+                .onSuccess { models ->
+                    _state.update {
+                        it.copy(
+                            aiBusy = false,
+                            availableAiModels = models,
+                            aiServiceStatus = AiServiceStatus(
+                                kind = if (models.isEmpty()) AiServiceStatusKind.Warning else AiServiceStatusKind.Success,
+                                title = if (models.isEmpty()) "No models returned" else "Models pulled",
+                                body = if (models.isEmpty()) {
+                                    "The endpoint responded but returned no IDs. You can still type a model manually."
+                                } else {
+                                    "Tap a model below to use it for Capture Slip AI drafts."
+                                }
+                            ),
+                            message = if (models.isEmpty()) "No model IDs returned." else "AI models pulled."
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            aiBusy = false,
+                            aiServiceStatus = AiServiceStatus(
+                                kind = AiServiceStatusKind.Error,
+                                title = "Model pull failed",
+                                body = error.safeAiError()
+                            ),
+                            message = "Model pull failed."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun selectAiModel(modelId: String) {
+        updateAiSettings(savedField = "Model") { it.copy(model = modelId) }
     }
 
     fun toggleMoreSection(section: MoreSectionId) {
@@ -567,13 +816,103 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(appearanceMode = value, message = "Display mode saved locally") }
     }
 
-    private fun updateAiSettings(reducer: (AiProviderSettings) -> AiProviderSettings) {
+    private fun updateAiSettings(savedField: String, reducer: (AiProviderSettings) -> AiProviderSettings) {
         _state.update { current ->
             val next = reducer(current.aiProviderSettings)
             saveAiProviderSettings(next)
-            current.copy(aiProviderSettings = next, message = "")
+            current.copy(
+                aiProviderSettings = next,
+                aiServiceStatus = AiServiceStatus(
+                    kind = AiServiceStatusKind.Info,
+                    title = "$savedField saved automatically",
+                    body = "Settings are stored locally as you type. Tap Validate to test the provider before drafting."
+                ),
+                message = ""
+            )
         }
     }
+
+    private suspend fun fetchModelIds(settings: AiProviderSettings): List<String> =
+        withContext(Dispatchers.IO) {
+            val response = openAiGet(url = aiModelsUrl(settings.baseUrl), apiKey = settings.apiKey)
+            parseOpenAiModelIds(response)
+        }
+
+    private suspend fun requestCaptureDraft(
+        settings: AiProviderSettings,
+        slip: CaptureSlipEntity,
+        existingNodeTitles: List<String>
+    ): String =
+        withContext(Dispatchers.IO) {
+            val prompt = buildCaptureAiDraftPrompt(slip = slip, existingNodes = existingNodeTitles)
+            val payload = JSONObject()
+                .put("model", settings.model)
+                .put("temperature", 0.2)
+                .put(
+                    "messages",
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("role", "system")
+                                .put("content", "You create concise, editable Markdown learning-node drafts for a local-first study app.")
+                        )
+                        .put(JSONObject().put("role", "user").put("content", prompt))
+                )
+            val response = openAiPost(
+                url = aiChatCompletionsUrl(settings.baseUrl),
+                apiKey = settings.apiKey,
+                payload = payload
+            )
+            parseOpenAiChatContent(response).ifBlank {
+                throw IllegalStateException("The model returned an empty draft.")
+            }
+        }
+
+    private fun openAiGet(url: String, apiKey: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = AiConnectTimeoutMillis
+            readTimeout = AiReadTimeoutMillis
+            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Accept", "application/json")
+        }
+        return connection.useResponse()
+    }
+
+    private fun openAiPost(url: String, apiKey: String, payload: JSONObject): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = AiConnectTimeoutMillis
+            readTimeout = AiReadTimeoutMillis
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        connection.outputStream.use { stream ->
+            stream.write(payload.toString().toByteArray(Charsets.UTF_8))
+        }
+        return connection.useResponse()
+    }
+
+    private fun HttpURLConnection.useResponse(): String =
+        try {
+            val responseBody = (if (responseCode in 200..299) inputStream else errorStream)
+                ?.bufferedReader()
+                ?.use { it.readText() }
+                .orEmpty()
+            if (responseCode !in 200..299) {
+                throw IllegalStateException("HTTP $responseCode: ${responseBody.take(240)}")
+            }
+            responseBody
+        } finally {
+            disconnect()
+        }
+
+    private fun Throwable.safeAiError(): String =
+        (message ?: javaClass.simpleName)
+            .replace(Regex("sk-[A-Za-z0-9_-]+"), "sk-...")
+            .take(260)
 
     private fun loadAiProviderSettings(): AiProviderSettings =
         AiProviderSettings(
@@ -621,5 +960,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     private companion object {
         const val StarterContentSeedVersion = 1
+        const val AiConnectTimeoutMillis = 15_000
+        const val AiReadTimeoutMillis = 45_000
     }
 }

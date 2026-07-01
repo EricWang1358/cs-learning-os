@@ -154,8 +154,15 @@ private fun SystemSettingsContent(state: LearningUiState, viewModel: LearningVie
 @Composable
 private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewModel, copy: MoreSettingsCopy) {
     val settings = state.aiProviderSettings
+    AiServiceStatusBlock(status = state.aiServiceStatus)
     SettingsRow(label = copy.provider) {
         WorkbenchTextField(settings.provider, viewModel::setAiProvider, "DeepSeek / OpenAI compatible")
+        Text(
+            text = "Settings are auto-saved locally as you type. Use Save settings for explicit confirmation, then Validate or Pull models.",
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
     }
     SettingsRow(label = copy.apiKey) {
         if (settings.apiKeyVisible) {
@@ -182,6 +189,23 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
     }
     SettingsRow(label = copy.model) {
         WorkbenchTextField(settings.model, viewModel::setAiModel, "deepseek-v4-flash")
+        if (state.availableAiModels.isNotEmpty()) {
+            Text(
+                text = "Pulled models",
+                color = WorkbenchColors.Muted,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            ToolbarRow {
+                state.availableAiModels.take(8).forEach { modelId ->
+                    WorkbenchButton(
+                        text = modelId,
+                        onClick = { viewModel.selectAiModel(modelId) },
+                        primary = settings.model == modelId
+                    )
+                }
+            }
+        }
         ToolbarRow {
             WorkbenchButton(
                 text = "Thinking on",
@@ -197,9 +221,35 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
     }
     SettingsRow(label = copy.connection) {
         ToolbarRow {
-            WorkbenchButton(copy.validate, viewModel::validateAiSettings, primary = true)
-            WorkbenchButton(copy.pullModels, viewModel::pullAiModels)
+            WorkbenchButton("Save settings", viewModel::saveAiSettings, enabled = !state.aiBusy)
+            WorkbenchButton(copy.validate, viewModel::validateAiSettings, primary = true, enabled = !state.aiBusy)
+            WorkbenchButton(copy.pullModels, viewModel::pullAiModels, enabled = !state.aiBusy)
         }
+    }
+}
+
+@Composable
+private fun AiServiceStatusBlock(status: AiServiceStatus) {
+    val borderColor = when (status.kind) {
+        AiServiceStatusKind.Success -> WorkbenchColors.Success
+        AiServiceStatusKind.Warning -> WorkbenchColors.AccentStrong
+        AiServiceStatusKind.Error -> WorkbenchColors.Danger
+        AiServiceStatusKind.Loading -> WorkbenchColors.Accent
+        AiServiceStatusKind.Info,
+        AiServiceStatusKind.Idle -> WorkbenchColors.LineStrong
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(WorkbenchColors.Surface.copy(alpha = 0.62f))
+            .border(BorderStroke(1.dp, borderColor.copy(alpha = 0.72f)), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Eyebrow("service status")
+        Text(status.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+        Text(status.body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
     }
 }
 
