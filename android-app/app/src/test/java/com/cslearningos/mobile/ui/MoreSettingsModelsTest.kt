@@ -16,7 +16,13 @@ class MoreSettingsModelsTest {
         )
 
         assertEquals(
-            listOf(MoreSectionId.System, MoreSectionId.Service, MoreSectionId.Data, MoreSectionId.Support),
+            listOf(
+                MoreSectionId.System,
+                MoreSectionId.Service,
+                MoreSectionId.Notifications,
+                MoreSectionId.Data,
+                MoreSectionId.Support
+            ),
             sections.map { it.id }
         )
         assertEquals("Follow system / Follow system", sections.first().value)

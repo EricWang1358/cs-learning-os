@@ -21,7 +21,14 @@ interface LearningDao {
     @Query("SELECT * FROM reader_questions WHERE deleted_at IS NULL AND resolved_at IS NULL ORDER BY created_at DESC")
     fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>>
 
-    @Query("SELECT * FROM capture_slips WHERE deleted_at IS NULL AND status = 'inbox' ORDER BY created_at DESC")
+    @Query(
+        """
+        SELECT * FROM capture_slips
+        WHERE deleted_at IS NULL
+          AND status IN ('inbox', 'ai_queued', 'ai_drafting', 'ai_draft_ready')
+        ORDER BY created_at DESC
+        """
+    )
     fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>>
 
     @Query(

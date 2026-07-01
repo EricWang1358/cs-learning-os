@@ -82,6 +82,8 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
 @Composable
 private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewModel) {
     val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } } ?: return
+    val settings = state.aiProviderSettings
+    val contextTitles = aiDraftContextNodeTitles(state.nodes.map { it.title })
     WorkbenchCard(accent = true) {
         Eyebrow("ai draft preflight")
         Text(
@@ -91,11 +93,36 @@ private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewMode
             fontWeight = FontWeight.Black
         )
         Text(
-            text = "Target: ${slip.topicHint ?: "Let AI infer topic"} / Source: ${slip.sourceLabel ?: "manual"}. The slip text is the only content sent. The result opens in Edit Mode and still needs your Save Markdown confirmation.",
+            text = "Target: ${slip.topicHint ?: "Let AI infer topic"} / Source: ${slip.sourceLabel ?: "manual"}. The result opens in Edit Mode and still needs your Save Markdown confirmation.",
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 21.sp
         )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(WorkbenchColors.Surface.copy(alpha = 0.68f))
+                .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Eyebrow("will send")
+            Text("Type: ${slip.type.label()}", color = WorkbenchColors.Muted, fontSize = 13.sp)
+            Text(slip.body, color = WorkbenchColors.InkStrong, fontSize = 15.sp, lineHeight = 22.sp)
+            Text(
+                "Provider: ${settings.provider} / Model: ${settings.model} / Base URL: ${settings.baseUrl}",
+                color = WorkbenchColors.Muted,
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+            Text(
+                text = "Node title context: ${contextTitles.joinToString().ifBlank { "No existing nodes yet" }}",
+                color = WorkbenchColors.Muted,
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+        }
         Text(
             text = state.aiServiceStatus.body,
             color = WorkbenchColors.Muted,
@@ -104,7 +131,7 @@ private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewMode
         )
         ToolbarRow {
             WorkbenchButton("Validate", viewModel::validateAiSettings, enabled = !state.aiBusy)
-            WorkbenchButton("Generate", viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
+            WorkbenchButton("Generate draft", viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
             WorkbenchButton("Cancel", viewModel::cancelAiDraftPreflight)
         }
     }
@@ -147,7 +174,8 @@ private fun CaptureInbox(state: LearningUiState, viewModel: LearningViewModel) {
                 slip = slip,
                 viewModel = viewModel,
                 aiConfigured = state.aiProviderSettings.isConfigured,
-                aiBusy = state.aiBusy
+                aiBusy = state.aiBusy,
+                pendingAiDraftSlipId = state.pendingAiDraftSlipId
             )
         }
     }
@@ -158,8 +186,15 @@ private fun CaptureSlipCard(
     slip: CaptureSlipEntity,
     viewModel: LearningViewModel,
     aiConfigured: Boolean,
-    aiBusy: Boolean
+    aiBusy: Boolean,
+    pendingAiDraftSlipId: String?
 ) {
+    val workflow = buildCaptureSlipWorkflow(
+        slip = slip,
+        pendingAiDraftSlipId = pendingAiDraftSlipId,
+        aiBusy = aiBusy,
+        aiConfigured = aiConfigured
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -170,7 +205,7 @@ private fun CaptureSlipCard(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            MetaPill(slip.type.label(), slip.topicHint ?: "Inbox", Modifier.weight(1f))
+            MetaPill(workflow.statusLabel, slip.topicHint ?: "Inbox", Modifier.weight(1f))
             MetaPill("Source", slip.sourceLabel ?: "manual", Modifier.weight(1f))
         }
         Text(
@@ -181,16 +216,22 @@ private fun CaptureSlipCard(
             maxLines = 5,
             overflow = TextOverflow.Ellipsis
         )
+        Text(
+            text = workflow.detail,
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
         ToolbarRow {
             WorkbenchButton("Make node", { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
             WorkbenchButton(
-                text = if (aiConfigured) "AI draft" else "Set up AI",
+                text = if (aiConfigured) workflow.primaryActionLabel else "Set up AI",
                 onClick = if (aiConfigured) {
                     { viewModel.prepareAiDraftForSlip(slip) }
                 } else {
                     viewModel::showAiServiceSettings
                 },
-                enabled = !aiBusy
+                enabled = workflow.actionsEnabled
             )
             WorkbenchButton("Archive", { viewModel.archiveCaptureSlip(slip) })
         }

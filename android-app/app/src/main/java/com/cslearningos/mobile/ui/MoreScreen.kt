@@ -62,6 +62,7 @@ private fun MoreSettingsList(
                 when (section.id) {
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel, copy = copy)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel, copy = copy)
+                    MoreSectionId.Notifications -> NotificationsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel, copy = copy)
                     MoreSectionId.Support -> SupportContent(copy = copy)
                 }
@@ -109,6 +110,36 @@ private fun MoreSectionRow(
         }
         if (expanded) {
             content()
+        }
+    }
+}
+
+@Composable
+private fun NotificationsContent(state: LearningUiState, viewModel: LearningViewModel) {
+    SettingsRow(label = "Task inbox") {
+        if (state.notices.isEmpty()) {
+            Text(
+                text = "No notifications yet. Capture and AI draft progress will appear here.",
+                color = WorkbenchColors.Muted,
+                fontSize = 14.sp,
+                lineHeight = 21.sp
+            )
+        }
+        state.notices.forEach { notice ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
+                    .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Eyebrow("notice")
+                Text(notice.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                Text(notice.body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
+                WorkbenchButton("Dismiss", { viewModel.dismissNotice(notice.id) })
+            }
         }
     }
 }

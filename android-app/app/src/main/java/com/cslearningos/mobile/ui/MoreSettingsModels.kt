@@ -15,6 +15,7 @@ enum class AppearanceMode(val label: String) {
 enum class MoreSectionId {
     System,
     Service,
+    Notifications,
     Data,
     Support
 }
@@ -110,6 +111,12 @@ fun moreSectionSummaries(
                 value = if (aiConfigured) "\u5df2\u914d\u7f6e" else "\u672a\u914d\u7f6e"
             ),
             MoreSectionSummary(
+                id = MoreSectionId.Notifications,
+                title = "\u901a\u77e5",
+                body = "Capture \u548c AI \u4efb\u52a1\u72b6\u6001\u3002",
+                value = "\u6536\u4ef6\u7bb1"
+            ),
+            MoreSectionSummary(
                 id = MoreSectionId.Data,
                 title = "\u6570\u636e",
                 body = "\u5907\u4efd\u3001\u5bfc\u51fa\u3001\u5bfc\u5165\u548c\u7535\u8111\u540c\u6b65\u3002",
@@ -135,6 +142,12 @@ fun moreSectionSummaries(
                 title = "Service",
                 body = "Optional AI provider for capture drafting.",
                 value = if (aiConfigured) "Configured" else "Not configured"
+            ),
+            MoreSectionSummary(
+                id = MoreSectionId.Notifications,
+                title = "Notifications",
+                body = "Capture and AI task status.",
+                value = "Inbox"
             ),
             MoreSectionSummary(
                 id = MoreSectionId.Data,

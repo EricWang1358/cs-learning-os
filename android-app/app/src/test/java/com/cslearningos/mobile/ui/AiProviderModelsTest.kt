@@ -51,6 +51,17 @@ class AiProviderModelsTest {
     }
 
     @Test
+    fun aiDraftContextNodeTitlesMatchPromptLimitAndPreflightDisclosure() {
+        val titles = (1..14).map { " Node $it " }
+
+        val context = aiDraftContextNodeTitles(titles)
+
+        assertEquals(12, context.size)
+        assertEquals("Node 1", context.first())
+        assertEquals("Node 12", context.last())
+    }
+
+    @Test
     fun markdownTitleFallsBackWhenModelDoesNotReturnHeading() {
         assertEquals("Virtual Memory", titleFromAiMarkdown("# Virtual Memory\n\nBody", fallback = "Capture Draft"))
         assertEquals("Capture Draft", titleFromAiMarkdown("Body only", fallback = "Capture Draft"))

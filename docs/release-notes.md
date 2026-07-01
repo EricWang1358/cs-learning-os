@@ -1,5 +1,26 @@
 # Release Notes
 
+## Android Beta 0.1.7
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.7-beta`
+
+Android version:
+
+- `versionCode`: 8
+- `versionName`: `0.1.7`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added visible Capture Slip AI workflow states: queued, drafting, draft ready, failure, and retry-ready.
+- Added an in-app notification tray plus a More -> Notifications inbox for Capture/AI task feedback.
+- Expanded AI preflight to show the exact slip text, type, topic/source, provider, base URL, and model before Generate.
+- Added a phone-friendly Library area map with collapse/expand behavior before node cards.
+- Expanded demo content with Virtual Memory, Capture Slip Workflow, and a second committed review card; starter seed version now upgrades to add new demo content without overwriting existing starter edits.
+
 ## Android Beta 0.1.6
 
 Date: 2026-07-01

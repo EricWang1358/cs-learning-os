@@ -108,6 +108,7 @@ private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewMod
                 }
             }
             item { StatusBanner(state.message) }
+            item { NoticeTray(state = state, viewModel = viewModel) }
             item { ScreenContent(state, viewModel, isDetailPane = true) }
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
@@ -141,6 +142,7 @@ private fun TwoPaneWorkbench(state: LearningUiState, viewModel: LearningViewMode
                 .border(BorderStroke(1.dp, WorkbenchColors.Line))
         ) {
             item { StatusBanner(state.message) }
+            item { NoticeTray(state = state, viewModel = viewModel) }
             item { ScreenContent(state, viewModel, isDetailPane = true) }
         }
     }
@@ -388,6 +390,7 @@ private fun DetailPane(state: LearningUiState, viewModel: LearningViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         StatusBanner(state.message)
+        NoticeTray(state = state, viewModel = viewModel)
         when (state.screen) {
             AppScreen.Reader -> ReaderScreen(state, viewModel)
             AppScreen.Editor -> EditorScreen(state, viewModel)
@@ -423,8 +426,10 @@ private fun DetailEmptyState(state: LearningUiState) {
 private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val groups = buildLibraryGroups(state.nodes)
     val overview = buildLibraryOverview(state.nodes)
+    val map = buildLibraryMap(state.nodes, state.collapsedLibraryAreas)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         LibraryOverviewCard(overview = overview)
+        LibraryMapCard(map = map, onToggleArea = viewModel::toggleLibraryArea)
         WorkbenchButton(
             text = "+ New node",
             onClick = viewModel::startNewNode,
@@ -438,43 +443,108 @@ private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) 
             )
         }
         groups.forEach { area ->
+            val collapsed = area.area in state.collapsedLibraryAreas
             WorkbenchCard {
                 Eyebrow("area")
-                Text(
-                    readableAreaLabel(area.area),
-                    color = WorkbenchColors.InkStrong,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black
-                )
-                area.tracks.forEach { track ->
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                readableTrackLabel(track.track),
-                                color = WorkbenchColors.Accent,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                "${track.nodes.size} nodes",
-                                color = WorkbenchColors.Muted,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        track.nodes.forEach { item ->
-                            LibraryNodeCard(
-                                item = item,
-                                selected = state.selectedNode?.id == item.id,
-                                onOpen = { viewModel.openNode(item.node) },
-                                onEdit = { viewModel.editNode(item.node) }
-                            )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        readableAreaLabel(area.area),
+                        color = WorkbenchColors.InkStrong,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    WorkbenchButton(if (collapsed) "Open" else "Close", { viewModel.toggleLibraryArea(area.area) })
+                }
+                if (collapsed) {
+                    Text(
+                        text = "${area.tracks.sumOf { it.nodes.size }} nodes hidden. Open this area when you want to drill into tracks.",
+                        color = WorkbenchColors.Muted,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp
+                    )
+                } else {
+                    area.tracks.forEach { track ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    readableTrackLabel(track.track),
+                                    color = WorkbenchColors.Accent,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Text(
+                                    "${track.nodes.size} nodes",
+                                    color = WorkbenchColors.Muted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            track.nodes.forEach { item ->
+                                LibraryNodeCard(
+                                    item = item,
+                                    selected = state.selectedNode?.id == item.id,
+                                    onOpen = { viewModel.openNode(item.node) },
+                                    onEdit = { viewModel.editNode(item.node) }
+                                )
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoticeTray(state: LearningUiState, viewModel: LearningViewModel) {
+    val latest = state.notices.firstOrNull() ?: return
+    WorkbenchCard(accent = latest.title.contains("ready", ignoreCase = true)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Eyebrow("notification")
+                Text(latest.title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Text(latest.body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+            WorkbenchButton("Dismiss", { viewModel.dismissNotice(latest.id) })
+        }
+    }
+}
+
+@Composable
+private fun LibraryMapCard(map: LibraryMap, onToggleArea: (String) -> Unit) {
+    WorkbenchCard(accent = true) {
+        Eyebrow("map")
+        Text("Area map", color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
+        Text(
+            "Tap an area to collapse or expand. This mirrors the desktop knowledge map as a phone-friendly outline.",
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
+        map.areas.forEach { area ->
+            InteractiveCard(onClick = { onToggleArea(area.area) }, accent = !area.collapsed) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(area.label, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                        Text(area.trackPreview, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
+                    }
+                    MetaPill(if (area.collapsed) "Closed" else "Open", "${area.nodeCount}N/${area.trackCount}T")
                 }
             }
         }

@@ -33,6 +33,9 @@ enum class CaptureSlipType {
 
 enum class CaptureSlipStatus {
     inbox,
+    ai_queued,
+    ai_drafting,
+    ai_draft_ready,
     linked,
     converted,
     archived

@@ -40,6 +40,24 @@ class LibraryModelsTest {
         assertEquals("Area -> Track -> Ordered nodes", overview.structureLabel)
     }
 
+    @Test
+    fun libraryMapCanCollapseAreaWithoutLosingCounts() {
+        val map = buildLibraryMap(
+            nodes = listOf(
+                node("vm", "Virtual Memory", "cs-fundamentals", "memory-hierarchy", 20),
+                node("gdb", "GDB", "cs-fundamentals", "gdb-debugging", 30),
+                node("binary", "Binary Search", "algorithms", "search-patterns", 10)
+            ),
+            collapsedAreas = setOf("cs-fundamentals")
+        )
+
+        assertEquals(listOf("algorithms", "cs-fundamentals"), map.areas.map { it.area })
+        assertEquals(false, map.areas[0].collapsed)
+        assertEquals(true, map.areas[1].collapsed)
+        assertEquals(2, map.areas[1].nodeCount)
+        assertEquals("Gdb Debugging, Memory Hierarchy", map.areas[1].trackPreview)
+    }
+
     private fun node(id: String, title: String, area: String, track: String, order: Int) =
         LearningNodeEntity(
             id = id,

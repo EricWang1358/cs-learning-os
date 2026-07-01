@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.CaptureNodeDraft
 import com.cslearningos.mobile.data.LearningDatabase
@@ -56,6 +57,13 @@ data class AiProviderSettings(
         get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
 }
 
+data class AppNotice(
+    val id: String,
+    val title: String,
+    val body: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
     val nodes: List<LearningNodeEntity> = emptyList(),
@@ -86,6 +94,8 @@ data class LearningUiState(
     val availableAiModels: List<String> = emptyList(),
     val aiBusy: Boolean = false,
     val pendingAiDraftSlipId: String? = null,
+    val notices: List<AppNotice> = emptyList(),
+    val collapsedLibraryAreas: Set<String> = emptySet(),
     val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
     val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
@@ -184,6 +194,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun showMore() {
         _state.update { it.copy(screen = AppScreen.More, message = "") }
+    }
+
+    fun dismissNotice(noticeId: String) {
+        _state.update { current ->
+            current.copy(notices = current.notices.filterNot { it.id == noticeId })
+        }
     }
 
     fun showAiServiceSettings() {
@@ -460,7 +476,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 body = snapshot.captureDraft,
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
-                sourceLabel = snapshot.captureSourceLabel
+                sourceLabel = snapshot.captureSourceLabel,
+                status = if (snapshot.aiProviderSettings.isConfigured) CaptureSlipStatus.ai_queued else CaptureSlipStatus.inbox
             )
             _state.update {
                 it.copy(
@@ -481,6 +498,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         "Slip saved. Review AI draft preflight."
                     } else {
                         "Slip saved. Configure AI before drafting."
+                    }
+                ).withNotice(
+                    title = if (snapshot.aiProviderSettings.isConfigured) "AI draft queued" else "Capture saved",
+                    body = if (snapshot.aiProviderSettings.isConfigured) {
+                        "The slip is waiting in Capture. Review what will be sent, then tap Generate draft."
+                    } else {
+                        "The slip is safe locally. Configure Service before using AI draft."
                     }
                 )
             }
@@ -506,15 +530,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        viewModelScope.launch {
+            repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_queued)
+        }
         _state.update {
             it.copy(
                 pendingAiDraftSlipId = slip.id,
                 aiServiceStatus = AiServiceStatus(
                     kind = AiServiceStatusKind.Info,
                     title = "AI draft preflight",
-                    body = "This will send one capture slip to ${settings.provider} and open the result as an editable Markdown node draft. Nothing becomes a node until Save Markdown."
+                    body = "This will send the capture slip plus the shown node-title context to ${settings.provider}. The result opens as an editable Markdown draft; nothing becomes a node until Save Markdown."
                 ),
                 message = "Confirm AI draft when ready."
+            ).withNotice(
+                title = "AI draft queued",
+                body = "Review the preflight card, then generate an editable Markdown draft."
             )
         }
     }
@@ -532,7 +562,6 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val slip = state.value.pendingAiDraftSlipId
             ?.let { slipId -> state.value.captureSlips.firstOrNull { it.id == slipId } }
             ?: return
-        _state.update { it.copy(pendingAiDraftSlipId = null) }
         draftCaptureSlipWithAi(slip)
     }
 
@@ -579,20 +608,26 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
+            repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_drafting)
             _state.update {
                 it.copy(
                     aiBusy = true,
+                    pendingAiDraftSlipId = slip.id,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Loading,
                         title = "Drafting from capture",
                         body = "Sending this slip to your configured OpenAI-compatible model. The result will open as an editable Markdown node draft."
                     ),
                     message = "Generating AI draft..."
+                ).withNotice(
+                    title = "AI draft started",
+                    body = "The model is expanding one capture slip into an editable Markdown draft."
                 )
             }
             runCatching {
                 requestCaptureDraft(settings = settings, slip = slip, existingNodeTitles = snapshot.nodes.map { it.title })
             }.onSuccess { markdown ->
+                repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_draft_ready)
                 val fallbackTitle = slip.topicHint?.takeIf { it.isNotBlank() } ?: "Capture Draft"
                 _state.update {
                     it.copy(
@@ -610,9 +645,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             body = "Review the Markdown, edit anything suspicious, then Save Markdown to convert the slip into a node."
                         ),
                         message = "AI draft ready. Review before saving."
+                    ).withNotice(
+                        title = "AI draft ready",
+                        body = "A Markdown draft opened in Edit Mode. Save Markdown when you approve it."
                     )
                 }
             }.onFailure { error ->
+                repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_queued)
                 _state.update {
                     it.copy(
                         aiBusy = false,
@@ -622,6 +661,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             body = error.safeAiError()
                         ),
                         message = "AI draft failed."
+                    ).withNotice(
+                        title = "AI draft failed",
+                        body = error.safeAiError()
                     )
                 }
             }
@@ -915,6 +957,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleLibraryArea(area: String) {
+        _state.update { current ->
+            val nextCollapsed = if (area in current.collapsedLibraryAreas) {
+                current.collapsedLibraryAreas - area
+            } else {
+                current.collapsedLibraryAreas + area
+            }
+            current.copy(collapsedLibraryAreas = nextCollapsed, message = "")
+        }
+    }
+
     fun setSystemLanguage(value: SystemLanguage) {
         appPrefs.edit().putString("systemLanguage", value.name).apply()
         _state.update { it.copy(systemLanguage = value, message = "Language preference saved locally") }
@@ -1068,8 +1121,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     private companion object {
-        const val StarterContentSeedVersion = 1
+        const val StarterContentSeedVersion = 2
         const val AiConnectTimeoutMillis = 15_000
         const val AiReadTimeoutMillis = 45_000
     }
 }
+
+private fun LearningUiState.withNotice(title: String, body: String): LearningUiState =
+    copy(
+        notices = (
+            listOf(
+                AppNotice(
+                    id = "notice-${System.currentTimeMillis()}-${notices.size}",
+                    title = title,
+                    body = body
+                )
+            ) + notices
+        ).take(6)
+    )

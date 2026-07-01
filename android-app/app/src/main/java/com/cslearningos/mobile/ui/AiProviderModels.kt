@@ -49,8 +49,16 @@ fun parseOpenAiChatContent(raw: String): String =
         .getString("content")
         .trim()
 
+fun aiDraftContextNodeTitles(existingNodes: List<String>): List<String> =
+    existingNodes
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .take(12)
+
 fun buildCaptureAiDraftPrompt(slip: CaptureSlipEntity, existingNodes: List<String>): String {
-    val knownNodes = existingNodes.take(12).joinToString(separator = "\n") { "- $it" }.ifBlank { "- No existing nodes yet" }
+    val knownNodes = aiDraftContextNodeTitles(existingNodes)
+        .joinToString(separator = "\n") { "- $it" }
+        .ifBlank { "- No existing nodes yet" }
     return """
         Convert this mobile capture slip into a useful CS Learning OS Markdown node draft.
 

@@ -28,6 +28,19 @@ data class LibraryOverview(
     val structureLabel: String = "Area -> Track -> Ordered nodes"
 )
 
+data class LibraryMap(
+    val areas: List<LibraryMapArea>
+)
+
+data class LibraryMapArea(
+    val area: String,
+    val label: String,
+    val nodeCount: Int,
+    val trackCount: Int,
+    val trackPreview: String,
+    val collapsed: Boolean
+)
+
 fun buildLibraryOverview(nodes: List<LearningNodeEntity>): LibraryOverview {
     val activeNodes = nodes.filter { it.deletedAt == null && it.visibility != "trash" }
     val groups = buildLibraryGroups(activeNodes)
@@ -70,6 +83,21 @@ fun buildLibraryGroups(nodes: List<LearningNodeEntity>): List<LibraryAreaGroup> 
                     }
             )
         }
+
+fun buildLibraryMap(nodes: List<LearningNodeEntity>, collapsedAreas: Set<String>): LibraryMap =
+    LibraryMap(
+        areas = buildLibraryGroups(nodes).map { area ->
+            val tracks = area.tracks.map { readableTrackLabel(it.track) }
+            LibraryMapArea(
+                area = area.area,
+                label = readableAreaLabel(area.area),
+                nodeCount = area.tracks.sumOf { it.nodes.size },
+                trackCount = area.tracks.size,
+                trackPreview = tracks.take(3).joinToString(", ").ifBlank { "No tracks" },
+                collapsed = area.area in collapsedAreas
+            )
+        }
+    )
 
 fun readableAreaLabel(area: String): String =
     when (area) {

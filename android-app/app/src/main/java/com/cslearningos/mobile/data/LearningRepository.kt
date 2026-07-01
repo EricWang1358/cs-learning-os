@@ -201,6 +201,7 @@ class LearningRepository(private val dao: LearningDao) {
         type: CaptureSlipType,
         topicHint: String?,
         sourceLabel: String?,
+        status: CaptureSlipStatus = CaptureSlipStatus.inbox,
         now: Long = System.currentTimeMillis()
     ): CaptureSlipEntity {
         val slip = CaptureSlipEntity(
@@ -210,7 +211,7 @@ class LearningRepository(private val dao: LearningDao) {
             topicHint = topicHint?.trim()?.ifBlank { null },
             sourceLabel = sourceLabel?.trim()?.ifBlank { null },
             linkedNodeId = null,
-            status = CaptureSlipStatus.inbox,
+            status = status,
             createdAt = now,
             updatedAt = now,
             revision = 1L,
@@ -219,6 +220,22 @@ class LearningRepository(private val dao: LearningDao) {
         )
         dao.upsertCaptureSlip(slip)
         return slip
+    }
+
+    suspend fun updateCaptureSlipStatus(
+        slipId: String,
+        status: CaptureSlipStatus,
+        now: Long = System.currentTimeMillis()
+    ): CaptureSlipEntity? {
+        val slip = dao.getCaptureSlip(slipId) ?: return null
+        val updated = slip.copy(
+            status = status,
+            updatedAt = now,
+            revision = slip.revision + 1,
+            syncStatus = SyncStatus.dirty
+        )
+        dao.upsertCaptureSlip(updated)
+        return updated
     }
 
     suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()) {
@@ -251,11 +268,19 @@ class LearningRepository(private val dao: LearningDao) {
     }
 
     suspend fun seedStarterContent(pack: StarterContentPackage) {
-        dao.upsertNodes(pack.nodes)
-        dao.upsertQuizzes(pack.quizzes)
-        dao.upsertReviewStates(pack.reviewStates)
-        pack.nodes.forEach { indexNode(it) }
-        pack.quizzes.forEach { indexQuiz(it) }
+        pack.nodes.forEach { node ->
+            if (dao.getNode(node.id) == null) {
+                dao.upsertNode(node)
+                indexNode(node)
+            }
+        }
+        pack.quizzes.forEach { quiz ->
+            if (dao.getQuiz(quiz.id) == null) {
+                dao.upsertQuiz(quiz)
+                pack.reviewStates.firstOrNull { it.quizId == quiz.id }?.let { dao.upsertReviewState(it) }
+                indexQuiz(quiz)
+            }
+        }
     }
 
     suspend fun saveManualQuiz(
@@ -357,7 +382,14 @@ class LearningRepository(private val dao: LearningDao) {
             .filter { it.deletedAt == null && it.resolvedAt == null }
             .groupBy { it.nodeId }
         val inboxSlips = dao.getAllCaptureSlips()
-            .filter { it.deletedAt == null && it.status == CaptureSlipStatus.inbox }
+            .filter {
+                it.deletedAt == null && it.status in setOf(
+                    CaptureSlipStatus.inbox,
+                    CaptureSlipStatus.ai_queued,
+                    CaptureSlipStatus.ai_drafting,
+                    CaptureSlipStatus.ai_draft_ready
+                )
+            }
         val activeQuizzes = dao.getAllQuizzes()
             .filter { it.deletedAt == null }
             .sortedWith(compareBy<QuizItemEntity> { it.area }.thenBy { it.track }.thenBy { it.prompt })
