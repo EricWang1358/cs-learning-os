@@ -269,9 +269,12 @@
     <string name="more_section_notifications_body">Capture and AI task status.</string>
     <string name="more_section_data_title">Data</string>
     <string name="more_section_data_body">Backup, import, and local cleanup.</string>
+    <string name="more_section_guide_title">Guide</string>
+    <string name="more_section_guide_body">A built-in quickstart for the phone workflow.</string>
     <string name="more_section_support_title">Support</string>
     <string name="more_section_support_body">Diagnostics and product contract.</string>
     <string name="more_value_local_first">Local first</string>
+    <string name="more_value_start_here">Start here</string>
     <string name="more_value_offline_safe">Offline safe</string>
     <string name="more_value_inbox">Inbox</string>
     <string name="more_notifications_label">Task inbox</string>
@@ -301,8 +304,24 @@
     <string name="more_remove_demo">Remove demo</string>
     <string name="more_trashbin_count">Trashbin: %1$d node(s)</string>
     <string name="more_trashbin_empty">No trashed nodes. Deleting from Reader moves a node here first.</string>
+    <string name="more_guide_label">How to use this app</string>
+    <string name="more_guide_intro">Keep it lightweight on the phone: capture first, organize later, and back up before risky cleanup.</string>
+    <string name="more_guide_step_badge">Step %1$d</string>
     <string name="more_support_label">Local-first contract</string>
     <string name="more_support_body">The app is usable without an account, backend, or API key. AI and sync are adapters, not the source of truth.</string>
+
+    <string-array name="more_guide_step_titles">
+        <item>Start from Home</item>
+        <item>Capture before you forget</item>
+        <item>Use Library like folders</item>
+        <item>Back up before heavy cleanup</item>
+    </string-array>
+    <string-array name="more_guide_step_bodies">
+        <item>Home is the command center: search, continue the last node, or jump straight into due review.</item>
+        <item>When a point is unclear, save a slip first. You can turn it into Markdown manually, or let AI draft it later.</item>
+        <item>Area is the top folder. Enter an Area to see its nodes, open one for reading, and use checked as a light progress marker.</item>
+        <item>Exports use a .txt filename with JSON inside, which is easier to share to QQ, WeChat, or file managers. Import accepts both .txt and .json.</item>
+    </string-array>
 
     <string name="message_add_title_or_markdown">Add a title or some Markdown before saving.</string>
     <string name="message_node_saved">Node saved</string>

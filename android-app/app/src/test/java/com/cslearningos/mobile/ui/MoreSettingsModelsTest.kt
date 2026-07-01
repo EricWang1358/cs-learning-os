@@ -14,6 +14,7 @@ class MoreSettingsModelsTest {
                 MoreSectionId.Service,
                 MoreSectionId.Notifications,
                 MoreSectionId.Data,
+                MoreSectionId.Guide,
                 MoreSectionId.Support
             ),
             orderedMoreSectionIds()
@@ -50,8 +51,9 @@ class MoreSettingsModelsTest {
 
     @Test
     fun moreSettingsModelsKeepOnlyStateAndSelectionLogic() {
-        assertEquals(5, orderedMoreSectionIds().size)
+        assertEquals(6, orderedMoreSectionIds().size)
         assertEquals(MoreSectionId.System, orderedMoreSectionIds().first())
         assertEquals(MoreSectionId.Support, orderedMoreSectionIds().last())
+        assertEquals(MoreSectionId.Guide, orderedMoreSectionIds()[4])
     }
 }

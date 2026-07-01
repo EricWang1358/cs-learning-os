@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ private fun MoreSettingsList(
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel)
                     MoreSectionId.Notifications -> NotificationsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel)
+                    MoreSectionId.Guide -> GuideContent()
                     MoreSectionId.Support -> SupportContent()
                 }
             }
@@ -328,6 +330,44 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GuideContent() {
+    val stepTitles = stringArrayResource(R.array.more_guide_step_titles)
+    val stepBodies = stringArrayResource(R.array.more_guide_step_bodies)
+    SettingsRow(label = stringResource(R.string.more_guide_label)) {
+        Text(
+            text = stringResource(R.string.more_guide_intro),
+            color = WorkbenchColors.Muted,
+            fontSize = 14.sp,
+            lineHeight = 21.sp
+        )
+        stepTitles.zip(stepBodies).forEachIndexed { index, (title, body) ->
+            GuideStepCard(
+                step = index + 1,
+                title = title,
+                body = body
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideStepCard(step: Int, title: String, body: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Eyebrow(stringResource(R.string.more_guide_step_badge, step))
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+        Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
     }
 }
 

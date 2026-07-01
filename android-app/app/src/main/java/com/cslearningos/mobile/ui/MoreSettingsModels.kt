@@ -17,6 +17,7 @@ enum class MoreSectionId {
     Service,
     Notifications,
     Data,
+    Guide,
     Support
 }
 
@@ -26,6 +27,7 @@ fun orderedMoreSectionIds(): List<MoreSectionId> =
         MoreSectionId.Service,
         MoreSectionId.Notifications,
         MoreSectionId.Data,
+        MoreSectionId.Guide,
         MoreSectionId.Support
     )
 

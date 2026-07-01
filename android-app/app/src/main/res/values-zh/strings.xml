@@ -398,4 +398,23 @@
     <string name="ai_status_autosaved_body">输入时会自动保存在本机。建议在 Capture 发送随手记前，先用“校验”确认供应商可用。</string>
     <string name="message_backup_export_failed">导出备份失败</string>
     <string name="message_backup_saved_to_device">备份已保存到本地</string>
+    <string name="more_section_guide_title">教程</string>
+    <string name="more_section_guide_body">把手机端最常用的流程直接放在这里。</string>
+    <string name="more_value_start_here">先看这里</string>
+    <string name="more_guide_label">怎么用这个 App</string>
+    <string name="more_guide_intro">手机端先求快和稳：先捕捉，再整理；要做较大清理前，先备份。</string>
+    <string name="more_guide_step_badge">步骤 %1$d</string>
+
+    <string-array name="more_guide_step_titles">
+        <item>先从首页进入</item>
+        <item>有想法先随手记</item>
+        <item>把知识库当文件夹用</item>
+        <item>大改之前先备份</item>
+    </string-array>
+    <string-array name="more_guide_step_bodies">
+        <item>首页就是总入口：可以直接搜索、继续上次阅读，或者跳进到期复习。</item>
+        <item>哪里没想清楚，先保存一条 Capture Slip。之后你可以手动整理成 Markdown，也可以稍后交给 AI 起草。</item>
+        <item>Area 是顶层文件夹。点进 Area 看节点列表，打开节点阅读；勾选只是轻量标记，不是复杂的批处理系统。</item>
+        <item>导出文件名会是 .txt，但里面仍然是 JSON，更方便分享到 QQ、微信或文件管理器；导入时 .txt 和 .json 都能识别。</item>
+    </string-array>
 </resources>

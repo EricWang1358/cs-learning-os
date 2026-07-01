@@ -43,6 +43,13 @@ fun moreSectionSummaries(state: LearningUiState): List<MoreSectionSummary> =
                 value = stringResource(R.string.more_value_local_first)
             )
 
+            MoreSectionId.Guide -> MoreSectionSummary(
+                id = sectionId,
+                title = stringResource(R.string.more_section_guide_title),
+                body = stringResource(R.string.more_section_guide_body),
+                value = stringResource(R.string.more_value_start_here)
+            )
+
             MoreSectionId.Support -> MoreSectionSummary(
                 id = sectionId,
                 title = stringResource(R.string.more_section_support_title),
