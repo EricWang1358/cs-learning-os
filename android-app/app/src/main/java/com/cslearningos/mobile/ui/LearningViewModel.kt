@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.cslearningos.mobile.R
+import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -16,6 +18,9 @@ import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentImporter
 import com.cslearningos.mobile.domain.ReviewRating
+import com.cslearningos.mobile.ui.backup.BackupDocument
+import com.cslearningos.mobile.ui.backup.BackupTransferCoordinator
+import com.cslearningos.mobile.ui.backup.backupImportErrorKey
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,13 +64,14 @@ data class AiProviderSettings(
 
 data class AppNotice(
     val id: String,
-    val title: String,
-    val body: String,
+    val title: UiText,
+    val body: UiText,
     val createdAt: Long = System.currentTimeMillis()
 )
 
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
+    val areas: List<AreaEntity> = emptyList(),
     val nodes: List<LearningNodeEntity> = emptyList(),
     val trashNodes: List<LearningNodeEntity> = emptyList(),
     val quizzes: List<QuizItemEntity> = emptyList(),
@@ -74,7 +80,10 @@ data class LearningUiState(
     val captureSlips: List<CaptureSlipEntity> = emptyList(),
     val selectedNode: LearningNodeEntity? = null,
     val selectedQuiz: QuizItemEntity? = null,
+    val selectedLibraryAreaId: String? = null,
+    val libraryCheckedFilter: LibraryCheckedFilter = LibraryCheckedFilter.All,
     val editorNodeId: String? = null,
+    val editorAreaId: String? = null,
     val editorSourceCaptureSlipId: String? = null,
     val editorTitle: String = "",
     val editorBody: String = "",
@@ -100,8 +109,7 @@ data class LearningUiState(
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
     val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
     val quizAnswerVisible: Boolean = false,
-    val backupText: String = "",
-    val message: String = ""
+    val message: UiText? = null
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -127,12 +135,28 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             seedStarterContentIfNeeded()
         }
         viewModelScope.launch {
+            repository.areas.collect { areas ->
+                _state.update { current ->
+                    current.copy(
+                        areas = areas,
+                        selectedLibraryAreaId = current.selectedLibraryAreaId?.takeIf { selectedId ->
+                            areas.any { it.id == selectedId && it.deletedAt == null }
+                        }
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
             repository.nodes.collect { nodes ->
                 _state.update { current ->
                     current.copy(
                         nodes = nodes,
                         selectedNode = current.selectedNode?.let { selected ->
                             nodes.firstOrNull { it.id == selected.id } ?: selected
+                        },
+                        selectedLibraryAreaId = current.selectedLibraryAreaId?.takeIf { selectedAreaId ->
+                            nodes.any { it.areaId == selectedAreaId && it.deletedAt == null && it.visibility != "trash" } ||
+                                current.areas.any { it.id == selectedAreaId && it.deletedAt == null }
                         }
                     )
                 }
@@ -173,27 +197,34 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun showHome() {
         refreshDueReviews()
-        _state.update { it.copy(screen = AppScreen.Home, message = "") }
+        _state.update { it.copy(screen = AppScreen.Home, message = null) }
     }
 
     fun showLibrary() {
-        _state.update { it.copy(screen = AppScreen.Library, message = "") }
+        _state.update {
+            it.copy(
+                screen = AppScreen.Library,
+                selectedLibraryAreaId = null,
+                libraryCheckedFilter = LibraryCheckedFilter.All,
+                message = null
+            )
+        }
     }
 
     fun showCapture() {
-        _state.update { it.copy(screen = AppScreen.Capture, message = "") }
+        _state.update { it.copy(screen = AppScreen.Capture, message = null) }
     }
 
     fun showSearch() {
-        _state.update { it.copy(screen = AppScreen.Search, message = "") }
+        _state.update { it.copy(screen = AppScreen.Search, message = null) }
     }
 
     fun showBackup() {
-        _state.update { it.copy(screen = AppScreen.Backup, message = "") }
+        _state.update { it.copy(screen = AppScreen.Backup, message = null) }
     }
 
     fun showMore() {
-        _state.update { it.copy(screen = AppScreen.More, message = "") }
+        _state.update { it.copy(screen = AppScreen.More, message = null) }
     }
 
     fun dismissNotice(noticeId: String) {
@@ -207,25 +238,26 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.More,
                 expandedMoreSection = MoreSectionId.Service,
-                message = "",
+                message = null,
                 aiServiceStatus = AiServiceStatus(
                     kind = AiServiceStatusKind.Info,
-                    title = "Configure AI service",
-                    body = "Settings are saved automatically on this phone. Tap Save settings for confirmation, then Validate or Pull models."
+                    title = uiText(R.string.ai_status_configure_service_title),
+                    body = uiText(R.string.ai_status_configure_service_body)
                 )
             )
         }
     }
 
-    fun startNewNode() {
+    fun startNewNode(areaId: String? = state.value.selectedLibraryAreaId) {
         _state.update {
             it.copy(
                 screen = AppScreen.Editor,
+                editorAreaId = areaId,
                 editorNodeId = null,
                 editorSourceCaptureSlipId = null,
                 editorTitle = "",
                 editorBody = "",
-                message = ""
+                message = null
             )
         }
     }
@@ -235,17 +267,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.Editor,
                 selectedNode = node,
+                editorAreaId = node.areaId,
                 editorNodeId = node.id,
                 editorSourceCaptureSlipId = null,
                 editorTitle = node.title,
                 editorBody = node.markdownBody,
-                message = ""
+                message = null
             )
         }
     }
 
     fun openNode(node: LearningNodeEntity) {
-        _state.update { it.copy(screen = AppScreen.Reader, selectedNode = node, message = "") }
+        _state.update { it.copy(screen = AppScreen.Reader, selectedNode = node, message = null) }
         viewModelScope.launch {
             repository.markRead(node.id)
         }
@@ -261,7 +294,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             screen = AppScreen.Review,
                             selectedQuiz = quiz,
                             quizAnswerVisible = false,
-                            message = ""
+                            message = null
                         )
                     }
                 }
@@ -280,14 +313,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun saveNode() {
         val snapshot = state.value
         if (snapshot.editorTitle.isBlank() && snapshot.editorBody.isBlank()) {
-            _state.update { it.copy(message = "Add a title or some Markdown before saving.") }
+            _state.update { it.copy(message = uiText(R.string.message_add_title_or_markdown)) }
             return
         }
         viewModelScope.launch {
             val node = repository.saveNode(
                 id = snapshot.editorNodeId,
                 title = snapshot.editorTitle,
-                markdownBody = snapshot.editorBody
+                markdownBody = snapshot.editorBody,
+                areaId = snapshot.editorAreaId
             )
             snapshot.editorSourceCaptureSlipId?.let { slipId ->
                 repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
@@ -296,8 +330,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     screen = AppScreen.Reader,
                     selectedNode = node,
+                    editorAreaId = null,
                     editorSourceCaptureSlipId = null,
-                    message = "Node saved"
+                    message = uiText(R.string.message_node_saved)
                 )
             }
         }
@@ -307,7 +342,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update {
             it.copy(
                 screen = if (it.selectedNode == null) AppScreen.Home else AppScreen.Reader,
-                message = ""
+                editorAreaId = null,
+                message = null
             )
         }
     }
@@ -320,11 +356,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     screen = AppScreen.Library,
                     selectedNode = null,
+                    editorAreaId = null,
                     editorNodeId = null,
                     editorSourceCaptureSlipId = null,
                     editorTitle = "",
                     editorBody = "",
-                    message = "Node moved to Trashbin"
+                    message = uiText(R.string.message_node_moved_to_trashbin)
                 )
             }
         }
@@ -333,21 +370,21 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun restoreNode(node: LearningNodeEntity) {
         viewModelScope.launch {
             repository.restoreNodeFromTrash(node.id)
-            _state.update { it.copy(message = "Node restored from Trashbin") }
+            _state.update { it.copy(message = uiText(R.string.message_node_restored)) }
         }
     }
 
     fun permanentlyDeleteNode(node: LearningNodeEntity) {
         viewModelScope.launch {
             repository.permanentlyDeleteNode(node.id)
-            _state.update { it.copy(message = "Node deleted forever") }
+            _state.update { it.copy(message = uiText(R.string.message_node_deleted_forever)) }
         }
     }
 
     fun clearStarterContent() {
         viewModelScope.launch {
             repository.clearStarterContent()
-            _state.update { it.copy(message = "Starter demo content removed") }
+            _state.update { it.copy(message = uiText(R.string.message_starter_demo_removed)) }
         }
     }
 
@@ -366,7 +403,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _state.update {
                 it.copy(
                     searchResults = repository.search(query),
-                    message = if (query.isBlank()) "Enter a search query" else ""
+                    message = if (query.isBlank()) uiText(R.string.message_enter_search_query) else null
                 )
             }
         }
@@ -379,7 +416,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 quizPrompt = "",
                 quizAnswer = "",
                 quizExplanation = "",
-                message = ""
+                message = null
             )
         }
     }
@@ -397,18 +434,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setReaderQuestionDraft(value: String) {
-        _state.update { it.copy(readerQuestionDraft = value, message = "") }
+        _state.update { it.copy(readerQuestionDraft = value, message = null) }
     }
 
     fun toggleReaderQuestionPanel() {
-        _state.update { it.copy(readerQuestionPanelExpanded = !it.readerQuestionPanelExpanded, message = "") }
+        _state.update { it.copy(readerQuestionPanelExpanded = !it.readerQuestionPanelExpanded, message = null) }
     }
 
     fun saveReaderQuestion() {
         val snapshot = state.value
         val node = snapshot.selectedNode ?: return
         if (snapshot.readerQuestionDraft.isBlank()) {
-            _state.update { it.copy(message = "Write the unclear point before saving it.") }
+            _state.update { it.copy(message = uiText(R.string.message_write_unclear_point)) }
             return
         }
         viewModelScope.launch {
@@ -419,32 +456,32 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _state.update {
                 it.copy(
                     readerQuestionDraft = "",
-                    message = "Question saved to unresolved reader queue"
+                    message = uiText(R.string.message_reader_question_saved)
                 )
             }
         }
     }
 
     fun setCaptureDraft(value: String) {
-        _state.update { it.copy(captureDraft = value, message = "") }
+        _state.update { it.copy(captureDraft = value, message = null) }
     }
 
     fun setCaptureTopicHint(value: String) {
-        _state.update { it.copy(captureTopicHint = value, message = "") }
+        _state.update { it.copy(captureTopicHint = value, message = null) }
     }
 
     fun setCaptureSourceLabel(value: String) {
-        _state.update { it.copy(captureSourceLabel = value, message = "") }
+        _state.update { it.copy(captureSourceLabel = value, message = null) }
     }
 
     fun setCaptureType(value: CaptureSlipType) {
-        _state.update { it.copy(captureType = value, message = "") }
+        _state.update { it.copy(captureType = value, message = null) }
     }
 
     fun saveCaptureSlip() {
         val snapshot = state.value
         if (snapshot.captureDraft.isBlank()) {
-            _state.update { it.copy(message = "Write a quick note before saving the capture slip.") }
+            _state.update { it.copy(message = uiText(R.string.message_write_capture_before_save)) }
             return
         }
         viewModelScope.launch {
@@ -459,7 +496,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     captureDraft = "",
                     captureTopicHint = "",
                     captureSourceLabel = "",
-                    message = "Capture slip saved to inbox"
+                    message = uiText(R.string.message_capture_saved_to_inbox)
                 )
             }
         }
@@ -468,7 +505,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun saveCaptureSlipForAiDraft() {
         val snapshot = state.value
         if (snapshot.captureDraft.isBlank()) {
-            _state.update { it.copy(message = "Write a quick note before saving it for AI drafting.") }
+            _state.update { it.copy(message = uiText(R.string.message_write_capture_before_ai)) }
             return
         }
         viewModelScope.launch {
@@ -488,23 +525,23 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     aiServiceStatus = if (snapshot.aiProviderSettings.isConfigured) {
                         AiServiceStatus(
                             kind = AiServiceStatusKind.Info,
-                            title = "AI draft preflight",
-                            body = "Slip saved. Confirm the target, optionally validate the provider, then generate an editable Markdown node draft."
+                            title = uiText(R.string.ai_status_preflight_title),
+                            body = uiText(R.string.ai_status_preflight_saved_body)
                         )
                     } else {
                         it.aiServiceStatus
                     },
                     message = if (snapshot.aiProviderSettings.isConfigured) {
-                        "Slip saved. Review AI draft preflight."
+                        uiText(R.string.message_review_ai_preflight)
                     } else {
-                        "Slip saved. Configure AI before drafting."
+                        uiText(R.string.message_configure_ai_before_drafting)
                     }
                 ).withNotice(
-                    title = if (snapshot.aiProviderSettings.isConfigured) "AI draft queued" else "Capture saved",
+                    title = if (snapshot.aiProviderSettings.isConfigured) uiText(R.string.ai_notice_queued_title) else uiText(R.string.capture_notice_saved_title),
                     body = if (snapshot.aiProviderSettings.isConfigured) {
-                        "The slip is waiting in Capture. Review what will be sent, then tap Generate draft."
+                        uiText(R.string.ai_notice_queued_body)
                     } else {
-                        "The slip is safe locally. Configure Service before using AI draft."
+                        uiText(R.string.capture_notice_saved_body)
                     }
                 )
             }
@@ -521,10 +558,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     expandedMoreSection = MoreSectionId.Service,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Warning,
-                        title = "AI setup needed",
-                        body = "Add ${missing.joinToString()} before generating a capture draft."
+                        title = uiText(R.string.ai_status_setup_needed_title),
+                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedLabelList(missing)))
                     ),
-                    message = "Configure AI before drafting."
+                    message = uiText(R.string.message_configure_ai_before_drafting)
                 )
             }
             return
@@ -538,13 +575,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 pendingAiDraftSlipId = slip.id,
                 aiServiceStatus = AiServiceStatus(
                     kind = AiServiceStatusKind.Info,
-                    title = "AI draft preflight",
-                    body = "This will send the capture slip plus the shown node-title context to ${settings.provider}. The result opens as an editable Markdown draft; nothing becomes a node until Save Markdown."
+                    title = uiText(R.string.ai_status_preflight_title),
+                    body = uiText(R.string.ai_status_preflight_confirm_body, settings.provider)
                 ),
-                message = "Confirm AI draft when ready."
+                message = uiText(R.string.message_confirm_ai_draft)
             ).withNotice(
-                title = "AI draft queued",
-                body = "Review the preflight card, then generate an editable Markdown draft."
+                title = uiText(R.string.ai_notice_queued_title),
+                body = uiText(R.string.ai_notice_review_preflight_body)
             )
         }
     }
@@ -553,7 +590,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update {
             it.copy(
                 pendingAiDraftSlipId = null,
-                message = "AI draft canceled."
+                message = uiText(R.string.message_ai_draft_canceled)
             )
         }
     }
@@ -568,7 +605,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun archiveCaptureSlip(slip: CaptureSlipEntity) {
         viewModelScope.launch {
             repository.archiveCaptureSlip(slip.id)
-            _state.update { it.copy(message = "Capture slip archived") }
+            _state.update { it.copy(message = uiText(R.string.message_capture_archived)) }
         }
     }
 
@@ -582,7 +619,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 selectedNode = draft.suggestedNodeId?.let { nodeId -> state.value.nodes.firstOrNull { node -> node.id == nodeId } },
                 editorTitle = draft.title,
                 editorBody = draft.markdownBody,
-                message = "Review this capture draft before saving it as Markdown."
+                message = uiText(R.string.message_review_capture_draft)
             )
         }
     }
@@ -598,10 +635,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     expandedMoreSection = MoreSectionId.Service,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Warning,
-                        title = "AI setup needed",
-                        body = "Add ${missing.joinToString()} before generating a capture draft."
+                        title = uiText(R.string.ai_status_setup_needed_title),
+                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedLabelList(missing)))
                     ),
-                    message = "Configure AI before drafting."
+                    message = uiText(R.string.message_configure_ai_before_drafting)
                 )
             }
             return
@@ -615,13 +652,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     pendingAiDraftSlipId = slip.id,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Loading,
-                        title = "Drafting from capture",
-                        body = "Sending this slip to your configured OpenAI-compatible model. The result will open as an editable Markdown node draft."
+                        title = uiText(R.string.ai_status_drafting_title),
+                        body = uiText(R.string.ai_status_drafting_body)
                     ),
-                    message = "Generating AI draft..."
+                    message = uiText(R.string.message_generating_ai_draft)
                 ).withNotice(
-                    title = "AI draft started",
-                    body = "The model is expanding one capture slip into an editable Markdown draft."
+                    title = uiText(R.string.ai_notice_started_title),
+                    body = uiText(R.string.ai_notice_started_body)
                 )
             }
             runCatching {
@@ -641,13 +678,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         pendingAiDraftSlipId = null,
                         aiServiceStatus = AiServiceStatus(
                             kind = AiServiceStatusKind.Success,
-                            title = "AI draft ready",
-                            body = "Review the Markdown, edit anything suspicious, then Save Markdown to convert the slip into a node."
+                            title = uiText(R.string.ai_status_ready_title),
+                            body = uiText(R.string.ai_status_ready_body)
                         ),
-                        message = "AI draft ready. Review before saving."
+                        message = uiText(R.string.message_ai_draft_ready)
                     ).withNotice(
-                        title = "AI draft ready",
-                        body = "A Markdown draft opened in Edit Mode. Save Markdown when you approve it."
+                        title = uiText(R.string.ai_notice_ready_title),
+                        body = uiText(R.string.ai_notice_ready_body)
                     )
                 }
             }.onFailure { error ->
@@ -657,13 +694,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         aiBusy = false,
                         aiServiceStatus = AiServiceStatus(
                             kind = AiServiceStatusKind.Error,
-                            title = "AI draft failed",
-                            body = error.safeAiError()
+                            title = uiText(R.string.ai_status_failed_title),
+                            body = UiText.Dynamic(error.safeAiError())
                         ),
-                        message = "AI draft failed."
+                        message = uiText(R.string.message_ai_draft_failed)
                     ).withNotice(
-                        title = "AI draft failed",
-                        body = error.safeAiError()
+                        title = uiText(R.string.ai_status_failed_title),
+                        body = UiText.Dynamic(error.safeAiError())
                     )
                 }
             }
@@ -673,14 +710,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun resolveReaderQuestion(question: ReaderQuestionEntity) {
         viewModelScope.launch {
             repository.resolveReaderQuestion(question.id)
-            _state.update { it.copy(message = "Question marked resolved") }
+            _state.update { it.copy(message = uiText(R.string.message_question_resolved)) }
         }
     }
 
     fun saveQuiz() {
         val snapshot = state.value
         if (snapshot.quizPrompt.isBlank() || snapshot.quizAnswer.isBlank()) {
-            _state.update { it.copy(message = "Question and answer are required.") }
+            _state.update { it.copy(message = uiText(R.string.message_question_answer_required)) }
             return
         }
         viewModelScope.launch {
@@ -691,7 +728,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 explanation = snapshot.quizExplanation
             )
             _state.update {
-                it.copy(screen = AppScreen.Home, message = "Quiz saved")
+                it.copy(screen = AppScreen.Home, message = uiText(R.string.message_quiz_saved))
             }
         }
     }
@@ -703,7 +740,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 screen = AppScreen.Review,
                 selectedQuiz = it.dueQuizzes.firstOrNull(),
                 quizAnswerVisible = false,
-                message = ""
+                message = null
             )
         }
     }
@@ -713,7 +750,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun revealCurrentQuizAnswer() {
-        _state.update { it.copy(quizAnswerVisible = true, message = "") }
+        _state.update { it.copy(quizAnswerVisible = true, message = null) }
     }
 
     fun answerCurrentQuiz(rating: ReviewRating) {
@@ -728,71 +765,66 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         rating = rating
                     ),
                     quizAnswerVisible = false,
-                    message = "Review saved"
+                    message = uiText(R.string.message_review_saved)
                 )
             }
             refreshDueReviews()
         }
     }
 
-    fun exportBackup() {
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    backupText = repository.exportBackup(),
-                    message = "Backup exported"
-                )
-            }
-        }
-    }
+    suspend fun createBackupDocument(now: Long = System.currentTimeMillis()): BackupDocument =
+        BackupTransferCoordinator.createBackupDocument(
+            rawJson = repository.exportBackup(now),
+            exportedAt = now
+        )
 
-    fun exportReadableMarkdown() {
+    fun restoreBackupFromJson(rawJson: String) {
         viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    screen = AppScreen.Backup,
-                    backupText = repository.exportReadableMarkdown(),
-                    message = "Readable Markdown/TXT export generated"
-                )
-            }
-        }
-    }
-
-    fun setBackupText(value: String) {
-        _state.update { it.copy(backupText = value) }
-    }
-
-    fun restoreBackup() {
-        val raw = state.value.backupText
-        viewModelScope.launch {
-            runCatching { repository.restoreBackup(raw) }
+            runCatching { repository.restoreBackup(rawJson) }
                 .onSuccess {
-                    _state.update { it.copy(screen = AppScreen.Home, message = "Backup restored") }
+                    _state.update { it.copy(screen = AppScreen.Home, message = uiText(R.string.message_backup_restored)) }
                 }
                 .onFailure { error ->
-                    _state.update { it.copy(message = error.message ?: "Restore failed") }
+                    showBackupError(error)
                 }
         }
+    }
+
+    fun noteBackupShared() {
+        _state.update { it.copy(message = uiText(R.string.message_backup_exported)) }
+    }
+
+    fun noteBackupSavedToDevice() {
+        _state.update { it.copy(message = uiText(R.string.message_backup_saved_to_device)) }
+    }
+
+    fun showBackupError(error: Throwable, fallbackResId: Int = R.string.message_restore_failed) {
+        val message = when (backupImportErrorKey(error)) {
+            "invalid_json" -> uiText(R.string.message_backup_invalid_json)
+            "unreadable_file" -> uiText(R.string.message_backup_unreadable_file)
+            else -> error.message?.let(UiText::Dynamic) ?: uiText(fallbackResId)
+        }
+        _state.update { it.copy(message = message) }
     }
 
     fun setAiProvider(value: String) {
-        updateAiSettings(savedField = "Provider") { it.copy(provider = value) }
+        updateAiSettings(savedField = uiText(R.string.more_provider_label)) { it.copy(provider = value) }
     }
 
     fun setAiApiKey(value: String) {
-        updateAiSettings(savedField = "API key") { it.copy(apiKey = value) }
+        updateAiSettings(savedField = uiText(R.string.more_api_key_label)) { it.copy(apiKey = value) }
     }
 
     fun setAiBaseUrl(value: String) {
-        updateAiSettings(savedField = "Base URL") { it.copy(baseUrl = value) }
+        updateAiSettings(savedField = uiText(R.string.more_base_url_label)) { it.copy(baseUrl = value) }
     }
 
     fun setAiModel(value: String) {
-        updateAiSettings(savedField = "Model") { it.copy(model = value) }
+        updateAiSettings(savedField = uiText(R.string.more_model_label)) { it.copy(model = value) }
     }
 
     fun setAiThinkingEnabled(value: Boolean) {
-        updateAiSettings(savedField = "Thinking") { it.copy(thinkingEnabled = value) }
+        updateAiSettings(savedField = uiText(R.string.more_connection_label)) { it.copy(thinkingEnabled = value) }
     }
 
     fun toggleAiKeyVisibility() {
@@ -809,10 +841,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Error,
-                        title = "AI settings incomplete",
-                        body = "Missing: ${missing.joinToString()}."
+                        title = uiText(R.string.ai_status_settings_incomplete_title),
+                        body = uiText(R.string.ai_status_missing_fields_body, UiText.Dynamic(localizedLabelList(missing)))
                     ),
-                    message = "AI settings incomplete."
+                    message = uiText(R.string.message_ai_settings_incomplete)
                 )
             }
             return
@@ -824,29 +856,28 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     aiBusy = true,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Loading,
-                        title = "Validating AI service",
-                        body = "Calling ${aiModelsUrl(settings.baseUrl)} with your saved API key."
+                        title = uiText(R.string.ai_status_validating_title),
+                        body = uiText(R.string.ai_status_validating_body, aiModelsUrl(settings.baseUrl))
                     ),
-                    message = "Validating AI service..."
+                    message = uiText(R.string.message_validating_ai_service)
                 )
             }
             runCatching { fetchModelIds(settings) }
                 .onSuccess { models ->
-                    val modelNote = if (models.isEmpty()) {
-                        "The endpoint responded, but did not return model IDs."
-                    } else {
-                        "Found ${models.size} model(s). Current model: ${settings.model}."
-                    }
                     _state.update {
                         it.copy(
                             aiBusy = false,
                             availableAiModels = models,
                             aiServiceStatus = AiServiceStatus(
                                 kind = AiServiceStatusKind.Success,
-                                title = "AI service validated",
-                                body = modelNote
+                                title = uiText(R.string.ai_status_validated_title),
+                                body = if (models.isEmpty()) {
+                                    uiText(R.string.ai_status_validated_empty_body)
+                                } else {
+                                    uiText(R.string.ai_status_validated_models_body, models.size, settings.model)
+                                }
                             ),
-                            message = "AI validation succeeded."
+                            message = uiText(R.string.message_ai_validation_succeeded)
                         )
                     }
                 }
@@ -856,10 +887,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             aiBusy = false,
                             aiServiceStatus = AiServiceStatus(
                                 kind = AiServiceStatusKind.Error,
-                                title = "AI validation failed",
-                                body = error.safeAiError()
+                                title = uiText(R.string.ai_status_validation_failed_title),
+                                body = UiText.Dynamic(error.safeAiError())
                             ),
-                            message = "AI validation failed."
+                            message = uiText(R.string.message_ai_validation_failed)
                         )
                     }
                 }
@@ -872,10 +903,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 aiServiceStatus = AiServiceStatus(
                     kind = AiServiceStatusKind.Success,
-                    title = "AI settings saved",
-                    body = "Provider, API key, base URL, model, and thinking preference are saved locally on this phone."
+                    title = uiText(R.string.ai_status_settings_saved_title),
+                    body = uiText(R.string.ai_status_settings_saved_body)
                 ),
-                message = "AI settings saved locally."
+                message = uiText(R.string.message_ai_settings_saved_locally)
             )
         }
     }
@@ -888,10 +919,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Warning,
-                        title = "Cannot pull models yet",
-                        body = "Missing: ${missing.joinToString()}."
+                        title = uiText(R.string.ai_status_pull_unavailable_title),
+                        body = uiText(R.string.ai_status_missing_fields_body, UiText.Dynamic(localizedLabelList(missing)))
                     ),
-                    message = "AI settings incomplete."
+                    message = uiText(R.string.message_ai_settings_incomplete)
                 )
             }
             return
@@ -903,10 +934,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     aiBusy = true,
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Loading,
-                        title = "Pulling model list",
-                        body = "Calling ${aiModelsUrl(settings.baseUrl)}. If your provider blocks model listing, type the model manually."
+                        title = uiText(R.string.ai_status_pull_title),
+                        body = uiText(R.string.ai_status_pull_body, aiModelsUrl(settings.baseUrl))
                     ),
-                    message = "Pulling AI models..."
+                    message = uiText(R.string.message_pulling_ai_models)
                 )
             }
             runCatching { fetchModelIds(settings) }
@@ -917,14 +948,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             availableAiModels = models,
                             aiServiceStatus = AiServiceStatus(
                                 kind = if (models.isEmpty()) AiServiceStatusKind.Warning else AiServiceStatusKind.Success,
-                                title = if (models.isEmpty()) "No models returned" else "Models pulled",
+                                title = if (models.isEmpty()) uiText(R.string.ai_status_pull_empty_title) else uiText(R.string.ai_status_pull_success_title),
                                 body = if (models.isEmpty()) {
-                                    "The endpoint responded but returned no IDs. You can still type a model manually."
+                                    uiText(R.string.ai_status_pull_empty_body)
                                 } else {
-                                    "Tap a model below to use it for Capture Slip AI drafts."
+                                    uiText(R.string.ai_status_pull_success_body)
                                 }
                             ),
-                            message = if (models.isEmpty()) "No model IDs returned." else "AI models pulled."
+                            message = if (models.isEmpty()) uiText(R.string.message_no_model_ids) else uiText(R.string.message_ai_models_pulled)
                         )
                     }
                 }
@@ -934,10 +965,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                             aiBusy = false,
                             aiServiceStatus = AiServiceStatus(
                                 kind = AiServiceStatusKind.Error,
-                                title = "Model pull failed",
-                                body = error.safeAiError()
+                                title = uiText(R.string.ai_status_pull_failed_title),
+                                body = UiText.Dynamic(error.safeAiError())
                             ),
-                            message = "Model pull failed."
+                            message = uiText(R.string.message_model_pull_failed)
                         )
                     }
                 }
@@ -945,14 +976,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectAiModel(modelId: String) {
-        updateAiSettings(savedField = "Model") { it.copy(model = modelId) }
+        updateAiSettings(savedField = uiText(R.string.more_model_label)) { it.copy(model = modelId) }
     }
 
     fun toggleMoreSection(section: MoreSectionId) {
         _state.update {
             it.copy(
                 expandedMoreSection = if (it.expandedMoreSection == section) null else section,
-                message = ""
+                message = null
             )
         }
     }
@@ -964,32 +995,102 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             } else {
                 current.collapsedLibraryAreas + area
             }
-            current.copy(collapsedLibraryAreas = nextCollapsed, message = "")
+            current.copy(collapsedLibraryAreas = nextCollapsed, message = null)
+        }
+    }
+
+    fun openLibraryArea(areaId: String) {
+        _state.update {
+            it.copy(
+                selectedLibraryAreaId = areaId,
+                libraryCheckedFilter = LibraryCheckedFilter.All,
+                message = null
+            )
+        }
+    }
+
+    fun closeLibraryArea() {
+        _state.update {
+            it.copy(
+                selectedLibraryAreaId = null,
+                libraryCheckedFilter = LibraryCheckedFilter.All,
+                message = null
+            )
+        }
+    }
+
+    fun setLibraryCheckedFilter(filter: LibraryCheckedFilter) {
+        _state.update { it.copy(libraryCheckedFilter = filter, message = null) }
+    }
+
+    fun createArea(name: String) {
+        viewModelScope.launch {
+            val area = repository.createArea(name)
+            _state.update {
+                it.copy(
+                    screen = AppScreen.Library,
+                    selectedLibraryAreaId = area.id,
+                    message = uiText(R.string.message_area_created)
+                )
+            }
+        }
+    }
+
+    fun renameArea(areaId: String, name: String) {
+        viewModelScope.launch {
+            repository.renameArea(areaId, name)
+            _state.update { it.copy(message = uiText(R.string.message_area_renamed)) }
+        }
+    }
+
+    fun deleteArea(areaId: String) {
+        viewModelScope.launch {
+            val deleted = repository.deleteAreaIfEmpty(areaId)
+            _state.update {
+                it.copy(
+                    selectedLibraryAreaId = if (deleted && it.selectedLibraryAreaId == areaId) null else it.selectedLibraryAreaId,
+                    message = if (deleted) uiText(R.string.message_area_deleted) else uiText(R.string.message_area_not_empty)
+                )
+            }
+        }
+    }
+
+    fun moveNodeToArea(nodeId: String, areaId: String) {
+        viewModelScope.launch {
+            repository.moveNodeToArea(nodeId, areaId)
+            _state.update { it.copy(message = uiText(R.string.message_node_moved_to_area)) }
+        }
+    }
+
+    fun toggleNodeChecked(nodeId: String) {
+        viewModelScope.launch {
+            repository.toggleNodeChecked(nodeId)
+            _state.update { it.copy(message = null) }
         }
     }
 
     fun setSystemLanguage(value: SystemLanguage) {
         appPrefs.edit().putString("systemLanguage", value.name).apply()
-        _state.update { it.copy(systemLanguage = value, message = "Language preference saved locally") }
+        _state.update { it.copy(systemLanguage = value, message = uiText(R.string.message_language_saved)) }
     }
 
     fun setAppearanceMode(value: AppearanceMode) {
         appPrefs.edit().putString("appearanceMode", value.name).apply()
-        _state.update { it.copy(appearanceMode = value, message = "Display mode saved locally") }
+        _state.update { it.copy(appearanceMode = value, message = uiText(R.string.message_appearance_saved)) }
     }
 
-    private fun updateAiSettings(savedField: String, reducer: (AiProviderSettings) -> AiProviderSettings) {
+    private fun updateAiSettings(savedField: UiText, reducer: (AiProviderSettings) -> AiProviderSettings) {
         _state.update { current ->
             val next = reducer(current.aiProviderSettings)
             saveAiProviderSettings(next)
             current.copy(
                 aiProviderSettings = next,
-                    aiServiceStatus = AiServiceStatus(
-                        kind = AiServiceStatusKind.Info,
-                        title = "$savedField saved automatically",
-                        body = "Settings are stored locally as you type. Validate tests the provider before Capture sends a slip."
-                    ),
-                message = ""
+                aiServiceStatus = AiServiceStatus(
+                    kind = AiServiceStatusKind.Info,
+                    title = uiText(R.string.ai_status_autosaved_title, savedField),
+                    body = uiText(R.string.ai_status_autosaved_body)
+                ),
+                message = null
             )
         }
     }
@@ -1076,6 +1177,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             .replace(Regex("sk-[A-Za-z0-9_-]+"), "sk-...")
             .take(260)
 
+    private fun localizedLabelList(labelResIds: List<Int>): String =
+        labelResIds.joinToString { labelResId -> localizedAppContext().getString(labelResId) }
+
+    private fun localizedAppContext(): Context {
+        val application = getApplication<Application>()
+        val systemLanguageTag = application.resources.configuration.locales[0]?.toLanguageTag().orEmpty()
+        return application.localizedAppContext(state.value.systemLanguage, systemLanguageTag)
+    }
+
     private fun loadAiProviderSettings(): AiProviderSettings =
         AiProviderSettings(
             provider = aiPrefs.getString("provider", null) ?: "DeepSeek",
@@ -1116,7 +1226,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             repository.seedStarterContent(pack)
             prefs.edit().putInt("seededVersion", StarterContentSeedVersion).apply()
         }.onFailure { error ->
-            _state.update { it.copy(message = error.message ?: "Starter content import failed") }
+            _state.update { it.copy(message = error.message?.let(UiText::Dynamic) ?: uiText(R.string.message_starter_content_import_failed)) }
         }
     }
 
@@ -1127,7 +1237,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 }
 
-private fun LearningUiState.withNotice(title: String, body: String): LearningUiState =
+private fun LearningUiState.withNotice(title: UiText, body: UiText): LearningUiState =
     copy(
         notices = (
             listOf(

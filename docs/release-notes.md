@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.9
+
+Date: 2026-07-02
+
+Git tag: `android-v0.1.9-beta`
+
+Android version:
+
+- `versionCode`: 10
+- `versionName`: `0.1.9`
+
+Status: implementation beta.
+
+Highlights:
+
+- Compacted non-home Android screens so Capture, Library, Backup, and More reach primary actions faster on phones.
+- Split screen-specific Android UI out of the overloaded app shell and added a shared compact chrome policy for follow-on cleanup.
+- Finished tappable Markdown links plus clearer backup import/export feedback for the file-based Android backup flow.
+
 ## Android Beta 0.1.8
 
 Date: 2026-07-01

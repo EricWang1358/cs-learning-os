@@ -10,6 +10,7 @@ object BackupCodec {
         JSONObject()
             .put("schemaVersion", backup.schemaVersion)
             .put("exportedAt", backup.exportedAt)
+            .put("areas", JSONArray(backup.areas.map { it.toJson() }))
             .put("nodes", JSONArray(backup.nodes.map { it.toJson() }))
             .put("quizzes", JSONArray(backup.quizzes.map { it.toJson() }))
             .put("reviewStates", JSONArray(backup.reviewStates.map { it.toJson() }))
@@ -24,10 +25,14 @@ object BackupCodec {
         require(schemaVersion == SchemaVersion) {
             "Unsupported backup schema version: $schemaVersion"
         }
+        val nodes = root.getJSONArray("nodes").mapObjects { it.toNode() }
+        val areas = root.optJSONArray("areas")?.mapObjects { it.toArea() }.orEmpty()
+        val inferredAreas = if (areas.isEmpty()) inferAreasFromNodes(nodes) else areas
         return LearningBackup(
             schemaVersion = schemaVersion,
             exportedAt = root.getLong("exportedAt"),
-            nodes = root.getJSONArray("nodes").mapObjects { it.toNode() },
+            areas = inferredAreas,
+            nodes = nodes,
             quizzes = root.getJSONArray("quizzes").mapObjects { it.toQuiz() },
             reviewStates = root.getJSONArray("reviewStates").mapObjects { it.toReviewState() },
             attempts = root.getJSONArray("attempts").mapObjects { it.toAttempt() },
@@ -35,6 +40,16 @@ object BackupCodec {
             captureSlips = root.optJSONArray("captureSlips")?.mapObjects { it.toCaptureSlip() }.orEmpty()
         )
     }
+
+    private fun AreaEntity.toJson(): JSONObject =
+        JSONObject()
+            .put("id", id)
+            .put("slug", slug)
+            .put("name", name)
+            .put("order", order)
+            .put("createdAt", createdAt)
+            .put("updatedAt", updatedAt)
+            .put("deletedAt", deletedAt)
 
     private fun LearningNodeEntity.toJson(): JSONObject =
         JSONObject()
@@ -48,11 +63,13 @@ object BackupCodec {
             .put("syncStatus", syncStatus.name)
             .put("deletedAt", deletedAt)
             .put("area", area)
+            .put("areaId", areaId)
             .put("track", track)
             .put("order", order)
             .put("summary", summary)
             .put("visibility", visibility)
             .put("isStarter", isStarter)
+            .put("isChecked", isChecked)
 
     private fun QuizItemEntity.toJson(): JSONObject =
         JSONObject()
@@ -116,6 +133,17 @@ object BackupCodec {
             .put("syncStatus", syncStatus.name)
             .put("deletedAt", deletedAt)
 
+    private fun JSONObject.toArea(): AreaEntity =
+        AreaEntity(
+            id = getString("id"),
+            slug = optString("slug", getString("id")),
+            name = optString("name", optString("slug", getString("id"))),
+            order = optInt("order", 1000),
+            createdAt = optLong("createdAt", 0L),
+            updatedAt = optLong("updatedAt", optLong("createdAt", 0L)),
+            deletedAt = nullableLong("deletedAt")
+        )
+
     private fun JSONObject.toNode(): LearningNodeEntity =
         LearningNodeEntity(
             id = getString("id"),
@@ -128,11 +156,13 @@ object BackupCodec {
             syncStatus = SyncStatus.valueOf(getString("syncStatus")),
             deletedAt = nullableLong("deletedAt"),
             area = optString("area", "questions"),
+            areaId = optString("areaId", optString("area", "questions")),
             track = optString("track", "general"),
             order = optInt("order", 1000),
             summary = optString("summary", ""),
             visibility = optString("visibility", "support"),
-            isStarter = optBoolean("isStarter", false)
+            isStarter = optBoolean("isStarter", false),
+            isChecked = optBoolean("isChecked", false)
         )
 
     private fun JSONObject.toQuiz(): QuizItemEntity =
@@ -210,4 +240,20 @@ object BackupCodec {
 
     private fun <T> JSONArray.mapObjects(mapper: (JSONObject) -> T): List<T> =
         (0 until length()).map { index -> mapper(getJSONObject(index)) }
+
+    private fun inferAreasFromNodes(nodes: List<LearningNodeEntity>): List<AreaEntity> =
+        nodes
+            .map { it.areaId.ifBlank { it.area } to it.area }
+            .distinctBy { it.first }
+            .mapIndexed { index, (areaId, slug) ->
+                AreaEntity(
+                    id = areaId,
+                    slug = slug,
+                    name = slug,
+                    order = (index + 1) * 10,
+                    createdAt = 0L,
+                    updatedAt = 0L,
+                    deletedAt = null
+                )
+            }
 }

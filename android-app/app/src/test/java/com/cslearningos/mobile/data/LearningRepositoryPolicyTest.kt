@@ -68,6 +68,7 @@ class LearningRepositoryPolicyTest {
         val backup = LearningBackup(
             schemaVersion = BackupCodec.SchemaVersion,
             exportedAt = 1_000L,
+            areas = emptyList(),
             nodes = emptyList(),
             quizzes = emptyList(),
             reviewStates = emptyList(),
@@ -330,6 +331,132 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun createRenameMoveCheckAndDeleteEmptyAreaFollowFolderRules() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+        dao.nodes["node-1"] = LearningNodeEntity(
+            id = "node-1",
+            title = "Paging",
+            markdownBody = "# Paging",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            areaId = "systems",
+            track = "virtual-memory",
+            order = 20,
+            summary = "Summary",
+            visibility = "support",
+            isStarter = false
+        )
+
+        val created = repository.createArea("Compilers", now = 2_000L)
+        repository.renameArea(created.id, "Compiler Lab", now = 3_000L)
+        repository.moveNodeToArea(nodeId = "node-1", targetAreaId = created.id, now = 4_000L)
+        repository.toggleNodeChecked(nodeId = "node-1", now = 5_000L)
+
+        assertEquals("compilers", created.id)
+        assertEquals("Compiler Lab", dao.areas.getValue(created.id).name)
+        assertEquals(created.id, dao.nodes.getValue("node-1").areaId)
+        assertEquals(created.slug, dao.nodes.getValue("node-1").area)
+        assertTrue(dao.nodes.getValue("node-1").isChecked)
+        assertEquals(false, repository.deleteAreaIfEmpty(created.id, now = 6_000L))
+
+        repository.moveNodeToArea(nodeId = "node-1", targetAreaId = "systems", now = 7_000L)
+
+        assertEquals(true, repository.deleteAreaIfEmpty(created.id, now = 8_000L))
+        assertEquals(8_000L, dao.areas.getValue(created.id).deletedAt)
+    }
+
+    @Test
+    fun restoreNodeFromTrashRevivesDeletedAreaInsteadOfLeavingNodeOrphaned() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = 2_000L
+        )
+        dao.nodes["node-1"] = LearningNodeEntity(
+            id = "node-1",
+            title = "Paging",
+            markdownBody = "# Paging",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            areaId = "systems",
+            track = "virtual-memory",
+            order = 20,
+            summary = "Summary",
+            visibility = "trash",
+            isStarter = false
+        )
+
+        repository.restoreNodeFromTrash("node-1", now = 3_000L)
+
+        assertNull(dao.areas.getValue("systems").deletedAt)
+        assertEquals("support", dao.nodes.getValue("node-1").visibility)
+    }
+
+    @Test
+    fun deleteAreaIfEmptyTreatsTrashNodesAsStillOccupyingThatArea() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+        dao.nodes["node-1"] = LearningNodeEntity(
+            id = "node-1",
+            title = "Paging",
+            markdownBody = "# Paging",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            areaId = "systems",
+            track = "virtual-memory",
+            order = 20,
+            summary = "Summary",
+            visibility = "trash",
+            isStarter = false
+        )
+
+        val deleted = repository.deleteAreaIfEmpty("systems", now = 2_000L)
+
+        assertEquals(false, deleted)
+        assertNull(dao.areas.getValue("systems").deletedAt)
+    }
+
+    @Test
     fun clearStarterContentDeletesOnlyStarterRecords() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
@@ -391,6 +518,15 @@ class LearningRepositoryPolicyTest {
     fun readableMarkdownExportIncludesActiveLearningArtifacts() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
+        dao.areas["cs-fundamentals"] = AreaEntity(
+            id = "cs-fundamentals",
+            slug = "cs-fundamentals",
+            name = "Operating Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 2_500L,
+            deletedAt = null
+        )
         dao.nodes["node-1"] = LearningNodeEntity(
             id = "node-1",
             title = "Virtual Memory",
@@ -452,7 +588,7 @@ class LearningRepositoryPolicyTest {
 
         assertTrue(exported.startsWith("# CS Learning OS Markdown Export"))
         assertTrue(exported.contains("## Virtual Memory"))
-        assertTrue(exported.contains("Area: cs-fundamentals / Track: memory / Order: 40"))
+        assertTrue(exported.contains("Area: Operating Systems / Track: memory / Order: 40"))
         assertTrue(exported.contains("Why does a TLB miss walk the page table?"))
         assertTrue(exported.contains("Video said page fault"))
         assertTrue(exported.contains("What does a page table map?"))
@@ -461,6 +597,7 @@ class LearningRepositoryPolicyTest {
 }
 
 private class FakeLearningDao : LearningDao {
+    val areas = linkedMapOf<String, AreaEntity>()
     val nodes = linkedMapOf<String, LearningNodeEntity>()
     val quizzes = linkedMapOf<String, QuizItemEntity>()
     val reviewStates = linkedMapOf<String, ReviewStateEntity>()
@@ -470,6 +607,8 @@ private class FakeLearningDao : LearningDao {
     val deletedNodeFtsIds = mutableListOf<String>()
     val deletedQuizFtsIds = mutableListOf<String>()
 
+    override fun observeAreas(): Flow<List<AreaEntity>> =
+        flowOf(areas.values.filter { it.deletedAt == null }.sortedBy { it.order })
     override fun observeNodes(): Flow<List<LearningNodeEntity>> = flowOf(nodes.values.toList())
     override fun observeTrashNodes(): Flow<List<LearningNodeEntity>> =
         flowOf(nodes.values.filter { it.visibility == "trash" && it.deletedAt == null })
@@ -478,6 +617,8 @@ private class FakeLearningDao : LearningDao {
         flowOf(readerQuestions.values.filter { it.deletedAt == null && it.resolvedAt == null })
     override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
+    override suspend fun getArea(id: String): AreaEntity? = areas[id]?.takeIf { it.deletedAt == null }
+    override suspend fun getAreaBySlug(slug: String): AreaEntity? = areas.values.firstOrNull { it.slug == slug && it.deletedAt == null }
     override suspend fun getNode(id: String): LearningNodeEntity? = nodes[id]
     override suspend fun getQuiz(id: String): QuizItemEntity? = quizzes[id]
     override suspend fun getReaderQuestion(id: String): ReaderQuestionEntity? = readerQuestions[id]
@@ -487,6 +628,7 @@ private class FakeLearningDao : LearningDao {
     override suspend fun getActiveReaderQuestionsForNode(nodeId: String): List<ReaderQuestionEntity> =
         readerQuestions.values.filter { it.nodeId == nodeId && it.deletedAt == null }
     override suspend fun getReviewState(quizId: String): ReviewStateEntity? = reviewStates[quizId]
+    override suspend fun getAllAreas(): List<AreaEntity> = areas.values.toList()
     override suspend fun getAllNodes(): List<LearningNodeEntity> = nodes.values.toList()
     override suspend fun getStarterNodes(): List<LearningNodeEntity> =
         nodes.values.filter { it.isStarter && it.deletedAt == null }
@@ -497,6 +639,11 @@ private class FakeLearningDao : LearningDao {
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = reviewAttempts.values.toList()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = readerQuestions.values.toList()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = captureSlips.values.toList()
+    override suspend fun countActiveNodesInArea(areaId: String): Int =
+        nodes.values.count { it.areaId == areaId && it.deletedAt == null }
+    override suspend fun upsertArea(area: AreaEntity) {
+        areas[area.id] = area
+    }
     override suspend fun upsertNode(node: LearningNodeEntity) {
         nodes[node.id] = node
     }
@@ -515,6 +662,10 @@ private class FakeLearningDao : LearningDao {
     override suspend fun insertAttempt(attempt: ReviewAttemptEntity) {
         reviewAttempts[attempt.id] = attempt
     }
+    override suspend fun upsertAreas(areas: List<AreaEntity>) {
+        areas.forEach { this.areas[it.id] = it }
+    }
+    override suspend fun deleteAllAreas() = unsupported()
     override suspend fun upsertNodes(nodes: List<LearningNodeEntity>) {
         nodes.forEach { this.nodes[it.id] = it }
     }

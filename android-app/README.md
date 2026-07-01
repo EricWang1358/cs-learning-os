@@ -70,12 +70,23 @@ For worker handoffs or release scripts, use JSON mode:
 
 The APK is self-contained for this milestone. Install it on an emulator or phone, open the app, and create a Markdown node from the Home screen.
 
+For phone-testable APK handoff or distribution, run the Android beta acceptance gate from the repo root:
+
+```powershell
+.\scripts\verify-android-beta.ps1
+```
+
+This is the release acceptance command for Android beta builds. It checks that Gradle version metadata, `docs/release-notes.md`, and the expected Android Git tag agree, then runs the doctor, unit-test, and debug-build commands that remain useful on their own during normal development.
+
 ## Beta Versioning
 
 The test APK version is defined in `app/build.gradle`:
 
 - `versionCode` must increase for every Android implementation commit that produces a phone-testable APK.
 - `versionName` should stay human-readable in the current beta line, such as `0.1.4`.
+- Update `docs/release-notes.md` for the matching Android beta.
+- Keep the matching Git tag aligned with that beta, for example `android-v0.1.4-beta`.
+- Run `.\scripts\verify-android-beta.ps1` before handing off or distributing the APK.
 - Docs-only/spec-only commits do not need a version bump unless a new APK is distributed.
 
 Build outputs such as `.apk` and `.aab` remain ignored by Git. Share or install the APK from `app/build/outputs/apk/debug/app-debug.apk`, but track which beta it is through Gradle and the commit message/handoff.

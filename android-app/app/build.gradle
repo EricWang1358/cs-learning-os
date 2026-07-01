@@ -26,8 +26,8 @@ android {
         applicationId "com.cslearningos.mobile"
         minSdk 26
         targetSdk 35
-        versionCode 9
-        versionName "0.1.8"
+        versionCode 10
+        versionName "0.1.9"
     }
 
     sourceSets {
@@ -67,6 +67,10 @@ dependencies {
     implementation "androidx.navigation:navigation-compose:2.8.5"
     implementation "androidx.room:room-ktx:2.6.1"
     implementation "androidx.room:room-runtime:2.6.1"
+    implementation files(
+        "libs/commonmark-0.27.0.jar",
+        "libs/commonmark-ext-gfm-tables-0.27.0.jar"
+    )
     ksp "androidx.room:room-compiler:2.6.1"
 
     debugImplementation "androidx.compose.ui:ui-tooling"

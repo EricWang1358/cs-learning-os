@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LearningDao {
+    @Query("SELECT * FROM areas WHERE deleted_at IS NULL ORDER BY `order` ASC, name ASC")
+    fun observeAreas(): Flow<List<AreaEntity>>
+
     @Query("SELECT * FROM learning_nodes WHERE deleted_at IS NULL AND visibility != 'trash' ORDER BY area ASC, track ASC, `order` ASC, updated_at DESC")
     fun observeNodes(): Flow<List<LearningNodeEntity>>
 
@@ -41,6 +44,12 @@ interface LearningDao {
     )
     fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>>
 
+    @Query("SELECT * FROM areas WHERE id = :id AND deleted_at IS NULL LIMIT 1")
+    suspend fun getArea(id: String): AreaEntity?
+
+    @Query("SELECT * FROM areas WHERE slug = :slug AND deleted_at IS NULL LIMIT 1")
+    suspend fun getAreaBySlug(slug: String): AreaEntity?
+
     @Query("SELECT * FROM learning_nodes WHERE id = :id LIMIT 1")
     suspend fun getNode(id: String): LearningNodeEntity?
 
@@ -61,6 +70,9 @@ interface LearningDao {
 
     @Query("SELECT * FROM review_states WHERE quiz_id = :quizId LIMIT 1")
     suspend fun getReviewState(quizId: String): ReviewStateEntity?
+
+    @Query("SELECT * FROM areas")
+    suspend fun getAllAreas(): List<AreaEntity>
 
     @Query("SELECT * FROM learning_nodes")
     suspend fun getAllNodes(): List<LearningNodeEntity>
@@ -86,6 +98,12 @@ interface LearningDao {
     @Query("SELECT * FROM capture_slips")
     suspend fun getAllCaptureSlips(): List<CaptureSlipEntity>
 
+    @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
+    suspend fun countActiveNodesInArea(areaId: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertArea(area: AreaEntity)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertNode(node: LearningNodeEntity)
 
@@ -103,6 +121,9 @@ interface LearningDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttempt(attempt: ReviewAttemptEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAreas(areas: List<AreaEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertNodes(nodes: List<LearningNodeEntity>)
@@ -133,6 +154,9 @@ interface LearningDao {
 
     @Query("DELETE FROM quiz_fts WHERE quiz_id = :quizId")
     suspend fun deleteQuizFts(quizId: String)
+
+    @Query("DELETE FROM areas")
+    suspend fun deleteAllAreas()
 
     @Query("DELETE FROM learning_nodes")
     suspend fun deleteAllNodes()
@@ -189,6 +213,7 @@ interface LearningDao {
         deleteAllQuizzes()
         deleteAllReaderQuestions()
         deleteAllCaptureSlips()
+        deleteAllAreas()
         deleteAllNodes()
         deleteAllQuizFts()
         deleteAllNodeFts()
@@ -196,6 +221,7 @@ interface LearningDao {
 
     @Transaction
     suspend fun restoreBackup(
+        areas: List<AreaEntity>,
         nodes: List<LearningNodeEntity>,
         quizzes: List<QuizItemEntity>,
         states: List<ReviewStateEntity>,
@@ -206,6 +232,7 @@ interface LearningDao {
         quizFts: List<QuizFtsEntity>
     ) {
         clearAll()
+        upsertAreas(areas)
         upsertNodes(nodes)
         upsertQuizzes(quizzes)
         upsertReviewStates(states)

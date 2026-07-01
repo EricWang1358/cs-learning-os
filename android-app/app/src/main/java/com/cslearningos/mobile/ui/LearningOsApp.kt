@@ -2,6 +2,10 @@
 
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.R
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,8 +39,15 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,25 +63,13 @@ import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.domain.ReviewRating
+import com.cslearningos.mobile.ui.backup.BackupDocument
+import com.cslearningos.mobile.ui.backup.BackupTransferCoordinator
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.launch
 
 private val CardShape = RoundedCornerShape(10.dp)
-
-data class MobileBottomNavItem(
-    val label: String,
-    val screen: AppScreen,
-    val contentDescription: String
-)
-
-fun mobileBottomNavItems(): List<MobileBottomNavItem> =
-    listOf(
-        MobileBottomNavItem("Home", AppScreen.Home, "Home dashboard"),
-        MobileBottomNavItem("Capture", AppScreen.Capture, "Quick capture"),
-        MobileBottomNavItem("Library", AppScreen.Library, "Knowledge library"),
-        MobileBottomNavItem("Review", AppScreen.Review, "Due review"),
-        MobileBottomNavItem("More", AppScreen.More, "Settings and data")
-    )
 
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
     when (screen) {
@@ -89,18 +88,21 @@ fun selectedBottomTabFor(screen: AppScreen): AppScreen =
 @Composable
 fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val localizedContext = rememberLocalizedAppContext(state.systemLanguage)
 
     WorkbenchTheme(appearanceMode = state.appearanceMode) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .workbenchGrid()
-                .safeDrawingPadding()
-        ) {
-            when {
-                maxWidth >= 1100.dp -> LandscapeWorkbench(state = state, viewModel = viewModel)
-                maxWidth >= 840.dp -> TwoPaneWorkbench(state = state, viewModel = viewModel)
-                else -> PortraitWorkbench(state = state, viewModel = viewModel)
+        CompositionLocalProvider(LocalContext provides localizedContext) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .workbenchGrid()
+                    .safeDrawingPadding()
+            ) {
+                when {
+                    maxWidth >= 1100.dp -> LandscapeWorkbench(state = state, viewModel = viewModel)
+                    maxWidth >= 840.dp -> TwoPaneWorkbench(state = state, viewModel = viewModel)
+                    else -> PortraitWorkbench(state = state, viewModel = viewModel)
+                }
             }
         }
     }
@@ -213,16 +215,24 @@ private fun WorkbenchSidebar(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         BrandBlock(state)
-        NavButton("Home", state.screen == AppScreen.Home, viewModel::showHome)
-        NavButton("Capture", state.screen == AppScreen.Capture, viewModel::showCapture)
-        NavButton("Library", state.screen == AppScreen.Library, viewModel::showLibrary)
-        NavButton("Review (${state.dueQuizzes.size})", state.screen == AppScreen.Review, viewModel::showReview)
-        NavButton("More", state.screen == AppScreen.More || state.screen == AppScreen.Backup, viewModel::showMore)
+        NavButton(stringResource(R.string.nav_home_label), state.screen == AppScreen.Home, viewModel::showHome)
+        NavButton(stringResource(R.string.nav_capture_label), state.screen == AppScreen.Capture, viewModel::showCapture)
+        NavButton(stringResource(R.string.nav_library_label), state.screen == AppScreen.Library, viewModel::showLibrary)
+        NavButton(
+            stringResource(R.string.nav_review_count, state.dueQuizzes.size),
+            state.screen == AppScreen.Review,
+            viewModel::showReview
+        )
+        NavButton(
+            stringResource(R.string.nav_more_label),
+            state.screen == AppScreen.More || state.screen == AppScreen.Backup,
+            viewModel::showMore
+        )
         Spacer(modifier = Modifier.height(4.dp))
-            WorkbenchCard {
-            Eyebrow("offline first")
+        WorkbenchCard {
+            Eyebrow(stringResource(R.string.sidebar_offline_first_eyebrow))
             Text(
-                text = "Local Markdown, Room database, explicit JSON backup. No account required; AI is optional.",
+                text = stringResource(R.string.sidebar_offline_first_body),
                 color = WorkbenchColors.Muted,
                 fontSize = 13.sp,
                 lineHeight = 19.sp
@@ -235,9 +245,9 @@ private fun WorkbenchSidebar(
 private fun BrandBlock(state: LearningUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
-            Eyebrow("CS Learning OS")
+            Eyebrow(stringResource(R.string.brand_eyebrow))
             Text(
-                text = "Knowledge\nWorkbench",
+                text = stringResource(R.string.brand_title_multiline),
                 color = WorkbenchColors.Accent,
                 fontSize = 30.sp,
                 lineHeight = 31.sp,
@@ -246,8 +256,8 @@ private fun BrandBlock(state: LearningUiState) {
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            StatPill("Nodes", state.nodes.size.toString(), Modifier.weight(1f))
-            StatPill("Due", state.dueQuizzes.size.toString(), Modifier.weight(1f))
+            StatPill(stringResource(R.string.common_nodes), state.nodes.size.toString(), Modifier.weight(1f))
+            StatPill(stringResource(R.string.common_due), state.dueQuizzes.size.toString(), Modifier.weight(1f))
         }
     }
 }
@@ -257,25 +267,32 @@ private fun CompactBrandBlock(state: LearningUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.88f))
-            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(
+                        WorkbenchColors.SurfaceCard.copy(alpha = 0.97f),
+                        WorkbenchColors.Surface.copy(alpha = 0.92f)
+                    )
+                )
+            )
+            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong.copy(alpha = 0.8f)), RoundedCornerShape(20.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
-            Eyebrow("CS Learning OS")
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = Modifier.weight(1f)) {
             Text(
-                text = state.screen.name,
+                text = stringResource(appScreenLabelResId(state.screen)),
                 color = WorkbenchColors.InkStrong,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.8).sp
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetaPill("Nodes", state.nodes.size.toString())
-            MetaPill("Due", state.dueQuizzes.size.toString())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            InlineMetricBadge(stringResource(R.string.common_nodes), state.nodes.size.toString())
+            InlineMetricBadge(stringResource(R.string.common_due), state.dueQuizzes.size.toString())
         }
     }
 }
@@ -331,7 +348,7 @@ private fun BottomNavTab(
         Box {
             Icon(
                 imageVector = item.icon(),
-                contentDescription = item.contentDescription,
+                contentDescription = stringResource(item.contentDescriptionResId),
                 tint = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
                 modifier = Modifier.height(22.dp)
             )
@@ -346,7 +363,7 @@ private fun BottomNavTab(
             }
         }
         Text(
-            text = item.label,
+            text = stringResource(item.labelResId),
             color = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
             fontSize = 10.sp,
             fontWeight = FontWeight.Black,
@@ -416,9 +433,9 @@ private fun DetailPane(state: LearningUiState, viewModel: LearningViewModel) {
 private fun DetailEmptyState(state: LearningUiState) {
     val selected = state.selectedNode
     WorkbenchCard(accent = selected != null) {
-        Eyebrow(if (selected == null) "detail panel" else "selected node")
+        Eyebrow(stringResource(if (selected == null) R.string.detail_panel_eyebrow else R.string.selected_node_eyebrow))
         Text(
-            text = selected?.title ?: "Select a node",
+            text = selected?.title ?: stringResource(R.string.detail_empty_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 25.sp,
             fontWeight = FontWeight.Black,
@@ -426,7 +443,7 @@ private fun DetailEmptyState(state: LearningUiState) {
         )
         Text(
             text = selected?.markdownBody?.lineSequence()?.firstOrNull { it.isNotBlank() }
-                ?: "Choose a card to inspect details, edit Markdown, add quiz cards, and keep your local study loop moving.",
+                ?: stringResource(R.string.detail_empty_body),
             color = WorkbenchColors.Muted,
             fontSize = 15.sp,
             lineHeight = 22.sp
@@ -435,218 +452,23 @@ private fun DetailEmptyState(state: LearningUiState) {
 }
 
 @Composable
-private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
-    val groups = buildLibraryGroups(state.nodes)
-    val overview = buildLibraryOverview(state.nodes)
-    val map = buildLibraryMap(state.nodes, state.collapsedLibraryAreas)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        LibraryOverviewCard(overview = overview)
-        LibraryMapCard(map = map, onToggleArea = viewModel::toggleLibraryArea)
-        WorkbenchButton(
-            text = "+ New node",
-            onClick = viewModel::startNewNode,
-            primary = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        if (state.nodes.isEmpty()) {
-            EmptyWorkbenchCard(
-                title = "Build the first local node",
-                body = "Create a Markdown note. The phone app works without desktop, account, network, or AI."
-            )
-        }
-        groups.forEach { area ->
-            val collapsed = area.area in state.collapsedLibraryAreas
-            WorkbenchCard {
-                Eyebrow("area")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        readableAreaLabel(area.area),
-                        color = WorkbenchColors.InkStrong,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    WorkbenchButton(if (collapsed) "Open" else "Close", { viewModel.toggleLibraryArea(area.area) })
-                }
-                if (collapsed) {
-                    Text(
-                        text = "${area.tracks.sumOf { it.nodes.size }} nodes hidden. Open this area when you want to drill into tracks.",
-                        color = WorkbenchColors.Muted,
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp
-                    )
-                } else {
-                    area.tracks.forEach { track ->
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    readableTrackLabel(track.track),
-                                    color = WorkbenchColors.Accent,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Text(
-                                    "${track.nodes.size} nodes",
-                                    color = WorkbenchColors.Muted,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            track.nodes.forEach { item ->
-                                LibraryNodeCard(
-                                    item = item,
-                                    selected = state.selectedNode?.id == item.id,
-                                    onOpen = { viewModel.openNode(item.node) },
-                                    onEdit = { viewModel.editNode(item.node) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun NoticeTray(state: LearningUiState, viewModel: LearningViewModel) {
     val latest = state.notices.firstOrNull() ?: return
-    WorkbenchCard(accent = latest.title.contains("ready", ignoreCase = true)) {
+    val context = LocalContext.current
+    val title = latest.title.resolve(context)
+    val body = latest.body.resolve(context)
+    WorkbenchCard(accent = title.contains("ready", ignoreCase = true)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Eyebrow("notification")
-                Text(latest.title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                Text(latest.body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
+                Eyebrow(stringResource(R.string.notice_eyebrow))
+                Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
             }
-            WorkbenchButton("Dismiss", { viewModel.dismissNotice(latest.id) })
-        }
-    }
-}
-
-@Composable
-private fun LibraryMapCard(map: LibraryMap, onToggleArea: (String) -> Unit) {
-    WorkbenchCard(accent = true) {
-        Eyebrow("map")
-        Text("Area map", color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
-        Text(
-            "Tap an area to collapse or expand. This mirrors the desktop knowledge map as a phone-friendly outline.",
-            color = WorkbenchColors.Muted,
-            fontSize = 13.sp,
-            lineHeight = 19.sp
-        )
-        map.areas.forEach { area ->
-            InteractiveCard(onClick = { onToggleArea(area.area) }, accent = !area.collapsed) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(area.label, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                        Text(area.trackPreview, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
-                    }
-                    MetaPill(if (area.collapsed) "Closed" else "Open", "${area.nodeCount}N/${area.trackCount}T")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryOverviewCard(overview: LibraryOverview) {
-    WorkbenchCard(accent = true) {
-        Eyebrow("library")
-        Text("Knowledge map", color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black)
-        Text(
-            "Desktop-compatible structure: ${overview.structureLabel}. Start from a topic, then drill into tracks and ordered nodes.",
-            color = WorkbenchColors.Muted,
-            fontSize = 13.sp,
-            lineHeight = 20.sp
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            MetaPill("Areas", overview.areaCount.toString(), Modifier.weight(1f))
-            MetaPill("Tracks", overview.trackCount.toString(), Modifier.weight(1f))
-            MetaPill("Nodes", overview.nodeCount.toString(), Modifier.weight(1f))
-        }
-        MetaPill("Featured", overview.featuredAreaLabel)
-    }
-}
-
-@Composable
-private fun LibraryNodeCard(
-    item: LibraryNodeSummary,
-    selected: Boolean,
-    onOpen: () -> Unit,
-    onEdit: () -> Unit
-) {
-    InteractiveCard(onClick = onOpen, accent = selected) {
-        Eyebrow(item.meta)
-        Text(
-            text = item.title,
-            color = WorkbenchColors.InkStrong,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = item.summary,
-            color = WorkbenchColors.Muted,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WorkbenchButton("Read", onOpen, primary = true)
-            WorkbenchButton("Edit", onEdit)
-        }
-    }
-}
-
-@Composable
-private fun NodeCard(
-    node: LearningNodeEntity,
-    selected: Boolean,
-    onOpen: () -> Unit,
-    onEdit: () -> Unit
-) {
-    InteractiveCard(onClick = onOpen, accent = selected) {
-        Eyebrow("node / rev ${node.revision}")
-        Text(
-            text = node.title,
-            color = WorkbenchColors.InkStrong,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = previewMarkdown(node.markdownBody),
-            color = WorkbenchColors.Muted,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            MetaPill("Updated", formatTime(node.updatedAt), Modifier.weight(1f))
-            MetaPill("Last read", node.lastReadAt?.let(::formatTime) ?: "Not recorded", Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WorkbenchButton("Read", onOpen, primary = true)
-            WorkbenchButton("Edit", onEdit)
+            WorkbenchButton(stringResource(R.string.common_dismiss), { viewModel.dismissNotice(latest.id) })
         }
     }
 }
@@ -655,22 +477,33 @@ private fun NodeCard(
 private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val node = state.selectedNode
     if (node == null) {
-        EmptyWorkbenchCard("No node selected", "Open a node from the library first.")
+        EmptyWorkbenchCard(
+            stringResource(R.string.reader_empty_title),
+            stringResource(R.string.reader_empty_body)
+        )
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DetailHeading(
-            eyebrow = "reading desk",
+            eyebrow = stringResource(R.string.reader_heading_eyebrow),
             title = node.title,
-            body = "Updated ${formatTime(node.updatedAt)} / Last read ${node.lastReadAt?.let(::formatTime) ?: "Not recorded"}"
+            body = stringResource(
+                R.string.reader_heading_body,
+                formatTime(node.updatedAt),
+                node.lastReadAt?.let(::formatTime) ?: stringResource(R.string.common_not_recorded)
+            )
         )
         ToolbarRow {
-            WorkbenchButton("Back", viewModel::showHome)
-            WorkbenchButton("Edit mode", { viewModel.editNode(node) }, primary = true)
-            WorkbenchButton("Add quiz", viewModel::startQuizForSelectedNode)
-            WorkbenchButton("Delete", viewModel::deleteSelectedNode, danger = true)
+            WorkbenchButton(stringResource(R.string.common_back), viewModel::showHome)
+            WorkbenchButton(stringResource(R.string.reader_edit_mode_button), { viewModel.editNode(node) }, primary = true)
+            WorkbenchButton(stringResource(R.string.reader_add_quiz_button), viewModel::startQuizForSelectedNode)
+            WorkbenchButton(stringResource(R.string.common_delete), viewModel::deleteSelectedNode, danger = true)
             WorkbenchButton(
-                readerQuestionButtonLabel(openQuestionCount = state.readerQuestions.count { it.nodeId == node.id }, expanded = state.readerQuestionPanelExpanded),
+                readerQuestionButtonLabel(
+                    openQuestionCount = state.readerQuestions.count { it.nodeId == node.id },
+                    expanded = state.readerQuestionPanelExpanded,
+                    context = LocalContext.current
+                ),
                 viewModel::toggleReaderQuestionPanel
             )
         }
@@ -685,15 +518,15 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
 private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningViewModel, nodeId: String) {
     val openQuestions = state.readerQuestions.filter { it.nodeId == nodeId }
     WorkbenchCard(accent = openQuestions.isNotEmpty()) {
-        Eyebrow("q to be solved")
+        Eyebrow(stringResource(R.string.reader_questions_eyebrow))
         Text(
-            text = "What is unclear?",
+            text = stringResource(R.string.reader_questions_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 20.sp,
             fontWeight = FontWeight.Black
         )
         Text(
-            text = "Save questions while reading. They stay unresolved until you mark them resolved, export them, or fold them into Markdown/quiz edits.",
+            text = stringResource(R.string.reader_questions_body),
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -701,21 +534,21 @@ private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningVie
         WorkbenchTextField(
             value = state.readerQuestionDraft,
             onValueChange = viewModel::setReaderQuestionDraft,
-            label = "Example: This explanation skips why %eax changes here.",
+            label = stringResource(R.string.reader_question_example),
             minLines = 3
         )
         WorkbenchButton(
-            text = "Save question",
+            text = stringResource(R.string.reader_save_question),
             onClick = viewModel::saveReaderQuestion,
             primary = true,
             modifier = Modifier.fillMaxWidth()
         )
         if (openQuestions.isEmpty()) {
-            Text("0 open", color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black)
+            Text(stringResource(R.string.reader_open_question_count, 0), color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "${openQuestions.size} open",
+                    stringResource(R.string.reader_open_question_count, openQuestions.size),
                     color = WorkbenchColors.InkStrong,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black
@@ -745,7 +578,7 @@ private fun ReaderQuestionRow(question: ReaderQuestionEntity, onResolve: () -> U
             fontSize = 14.sp,
             lineHeight = 20.sp
         )
-        WorkbenchButton("Resolved", onResolve)
+        WorkbenchButton(stringResource(R.string.reader_mark_resolved), onResolve)
     }
 }
 
@@ -753,24 +586,24 @@ private fun ReaderQuestionRow(question: ReaderQuestionEntity, onResolve: () -> U
 private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailHeading(
-            eyebrow = if (state.editorNodeId == null) "new node" else "edit mode",
-            title = if (state.editorNodeId == null) "Create Markdown node" else "Edit Markdown",
-            body = "Use Markdown headings and :::quiz blocks. Saving returns to the reader."
+            eyebrow = stringResource(if (state.editorNodeId == null) R.string.editor_new_node_eyebrow else R.string.editor_edit_mode_eyebrow),
+            title = stringResource(if (state.editorNodeId == null) R.string.editor_create_title else R.string.editor_edit_title),
+            body = stringResource(R.string.editor_heading_body)
         )
         WorkbenchTextField(
             value = state.editorTitle,
             onValueChange = viewModel::setEditorTitle,
-            label = "Title"
+            label = stringResource(R.string.editor_title_field)
         )
         WorkbenchTextField(
             value = state.editorBody,
             onValueChange = viewModel::setEditorBody,
-            label = "Markdown body",
+            label = stringResource(R.string.editor_body_field),
             minLines = 16
         )
         ToolbarRow {
-            WorkbenchButton("Save Markdown", viewModel::saveNode, primary = true)
-            WorkbenchButton("Cancel", viewModel::cancelEditor)
+            WorkbenchButton(stringResource(R.string.editor_save_markdown), viewModel::saveNode, primary = true)
+            WorkbenchButton(stringResource(R.string.common_cancel), viewModel::cancelEditor)
         }
     }
 }
@@ -779,18 +612,18 @@ private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
 private fun SearchScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
-            eyebrow = "global search",
-            title = "Find local knowledge",
-            body = "Search nodes and quiz cards stored on this device."
+            eyebrow = stringResource(R.string.search_eyebrow),
+            title = stringResource(R.string.search_title),
+            body = stringResource(R.string.search_body)
         )
         WorkbenchTextField(
             value = state.searchQuery,
             onValueChange = viewModel::setSearchQuery,
-            label = "Search concepts, tags, summaries..."
+            label = stringResource(R.string.search_field_label)
         )
-        WorkbenchButton("Search", viewModel::runSearch, primary = true, modifier = Modifier.fillMaxWidth())
+        WorkbenchButton(stringResource(R.string.common_search), viewModel::runSearch, primary = true, modifier = Modifier.fillMaxWidth())
         if (state.searchResults.isEmpty()) {
-            EmptyWorkbenchCard("No search results yet", "Type a query and search. Results open directly into reader or review.")
+            EmptyWorkbenchCard(stringResource(R.string.search_empty_title), stringResource(R.string.search_empty_body))
         }
         state.searchResults.forEach { result ->
             SearchResultCard(result = result, onOpen = { viewModel.openSearchResult(result) })
@@ -811,16 +644,19 @@ private fun SearchResultCard(result: SearchResultEntity, onOpen: () -> Unit) {
 private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailHeading(
-            eyebrow = "quiz authoring",
-            title = "Add review card",
-            body = "Linked to ${state.selectedNode?.title ?: "general review"}. Question and answer are required."
+            eyebrow = stringResource(R.string.quiz_editor_eyebrow),
+            title = stringResource(R.string.quiz_editor_title),
+            body = stringResource(
+                R.string.quiz_editor_body,
+                state.selectedNode?.title ?: stringResource(R.string.quiz_editor_default_link)
+            )
         )
-        WorkbenchTextField(state.quizPrompt, viewModel::setQuizPrompt, "Question", minLines = 3)
-        WorkbenchTextField(state.quizAnswer, viewModel::setQuizAnswer, "Answer", minLines = 3)
-        WorkbenchTextField(state.quizExplanation, viewModel::setQuizExplanation, "Explanation", minLines = 4)
+        WorkbenchTextField(state.quizPrompt, viewModel::setQuizPrompt, stringResource(R.string.quiz_prompt_field), minLines = 3)
+        WorkbenchTextField(state.quizAnswer, viewModel::setQuizAnswer, stringResource(R.string.quiz_answer_field), minLines = 3)
+        WorkbenchTextField(state.quizExplanation, viewModel::setQuizExplanation, stringResource(R.string.quiz_explanation_field), minLines = 4)
         ToolbarRow {
-            WorkbenchButton("Save quiz", viewModel::saveQuiz, primary = true)
-            WorkbenchButton("Cancel", viewModel::cancelEditor)
+            WorkbenchButton(stringResource(R.string.quiz_save_button), viewModel::saveQuiz, primary = true)
+            WorkbenchButton(stringResource(R.string.common_cancel), viewModel::cancelEditor)
         }
     }
 }
@@ -830,14 +666,14 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val quiz = state.selectedQuiz
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
-            eyebrow = "review system",
-            title = "Daily review",
-            body = "${state.dueQuizzes.size} due now / ${state.quizzes.size} total cards. Again keeps the current card in this session; Hard and Good advance."
+            eyebrow = stringResource(R.string.review_eyebrow),
+            title = stringResource(R.string.review_title),
+            body = stringResource(R.string.review_body, state.dueQuizzes.size, state.quizzes.size)
         )
         if (quiz == null) {
             EmptyWorkbenchCard(
-                title = "Queue is clear",
-                body = "Add quiz cards from a note or Markdown :::quiz block. Due cards will appear here."
+                title = stringResource(R.string.review_empty_title),
+                body = stringResource(R.string.review_empty_body)
             )
             return
         }
@@ -845,14 +681,14 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
             Eyebrow(quiz.source.name)
             Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 28.sp)
             if (!state.quizAnswerVisible) {
-                Text("Answer is hidden until you reveal it.", color = WorkbenchColors.Muted, fontSize = 14.sp)
-                WorkbenchButton("Reveal answer", viewModel::revealCurrentQuizAnswer, primary = true, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.review_answer_hidden), color = WorkbenchColors.Muted, fontSize = 14.sp)
+                WorkbenchButton(stringResource(R.string.review_reveal_answer), viewModel::revealCurrentQuizAnswer, primary = true, modifier = Modifier.fillMaxWidth())
             } else {
                 AnswerBlock(quiz)
                 ToolbarRow {
-                    WorkbenchButton("Again", { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
-                    WorkbenchButton("Hard", { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
-                    WorkbenchButton("Good", { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)
+                    WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
+                    WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
+                    WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)
                 }
             }
         }
@@ -870,41 +706,10 @@ private fun AnswerBlock(quiz: QuizItemEntity) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Eyebrow("answer")
+        Eyebrow(stringResource(R.string.review_answer_eyebrow))
         Text(quiz.answer, color = WorkbenchColors.InkStrong, fontSize = 17.sp, lineHeight = 24.sp)
         if (quiz.explanation.isNotBlank()) {
             Text(quiz.explanation, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
         }
     }
 }
-
-@Composable
-private fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionHeader(
-            eyebrow = "local safety",
-            title = "Backup, export, restore",
-            body = "JSON is full app recovery. Markdown/TXT is readable study material for computer editing or printing."
-        )
-        ToolbarRow {
-            WorkbenchButton("Export JSON", viewModel::exportBackup, primary = true)
-            WorkbenchButton("Restore overwrite", viewModel::restoreBackup, danger = true)
-        }
-        WorkbenchTextField(
-            value = state.backupText,
-            onValueChange = viewModel::setBackupText,
-            label = "Backup JSON",
-            minLines = 14
-        )
-    }
-}
-
-private fun previewMarkdown(markdown: String): String =
-    markdown
-        .lineSequence()
-        .map { it.trim().trimStart('#', '-', '>', ' ') }
-        .firstOrNull { it.isNotBlank() && !it.startsWith(":::") }
-        ?: "No body yet. Add Markdown to make this node useful."
-
-private fun formatTime(epochMillis: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMillis))

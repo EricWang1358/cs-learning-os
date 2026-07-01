@@ -5,11 +5,13 @@ import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.domain.ReviewScheduleInput
 import com.cslearningos.mobile.domain.ReviewScheduler
 import kotlinx.coroutines.flow.Flow
+import java.text.Normalizer
 import java.time.Instant
 import java.util.UUID
 import kotlin.math.absoluteValue
 
 class LearningRepository(private val dao: LearningDao) {
+    val areas: Flow<List<AreaEntity>> = dao.observeAreas()
     val nodes: Flow<List<LearningNodeEntity>> = dao.observeNodes()
     val trashNodes: Flow<List<LearningNodeEntity>> = dao.observeTrashNodes()
     val quizzes: Flow<List<QuizItemEntity>> = dao.observeQuizzes()
@@ -26,9 +28,11 @@ class LearningRepository(private val dao: LearningDao) {
         id: String?,
         title: String,
         markdownBody: String,
+        areaId: String? = null,
         now: Long = System.currentTimeMillis()
     ): LearningNodeEntity {
         val existing = id?.let { dao.getNode(it) }
+        val resolvedArea = resolveArea(areaId ?: existing?.areaId ?: existing?.area ?: DefaultAreaSlug, now)
         val node = LearningNodeEntity(
             id = existing?.id ?: UUID.randomUUID().toString(),
             title = title.ifBlank { "Untitled" },
@@ -39,7 +43,8 @@ class LearningRepository(private val dao: LearningDao) {
             revision = (existing?.revision ?: 0L) + 1L,
             syncStatus = SyncStatus.dirty,
             deletedAt = null,
-            area = existing?.area ?: "questions",
+            area = resolvedArea.slug,
+            areaId = resolvedArea.id,
             track = existing?.track ?: "general",
             order = existing?.order ?: 1000,
             summary = existing?.summary ?: markdownBody.lineSequence()
@@ -47,7 +52,8 @@ class LearningRepository(private val dao: LearningDao) {
                 ?.trim()
                 .orEmpty(),
             visibility = existing?.visibility ?: "support",
-            isStarter = existing?.isStarter ?: false
+            isStarter = existing?.isStarter ?: false,
+            isChecked = existing?.isChecked ?: false
         )
         dao.upsertNode(node)
         indexNode(node)
@@ -90,10 +96,13 @@ class LearningRepository(private val dao: LearningDao) {
     suspend fun restoreNodeFromTrash(nodeId: String, now: Long = System.currentTimeMillis()) {
         val node = dao.getNode(nodeId) ?: return
         if (node.deletedAt != null) return
+        val area = resolveArea(node.areaId.ifBlank { node.area }, now)
         val restored = node.copy(
             updatedAt = now,
             revision = node.revision + 1,
             syncStatus = SyncStatus.dirty,
+            area = area.slug,
+            areaId = area.id,
             visibility = if (node.isStarter) "core" else "support"
         )
         dao.upsertNode(restored)
@@ -271,6 +280,7 @@ class LearningRepository(private val dao: LearningDao) {
 
     suspend fun seedStarterContent(pack: StarterContentPackage) {
         pack.nodes.forEach { node ->
+            ensureAreaExists(areaId = node.areaId, slug = node.area, now = node.updatedAt)
             if (dao.getNode(node.id) == null) {
                 dao.upsertNode(node)
                 indexNode(node)
@@ -352,6 +362,75 @@ class LearningRepository(private val dao: LearningDao) {
         )
     }
 
+    suspend fun createArea(name: String, now: Long = System.currentTimeMillis()): AreaEntity {
+        val normalizedName = name.trim().ifBlank { "New Area" }
+        val slug = uniqueAreaSlug(normalizedName)
+        val area = AreaEntity(
+            id = slug,
+            slug = slug,
+            name = normalizedName,
+            order = nextAreaOrder(),
+            createdAt = now,
+            updatedAt = now,
+            deletedAt = null
+        )
+        dao.upsertArea(area)
+        return area
+    }
+
+    suspend fun renameArea(areaId: String, name: String, now: Long = System.currentTimeMillis()) {
+        val area = dao.getArea(areaId) ?: return
+        dao.upsertArea(
+            area.copy(
+                name = name.trim().ifBlank { area.name },
+                updatedAt = now
+            )
+        )
+    }
+
+    suspend fun deleteAreaIfEmpty(areaId: String, now: Long = System.currentTimeMillis()): Boolean {
+        if (dao.countActiveNodesInArea(areaId) > 0) return false
+        val area = dao.getArea(areaId) ?: return false
+        dao.upsertArea(area.copy(updatedAt = now, deletedAt = now))
+        return true
+    }
+
+    suspend fun moveNodeToArea(nodeId: String, targetAreaId: String, now: Long = System.currentTimeMillis()) {
+        val node = dao.getNode(nodeId) ?: return
+        val area = resolveArea(targetAreaId, now)
+        val updated = node.copy(
+            updatedAt = now,
+            revision = node.revision + 1,
+            syncStatus = SyncStatus.dirty,
+            area = area.slug,
+            areaId = area.id
+        )
+        dao.upsertNode(updated)
+        indexNode(updated)
+        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
+            val updatedQuiz = quiz.copy(
+                updatedAt = now,
+                revision = quiz.revision + 1,
+                syncStatus = SyncStatus.dirty,
+                area = area.slug
+            )
+            dao.upsertQuiz(updatedQuiz)
+            indexQuiz(updatedQuiz)
+        }
+    }
+
+    suspend fun toggleNodeChecked(nodeId: String, now: Long = System.currentTimeMillis()) {
+        val node = dao.getNode(nodeId) ?: return
+        val updated = node.copy(
+            updatedAt = now,
+            revision = node.revision + 1,
+            syncStatus = SyncStatus.dirty,
+            isChecked = !node.isChecked
+        )
+        dao.upsertNode(updated)
+        indexNode(updated)
+    }
+
     suspend fun search(rawQuery: String): List<SearchResultEntity> {
         val query = rawQuery
             .trim()
@@ -367,6 +446,7 @@ class LearningRepository(private val dao: LearningDao) {
             LearningBackup(
                 schemaVersion = BackupCodec.SchemaVersion,
                 exportedAt = now,
+                areas = dao.getAllAreas(),
                 nodes = dao.getAllNodes(),
                 quizzes = dao.getAllQuizzes(),
                 reviewStates = dao.getAllReviewStates(),
@@ -377,6 +457,7 @@ class LearningRepository(private val dao: LearningDao) {
         )
 
     suspend fun exportReadableMarkdown(now: Long = System.currentTimeMillis()): String {
+        val areasById = dao.getAllAreas().associateBy { it.id }
         val activeNodes = dao.getAllNodes()
             .filter { it.deletedAt == null && it.visibility != "trash" }
             .sortedWith(compareBy<LearningNodeEntity> { it.area }.thenBy { it.track }.thenBy { it.order }.thenBy { it.title })
@@ -411,7 +492,7 @@ class LearningRepository(private val dao: LearningDao) {
             activeNodes.forEach { node ->
                 appendLine("## ${node.title}")
                 appendLine()
-                appendLine("Area: ${node.area} / Track: ${node.track} / Order: ${node.order}")
+                appendLine("Area: ${exportAreaLabel(node, areasById)} / Track: ${node.track} / Order: ${node.order}")
                 if (node.summary.isNotBlank()) {
                     appendLine()
                     appendLine("> ${node.summary}")
@@ -463,6 +544,7 @@ class LearningRepository(private val dao: LearningDao) {
     suspend fun restoreBackup(rawJson: String) {
         val backup = BackupCodec.decode(rawJson)
         dao.restoreBackup(
+            areas = if (backup.areas.isEmpty()) inferAreasFromNodes(backup.nodes) else backup.areas,
             nodes = backup.nodes,
             quizzes = backup.quizzes,
             states = backup.reviewStates,
@@ -586,15 +668,97 @@ class LearningRepository(private val dao: LearningDao) {
     private fun stableRowId(id: String): Int = id.hashCode().absoluteValue.coerceAtLeast(1)
 
     private suspend fun snapshotAreaForNode(nodeId: String?): String =
-        nodeId?.let { dao.getNode(it)?.area } ?: "questions"
+        nodeId?.let { dao.getNode(it)?.area } ?: DefaultAreaSlug
 
     private suspend fun snapshotTrackForNode(nodeId: String?): String =
         nodeId?.let { dao.getNode(it)?.track } ?: "general"
+
+    private suspend fun resolveArea(areaIdOrSlug: String, now: Long): AreaEntity =
+        dao.getArea(areaIdOrSlug)
+            ?: dao.getAreaBySlug(areaIdOrSlug)
+            ?: createImplicitArea(areaIdOrSlug, now)
+
+    private suspend fun ensureAreaExists(areaId: String, slug: String, now: Long) {
+        if (dao.getArea(areaId) != null || dao.getAreaBySlug(slug) != null) return
+        dao.upsertArea(
+            AreaEntity(
+                id = areaId,
+                slug = slug,
+                name = slug,
+                order = nextAreaOrder(),
+                createdAt = now,
+                updatedAt = now,
+                deletedAt = null
+            )
+        )
+    }
+
+    private suspend fun createImplicitArea(slugSeed: String, now: Long): AreaEntity {
+        val slug = slugSeed.ifBlank { DefaultAreaSlug }
+        val area = AreaEntity(
+            id = slug,
+            slug = slug,
+            name = slug,
+            order = nextAreaOrder(),
+            createdAt = now,
+            updatedAt = now,
+            deletedAt = null
+        )
+        dao.upsertArea(area)
+        return area
+    }
+
+    private suspend fun nextAreaOrder(): Int =
+        ((dao.getAllAreas().maxOfOrNull { it.order } ?: 0) + 10)
+
+    private suspend fun uniqueAreaSlug(name: String): String {
+        val base = slugify(name).ifBlank { DefaultAreaSlug }
+        var candidate = base
+        var suffix = 2
+        while (dao.getArea(candidate) != null || dao.getAreaBySlug(candidate) != null) {
+            candidate = "$base-$suffix"
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private fun slugify(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+
+    private fun inferAreasFromNodes(nodes: List<LearningNodeEntity>): List<AreaEntity> =
+        nodes
+            .map { it.areaId.ifBlank { it.area } to it.area }
+            .distinctBy { it.first }
+            .mapIndexed { index, (areaId, slug) ->
+                AreaEntity(
+                    id = areaId,
+                    slug = slug,
+                    name = slug,
+                    order = (index + 1) * 10,
+                    createdAt = 0L,
+                    updatedAt = 0L,
+                    deletedAt = null
+                )
+            }
+
+    private fun exportAreaLabel(node: LearningNodeEntity, areasById: Map<String, AreaEntity>): String =
+        areasById[node.areaId]
+            ?.name
+            ?.takeIf { it.isNotBlank() }
+            ?: node.area
 
     private fun ReviewRating.toReviewResult(): ReviewResult =
         when (this) {
             ReviewRating.Again -> ReviewResult.again
             ReviewRating.Hard -> ReviewResult.hard
             ReviewRating.Good -> ReviewResult.good
-        }
+    }
+
+    private companion object {
+        const val DefaultAreaSlug = "questions"
+    }
 }

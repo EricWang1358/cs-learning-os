@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import org.json.JSONObject
 
@@ -14,15 +15,15 @@ enum class AiServiceStatusKind {
 
 data class AiServiceStatus(
     val kind: AiServiceStatusKind = AiServiceStatusKind.Info,
-    val title: String = "AI is optional",
-    val body: String = "Add a provider, API key, base URL, and model to turn capture slips into editable Markdown drafts."
+    val title: UiText = uiText(R.string.ai_status_optional_title),
+    val body: UiText = uiText(R.string.ai_status_optional_body)
 )
 
-fun AiProviderSettings.missingRequiredFields(): List<String> =
+fun AiProviderSettings.missingRequiredFields(): List<Int> =
     buildList {
-        if (apiKey.isBlank()) add("API key")
-        if (baseUrl.isBlank()) add("Base URL")
-        if (model.isBlank()) add("Model")
+        if (apiKey.isBlank()) add(R.string.more_api_key_label)
+        if (baseUrl.isBlank()) add(R.string.more_base_url_label)
+        if (model.isBlank()) add(R.string.more_model_label)
     }
 
 fun aiModelsUrl(baseUrl: String): String =

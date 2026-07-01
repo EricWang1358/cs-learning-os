@@ -32,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,12 +54,31 @@ import androidx.compose.ui.unit.sp
 private val PanelShape = RoundedCornerShape(14.dp)
 private val CardShape = RoundedCornerShape(10.dp)
 
+fun eyebrowLetterSpacingValue(text: String): Float {
+    val trimmed = text.trim()
+    val hanCount = trimmed.count { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+    val hasHan = hanCount > 0
+
+    return when {
+        hasHan && trimmed.length <= 4 -> 0.1f
+        hasHan && trimmed.length <= 6 -> 0.18f
+        hasHan -> 0.28f
+        trimmed.length <= 8 -> 0.8f
+        else -> 1.0f
+    }
+}
+
 @Composable
 fun SectionHeader(eyebrow: String, title: String, body: String) {
-    WorkbenchCard(accent = true) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 27.sp)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 20.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black, lineHeight = 22.sp)
+        Text(body, color = WorkbenchColors.Muted.copy(alpha = 0.92f), fontSize = 12.sp, lineHeight = 18.sp)
     }
 }
 
@@ -66,19 +88,13 @@ fun DetailHeading(eyebrow: String, title: String, body: String) {
         modifier = Modifier
             .fillMaxWidth()
             .border(BorderStroke(1.dp, WorkbenchColors.Line), PanelShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(WorkbenchColors.Accent.copy(alpha = 0.18f), Color.Transparent),
-                    radius = 620f
-                ),
-                PanelShape
-            )
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.76f), PanelShape)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 26.sp, fontWeight = FontWeight.Black, lineHeight = 31.sp)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black, lineHeight = 25.sp)
+        Text(body, color = WorkbenchColors.Muted.copy(alpha = 0.92f), fontSize = 12.sp, lineHeight = 18.sp)
     }
 }
 
@@ -291,8 +307,8 @@ fun WorkbenchTextField(
 }
 
 @Composable
-fun StatusBanner(message: String) {
-    if (message.isBlank()) return
+fun StatusBanner(message: UiText?) {
+    val resolved = message.resolve() ?: return
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -301,7 +317,7 @@ fun StatusBanner(message: String) {
             .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.32f)), CardShape)
             .padding(12.dp)
     ) {
-        Text(message, color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        Text(resolved, color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -312,8 +328,35 @@ fun Eyebrow(text: String) {
         color = WorkbenchColors.Muted,
         fontSize = 11.sp,
         fontWeight = FontWeight.Black,
-        letterSpacing = 1.2.sp
+        letterSpacing = eyebrowLetterSpacingValue(text).sp
     )
+}
+
+@Composable
+fun InlineMetricBadge(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
+            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong.copy(alpha = 0.85f)), RoundedCornerShape(999.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = WorkbenchColors.Muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            text = value,
+            color = WorkbenchColors.InkStrong,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = FontFamily.Monospace
+        )
+    }
 }
 
 @Composable
@@ -359,6 +402,48 @@ fun ToolbarRow(content: @Composable FlowRowScope.() -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         content = content
     )
+}
+
+@Composable
+fun CollapsibleWorkbenchSection(
+    eyebrow: String,
+    title: String,
+    body: String,
+    expandLabel: String,
+    collapseLabel: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+    WorkbenchCard(accent = expanded) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Eyebrow(eyebrow)
+                Text(
+                    text = title,
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 21.sp
+                )
+            }
+            WorkbenchButton(
+                text = if (expanded) collapseLabel else expandLabel,
+                onClick = { expanded = !expanded }
+            )
+        }
+        if (expanded) {
+            Text(body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            content()
+        }
+    }
 }
 
 fun Modifier.workbenchGrid(): Modifier = drawBehind {

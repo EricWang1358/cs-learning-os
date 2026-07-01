@@ -8,13 +8,6 @@ import org.junit.Test
 class MoreSettingsModelsTest {
     @Test
     fun moreSectionsCollapseIntoSettingsListOrder() {
-        val sections = moreSectionSummaries(
-            language = SystemLanguage.FollowSystem,
-            appearance = AppearanceMode.FollowSystem,
-            aiConfigured = false,
-            effectiveLanguage = SystemLanguage.English
-        )
-
         assertEquals(
             listOf(
                 MoreSectionId.System,
@@ -23,21 +16,8 @@ class MoreSettingsModelsTest {
                 MoreSectionId.Data,
                 MoreSectionId.Support
             ),
-            sections.map { it.id }
+            orderedMoreSectionIds()
         )
-        assertEquals("Follow system / Follow system", sections.first().value)
-    }
-
-    @Test
-    fun serviceCopyDescribesImplementedCaptureDraftingNotFuturePlaceholder() {
-        val section = moreSectionSummaries(
-            language = SystemLanguage.English,
-            appearance = AppearanceMode.Night,
-            aiConfigured = true,
-            effectiveLanguage = SystemLanguage.English
-        ).first { it.id == MoreSectionId.Service }
-
-        assertEquals("Optional AI provider for capture drafting.", section.body)
     }
 
     @Test
@@ -54,6 +34,13 @@ class MoreSettingsModelsTest {
     }
 
     @Test
+    fun appLocaleHelpersSeparateAppWideLocaleFromSettingsDisplayCopy() {
+        assertEquals("en", appLanguageTag(SystemLanguage.English, "zh-CN"))
+        assertEquals("zh-CN", appLanguageTag(SystemLanguage.Chinese, "en-US"))
+        assertEquals(null, appLanguageTag(SystemLanguage.FollowSystem, "zh-CN"))
+    }
+
+    @Test
     fun appearanceModeResolvesDarkTheme() {
         assertTrue(AppearanceMode.FollowSystem.usesDarkTheme(systemDark = true))
         assertFalse(AppearanceMode.FollowSystem.usesDarkTheme(systemDark = false))
@@ -62,17 +49,9 @@ class MoreSettingsModelsTest {
     }
 
     @Test
-    fun chineseCopyCanDriveMoreSettings() {
-        val copy = moreSettingsCopy(SystemLanguage.FollowSystem, "zh-Hans-CN")
-        val sections = moreSectionSummaries(
-            language = SystemLanguage.FollowSystem,
-            appearance = AppearanceMode.Night,
-            aiConfigured = true,
-            effectiveLanguage = SystemLanguage.Chinese
-        )
-
-        assertEquals("\u66f4\u591a", copy.title)
-        assertEquals("\u7cfb\u7edf", sections.first().title)
-        assertEquals("\u5df2\u914d\u7f6e", sections[1].value)
+    fun moreSettingsModelsKeepOnlyStateAndSelectionLogic() {
+        assertEquals(5, orderedMoreSectionIds().size)
+        assertEquals(MoreSectionId.System, orderedMoreSectionIds().first())
+        assertEquals(MoreSectionId.Support, orderedMoreSectionIds().last())
     }
 }

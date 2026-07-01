@@ -10,6 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
+        AreaEntity::class,
         LearningNodeEntity::class,
         ReaderQuestionEntity::class,
         CaptureSlipEntity::class,
@@ -19,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NodeFtsEntity::class,
         QuizFtsEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -85,13 +86,43 @@ abstract class LearningDatabase : RoomDatabase() {
             }
         }
 
+        private val Migration4To5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `areas` (
+                        `id` TEXT NOT NULL,
+                        `slug` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `order` INTEGER NOT NULL DEFAULT 1000,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        `deleted_at` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `area_id` TEXT NOT NULL DEFAULT 'questions'")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `is_checked` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `areas` (`id`, `slug`, `name`, `order`, `created_at`, `updated_at`, `deleted_at`)
+                    SELECT `area`, `area`, `area`, 1000, MIN(`created_at`), MAX(`updated_at`), NULL
+                    FROM `learning_nodes`
+                    GROUP BY `area`
+                    """.trimIndent()
+                )
+                db.execSQL("UPDATE `learning_nodes` SET `area_id` = `area` WHERE `area_id` = ''")
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 LearningDatabase::class.java,
                 "learning-os.db"
             )
-                .addMigrations(Migration1To2, Migration2To3, Migration3To4)
+                .addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5)
                 .build()
     }
 }

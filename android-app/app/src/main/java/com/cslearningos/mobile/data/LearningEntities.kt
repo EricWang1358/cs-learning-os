@@ -53,11 +53,13 @@ data class LearningNodeEntity(
     @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
     val area: String = "questions",
+    @ColumnInfo(name = "area_id") val areaId: String = area,
     val track: String = "general",
     val order: Int = 1000,
     val summary: String = "",
     val visibility: String = "support",
-    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false
+    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false,
+    @ColumnInfo(name = "is_checked") val isChecked: Boolean = false
 )
 
 fun LearningNodeEntity.withReadTrace(now: Long): LearningNodeEntity =

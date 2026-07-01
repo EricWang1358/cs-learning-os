@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.R
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -8,7 +9,10 @@ class MobileNavigationModelsTest {
     fun bottomTabsUseProductOrder() {
         val tabs = mobileBottomNavItems()
 
-        assertEquals(listOf("Home", "Capture", "Library", "Review", "More"), tabs.map { it.label })
+        assertEquals(
+            listOf(R.string.nav_home_label, R.string.nav_capture_label, R.string.nav_library_label, R.string.nav_review_label, R.string.nav_more_label),
+            tabs.map { it.labelResId }
+        )
         assertEquals(listOf(AppScreen.Home, AppScreen.Capture, AppScreen.Library, AppScreen.Review, AppScreen.More), tabs.map { it.screen })
     }
 
@@ -17,8 +21,14 @@ class MobileNavigationModelsTest {
         val tabs = mobileBottomNavItems()
 
         assertEquals(
-            listOf("Home dashboard", "Quick capture", "Knowledge library", "Due review", "Settings and data"),
-            tabs.map { it.contentDescription }
+            listOf(
+                R.string.nav_home_description,
+                R.string.nav_capture_description,
+                R.string.nav_library_description,
+                R.string.nav_review_description,
+                R.string.nav_more_description
+            ),
+            tabs.map { it.contentDescriptionResId }
         )
     }
 

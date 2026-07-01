@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -13,7 +14,10 @@ class AiProviderModelsTest {
     fun missingFieldsExplainWhyValidationCannotRun() {
         val settings = AiProviderSettings(apiKey = "", baseUrl = "", model = "")
 
-        assertEquals(listOf("API key", "Base URL", "Model"), settings.missingRequiredFields())
+        assertEquals(
+            listOf(R.string.more_api_key_label, R.string.more_base_url_label, R.string.more_model_label),
+            settings.missingRequiredFields()
+        )
     }
 
     @Test

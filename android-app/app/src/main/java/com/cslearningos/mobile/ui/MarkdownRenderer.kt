@@ -13,25 +13,47 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cslearningos.mobile.ui.markdown.MarkdownBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownCodeBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownHeadingBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownHorizontalRuleBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownInline
+import com.cslearningos.mobile.ui.markdown.MarkdownListBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownListItem
+import com.cslearningos.mobile.ui.markdown.MarkdownParagraphBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownQuizBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownQuoteBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownTableBlock
+import com.cslearningos.mobile.ui.markdown.MarkdownLinkAnnotationTag
+import com.cslearningos.mobile.ui.markdown.QuizAwareMarkdownDocument
+import com.cslearningos.mobile.ui.markdown.buildMarkdownAnnotatedText
 
 private val CardShape = RoundedCornerShape(10.dp)
 private val BlockShape = RoundedCornerShape(10.dp)
 private val PillShape = RoundedCornerShape(999.dp)
-private val ListPattern = Regex("""^(\s*)([-*+]|\d+\.)\s+(.*)$""")
 
 @Composable
 fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier) {
+    val blocks = remember(markdown) { QuizAwareMarkdownDocument.parse(markdown) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -45,35 +67,43 @@ fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier) {
             .background(WorkbenchColors.SurfaceCard)
             .border(1.dp, WorkbenchColors.Line, CardShape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        parseMarkdownBlocks(markdown).forEach { block ->
-            when (block) {
-                is MarkdownBlock.Code -> CodeBlock(block)
-                is MarkdownBlock.Heading -> HeadingBlock(block)
-                is MarkdownBlock.ListItem -> ListItemBlock(block)
-                is MarkdownBlock.Paragraph -> ParagraphBlock(block.text)
-                is MarkdownBlock.Quiz -> QuizBlock(block)
-                is MarkdownBlock.Quote -> QuoteBlock(block.lines)
-                MarkdownBlock.Space -> Spacer(modifier = Modifier.size(2.dp))
-            }
+        blocks.forEach { block ->
+            MarkdownBlockView(block = block)
         }
     }
 }
 
 @Composable
-private fun HeadingBlock(block: MarkdownBlock.Heading) {
+private fun MarkdownBlockView(block: MarkdownBlock) {
+    when (block) {
+        is MarkdownCodeBlock -> CodeBlock(block)
+        is MarkdownHeadingBlock -> HeadingBlock(block)
+        MarkdownHorizontalRuleBlock -> HorizontalRuleBlock()
+        is MarkdownListBlock -> ListBlock(block)
+        is MarkdownParagraphBlock -> ParagraphBlock(block.inlines)
+        is MarkdownQuizBlock -> QuizBlock(block)
+        is MarkdownQuoteBlock -> QuoteBlock(block)
+        is MarkdownTableBlock -> TableBlock(block)
+    }
+}
+
+@Composable
+private fun HeadingBlock(block: MarkdownHeadingBlock) {
     val style = when (block.level) {
         1 -> MaterialTheme.typography.headlineSmall.copy(
             color = WorkbenchColors.InkStrong,
             fontWeight = FontWeight.ExtraBold,
             lineHeight = 30.sp
         )
+
         2 -> MaterialTheme.typography.titleLarge.copy(
             color = WorkbenchColors.InkStrong,
             fontWeight = FontWeight.Bold,
             lineHeight = 26.sp
         )
+
         else -> MaterialTheme.typography.titleMedium.copy(
             color = WorkbenchColors.Ink,
             fontWeight = FontWeight.SemiBold,
@@ -84,10 +114,10 @@ private fun HeadingBlock(block: MarkdownBlock.Heading) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (block.level == 1) 8.dp else 6.dp, bottom = 2.dp),
+            .padding(top = if (block.level == 1) 8.dp else 2.dp, bottom = 2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(text = block.text, style = style)
+        RichText(inlines = block.inlines, style = style)
         if (block.level <= 2) {
             Box(
                 modifier = Modifier
@@ -100,34 +130,37 @@ private fun HeadingBlock(block: MarkdownBlock.Heading) {
 }
 
 @Composable
-private fun ParagraphBlock(text: String) {
-    Text(
-        text = text,
+private fun ParagraphBlock(inlines: List<MarkdownInline>, modifier: Modifier = Modifier) {
+    RichText(
+        inlines = inlines,
         style = MaterialTheme.typography.bodyMedium.copy(
             color = WorkbenchColors.Ink,
             lineHeight = 20.sp
         ),
-        modifier = Modifier.padding(vertical = 1.dp)
+        modifier = modifier
     )
 }
 
 @Composable
-private fun ListItemBlock(block: MarkdownBlock.ListItem) {
+private fun ListBlock(block: MarkdownListBlock) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        block.items.forEach { item ->
+            ListItemBlock(item)
+        }
+    }
+}
+
+@Composable
+private fun ListItemBlock(item: MarkdownListItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = (block.depth * 14).dp, top = 1.dp, bottom = 1.dp),
+            .padding(start = (item.depth * 14).dp, top = 1.dp, bottom = 1.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Box(
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .size(if (block.marker.endsWith(".")) 0.dp else 5.dp)
-                .background(WorkbenchColors.AccentStrong, CircleShape)
-        )
-        if (block.marker.endsWith(".")) {
+        if (item.marker.endsWith(".")) {
             Text(
-                text = block.marker,
+                text = item.marker,
                 style = MaterialTheme.typography.labelMedium.copy(
                     color = WorkbenchColors.AccentStrong,
                     fontWeight = FontWeight.Bold
@@ -135,20 +168,28 @@ private fun ListItemBlock(block: MarkdownBlock.ListItem) {
                 modifier = Modifier.width(28.dp)
             )
         } else {
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .size(5.dp)
+                    .background(WorkbenchColors.AccentStrong, CircleShape)
+            )
             Spacer(modifier = Modifier.width(10.dp))
         }
-        Text(
-            text = block.text,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = WorkbenchColors.Ink,
-                lineHeight = 20.sp
-            )
-        )
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            item.blocks.forEach { block ->
+                MarkdownBlockView(block)
+            }
+        }
     }
 }
 
 @Composable
-private fun QuoteBlock(lines: List<String>) {
+private fun QuoteBlock(block: MarkdownQuoteBlock) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -165,18 +206,19 @@ private fun QuoteBlock(lines: List<String>) {
                 .padding(vertical = 30.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = lines.joinToString("\n"),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = WorkbenchColors.Ink,
-                lineHeight = 20.sp
-            )
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            block.blocks.forEach { child ->
+                MarkdownBlockView(child)
+            }
+        }
     }
 }
 
 @Composable
-private fun CodeBlock(block: MarkdownBlock.Code) {
+private fun CodeBlock(block: MarkdownCodeBlock) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -200,7 +242,7 @@ private fun CodeBlock(block: MarkdownBlock.Code) {
             )
         }
         Text(
-            text = block.lines.joinToString("\n"),
+            text = block.code,
             style = MaterialTheme.typography.bodySmall.copy(
                 color = WorkbenchColors.Ink,
                 fontFamily = FontFamily.Monospace,
@@ -212,7 +254,81 @@ private fun CodeBlock(block: MarkdownBlock.Code) {
 }
 
 @Composable
-private fun QuizBlock(block: MarkdownBlock.Quiz) {
+private fun TableBlock(block: MarkdownTableBlock) {
+    val columnCount = maxOf(
+        block.headers.size,
+        block.rows.maxOfOrNull { it.size } ?: 0
+    ).coerceAtLeast(1)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(BlockShape)
+            .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
+            .border(1.dp, WorkbenchColors.LineStrong, BlockShape)
+    ) {
+        TableRowBlock(
+            cells = padTableCells(block.headers, columnCount),
+            header = true
+        )
+        block.rows.forEach { row ->
+            TableRowBlock(cells = padTableCells(row, columnCount), header = false)
+        }
+    }
+}
+
+@Composable
+private fun TableRowBlock(
+    cells: List<List<MarkdownInline>>,
+    header: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (header) WorkbenchColors.SurfaceSoft else Color.Transparent)
+    ) {
+        cells.forEachIndexed { index, cell ->
+            val borderModifier = if (index < cells.lastIndex) {
+                Modifier.border(
+                    width = 1.dp,
+                    color = WorkbenchColors.Line,
+                    shape = RoundedCornerShape(0.dp)
+                )
+            } else {
+                Modifier
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(borderModifier)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                RichText(
+                    inlines = cell,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = WorkbenchColors.InkStrong,
+                        fontWeight = if (header) FontWeight.Bold else FontWeight.Medium,
+                        lineHeight = 18.sp
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HorizontalRuleBlock() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .background(WorkbenchColors.LineStrong, RoundedCornerShape(999.dp))
+            .padding(vertical = 1.dp)
+    )
+}
+
+@Composable
+private fun QuizBlock(block: MarkdownQuizBlock) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,122 +377,68 @@ private fun QuizBlock(block: MarkdownBlock.Quiz) {
     }
 }
 
-private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
-    val blocks = mutableListOf<MarkdownBlock>()
-    val lines = markdown.lines()
-    var index = 0
+@Composable
+private fun RichText(
+    inlines: List<MarkdownInline>,
+    style: androidx.compose.ui.text.TextStyle,
+    modifier: Modifier = Modifier
+) {
+    val uriHandler = LocalUriHandler.current
+    val annotated = remember(inlines) { buildMarkdownAnnotatedText(inlines) }
+    val displayText = remember(annotated) {
+        buildAnnotatedString {
+            append(annotated.text)
 
-    while (index < lines.size) {
-        val line = lines[index]
-        val trimmed = line.trimStart()
-
-        when {
-            line.isBlank() -> {
-                blocks += MarkdownBlock.Space
-                index += 1
-            }
-            trimmed.startsWith("```") -> {
-                val (block, nextIndex) = readCodeBlock(lines, index)
-                blocks += block
-                index = nextIndex
-            }
-            trimmed.startsWith(":::") && trimmed.removePrefix(":::").trimStart().startsWith("quiz") -> {
-                val (block, nextIndex) = readQuizBlock(lines, index)
-                blocks += block
-                index = nextIndex
-            }
-            trimmed.startsWith(">") -> {
-                val (block, nextIndex) = readQuoteBlock(lines, index)
-                blocks += block
-                index = nextIndex
-            }
-            trimmed.startsWith("### ") -> {
-                blocks += MarkdownBlock.Heading(level = 3, text = trimmed.removePrefix("### ").trim())
-                index += 1
-            }
-            trimmed.startsWith("## ") -> {
-                blocks += MarkdownBlock.Heading(level = 2, text = trimmed.removePrefix("## ").trim())
-                index += 1
-            }
-            trimmed.startsWith("# ") -> {
-                blocks += MarkdownBlock.Heading(level = 1, text = trimmed.removePrefix("# ").trim())
-                index += 1
-            }
-            ListPattern.matches(line) -> {
-                val match = ListPattern.matchEntire(line)
-                val indent = match?.groupValues?.get(1).orEmpty().length
-                blocks += MarkdownBlock.ListItem(
-                    depth = indent / 2,
-                    marker = match?.groupValues?.get(2).orEmpty(),
-                    text = match?.groupValues?.get(3).orEmpty()
+            annotated.text.getStringAnnotations(
+                tag = MarkdownLinkAnnotationTag,
+                start = 0,
+                end = annotated.text.length
+            ).forEach { annotation ->
+                addStyle(
+                    style = SpanStyle(
+                        color = WorkbenchColors.Accent,
+                        textDecoration = TextDecoration.Underline
+                    ),
+                    start = annotation.start,
+                    end = annotation.end
                 )
-                index += 1
             }
-            else -> {
-                blocks += MarkdownBlock.Paragraph(line.trim())
-                index += 1
+
+            annotated.codeSpans.forEach { span ->
+                addStyle(
+                    style = SpanStyle(
+                        color = WorkbenchColors.AccentStrong,
+                        background = WorkbenchColors.Surface,
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    start = span.start,
+                    end = span.end
+                )
             }
         }
     }
 
-    return blocks
+    ClickableText(
+        text = displayText,
+        style = style,
+        modifier = modifier,
+        onClick = { offset ->
+            displayText
+                .getStringAnnotations(
+                    tag = MarkdownLinkAnnotationTag,
+                    start = offset,
+                    end = offset
+                )
+                .firstOrNull()
+                ?.let { uriHandler.openUri(it.item) }
+        }
+    )
 }
 
-private fun readCodeBlock(lines: List<String>, startIndex: Int): Pair<MarkdownBlock.Code, Int> {
-    val opener = lines[startIndex].trimStart()
-    val content = mutableListOf<String>()
-    var index = startIndex + 1
+private fun List<List<MarkdownInline>>.padTo(size: Int): List<List<MarkdownInline>> =
+    this + List((size - this.size).coerceAtLeast(0)) { emptyList() }
 
-    while (index < lines.size && !lines[index].trimStart().startsWith("```")) {
-        content += lines[index]
-        index += 1
-    }
-
-    val nextIndex = if (index < lines.size) index + 1 else index
-    return MarkdownBlock.Code(
-        info = opener.removePrefix("```").trim(),
-        lines = content
-    ) to nextIndex
-}
-
-private fun readQuizBlock(lines: List<String>, startIndex: Int): Pair<MarkdownBlock.Quiz, Int> {
-    val opener = lines[startIndex].trimStart()
-    val content = mutableListOf<String>()
-    var index = startIndex + 1
-
-    while (index < lines.size && lines[index].trim() != ":::") {
-        content += lines[index].trimEnd()
-        index += 1
-    }
-
-    val nextIndex = if (index < lines.size) index + 1 else index
-    return MarkdownBlock.Quiz(
-        info = opener.removePrefix(":::").trim().removePrefix("quiz").trim(),
-        lines = content
-    ) to nextIndex
-}
-
-private fun readQuoteBlock(lines: List<String>, startIndex: Int): Pair<MarkdownBlock.Quote, Int> {
-    val content = mutableListOf<String>()
-    var index = startIndex
-
-    while (index < lines.size && lines[index].trimStart().startsWith(">")) {
-        content += lines[index]
-            .trimStart()
-            .removePrefix(">")
-            .trimStart()
-        index += 1
-    }
-
-    return MarkdownBlock.Quote(lines = content) to index
-}
-
-private sealed interface MarkdownBlock {
-    data class Code(val info: String, val lines: List<String>) : MarkdownBlock
-    data class Heading(val level: Int, val text: String) : MarkdownBlock
-    data class ListItem(val depth: Int, val marker: String, val text: String) : MarkdownBlock
-    data class Paragraph(val text: String) : MarkdownBlock
-    data class Quiz(val info: String, val lines: List<String>) : MarkdownBlock
-    data class Quote(val lines: List<String>) : MarkdownBlock
-    object Space : MarkdownBlock
-}
+private fun padTableCells(
+    cells: List<List<MarkdownInline>>,
+    columnCount: Int
+): List<List<MarkdownInline>> = cells.padTo(columnCount)

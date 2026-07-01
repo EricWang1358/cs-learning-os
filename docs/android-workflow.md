@@ -79,6 +79,7 @@ Do not mix unrelated scopes in one commit unless the coordinator explicitly says
 
 | Check | Command |
 | --- | --- |
+| Android beta release acceptance | `.\scripts\verify-android-beta.ps1` |
 | Toolchain and offline-product doctor | `.\scripts\android-doctor.ps1` |
 | Machine-readable Android doctor | `.\scripts\android-doctor.ps1 -Json` |
 | Android unit tests | `cd android-app; .\gradlew.bat testDebugUnitTest` |
@@ -112,6 +113,9 @@ Every Android implementation commit that produces a testable APK must update `an
 
 - Increment `versionCode` by 1.
 - Increment `versionName` in the current beta line, for example `0.1.0` -> `0.1.1`.
+- Update `docs/release-notes.md` with the matching Android beta entry.
+- Ensure the matching Git tag exists and points at the handoff commit, for example `android-v0.1.1-beta`.
+- Run `.\scripts\verify-android-beta.ps1` as the release acceptance gate before handoff or distribution.
 - Mention the APK version in the handoff/final message.
 - Do not bump the APK version for docs-only/spec-only commits unless a new APK is actually distributed.
 

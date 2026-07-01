@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,7 +39,7 @@ fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @Composable
 private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: LearningViewModel) {
     WorkbenchCard(accent = true) {
-        Eyebrow("start here")
+        Eyebrow(stringResource(R.string.dashboard_start_here_eyebrow))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -61,16 +63,16 @@ private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: Learnin
 @Composable
 private fun DashboardHero(state: LearningUiState, viewModel: LearningViewModel) {
     WorkbenchCard {
-        Eyebrow("learning command center")
+        Eyebrow(stringResource(R.string.dashboard_hero_eyebrow))
         Text(
-            text = "What are we learning next?",
+            text = stringResource(R.string.dashboard_hero_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 28.sp,
             fontWeight = FontWeight.Black,
             lineHeight = 32.sp
         )
         Text(
-            text = "Search local knowledge, capture Markdown, or jump into due review from one offline command center.",
+            text = stringResource(R.string.dashboard_hero_body),
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -78,11 +80,11 @@ private fun DashboardHero(state: LearningUiState, viewModel: LearningViewModel) 
         WorkbenchTextField(
             value = state.searchQuery,
             onValueChange = viewModel::setSearchQuery,
-            label = "Search concepts, notes, quiz cards...",
+            label = stringResource(R.string.dashboard_search_field),
             minLines = 1
         )
         WorkbenchButton(
-            text = "Search now",
+            text = stringResource(R.string.dashboard_search_now),
             onClick = {
                 viewModel.showSearch()
                 viewModel.runSearch()
@@ -96,12 +98,12 @@ private fun DashboardHero(state: LearningUiState, viewModel: LearningViewModel) 
 @Composable
 private fun TodayStack(summary: DashboardSummary) {
     WorkbenchCard {
-        Eyebrow("today")
-        Text("Learning state", color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
+        Eyebrow(stringResource(R.string.dashboard_today_eyebrow))
+        Text(stringResource(R.string.dashboard_today_title), color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            DashboardMetric("Nodes", summary.nodeCount.toString(), Modifier.weight(1f))
-            DashboardMetric("Due", summary.dueReviewCount.toString(), Modifier.weight(1f))
-            DashboardMetric("Slips", summary.captureSlipCount.toString(), Modifier.weight(1f))
+            DashboardMetric(stringResource(R.string.common_nodes), summary.nodeCount.toString(), Modifier.weight(1f))
+            DashboardMetric(stringResource(R.string.common_due), summary.dueReviewCount.toString(), Modifier.weight(1f))
+            DashboardMetric(stringResource(R.string.common_slips), summary.captureSlipCount.toString(), Modifier.weight(1f))
         }
     }
 }
@@ -111,35 +113,35 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
     val node = summary.recentNode
     if (node == null) {
         EmptyWorkbenchCard(
-            title = "No reading history yet",
-            body = "Create or open a node. Your next visit will surface the most recent learning thread here."
+            title = stringResource(R.string.dashboard_continue_empty_title),
+            body = stringResource(R.string.dashboard_continue_empty_body)
         )
         return
     }
 
     WorkbenchCard(accent = true) {
-        Eyebrow("continue")
+        Eyebrow(stringResource(R.string.dashboard_continue_eyebrow))
         Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 23.sp, fontWeight = FontWeight.Black)
         Text(
-            dashboardPreviewMarkdown(node.markdownBody),
+            dashboardPreviewMarkdown(node.markdownBody, stringResource(R.string.library_no_body_yet)),
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 21.sp,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
-        WorkbenchButton("Continue reading", { viewModel.openNode(node) }, primary = true)
+        WorkbenchButton(stringResource(R.string.dashboard_continue_button), { viewModel.openNode(node) }, primary = true)
     }
 }
 
 @Composable
 private fun LibraryPreview(state: LearningUiState, viewModel: LearningViewModel) {
     WorkbenchCard {
-        Eyebrow("library preview")
-        Text("Your local knowledge base", color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
+        Eyebrow(stringResource(R.string.dashboard_library_preview_eyebrow))
+        Text(stringResource(R.string.dashboard_library_preview_title), color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
         if (state.nodes.isEmpty()) {
             Text(
-                "No nodes yet. Create the first Markdown node from the action card above.",
+                stringResource(R.string.dashboard_library_preview_empty_body),
                 color = WorkbenchColors.Muted,
                 fontSize = 14.sp,
                 lineHeight = 20.sp
@@ -151,7 +153,7 @@ private fun LibraryPreview(state: LearningUiState, viewModel: LearningViewModel)
                 }
             }
         }
-        WorkbenchButton("Browse full library", viewModel::showLibrary)
+        WorkbenchButton(stringResource(R.string.dashboard_browse_library), viewModel::showLibrary)
     }
 }
 
@@ -172,10 +174,10 @@ private fun DashboardMetric(label: String, value: String, modifier: Modifier = M
 @Composable
 private fun DashboardNodePreview(node: LearningNodeEntity, onOpen: () -> Unit) {
     InteractiveCard(onClick = onOpen, accent = false) {
-        Eyebrow("node")
+        Eyebrow(stringResource(R.string.library_node_eyebrow))
         Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
         Text(
-            dashboardPreviewMarkdown(node.markdownBody),
+            dashboardPreviewMarkdown(node.markdownBody, stringResource(R.string.library_no_body_yet)),
             color = WorkbenchColors.Muted,
             fontSize = 13.sp,
             lineHeight = 18.sp,
@@ -185,19 +187,20 @@ private fun DashboardNodePreview(node: LearningNodeEntity, onOpen: () -> Unit) {
     }
 }
 
-private fun dashboardPreviewMarkdown(markdown: String): String =
+private fun dashboardPreviewMarkdown(markdown: String, fallback: String): String =
     markdown
         .lineSequence()
         .map { it.trim().trimStart('#', '-', '>', ' ') }
         .firstOrNull { it.isNotBlank() && !it.startsWith(":::") }
-        ?: "No body yet. Add Markdown to make this node useful."
+        ?: fallback
 
+@Composable
 private fun DashboardAction.firstScreenLabel(summary: DashboardSummary): String =
     when (this) {
-        DashboardAction.Search -> "Search"
-        DashboardAction.Capture -> "Capture"
-        DashboardAction.Create -> "Create"
-        DashboardAction.Review -> "Review ${summary.dueReviewCount}"
+        DashboardAction.Search -> stringResource(R.string.dashboard_action_search)
+        DashboardAction.Capture -> stringResource(R.string.dashboard_action_capture)
+        DashboardAction.Create -> stringResource(R.string.dashboard_action_create)
+        DashboardAction.Review -> stringResource(R.string.dashboard_action_review, summary.dueReviewCount)
     }
 
 private fun DashboardAction.clickHandler(viewModel: LearningViewModel): () -> Unit =
@@ -208,20 +211,22 @@ private fun DashboardAction.clickHandler(viewModel: LearningViewModel): () -> Un
         DashboardAction.Review -> viewModel::showReview
     }
 
+@Composable
 private fun DashboardAction.eyebrow(): String =
     when (this) {
-        DashboardAction.Search -> "find"
-        DashboardAction.Capture -> "slip"
-        DashboardAction.Create -> "node"
-        DashboardAction.Review -> "due"
+        DashboardAction.Search -> stringResource(R.string.dashboard_action_search_eyebrow)
+        DashboardAction.Capture -> stringResource(R.string.dashboard_action_capture_eyebrow)
+        DashboardAction.Create -> stringResource(R.string.dashboard_action_create_eyebrow)
+        DashboardAction.Review -> stringResource(R.string.dashboard_action_review_eyebrow)
     }
 
+@Composable
 private fun DashboardAction.body(): String =
     when (this) {
-        DashboardAction.Search -> "Search notes and quiz cards."
-        DashboardAction.Capture -> "Catch unclear points fast."
-        DashboardAction.Create -> "Write structured Markdown."
-        DashboardAction.Review -> "Reveal, rate, repeat."
+        DashboardAction.Search -> stringResource(R.string.dashboard_action_search_body)
+        DashboardAction.Capture -> stringResource(R.string.dashboard_action_capture_body)
+        DashboardAction.Create -> stringResource(R.string.dashboard_action_create_body)
+        DashboardAction.Review -> stringResource(R.string.dashboard_action_review_body)
     }
 
 private fun DashboardAction.metric(summary: DashboardSummary): String? =

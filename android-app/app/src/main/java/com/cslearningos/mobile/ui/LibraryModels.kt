@@ -1,31 +1,47 @@
 package com.cslearningos.mobile.ui
 
+import android.content.Context
+import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.LearningNodeEntity
+import com.cslearningos.mobile.data.QuizItemEntity
 
-data class LibraryNodeSummary(
+enum class LibraryCheckedFilter {
+    All,
+    Checked
+}
+
+data class LibraryFolderRow(
+    val areaId: String,
+    val title: String,
+    val nodeCount: Int,
+    val checkedCount: Int,
+    val dueCount: Int,
+    val trackPreview: String
+)
+
+data class LibraryNodeRow(
     val id: String,
     val title: String,
     val summary: String,
-    val meta: String,
+    val trackLabel: String,
+    val dueCount: Int,
+    val checked: Boolean,
     val node: LearningNodeEntity
 )
 
-data class LibraryTrackGroup(
-    val track: String,
-    val nodes: List<LibraryNodeSummary>
-)
-
-data class LibraryAreaGroup(
-    val area: String,
-    val tracks: List<LibraryTrackGroup>
+data class LibraryAreaDetail(
+    val areaId: String,
+    val title: String,
+    val nodeCount: Int,
+    val checkedCount: Int,
+    val items: List<LibraryNodeRow>
 )
 
 data class LibraryOverview(
     val areaCount: Int,
-    val trackCount: Int,
     val nodeCount: Int,
-    val featuredAreaLabel: String,
-    val structureLabel: String = "Area -> Track -> Ordered nodes"
+    val checkedCount: Int,
+    val featuredAreaLabel: String
 )
 
 data class LibraryMap(
@@ -33,89 +49,144 @@ data class LibraryMap(
 )
 
 data class LibraryMapArea(
-    val area: String,
+    val areaId: String,
     val label: String,
     val nodeCount: Int,
-    val trackCount: Int,
-    val trackPreview: String,
-    val collapsed: Boolean
+    val checkedCount: Int,
+    val trackPreview: String
 )
 
-fun buildLibraryOverview(nodes: List<LearningNodeEntity>): LibraryOverview {
-    val activeNodes = nodes.filter { it.deletedAt == null && it.visibility != "trash" }
-    val groups = buildLibraryGroups(activeNodes)
-    val featuredArea = groups.maxByOrNull { area -> area.tracks.sumOf { it.nodes.size } }?.area
+fun buildLibraryRootFolders(
+    areas: List<AreaEntity>,
+    nodes: List<LearningNodeEntity>,
+    dueQuizzes: List<QuizItemEntity>,
+    context: Context? = null
+): List<LibraryFolderRow> {
+    val activeNodes = nodes.activeLibraryNodes()
+    val dueByNode = dueQuizzes.groupBy { it.nodeId }
 
-    return LibraryOverview(
-        areaCount = groups.size,
-        trackCount = groups.sumOf { it.tracks.size },
+    return areas
+        .filter { it.deletedAt == null }
+        .sortedWith(compareBy<AreaEntity> { it.order }.thenBy { displayAreaName(context, it) })
+        .map { area ->
+            val areaNodes = activeNodes.filter { it.areaId == area.id }
+            val tracks = areaNodes.map { readableTrackLabel(context, it.track) }.distinct().sorted()
+            LibraryFolderRow(
+                areaId = area.id,
+                title = displayAreaName(context, area),
+                nodeCount = areaNodes.size,
+                checkedCount = areaNodes.count { it.isChecked },
+                dueCount = areaNodes.sumOf { node -> dueByNode[node.id].orEmpty().size },
+                trackPreview = tracks.take(3).joinToString(", ")
+            )
+        }
+}
+
+fun buildLibraryAreaDetail(
+    area: AreaEntity,
+    nodes: List<LearningNodeEntity>,
+    dueQuizzes: List<QuizItemEntity>,
+    filter: LibraryCheckedFilter,
+    context: Context? = null
+): LibraryAreaDetail {
+    val activeNodes = nodes.activeLibraryNodes()
+        .filter { it.areaId == area.id }
+    val filteredNodes = when (filter) {
+        LibraryCheckedFilter.All -> activeNodes
+        LibraryCheckedFilter.Checked -> activeNodes.filter { it.isChecked }
+    }
+    val dueByNode = dueQuizzes.groupBy { it.nodeId }
+
+    return LibraryAreaDetail(
+        areaId = area.id,
+        title = displayAreaName(context, area),
         nodeCount = activeNodes.size,
-        featuredAreaLabel = featuredArea?.let(::readableAreaLabel) ?: "No active area"
+        checkedCount = activeNodes.count { it.isChecked },
+        items = filteredNodes
+            .sortedWith(compareBy<LearningNodeEntity> { it.track }.thenBy { it.order }.thenBy { it.title })
+            .map { node ->
+                LibraryNodeRow(
+                    id = node.id,
+                    title = node.title,
+                    summary = node.summary.ifBlank {
+                        previewLibraryMarkdown(
+                            markdown = node.markdownBody,
+                            fallback = context?.getString(com.cslearningos.mobile.R.string.library_no_summary_yet)
+                                ?: "No summary yet."
+                        )
+                    },
+                    trackLabel = readableTrackLabel(context, node.track),
+                    dueCount = dueByNode[node.id].orEmpty().size,
+                    checked = node.isChecked,
+                    node = node
+                )
+            }
     )
 }
 
-fun buildLibraryGroups(nodes: List<LearningNodeEntity>): List<LibraryAreaGroup> =
-    nodes
-        .filter { it.deletedAt == null && it.visibility != "trash" }
-        .groupBy { it.area }
-        .toSortedMap()
-        .map { (area, areaNodes) ->
-            LibraryAreaGroup(
-                area = area,
-                tracks = areaNodes
-                    .groupBy { it.track }
-                    .toSortedMap()
-                    .map { (track, trackNodes) ->
-                        LibraryTrackGroup(
-                            track = track,
-                            nodes = trackNodes
-                                .sortedWith(compareBy<LearningNodeEntity> { it.order }.thenBy { it.title })
-                                .map { node ->
-                                    LibraryNodeSummary(
-                                        id = node.id,
-                                        title = node.title,
-                                        summary = node.summary.ifBlank { previewLibraryMarkdown(node.markdownBody) },
-                                        meta = "Order ${node.order}",
-                                        node = node
-                                    )
-                                }
-                        )
-                    }
-            )
-        }
+fun buildLibraryOverview(
+    areas: List<AreaEntity>,
+    nodes: List<LearningNodeEntity>,
+    context: Context? = null
+): LibraryOverview {
+    val activeNodes = nodes.activeLibraryNodes()
+    val featuredAreaId = activeNodes
+        .groupBy { it.areaId }
+        .entries
+        .maxWithOrNull(
+            compareBy<Map.Entry<String, List<LearningNodeEntity>>> { entry -> entry.value.count { it.isChecked } }
+                .thenBy { entry -> entry.value.size }
+                .thenBy { entry -> entry.key }
+        )
+        ?.key
+    val featuredArea = areas.firstOrNull { it.id == featuredAreaId }
 
-fun buildLibraryMap(nodes: List<LearningNodeEntity>, collapsedAreas: Set<String>): LibraryMap =
-    LibraryMap(
-        areas = buildLibraryGroups(nodes).map { area ->
-            val tracks = area.tracks.map { readableTrackLabel(it.track) }
-            LibraryMapArea(
-                area = area.area,
-                label = readableAreaLabel(area.area),
-                nodeCount = area.tracks.sumOf { it.nodes.size },
-                trackCount = area.tracks.size,
-                trackPreview = tracks.take(3).joinToString(", ").ifBlank { "No tracks" },
-                collapsed = area.area in collapsedAreas
-            )
-        }
+    return LibraryOverview(
+        areaCount = areas.count { it.deletedAt == null },
+        nodeCount = activeNodes.size,
+        checkedCount = activeNodes.count { it.isChecked },
+        featuredAreaLabel = featuredArea?.let { displayAreaName(context, it) }
+            ?: (context?.getString(com.cslearningos.mobile.R.string.library_no_active_area) ?: "No active area")
     )
+}
 
-fun readableAreaLabel(area: String): String =
-    when (area) {
-        "cs-fundamentals" -> "CS Fundamentals"
-        "algorithms" -> "Algorithms"
-        "projects" -> "Projects"
-        "abilities" -> "Abilities"
-        "tools" -> "Tools"
-        "questions" -> "Questions"
-        else -> area.split('-', '_').joinToString(" ") { it.replaceFirstChar(Char::uppercaseChar) }
-    }
+fun buildLibraryMap(
+    areas: List<AreaEntity>,
+    nodes: List<LearningNodeEntity>,
+    context: Context? = null
+): LibraryMap {
+    val activeNodes = nodes.activeLibraryNodes()
+    return LibraryMap(
+        areas = areas
+            .filter { it.deletedAt == null }
+            .sortedWith(compareBy<AreaEntity> { it.order }.thenBy { displayAreaName(context, it) })
+            .map { area ->
+                val areaNodes = activeNodes.filter { it.areaId == area.id }
+                LibraryMapArea(
+                    areaId = area.id,
+                    label = displayAreaName(context, area),
+                    nodeCount = areaNodes.size,
+                    checkedCount = areaNodes.count { it.isChecked },
+                    trackPreview = areaNodes
+                        .map { readableTrackLabel(context, it.track) }
+                        .distinct()
+                        .sorted()
+                        .take(3)
+                        .joinToString(", ")
+                )
+            }
+    )
+}
 
-fun readableTrackLabel(track: String): String =
-    track.split('-', '_').joinToString(" ") { it.replaceFirstChar(Char::uppercaseChar) }
+fun displayAreaName(context: Context?, area: AreaEntity): String =
+    if (area.name == area.slug) readableAreaLabel(context, area.slug) else area.name
 
-private fun previewLibraryMarkdown(markdown: String): String =
+private fun List<LearningNodeEntity>.activeLibraryNodes(): List<LearningNodeEntity> =
+    filter { it.deletedAt == null && it.visibility != "trash" }
+
+private fun previewLibraryMarkdown(markdown: String, fallback: String): String =
     markdown
         .lineSequence()
         .map { it.trim().trimStart('#', '-', '>', ' ') }
         .firstOrNull { it.isNotBlank() && !it.startsWith(":::") }
-        ?: "No summary yet."
+        ?: fallback
