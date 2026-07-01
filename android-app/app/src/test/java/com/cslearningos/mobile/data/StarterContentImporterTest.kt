@@ -40,6 +40,9 @@ class StarterContentImporterTest {
                         title: "Binary Search"
                         area: algorithms
                         track: search-patterns
+                        order: 10
+                        visibility: core
+                        summary: "Find boundaries."
                         ---
 
                         # Binary Search
@@ -57,6 +60,12 @@ class StarterContentImporterTest {
         assertEquals(1, pack.nodes.size)
         assertEquals("starter:node:algorithms/binary-search", pack.nodes.single().id)
         assertEquals("Binary Search", pack.nodes.single().title)
+        assertEquals("algorithms", pack.nodes.single().area)
+        assertEquals("search-patterns", pack.nodes.single().track)
+        assertEquals(10, pack.nodes.single().order)
+        assertEquals("Find boundaries.", pack.nodes.single().summary)
+        assertEquals("core", pack.nodes.single().visibility)
+        assertTrue(pack.nodes.single().isStarter)
         assertTrue(pack.nodes.single().markdownBody.startsWith("# Binary Search"))
     }
 
@@ -70,6 +79,8 @@ class StarterContentImporterTest {
                     text = """
                         ---
                         title: "GDB basics"
+                        area: cs-fundamentals
+                        track: gdb-debugging
                         ---
 
                         # GDB basics
@@ -93,6 +104,9 @@ class StarterContentImporterTest {
 
         assertEquals(1, pack.quizzes.size)
         assertEquals("starter:quiz:cs-fundamentals/gdb", pack.quizzes.single().id)
+        assertEquals("cs-fundamentals", pack.quizzes.single().area)
+        assertEquals("gdb-debugging", pack.quizzes.single().track)
+        assertTrue(pack.quizzes.single().isStarter)
         assertEquals("What does `stepi` do?", pack.quizzes.single().prompt)
         assertEquals("It executes one machine instruction.", pack.quizzes.single().answer)
         assertEquals(2_000L, pack.reviewStates.single().dueAt)

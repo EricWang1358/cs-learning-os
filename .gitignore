@@ -39,6 +39,10 @@ downloads/
 content-demo/quizzes/cs-fundamentals/x86-rax-trace-leaq-jump.md
 content-demo/quizzes/cs-fundamentals/gdb-disassemble-stepi-stack-examine.md
 启动 Learning OS.cmd
+启动 Learning OS Beta.cmd
+安装或修复 Learning OS Beta.cmd
+启动 Daily Bite.cmd
+启动 Learning OS.cmd
 
 # OS/editor noise
 .DS_Store

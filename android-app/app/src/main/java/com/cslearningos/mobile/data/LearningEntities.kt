@@ -48,7 +48,13 @@ data class LearningNodeEntity(
     @ColumnInfo(name = "last_read_at") val lastReadAt: Long?,
     val revision: Long,
     @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
-    @ColumnInfo(name = "deleted_at") val deletedAt: Long?
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+    val area: String = "questions",
+    val track: String = "general",
+    val order: Int = 1000,
+    val summary: String = "",
+    val visibility: String = "support",
+    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false
 )
 
 fun LearningNodeEntity.withReadTrace(now: Long): LearningNodeEntity =
@@ -94,7 +100,11 @@ data class QuizItemEntity(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     val revision: Long,
     @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
-    @ColumnInfo(name = "deleted_at") val deletedAt: Long?
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+    val area: String = "questions",
+    val track: String = "general",
+    val visibility: String = "practice",
+    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false
 )
 
 @Entity(tableName = "review_states", primaryKeys = ["quiz_id"])

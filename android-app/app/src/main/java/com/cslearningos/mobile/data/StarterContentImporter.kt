@@ -36,7 +36,13 @@ object StarterContentImporter {
                 lastReadAt = null,
                 revision = 1L,
                 syncStatus = SyncStatus.clean,
-                deletedAt = null
+                deletedAt = null,
+                area = parsed.metadata["area"] ?: areaFromPath(asset.path),
+                track = parsed.metadata["track"] ?: "general",
+                order = parsed.metadata["order"]?.toIntOrNull() ?: 1000,
+                summary = parsed.metadata["summary"].orEmpty(),
+                visibility = parsed.metadata["visibility"] ?: "core",
+                isStarter = true
             )
         }
 
@@ -56,7 +62,11 @@ object StarterContentImporter {
                 updatedAt = now,
                 revision = 1L,
                 syncStatus = SyncStatus.clean,
-                deletedAt = null
+                deletedAt = null,
+                area = parsed.metadata["area"] ?: areaFromPath(asset.path),
+                track = parsed.metadata["track"] ?: "general",
+                visibility = parsed.metadata["visibility"] ?: "practice",
+                isStarter = true
             )
         }
 
@@ -102,6 +112,13 @@ object StarterContentImporter {
         path.substringAfterLast('/').removeSuffix(".md").split('-', '_')
             .filter { it.isNotBlank() }
             .joinToString(" ") { it.replaceFirstChar { char -> char.uppercaseChar() } }
+
+    private fun areaFromPath(path: String): String =
+        path.removePrefix("nodes/")
+            .removePrefix("quizzes/")
+            .substringBefore('/')
+            .takeIf { it.isNotBlank() && it != path }
+            ?: "questions"
 
     private fun sectionAfterHeading(markdown: String, heading: String): String? {
         val lines = markdown.lines()

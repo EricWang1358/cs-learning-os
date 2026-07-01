@@ -62,7 +62,7 @@ private fun MoreSettingsList(
                 when (section.id) {
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel, copy = copy)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel, copy = copy)
-                    MoreSectionId.Data -> DataToolsContent(viewModel = viewModel, copy = copy)
+                    MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel, copy = copy)
                     MoreSectionId.Support -> SupportContent(copy = copy)
                 }
             }
@@ -254,18 +254,51 @@ private fun AiServiceStatusBlock(status: AiServiceStatus) {
 }
 
 @Composable
-private fun DataToolsContent(viewModel: LearningViewModel, copy: MoreSettingsCopy) {
+private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewModel, copy: MoreSettingsCopy) {
     SettingsRow(label = copy.localData) {
         Text(
-            text = "Readable Markdown/TXT export is separate from full JSON backup. Restore remains a full-phone recovery tool.",
+            text = "Readable Markdown/TXT export is separate from full JSON backup. Trashbin keeps deleted nodes recoverable before permanent deletion.",
             color = WorkbenchColors.Muted,
             fontSize = 14.sp,
             lineHeight = 21.sp
         )
         ToolbarRow {
             WorkbenchButton("Full backup", viewModel::showBackup, primary = true)
-            WorkbenchButton("Markdown export soon", viewModel::showBackup)
-            WorkbenchButton("Import preview soon", viewModel::showBackup)
+            WorkbenchButton("Export Markdown/TXT", viewModel::exportReadableMarkdown)
+            WorkbenchButton("Import preview", viewModel::showBackup)
+            WorkbenchButton("Remove demo content", viewModel::clearStarterContent, danger = true)
+        }
+        Text(
+            text = "Trashbin: ${state.trashNodes.size} node(s)",
+            color = WorkbenchColors.InkStrong,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Black
+        )
+        if (state.trashNodes.isEmpty()) {
+            Text(
+                text = "No trashed nodes. Deleting from Reader moves a node here first.",
+                color = WorkbenchColors.Muted,
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
+        }
+        state.trashNodes.take(6).forEach { node ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
+                    .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Eyebrow(node.area)
+                Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                ToolbarRow {
+                    WorkbenchButton("Restore", { viewModel.restoreNode(node) }, primary = true)
+                    WorkbenchButton("Delete forever", { viewModel.permanentlyDeleteNode(node) }, danger = true)
+                }
+            }
         }
     }
 }

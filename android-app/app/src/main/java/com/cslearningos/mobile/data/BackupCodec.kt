@@ -47,6 +47,12 @@ object BackupCodec {
             .put("revision", revision)
             .put("syncStatus", syncStatus.name)
             .put("deletedAt", deletedAt)
+            .put("area", area)
+            .put("track", track)
+            .put("order", order)
+            .put("summary", summary)
+            .put("visibility", visibility)
+            .put("isStarter", isStarter)
 
     private fun QuizItemEntity.toJson(): JSONObject =
         JSONObject()
@@ -62,6 +68,10 @@ object BackupCodec {
             .put("revision", revision)
             .put("syncStatus", syncStatus.name)
             .put("deletedAt", deletedAt)
+            .put("area", area)
+            .put("track", track)
+            .put("visibility", visibility)
+            .put("isStarter", isStarter)
 
     private fun ReviewStateEntity.toJson(): JSONObject =
         JSONObject()
@@ -116,7 +126,13 @@ object BackupCodec {
             lastReadAt = nullableLong("lastReadAt"),
             revision = getLong("revision"),
             syncStatus = SyncStatus.valueOf(getString("syncStatus")),
-            deletedAt = nullableLong("deletedAt")
+            deletedAt = nullableLong("deletedAt"),
+            area = optString("area", "questions"),
+            track = optString("track", "general"),
+            order = optInt("order", 1000),
+            summary = optString("summary", ""),
+            visibility = optString("visibility", "support"),
+            isStarter = optBoolean("isStarter", false)
         )
 
     private fun JSONObject.toQuiz(): QuizItemEntity =
@@ -132,7 +148,11 @@ object BackupCodec {
             updatedAt = getLong("updatedAt"),
             revision = getLong("revision"),
             syncStatus = SyncStatus.valueOf(getString("syncStatus")),
-            deletedAt = nullableLong("deletedAt")
+            deletedAt = nullableLong("deletedAt"),
+            area = optString("area", "questions"),
+            track = optString("track", "general"),
+            visibility = optString("visibility", "practice"),
+            isStarter = optBoolean("isStarter", false)
         )
 
     private fun JSONObject.toReviewState(): ReviewStateEntity =

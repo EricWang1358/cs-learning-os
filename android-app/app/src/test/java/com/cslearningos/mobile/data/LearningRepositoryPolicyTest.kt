@@ -254,33 +254,211 @@ class LearningRepositoryPolicyTest {
         assertEquals(2_000L, updated.updatedAt)
         assertEquals(2L, updated.revision)
     }
+
+    @Test
+    fun moveRestoreAndPermanentDeleteNodeFollowTrashbinLifecycle() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val node = LearningNodeEntity(
+            id = "node-1",
+            title = "Virtual Memory",
+            markdownBody = "# Virtual Memory",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "cs-fundamentals",
+            track = "memory",
+            order = 40,
+            summary = "Address translation",
+            visibility = "support",
+            isStarter = false
+        )
+        dao.nodes[node.id] = node
+        dao.quizzes["quiz-1"] = QuizItemEntity(
+            id = "quiz-1",
+            nodeId = node.id,
+            prompt = "What is a page table?",
+            answer = "A mapping structure.",
+            explanation = "",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "cs-fundamentals",
+            track = "memory",
+            visibility = "practice"
+        )
+
+        repository.moveNodeToTrash(node.id, now = 2_000L)
+        assertEquals("trash", dao.nodes.getValue(node.id).visibility)
+        assertEquals("trash", dao.quizzes.getValue("quiz-1").visibility)
+        assertTrue(dao.deletedNodeFtsIds.contains(node.id))
+        assertTrue(dao.deletedQuizFtsIds.contains("quiz-1"))
+
+        repository.restoreNodeFromTrash(node.id, now = 3_000L)
+        assertEquals("support", dao.nodes.getValue(node.id).visibility)
+        assertEquals("practice", dao.quizzes.getValue("quiz-1").visibility)
+        assertEquals(3_000L, dao.nodes.getValue(node.id).updatedAt)
+
+        repository.permanentlyDeleteNode(node.id, now = 4_000L)
+        assertEquals(4_000L, dao.nodes.getValue(node.id).deletedAt)
+        assertEquals(SyncStatus.deleted, dao.nodes.getValue(node.id).syncStatus)
+    }
+
+    @Test
+    fun clearStarterContentDeletesOnlyStarterRecords() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.nodes["starter"] = LearningNodeEntity(
+            id = "starter",
+            title = "Starter",
+            markdownBody = "# Starter",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            isStarter = true
+        )
+        dao.nodes["user"] = dao.nodes.getValue("starter").copy(id = "user", title = "User", isStarter = false)
+        dao.quizzes["starter-quiz"] = QuizItemEntity(
+            id = "starter-quiz",
+            nodeId = null,
+            prompt = "Starter?",
+            answer = "Starter answer.",
+            explanation = "",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            isStarter = true
+        )
+
+        repository.clearStarterContent(now = 2_000L)
+
+        assertEquals(2_000L, dao.nodes.getValue("starter").deletedAt)
+        assertNull(dao.nodes.getValue("user").deletedAt)
+        assertEquals(2_000L, dao.quizzes.getValue("starter-quiz").deletedAt)
+    }
+
+    @Test
+    fun readableMarkdownExportIncludesActiveLearningArtifacts() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.nodes["node-1"] = LearningNodeEntity(
+            id = "node-1",
+            title = "Virtual Memory",
+            markdownBody = "# Virtual Memory\n\n## Core Idea\n\nAddress translation maps virtual addresses.",
+            createdAt = 1_000L,
+            updatedAt = 2_000L,
+            lastReadAt = 3_000L,
+            revision = 2L,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null,
+            area = "cs-fundamentals",
+            track = "memory",
+            order = 40,
+            summary = "Address translation",
+            visibility = "support",
+            isStarter = false
+        )
+        dao.readerQuestions["rq-1"] = ReaderQuestionEntity(
+            id = "rq-1",
+            nodeId = "node-1",
+            body = "Why does a TLB miss walk the page table?",
+            createdAt = 3_100L,
+            resolvedAt = null,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null
+        )
+        dao.captureSlips["slip-1"] = CaptureSlipEntity(
+            id = "slip-1",
+            body = "Video said page fault but I confused it with TLB miss.",
+            type = CaptureSlipType.mistake,
+            topicHint = "Virtual Memory",
+            sourceLabel = "lecture",
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = 3_200L,
+            updatedAt = 3_200L,
+            revision = 1L,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null
+        )
+        dao.quizzes["quiz-1"] = QuizItemEntity(
+            id = "quiz-1",
+            nodeId = "node-1",
+            prompt = "What does a page table map?",
+            answer = "Virtual pages to physical frames.",
+            explanation = "The MMU uses the page table after address translation lookup misses cached entries.",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 3_300L,
+            updatedAt = 3_300L,
+            revision = 1L,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null,
+            area = "cs-fundamentals",
+            track = "memory"
+        )
+
+        val exported = repository.exportReadableMarkdown(now = 4_000L)
+
+        assertTrue(exported.startsWith("# CS Learning OS Markdown Export"))
+        assertTrue(exported.contains("## Virtual Memory"))
+        assertTrue(exported.contains("Area: cs-fundamentals / Track: memory / Order: 40"))
+        assertTrue(exported.contains("Why does a TLB miss walk the page table?"))
+        assertTrue(exported.contains("Video said page fault"))
+        assertTrue(exported.contains("What does a page table map?"))
+        assertTrue(exported.contains("Virtual pages to physical frames."))
+    }
 }
 
 private class FakeLearningDao : LearningDao {
     val nodes = linkedMapOf<String, LearningNodeEntity>()
     val quizzes = linkedMapOf<String, QuizItemEntity>()
     val reviewStates = linkedMapOf<String, ReviewStateEntity>()
+    val readerQuestions = linkedMapOf<String, ReaderQuestionEntity>()
     val captureSlips = linkedMapOf<String, CaptureSlipEntity>()
+    val deletedNodeFtsIds = mutableListOf<String>()
     val deletedQuizFtsIds = mutableListOf<String>()
 
     override fun observeNodes(): Flow<List<LearningNodeEntity>> = flowOf(nodes.values.toList())
+    override fun observeTrashNodes(): Flow<List<LearningNodeEntity>> =
+        flowOf(nodes.values.filter { it.visibility == "trash" && it.deletedAt == null })
     override fun observeQuizzes(): Flow<List<QuizItemEntity>> = flowOf(quizzes.values.toList())
-    override fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>> = flowOf(emptyList())
+    override fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>> =
+        flowOf(readerQuestions.values.filter { it.deletedAt == null && it.resolvedAt == null })
     override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override suspend fun getNode(id: String): LearningNodeEntity? = nodes[id]
     override suspend fun getQuiz(id: String): QuizItemEntity? = quizzes[id]
-    override suspend fun getReaderQuestion(id: String): ReaderQuestionEntity? = unsupported()
+    override suspend fun getReaderQuestion(id: String): ReaderQuestionEntity? = readerQuestions[id]
     override suspend fun getCaptureSlip(id: String): CaptureSlipEntity? = captureSlips[id]
     override suspend fun getActiveQuizzesForNode(nodeId: String): List<QuizItemEntity> =
         quizzes.values.filter { it.nodeId == nodeId && it.deletedAt == null }
-    override suspend fun getActiveReaderQuestionsForNode(nodeId: String): List<ReaderQuestionEntity> = emptyList()
+    override suspend fun getActiveReaderQuestionsForNode(nodeId: String): List<ReaderQuestionEntity> =
+        readerQuestions.values.filter { it.nodeId == nodeId && it.deletedAt == null }
     override suspend fun getReviewState(quizId: String): ReviewStateEntity? = reviewStates[quizId]
     override suspend fun getAllNodes(): List<LearningNodeEntity> = nodes.values.toList()
+    override suspend fun getStarterNodes(): List<LearningNodeEntity> =
+        nodes.values.filter { it.isStarter && it.deletedAt == null }
     override suspend fun getAllQuizzes(): List<QuizItemEntity> = quizzes.values.toList()
+    override suspend fun getStarterQuizzes(): List<QuizItemEntity> =
+        quizzes.values.filter { it.isStarter && it.deletedAt == null }
     override suspend fun getAllReviewStates(): List<ReviewStateEntity> = emptyList()
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = emptyList()
-    override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = emptyList()
+    override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = readerQuestions.values.toList()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = captureSlips.values.toList()
     override suspend fun upsertNode(node: LearningNodeEntity) {
         nodes[node.id] = node
@@ -288,7 +466,9 @@ private class FakeLearningDao : LearningDao {
     override suspend fun upsertQuiz(quiz: QuizItemEntity) {
         quizzes[quiz.id] = quiz
     }
-    override suspend fun upsertReaderQuestion(question: ReaderQuestionEntity) = unsupported()
+    override suspend fun upsertReaderQuestion(question: ReaderQuestionEntity) {
+        readerQuestions[question.id] = question
+    }
     override suspend fun upsertCaptureSlip(slip: CaptureSlipEntity) {
         captureSlips[slip.id] = slip
     }
@@ -306,13 +486,17 @@ private class FakeLearningDao : LearningDao {
         states.forEach { this.reviewStates[it.quizId] = it }
     }
     override suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>) = unsupported()
-    override suspend fun upsertReaderQuestions(questions: List<ReaderQuestionEntity>) = unsupported()
+    override suspend fun upsertReaderQuestions(questions: List<ReaderQuestionEntity>) {
+        questions.forEach { readerQuestions[it.id] = it }
+    }
     override suspend fun upsertCaptureSlips(slips: List<CaptureSlipEntity>) {
         slips.forEach { captureSlips[it.id] = it }
     }
     override suspend fun upsertNodeFts(entity: NodeFtsEntity) = Unit
     override suspend fun upsertQuizFts(entity: QuizFtsEntity) = Unit
-    override suspend fun deleteNodeFts(nodeId: String) = Unit
+    override suspend fun deleteNodeFts(nodeId: String) {
+        deletedNodeFtsIds += nodeId
+    }
     override suspend fun deleteQuizFts(quizId: String) {
         deletedQuizFtsIds += quizId
     }

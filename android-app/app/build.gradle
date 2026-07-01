@@ -26,8 +26,8 @@ android {
         applicationId "com.cslearningos.mobile"
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName "0.1.4"
+        versionCode 6
+        versionName "0.1.5"
     }
 
     sourceSets {
@@ -59,6 +59,7 @@ dependencies {
     implementation "androidx.activity:activity-compose:1.9.3"
     implementation "androidx.compose.foundation:foundation"
     implementation "androidx.compose.material3:material3"
+    implementation "androidx.compose.material:material-icons-core"
     implementation "androidx.compose.ui:ui"
     implementation "androidx.compose.ui:ui-tooling-preview"
     implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.7"

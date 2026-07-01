@@ -49,6 +49,17 @@ If a step cannot run locally, do not fake success. Write down the missing toolch
 - Private `data/content`, `data/knowledge.db`, generated indexes, and local backups must never be copied into Android assets.
 - Any destructive write path needs an explicit backup, snapshot, or repair story before product release.
 
+## Mobile Product Rules
+
+- Home, Capture, Library, Review, and More are first-class mobile tabs, not web-page sections stacked behind one scroll.
+- Home may carry the largest brand treatment; secondary tabs must use compact headers so content appears without excessive thumb scrolling.
+- Capture is the phone-native input path: short slips first, then optional promotion into Markdown nodes, quiz cards, or AI drafts.
+- AI drafting must be explicit: show what will be sent, allow provider validation, generate only an editable Markdown draft, and require the user to save before it becomes a node.
+- Library should preserve desktop-compatible organization through `area`, `track`, `order`, summary, and Markdown body rather than exposing internal revision jargon.
+- Review `Again` means same-session retry and should not disappear from the user's current practice loop.
+- Trash is a recovery state: active search/review should hide trashed nodes and linked quizzes, while restore should put them back into the study loop.
+- Markdown/TXT export is the phone-to-desktop fallback for users who do not want hosted sync; JSON backup remains the full recovery format.
+
 ## Strict Write Scopes
 
 | Task Type | Allowed Files |

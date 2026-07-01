@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NodeFtsEntity::class,
         QuizFtsEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -70,13 +70,28 @@ abstract class LearningDatabase : RoomDatabase() {
             }
         }
 
+        private val Migration3To4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `area` TEXT NOT NULL DEFAULT 'questions'")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `track` TEXT NOT NULL DEFAULT 'general'")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `order` INTEGER NOT NULL DEFAULT 1000")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `summary` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `visibility` TEXT NOT NULL DEFAULT 'support'")
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `is_starter` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `quiz_items` ADD COLUMN `area` TEXT NOT NULL DEFAULT 'questions'")
+                db.execSQL("ALTER TABLE `quiz_items` ADD COLUMN `track` TEXT NOT NULL DEFAULT 'general'")
+                db.execSQL("ALTER TABLE `quiz_items` ADD COLUMN `visibility` TEXT NOT NULL DEFAULT 'practice'")
+                db.execSQL("ALTER TABLE `quiz_items` ADD COLUMN `is_starter` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 LearningDatabase::class.java,
                 "learning-os.db"
             )
-                .addMigrations(Migration1To2, Migration2To3)
+                .addMigrations(Migration1To2, Migration2To3, Migration3To4)
                 .build()
     }
 }

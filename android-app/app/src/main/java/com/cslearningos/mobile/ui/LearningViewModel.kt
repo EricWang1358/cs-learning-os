@@ -59,6 +59,7 @@ data class AiProviderSettings(
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
     val nodes: List<LearningNodeEntity> = emptyList(),
+    val trashNodes: List<LearningNodeEntity> = emptyList(),
     val quizzes: List<QuizItemEntity> = emptyList(),
     val dueQuizzes: List<QuizItemEntity> = emptyList(),
     val readerQuestions: List<ReaderQuestionEntity> = emptyList(),
@@ -75,6 +76,7 @@ data class LearningUiState(
     val quizAnswer: String = "",
     val quizExplanation: String = "",
     val readerQuestionDraft: String = "",
+    val readerQuestionPanelExpanded: Boolean = false,
     val captureDraft: String = "",
     val captureTopicHint: String = "",
     val captureSourceLabel: String = "",
@@ -83,6 +85,7 @@ data class LearningUiState(
     val aiServiceStatus: AiServiceStatus = AiServiceStatus(),
     val availableAiModels: List<String> = emptyList(),
     val aiBusy: Boolean = false,
+    val pendingAiDraftSlipId: String? = null,
     val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
     val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
@@ -123,6 +126,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         }
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            repository.trashNodes.collect { nodes ->
+                _state.update { it.copy(trashNodes = nodes) }
             }
         }
         viewModelScope.launch {
@@ -291,18 +299,39 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun deleteSelectedNode() {
         val node = state.value.selectedNode ?: return
         viewModelScope.launch {
-            repository.deleteNode(node.id)
+            repository.moveNodeToTrash(node.id)
             _state.update {
                 it.copy(
-                    screen = AppScreen.Home,
+                    screen = AppScreen.Library,
                     selectedNode = null,
                     editorNodeId = null,
                     editorSourceCaptureSlipId = null,
                     editorTitle = "",
                     editorBody = "",
-                    message = "Node moved out of your active library"
+                    message = "Node moved to Trashbin"
                 )
             }
+        }
+    }
+
+    fun restoreNode(node: LearningNodeEntity) {
+        viewModelScope.launch {
+            repository.restoreNodeFromTrash(node.id)
+            _state.update { it.copy(message = "Node restored from Trashbin") }
+        }
+    }
+
+    fun permanentlyDeleteNode(node: LearningNodeEntity) {
+        viewModelScope.launch {
+            repository.permanentlyDeleteNode(node.id)
+            _state.update { it.copy(message = "Node deleted forever") }
+        }
+    }
+
+    fun clearStarterContent() {
+        viewModelScope.launch {
+            repository.clearStarterContent()
+            _state.update { it.copy(message = "Starter demo content removed") }
         }
     }
 
@@ -353,6 +382,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun setReaderQuestionDraft(value: String) {
         _state.update { it.copy(readerQuestionDraft = value, message = "") }
+    }
+
+    fun toggleReaderQuestionPanel() {
+        _state.update { it.copy(readerQuestionPanelExpanded = !it.readerQuestionPanelExpanded, message = "") }
     }
 
     fun saveReaderQuestion() {
@@ -423,7 +456,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
         viewModelScope.launch {
-            repository.saveCaptureSlip(
+            val slip = repository.saveCaptureSlip(
                 body = snapshot.captureDraft,
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
@@ -434,14 +467,73 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     captureDraft = "",
                     captureTopicHint = "",
                     captureSourceLabel = "",
+                    pendingAiDraftSlipId = if (snapshot.aiProviderSettings.isConfigured) slip.id else null,
+                    aiServiceStatus = if (snapshot.aiProviderSettings.isConfigured) {
+                        AiServiceStatus(
+                            kind = AiServiceStatusKind.Info,
+                            title = "AI draft preflight",
+                            body = "Slip saved. Confirm the target, optionally validate the provider, then generate an editable Markdown node draft."
+                        )
+                    } else {
+                        it.aiServiceStatus
+                    },
                     message = if (snapshot.aiProviderSettings.isConfigured) {
-                        "Slip saved. Tap AI draft node on its inbox card."
+                        "Slip saved. Review AI draft preflight."
                     } else {
                         "Slip saved. Configure AI before drafting."
                     }
                 )
             }
         }
+    }
+
+    fun prepareAiDraftForSlip(slip: CaptureSlipEntity) {
+        val settings = state.value.aiProviderSettings
+        val missing = settings.missingRequiredFields()
+        if (missing.isNotEmpty()) {
+            _state.update {
+                it.copy(
+                    screen = AppScreen.More,
+                    expandedMoreSection = MoreSectionId.Service,
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Warning,
+                        title = "AI setup needed",
+                        body = "Add ${missing.joinToString()} before generating a capture draft."
+                    ),
+                    message = "Configure AI before drafting."
+                )
+            }
+            return
+        }
+
+        _state.update {
+            it.copy(
+                pendingAiDraftSlipId = slip.id,
+                aiServiceStatus = AiServiceStatus(
+                    kind = AiServiceStatusKind.Info,
+                    title = "AI draft preflight",
+                    body = "This will send one capture slip to ${settings.provider} and open the result as an editable Markdown node draft. Nothing becomes a node until Save Markdown."
+                ),
+                message = "Confirm AI draft when ready."
+            )
+        }
+    }
+
+    fun cancelAiDraftPreflight() {
+        _state.update {
+            it.copy(
+                pendingAiDraftSlipId = null,
+                message = "AI draft canceled."
+            )
+        }
+    }
+
+    fun confirmAiDraftPreflight() {
+        val slip = state.value.pendingAiDraftSlipId
+            ?.let { slipId -> state.value.captureSlips.firstOrNull { it.id == slipId } }
+            ?: return
+        _state.update { it.copy(pendingAiDraftSlipId = null) }
+        draftCaptureSlipWithAi(slip)
     }
 
     fun archiveCaptureSlip(slip: CaptureSlipEntity) {
@@ -511,6 +603,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         editorTitle = titleFromAiMarkdown(markdown, fallbackTitle),
                         editorBody = markdown,
                         aiBusy = false,
+                        pendingAiDraftSlipId = null,
                         aiServiceStatus = AiServiceStatus(
                             kind = AiServiceStatusKind.Success,
                             title = "AI draft ready",
@@ -586,13 +679,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.answerQuiz(quiz.id, rating)
             _state.update { current ->
-                val remaining = current.dueQuizzes.filterNot { it.id == quiz.id }
                 current.copy(
-                    selectedQuiz = remaining.firstOrNull(),
+                    selectedQuiz = selectQuizAfterReview(
+                        currentQuiz = quiz,
+                        currentDueQuizzes = current.dueQuizzes,
+                        rating = rating
+                    ),
                     quizAnswerVisible = false,
                     message = "Review saved"
                 )
             }
+            refreshDueReviews()
         }
     }
 
@@ -602,6 +699,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 it.copy(
                     backupText = repository.exportBackup(),
                     message = "Backup exported"
+                )
+            }
+        }
+    }
+
+    fun exportReadableMarkdown() {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    screen = AppScreen.Backup,
+                    backupText = repository.exportReadableMarkdown(),
+                    message = "Readable Markdown/TXT export generated"
                 )
             }
         }

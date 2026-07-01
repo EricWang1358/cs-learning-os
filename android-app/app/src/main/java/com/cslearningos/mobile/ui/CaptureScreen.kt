@@ -31,6 +31,7 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
             body = "Save the smallest unclear point now. Later, turn it into a Markdown node, quiz card, or AI draft."
         )
         CaptureComposer(state = state, viewModel = viewModel)
+        AiDraftPreflight(state = state, viewModel = viewModel)
         CaptureInbox(state = state, viewModel = viewModel)
     }
 }
@@ -70,11 +71,42 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
             )
         }
         Text(
-            text = "AI flow: save a slip first, then tap AI draft node on the inbox card. The model generates an editable Markdown node; nothing is saved as a node until you review and press Save Markdown.",
+            text = "AI flow: save a slip first, review the preflight, optionally Validate the provider, then generate an editable Markdown node draft. Nothing is saved as a node until you review and press Save Markdown.",
             color = WorkbenchColors.Muted,
             fontSize = 13.sp,
             lineHeight = 19.sp
         )
+    }
+}
+
+@Composable
+private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewModel) {
+    val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } } ?: return
+    WorkbenchCard(accent = true) {
+        Eyebrow("ai draft preflight")
+        Text(
+            text = "Ready to generate an editable node draft",
+            color = WorkbenchColors.InkStrong,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            text = "Target: ${slip.topicHint ?: "Let AI infer topic"} / Source: ${slip.sourceLabel ?: "manual"}. The slip text is the only content sent. The result opens in Edit Mode and still needs your Save Markdown confirmation.",
+            color = WorkbenchColors.Muted,
+            fontSize = 14.sp,
+            lineHeight = 21.sp
+        )
+        Text(
+            text = state.aiServiceStatus.body,
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
+        ToolbarRow {
+            WorkbenchButton("Validate API", viewModel::validateAiSettings, enabled = !state.aiBusy)
+            WorkbenchButton("Generate draft", viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
+            WorkbenchButton("Cancel", viewModel::cancelAiDraftPreflight)
+        }
     }
 }
 
@@ -154,7 +186,7 @@ private fun CaptureSlipCard(
             WorkbenchButton(
                 text = if (aiConfigured) "AI draft node" else "Configure AI",
                 onClick = if (aiConfigured) {
-                    { viewModel.draftCaptureSlipWithAi(slip) }
+                    { viewModel.prepareAiDraftForSlip(slip) }
                 } else {
                     viewModel::showAiServiceSettings
                 },

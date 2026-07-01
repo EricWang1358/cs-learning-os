@@ -26,12 +26,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,16 +59,17 @@ private val CardShape = RoundedCornerShape(10.dp)
 
 data class MobileBottomNavItem(
     val label: String,
-    val screen: AppScreen
+    val screen: AppScreen,
+    val contentDescription: String
 )
 
 fun mobileBottomNavItems(): List<MobileBottomNavItem> =
     listOf(
-        MobileBottomNavItem("Home", AppScreen.Home),
-        MobileBottomNavItem("Capture", AppScreen.Capture),
-        MobileBottomNavItem("Library", AppScreen.Library),
-        MobileBottomNavItem("Review", AppScreen.Review),
-        MobileBottomNavItem("More", AppScreen.More)
+        MobileBottomNavItem("Home", AppScreen.Home, "Home dashboard"),
+        MobileBottomNavItem("Capture", AppScreen.Capture, "Quick capture"),
+        MobileBottomNavItem("Library", AppScreen.Library, "Knowledge library"),
+        MobileBottomNavItem("Review", AppScreen.Review, "Due review"),
+        MobileBottomNavItem("More", AppScreen.More, "Settings and data")
     )
 
 @Composable
@@ -90,7 +100,13 @@ private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewMod
             contentPadding = PaddingValues(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 116.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item { BrandBlock(state) }
+            item {
+                if (useCompactPortraitBrand(state.screen)) {
+                    CompactBrandBlock(state)
+                } else {
+                    BrandBlock(state)
+                }
+            }
             item { StatusBanner(state.message) }
             item { ScreenContent(state, viewModel, isDetailPane = true) }
             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -220,6 +236,34 @@ private fun BrandBlock(state: LearningUiState) {
 }
 
 @Composable
+private fun CompactBrandBlock(state: LearningUiState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.88f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            Eyebrow("CS Learning OS")
+            Text(
+                text = state.screen.name,
+                color = WorkbenchColors.InkStrong,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetaPill("Nodes", state.nodes.size.toString())
+            MetaPill("Due", state.dueQuizzes.size.toString())
+        }
+    }
+}
+
+@Composable
 private fun MobileBottomNav(
     state: LearningUiState,
     viewModel: LearningViewModel,
@@ -270,13 +314,23 @@ private fun BottomNavTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = item.symbol(dueCount),
-            color = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 1
-        )
+        Box {
+            Icon(
+                imageVector = item.icon(),
+                contentDescription = item.contentDescription,
+                tint = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
+                modifier = Modifier.height(22.dp)
+            )
+            if (item.screen == AppScreen.Review && dueCount > 0) {
+                Badge(
+                    containerColor = WorkbenchColors.Danger,
+                    contentColor = WorkbenchColors.InkStrong,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Text(dueCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Black)
+                }
+            }
+        }
         Text(
             text = item.label,
             color = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
@@ -298,14 +352,14 @@ private fun MobileBottomNavItem.open(viewModel: LearningViewModel) {
     }
 }
 
-private fun MobileBottomNavItem.symbol(dueCount: Int): String =
+private fun MobileBottomNavItem.icon(): ImageVector =
     when (screen) {
-        AppScreen.Home -> "H"
-        AppScreen.Capture -> "+"
-        AppScreen.Library -> "L"
-        AppScreen.Review -> dueCount.takeIf { it > 0 }?.toString() ?: "R"
-        AppScreen.More -> "="
-        else -> label.take(1)
+        AppScreen.Home -> Icons.Filled.Home
+        AppScreen.Capture -> Icons.Filled.Add
+        AppScreen.Library -> Icons.AutoMirrored.Filled.List
+        AppScreen.Review -> Icons.Filled.CheckCircle
+        AppScreen.More -> Icons.Filled.Menu
+        else -> Icons.Filled.Home
     }
 
 @Composable
@@ -367,12 +421,18 @@ private fun DetailEmptyState(state: LearningUiState) {
 
 @Composable
 private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val groups = buildLibraryGroups(state.nodes)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionHeader(
-            eyebrow = "global search",
-            title = "Local library",
-            body = "${state.nodes.size} active nodes. Last read is updated when you open a note."
-        )
+        WorkbenchCard(accent = true) {
+            Eyebrow("library")
+            Text("Knowledge paths", color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.Black)
+            Text(
+                "${state.nodes.size} active nodes arranged by desktop-compatible area, track, and order.",
+                color = WorkbenchColors.Muted,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+        }
         WorkbenchButton(
             text = "+ New node",
             onClick = viewModel::startNewNode,
@@ -385,13 +445,78 @@ private fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) 
                 body = "Create a Markdown note. The phone app works without desktop, account, network, or AI."
             )
         }
-        state.nodes.forEach { node ->
-            NodeCard(
-                node = node,
-                selected = state.selectedNode?.id == node.id,
-                onOpen = { viewModel.openNode(node) },
-                onEdit = { viewModel.editNode(node) }
-            )
+        groups.forEach { area ->
+            WorkbenchCard {
+                Eyebrow("area")
+                Text(
+                    readableAreaLabel(area.area),
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black
+                )
+                area.tracks.forEach { track ->
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                readableTrackLabel(track.track),
+                                color = WorkbenchColors.Accent,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                "${track.nodes.size} nodes",
+                                color = WorkbenchColors.Muted,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        track.nodes.forEach { item ->
+                            LibraryNodeCard(
+                                item = item,
+                                selected = state.selectedNode?.id == item.id,
+                                onOpen = { viewModel.openNode(item.node) },
+                                onEdit = { viewModel.editNode(item.node) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryNodeCard(
+    item: LibraryNodeSummary,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit
+) {
+    InteractiveCard(onClick = onOpen, accent = selected) {
+        Eyebrow(item.meta)
+        Text(
+            text = item.title,
+            color = WorkbenchColors.InkStrong,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = item.summary,
+            color = WorkbenchColors.Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WorkbenchButton("Read", onOpen, primary = true)
+            WorkbenchButton("Edit", onEdit)
         }
     }
 }
@@ -450,8 +575,14 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
             WorkbenchButton("Edit mode", { viewModel.editNode(node) }, primary = true)
             WorkbenchButton("Add quiz", viewModel::startQuizForSelectedNode)
             WorkbenchButton("Delete", viewModel::deleteSelectedNode, danger = true)
+            WorkbenchButton(
+                readerQuestionButtonLabel(openQuestionCount = state.readerQuestions.count { it.nodeId == node.id }, expanded = state.readerQuestionPanelExpanded),
+                viewModel::toggleReaderQuestionPanel
+            )
         }
-        ReaderQuestionCapture(state = state, viewModel = viewModel, nodeId = node.id)
+        if (state.readerQuestionPanelExpanded) {
+            ReaderQuestionCapture(state = state, viewModel = viewModel, nodeId = node.id)
+        }
         MarkdownRenderer(markdown = node.markdownBody)
     }
 }

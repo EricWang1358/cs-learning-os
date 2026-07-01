@@ -9,10 +9,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LearningDao {
-    @Query("SELECT * FROM learning_nodes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+    @Query("SELECT * FROM learning_nodes WHERE deleted_at IS NULL AND visibility != 'trash' ORDER BY area ASC, track ASC, `order` ASC, updated_at DESC")
     fun observeNodes(): Flow<List<LearningNodeEntity>>
 
-    @Query("SELECT * FROM quiz_items WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+    @Query("SELECT * FROM learning_nodes WHERE deleted_at IS NULL AND visibility = 'trash' ORDER BY updated_at DESC")
+    fun observeTrashNodes(): Flow<List<LearningNodeEntity>>
+
+    @Query("SELECT * FROM quiz_items WHERE deleted_at IS NULL AND visibility != 'trash' ORDER BY updated_at DESC")
     fun observeQuizzes(): Flow<List<QuizItemEntity>>
 
     @Query("SELECT * FROM reader_questions WHERE deleted_at IS NULL AND resolved_at IS NULL ORDER BY created_at DESC")
@@ -25,7 +28,7 @@ interface LearningDao {
         """
         SELECT quiz_items.* FROM quiz_items
         INNER JOIN review_states ON quiz_items.id = review_states.quiz_id
-        WHERE quiz_items.deleted_at IS NULL AND review_states.due_at <= :now
+        WHERE quiz_items.deleted_at IS NULL AND quiz_items.visibility != 'trash' AND review_states.due_at <= :now
         ORDER BY review_states.due_at ASC
         """
     )
@@ -55,8 +58,14 @@ interface LearningDao {
     @Query("SELECT * FROM learning_nodes")
     suspend fun getAllNodes(): List<LearningNodeEntity>
 
+    @Query("SELECT * FROM learning_nodes WHERE is_starter = 1 AND deleted_at IS NULL")
+    suspend fun getStarterNodes(): List<LearningNodeEntity>
+
     @Query("SELECT * FROM quiz_items")
     suspend fun getAllQuizzes(): List<QuizItemEntity>
+
+    @Query("SELECT * FROM quiz_items WHERE is_starter = 1 AND deleted_at IS NULL")
+    suspend fun getStarterQuizzes(): List<QuizItemEntity>
 
     @Query("SELECT * FROM review_states")
     suspend fun getAllReviewStates(): List<ReviewStateEntity>

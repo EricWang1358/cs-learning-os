@@ -1,5 +1,26 @@
 # Release Notes
 
+## Android Beta 0.1.5
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.5-beta`
+
+Android version:
+
+- `versionCode`: 6
+- `versionName`: `0.1.5`
+
+Status: implementation beta.
+
+Highlights:
+
+- Reworked the Android bottom navigation from letter placeholders into icon-based mobile tabs with stable accessibility descriptions and a Review due badge.
+- Added a Capture Slip AI preflight panel: users can review what will be sent, validate the configured provider, then generate an editable Markdown node draft.
+- Added real readable Markdown/TXT export for active nodes, open reader questions, capture slips, and quiz cards.
+- Tightened Trash behavior so linked quiz cards leave review/search while the node is trashed, then return when restored.
+- Updated Data tools to expose Markdown/TXT export and kept JSON backup/restore as the full recovery path.
+
 ## Android Beta 0.1.4
 
 Date: 2026-07-01
