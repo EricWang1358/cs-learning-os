@@ -1,0 +1,148 @@
+package com.cslearningos.mobile.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface LearningDao {
+    @Query("SELECT * FROM learning_nodes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+    fun observeNodes(): Flow<List<LearningNodeEntity>>
+
+    @Query("SELECT * FROM quiz_items WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+    fun observeQuizzes(): Flow<List<QuizItemEntity>>
+
+    @Query(
+        """
+        SELECT quiz_items.* FROM quiz_items
+        INNER JOIN review_states ON quiz_items.id = review_states.quiz_id
+        WHERE quiz_items.deleted_at IS NULL AND review_states.due_at <= :now
+        ORDER BY review_states.due_at ASC
+        """
+    )
+    fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>>
+
+    @Query("SELECT * FROM learning_nodes WHERE id = :id LIMIT 1")
+    suspend fun getNode(id: String): LearningNodeEntity?
+
+    @Query("SELECT * FROM quiz_items WHERE id = :id LIMIT 1")
+    suspend fun getQuiz(id: String): QuizItemEntity?
+
+    @Query("SELECT * FROM review_states WHERE quiz_id = :quizId LIMIT 1")
+    suspend fun getReviewState(quizId: String): ReviewStateEntity?
+
+    @Query("SELECT * FROM learning_nodes")
+    suspend fun getAllNodes(): List<LearningNodeEntity>
+
+    @Query("SELECT * FROM quiz_items")
+    suspend fun getAllQuizzes(): List<QuizItemEntity>
+
+    @Query("SELECT * FROM review_states")
+    suspend fun getAllReviewStates(): List<ReviewStateEntity>
+
+    @Query("SELECT * FROM review_attempts")
+    suspend fun getAllAttempts(): List<ReviewAttemptEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertNode(node: LearningNodeEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertQuiz(quiz: QuizItemEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReviewState(state: ReviewStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAttempt(attempt: ReviewAttemptEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertNodes(nodes: List<LearningNodeEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertQuizzes(quizzes: List<QuizItemEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReviewStates(states: List<ReviewStateEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertNodeFts(entity: NodeFtsEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertQuizFts(entity: QuizFtsEntity)
+
+    @Query("DELETE FROM node_fts WHERE node_id = :nodeId")
+    suspend fun deleteNodeFts(nodeId: String)
+
+    @Query("DELETE FROM quiz_fts WHERE quiz_id = :quizId")
+    suspend fun deleteQuizFts(quizId: String)
+
+    @Query("DELETE FROM learning_nodes")
+    suspend fun deleteAllNodes()
+
+    @Query("DELETE FROM quiz_items")
+    suspend fun deleteAllQuizzes()
+
+    @Query("DELETE FROM review_states")
+    suspend fun deleteAllReviewStates()
+
+    @Query("DELETE FROM review_attempts")
+    suspend fun deleteAllAttempts()
+
+    @Query("DELETE FROM node_fts")
+    suspend fun deleteAllNodeFts()
+
+    @Query("DELETE FROM quiz_fts")
+    suspend fun deleteAllQuizFts()
+
+    @Query(
+        """
+        SELECT 'node' AS type, node_id AS id, title, snippet(node_fts, 3, '[', ']', '...', 12) AS snippet
+        FROM node_fts
+        WHERE node_fts MATCH :query
+        """
+    )
+    suspend fun searchNodes(query: String): List<SearchResultEntity>
+
+    @Query(
+        """
+        SELECT 'quiz' AS type, quiz_id AS id, prompt AS title, snippet(quiz_fts, 3, '[', ']', '...', 12) AS snippet
+        FROM quiz_fts
+        WHERE quiz_fts MATCH :query
+        """
+    )
+    suspend fun searchQuizzes(query: String): List<SearchResultEntity>
+
+    @Transaction
+    suspend fun clearAll() {
+        deleteAllAttempts()
+        deleteAllReviewStates()
+        deleteAllQuizzes()
+        deleteAllNodes()
+        deleteAllQuizFts()
+        deleteAllNodeFts()
+    }
+
+    @Transaction
+    suspend fun restoreBackup(
+        nodes: List<LearningNodeEntity>,
+        quizzes: List<QuizItemEntity>,
+        states: List<ReviewStateEntity>,
+        attempts: List<ReviewAttemptEntity>,
+        nodeFts: List<NodeFtsEntity>,
+        quizFts: List<QuizFtsEntity>
+    ) {
+        clearAll()
+        upsertNodes(nodes)
+        upsertQuizzes(quizzes)
+        upsertReviewStates(states)
+        insertAttempts(attempts)
+        nodeFts.forEach { upsertNodeFts(it) }
+        quizFts.forEach { upsertQuizFts(it) }
+    }
+}

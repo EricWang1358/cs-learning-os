@@ -1,12 +1,16 @@
-# Android Migration Workflow
+# Android Native Workflow
 
-This workflow is the operating contract for Android work. It keeps the project local-first, SaaS-compatible, and strict enough that migration does not become another stone pile.
+This workflow is the operating contract for Android work. The current Android milestone is a native, local-first, offline minimum product. Future SaaS or sync modes must be additive adapters, not assumptions baked into the phone app.
 
 ## Prime Directive
 
-Start with the smallest shippable Android surface, then replace internals behind stable contracts.
+Keep a small shippable Android product working at all times:
 
-Do not rewrite the whole app before the Android shell can run. Do not hardcode a SaaS assumption into the domain model. Do not package private content into the APK by accident.
+- Native Compose UI owns the phone surface.
+- Room/SQLite owns durable local state.
+- Domain services stay deterministic and testable.
+- Core reading, editing, quiz, review, search, export, and restore work without backend, account, network, or AI.
+- Private desktop content and generated indexes are never packaged into the APK by accident.
 
 ## Required Loop
 
@@ -17,40 +21,40 @@ Every Android task must follow this loop:
 3. State the domain invariant being protected.
 4. Implement the smallest vertical slice.
 5. Run `scripts/android-doctor.ps1`.
-6. Run any available Gradle/Android Studio build check.
-7. Record what could not be verified.
+6. Run `cd android-app; .\gradlew.bat testDebugUnitTest`.
+7. Run `cd android-app; .\gradlew.bat assembleDebug`.
+8. Record what could not be verified.
 
-If a step cannot run locally, do not fake success. Write down the missing toolchain and continue with static checks.
+If a step cannot run locally, do not fake success. Write down the missing toolchain and continue with static checks only.
 
 ## Milestones
 
 | Milestone | Goal | Exit Criteria |
 | --- | --- | --- |
-| A0 Shell | Android project imports and shows either WebView app or fallback page. | Android Studio sync succeeds; debug install opens. |
-| A1 Mobile Readability | Existing UI is usable on a phone viewport. | Node read, quiz read, focus mode, Back, and fallback screen pass manual smoke. |
-| A2 Local Data Contract | Android has explicit interfaces for content, search, questions, and reading activity. | Domain interfaces exist without committing to sync or SaaS. |
-| A3 Offline Demo | APK can ship demo content without private data. | Demo content loads without desktop backend. |
-| A4 Review Engine | Quiz attempts and review scheduling are durable. | Attempt table and scheduling policy exist. |
-| A5 Sync Ready | Optional sync can be added without rewriting local-first flows. | Stable ids, revisions, tombstones, conflict policy, export/import exist. |
+| A0 Native Offline MVP | Compose app supports local Markdown nodes, quiz/review, search, and explicit backup. | Doctor, unit tests, and debug APK build pass. |
+| A1 Mobile UX Hardening | Reading, editing, review, search, and backup flows are comfortable on a phone. | Manual phone/emulator smoke covers create, edit, read, quiz, review, search, export, restore. |
+| A2 Sync Boundary | Local entities expose stable ids, revisions, tombstones, and conflict hooks. | Sync can be added as a repository adapter without replacing Room/domain models. |
+| A3 Desktop Sync | Phone can exchange user-approved data with the desktop app. | Local transport/import-export story exists before hosted sync. |
+| A4 Productization | Signed build, release checklist, privacy policy, backup UX, and diagnostics exist. | Release candidate can be installed and tested by a non-developer. |
 
 ## Architecture Rules
 
-- The Android app may start as a WebView shell.
-- The Python backend must not be embedded into Android without an explicit ADR.
+- The Android product must not require the Python backend.
+- The Android product must not require the React app.
+- The manifest must not request network permissions until a specific sync or provider feature needs them.
 - AI is optional. Users may later provide API keys or use a hosted provider, but core study flows must work without AI.
 - Domain models must not depend on a hosted account.
 - Sync is an adapter, not the source of truth.
-- Private `data/content` and `data/knowledge.db` must never be copied into Android assets.
-- Demo content is allowed only if it is already safe to commit.
-- Any destructive write path needs a backup, snapshot, or repair story before product release.
+- Private `data/content`, `data/knowledge.db`, generated indexes, and local backups must never be copied into Android assets.
+- Any destructive write path needs an explicit backup, snapshot, or repair story before product release.
 
 ## Strict Write Scopes
 
 | Task Type | Allowed Files |
 | --- | --- |
-| Android shell | `android-app/**`, `docs/android-*.md`, `.gitignore` |
+| Native Android product | `android-app/**`, `scripts/android-*.ps1`, `docs/android-*.md`, `.gitignore` |
 | Mobile Web UI | `app/src/**`, `app/scripts/**`, Android smoke docs |
-| Data contract | `docs/android-migration.md`, future shared domain files |
+| Sync contract | `docs/android-migration.md`, `android-app/app/src/main/java/**/data/**`, future shared domain files |
 | Backend adapter | `backend/**`, API docs, smoke tests |
 | Release tooling | `scripts/android-*.ps1`, `android-app/**`, README |
 
@@ -60,47 +64,46 @@ Do not mix unrelated scopes in one commit unless the coordinator explicitly says
 
 | Check | Command |
 | --- | --- |
-| Toolchain doctor | `.\scripts\android-doctor.ps1` |
+| Toolchain and offline-product doctor | `.\scripts\android-doctor.ps1` |
 | Machine-readable Android doctor | `.\scripts\android-doctor.ps1 -Json` |
-| Frontend build | `cd app; npm run build` |
-| Backend smoke | `.\.venv\Scripts\python.exe backend\smoke_test.py` |
-| Android Gradle build | `cd android-app; .\gradlew.bat assembleDebug` |
-| Manual emulator route | Start web app, open Android app, confirm `http://10.0.2.2:5173` loads. |
+| Android unit tests | `cd android-app; .\gradlew.bat testDebugUnitTest` |
+| Android debug APK | `cd android-app; .\gradlew.bat assembleDebug` |
+| Frontend build, only when web app touched | `cd app; npm run build` |
+| Backend smoke, only when backend touched | `.\.venv\Scripts\python.exe backend\smoke_test.py` |
 
 The Gradle wrapper is checked in. The command still requires JDK 17+ and Android SDK 35 to be visible to the CLI through `JAVA_HOME`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, or ignored `android-app/local.properties`.
 
-## A0 Local Runbook
+## Local Runbook
 
 1. From the repo root, run `.\scripts\android-doctor.ps1`.
-2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`; Gradle is provided by the checked-in wrapper.
-3. Start the existing web app with `.\scripts\dev.ps1 -Detached -NoBrowser`.
-4. Open `android-app/` in Android Studio and run the `app` configuration.
-5. Confirm the emulator loads `http://10.0.2.2:5173`.
-6. Stop the web server and confirm the fallback asset page appears on reload.
+2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`.
+3. Run `cd android-app; .\gradlew.bat testDebugUnitTest`.
+4. Run `cd android-app; .\gradlew.bat assembleDebug`.
+5. Install `android-app/app/build/outputs/apk/debug/app-debug.apk` on an emulator or phone.
+6. Manually smoke: create Markdown node, read it, edit it, add quiz, review it, search it, export backup, restore backup.
 
 ## Decision Gates
 
 Before A2, answer:
 
-- Is Android a shell over the existing web app, or a native UI rewrite?
-- Is local storage Markdown + SQLite, Room, or a generated read model?
-- What content can be packaged as demo content?
+- What is the stable content id strategy across phone and desktop?
+- Are conflicts last-writer-wins, field-level merges, or user-mediated?
+- What needs tombstones versus hard deletes?
 
-Before A5, answer:
+Before A4, answer:
 
 - Is sync file-based, event-based, or server-authoritative?
-- What is the conflict policy?
 - Does hosted SaaS store content, metadata only, or encrypted blobs?
+- What is the explicit user-visible backup and restore policy?
 
-## First Recommended Path
-
-The current path is:
+## Current Path
 
 ```text
-A0 Android shell
-  -> A1 mobile readability
-  -> A2 explicit domain/storage contracts
-  -> A3 offline demo content
+A0 native offline MVP
+  -> A1 phone UX hardening
+  -> A2 sync-ready repository boundary
+  -> A3 desktop sync
+  -> A4 productization
 ```
 
 This path preserves speed while keeping the SaaS door open.

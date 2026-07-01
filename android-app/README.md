@@ -2,16 +2,16 @@
 
 This is the Android migration subproject for CS Learning OS.
 
-The first milestone is intentionally small: an Android-native shell that can host the existing Learning OS web UI while we extract product boundaries. It follows a local-first architecture, but it is not SaaS-hostile. Future sync, account, and hosted API modes should be additive adapters rather than rewrites.
+The current milestone is a small Android-native offline product. It supports local Markdown nodes, local quiz/review state, local search, and explicit JSON backup/restore without requiring a desktop backend or hosted account. The architecture remains SaaS-ready: future sync, account, and hosted API modes should be additive adapters rather than rewrites.
 
 ## Architecture Position
 
 ```text
-Android shell
-  -> WebView product shell
-  -> existing React UI during migration
-  -> existing FastAPI/SQLite backend during development
-  -> future native/local data adapters
+Native Android app
+  -> Jetpack Compose UI
+  -> Room/SQLite local data
+  -> deterministic domain services
+  -> future optional sync/API adapters
 ```
 
 Local-first does not mean local-only:
@@ -23,13 +23,15 @@ Local-first does not mean local-only:
 
 ## Current Milestone
 
-The Android app starts as a WebView wrapper.
+The Android app is a native offline minimum product.
 
-- Debug builds load `http://10.0.2.2:5173`, which is the Android emulator route to the host machine.
-- If the dev server is unavailable, the app falls back to `file:///android_asset/www/index.html`.
-- Cleartext traffic is allowed only for local development hosts.
-
-This gives us a runnable Android surface before rewriting the data layer.
+- Create and edit Markdown learning nodes inside the app.
+- Read saved nodes without a backend.
+- Add manual quizzes or derive quizzes from `:::quiz` Markdown blocks.
+- Review due quiz cards using a deterministic local scheduler.
+- Search local nodes and quizzes through Room FTS.
+- Export and restore an explicit JSON backup.
+- Avoid network permissions and automatic system backup of local learning data by default.
 
 ## Build Requirements
 
@@ -64,28 +66,15 @@ For worker handoffs or release scripts, use JSON mode:
 .\scripts\android-doctor.ps1 -Json
 ```
 
-From the repo root, start the existing local web app:
-
-```powershell
-.\scripts\dev.ps1 -Detached -NoBrowser
-```
-
-Then run the Android app in an emulator. The WebView should connect to:
-
-```text
-http://10.0.2.2:5173
-```
-
-For a physical device, override the URL in `app/build.gradle` with your machine LAN address.
+The APK is self-contained for this milestone. Install it on an emulator or phone, open the app, and create a Markdown node from the Home screen.
 
 ## Migration Phases
 
-1. Android shell: WebView, navigation/back behavior, local dev connectivity.
-2. Mobile UI hardening: responsive focus reading, Q Queue, quiz bank, graph fallback.
-3. Storage boundary: define native interfaces for content, reading activity, questions, and quiz attempts.
-4. Offline package: bundle demo content and local SQLite or migrate to native SQLite/Room.
-5. Sync-ready model: add device id, content ids, revision ids, conflict rules, and export/import.
-6. Productization: signed builds, backup/restore, health diagnostics, privacy policy, release checklist.
+1. Native offline MVP: Compose UI, Room data, Markdown CRUD, quiz/review, local search, explicit backup.
+2. Mobile UX hardening: responsive reading, better editor affordances, quiz queue polish, graph fallback.
+3. Sync-ready model: device id, content ids, revision ids, conflict rules, and adapter interfaces.
+4. Desktop sync: local computer transport before hosted sync.
+5. Productization: signed builds, backup/restore UX, health diagnostics, privacy policy, release checklist.
 
 ## Decision Log
 
@@ -93,6 +82,6 @@ Recommended current stance:
 
 - Keep the project local-first.
 - Do not embed the Python FastAPI backend in Android yet.
-- Do not rewrite the whole React UI immediately.
-- Use the Android shell to force product boundaries and discover mobile-specific state bugs.
+- Do not depend on the React/FastAPI stack for the Android MVP.
+- Use native Android implementation to force product boundaries and discover mobile-specific state bugs.
 - Treat AI as an optional provider adapter. Users may later provide their own API key or use a hosted provider, but core reading/practice should not depend on AI.

@@ -31,19 +31,19 @@
 - Delete: `android-app/app/src/main/java/com/cslearningos/mobile/MainActivity.java`
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/MainActivity.kt`
 
-- [ ] **Step 1: Add Kotlin, Compose, and KSP plugins**
+- [x] **Step 1: Add Kotlin, Compose, and KSP plugins**
 
 Use Kotlin `2.0.21`, Compose compiler plugin `2.0.21`, and KSP `2.0.21-1.0.25` in the root Gradle file.
 
-- [ ] **Step 2: Add app dependencies**
+- [x] **Step 2: Add app dependencies**
 
 Add Compose BOM, Activity Compose, Lifecycle ViewModel Compose, Navigation Compose, Room runtime/ktx/compiler, and JUnit.
 
-- [ ] **Step 3: Replace WebView activity with Compose**
+- [x] **Step 3: Replace WebView activity with Compose**
 
 `MainActivity.kt` should call `setContent { LearningOsApp() }`.
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run:
 
@@ -65,15 +65,15 @@ Expected: build succeeds after `LearningOsApp` exists as a minimal placeholder C
 - Create in Task 3: `android-app/app/src/main/java/com/cslearningos/mobile/domain/ReviewScheduler.kt`
 - Create in Task 3: `android-app/app/src/main/java/com/cslearningos/mobile/domain/MarkdownQuizParser.kt`
 
-- [ ] **Step 1: Write failing scheduler tests**
+- [x] **Step 1: Write failing scheduler tests**
 
 Test that `again` schedules today, `hard` schedules one day out, and `good` grows interval/ease.
 
-- [ ] **Step 2: Write failing parser tests**
+- [x] **Step 2: Write failing parser tests**
 
 Test that a `:::quiz` block produces prompt, answer, explanation, and stable source anchor.
 
-- [ ] **Step 3: Run tests and confirm RED**
+- [x] **Step 3: Run tests and confirm RED**
 
 Run:
 
@@ -91,11 +91,11 @@ Expected: tests fail because production classes do not exist.
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/domain/ReviewScheduler.kt`
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/domain/MarkdownQuizParser.kt`
 
-- [ ] **Step 1: Implement review scheduler**
+- [x] **Step 1: Implement review scheduler**
 
 Create `ReviewRating`, `ReviewScheduleInput`, `ReviewScheduleResult`, and `ReviewScheduler.next(...)`.
 
-- [ ] **Step 2: Implement Markdown quiz parser**
+- [x] **Step 2: Implement Markdown quiz parser**
 
 Parse deterministic fenced blocks:
 
@@ -107,7 +107,7 @@ explanation: ...
 :::
 ```
 
-- [ ] **Step 3: Run domain tests and confirm GREEN**
+- [x] **Step 3: Run domain tests and confirm GREEN**
 
 Run:
 
@@ -127,19 +127,19 @@ Expected: domain tests pass.
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/data/LearningDatabase.kt`
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/data/LearningRepository.kt`
 
-- [ ] **Step 1: Create sync-ready entities**
+- [x] **Step 1: Create sync-ready entities**
 
 Entities: `LearningNodeEntity`, `QuizItemEntity`, `ReviewStateEntity`, `ReviewAttemptEntity`, `NodeFtsEntity`, and `QuizFtsEntity`.
 
-- [ ] **Step 2: Create DAO**
+- [x] **Step 2: Create DAO**
 
 DAO must support node CRUD, quiz CRUD, review queue, attempts, FTS upsert/delete/search, and transaction helpers.
 
-- [ ] **Step 3: Create repository**
+- [x] **Step 3: Create repository**
 
 Repository must expose Flows and suspend methods for node save/read/search, manual quiz save, Markdown quiz sync, review answer, export, and restore.
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run:
 
@@ -157,15 +157,15 @@ Expected: Room code generation succeeds.
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/data/BackupModels.kt`
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/data/BackupCodec.kt`
 
-- [ ] **Step 1: Add backup models**
+- [x] **Step 1: Add backup models**
 
 Backup contains schema version, export timestamp, nodes, quizzes, review states, and attempts.
 
-- [ ] **Step 2: Add JSON export/import**
+- [x] **Step 2: Add JSON export/import**
 
 Use Android `org.json` to avoid adding another serialization dependency.
 
-- [ ] **Step 3: Integrate with repository restore**
+- [x] **Step 3: Integrate with repository restore**
 
 Restore validates first, overwrites transactionally, and rebuilds FTS.
 
@@ -177,19 +177,19 @@ Restore validates first, overwrites transactionally, and rebuilds FTS.
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/ui/LearningOsApp.kt`
 - Create: `android-app/app/src/main/java/com/cslearningos/mobile/ui/MarkdownRenderer.kt`
 
-- [ ] **Step 1: Add ViewModel state**
+- [x] **Step 1: Add ViewModel state**
 
 State includes nodes, selected node, editor draft, search query/results, quiz editor state, due review cards, current screen, and backup text.
 
-- [ ] **Step 2: Add Compose screens**
+- [x] **Step 2: Add Compose screens**
 
 Screens: home, reader, editor, search, quiz editor, review, settings backup/restore.
 
-- [ ] **Step 3: Add Markdown rendering**
+- [x] **Step 3: Add Markdown rendering**
 
 Render headings, lists, block quotes, inline code markers as readable Compose text blocks.
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run:
 
@@ -208,11 +208,11 @@ Expected: debug APK builds.
 - Modify: `android-app/app/src/main/res/xml/backup_rules.xml`
 - Modify: `android-app/app/src/main/res/xml/data_extraction_rules.xml`
 
-- [ ] **Step 1: Remove WebView/network product assumptions**
+- [x] **Step 1: Remove WebView/network product assumptions**
 
 Remove broad cleartext/development network config from the product manifest unless still required by build-only legacy files.
 
-- [ ] **Step 2: Disable accidental local data backup**
+- [x] **Step 2: Disable accidental local data backup**
 
 Set backup rules so Room databases and local preferences are excluded until an explicit backup policy exists.
 
@@ -222,7 +222,7 @@ Set backup rules so Room databases and local preferences are excluded until an e
 
 - Verify only.
 
-- [ ] **Step 1: Run doctor**
+- [x] **Step 1: Run doctor**
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
@@ -230,21 +230,21 @@ $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 .\scripts\android-doctor.ps1
 ```
 
-- [ ] **Step 2: Run unit tests**
+- [x] **Step 2: Run unit tests**
 
 ```powershell
 cd android-app
 .\gradlew.bat testDebugUnitTest
 ```
 
-- [ ] **Step 3: Run Android build**
+- [x] **Step 3: Run Android build**
 
 ```powershell
 cd android-app
 .\gradlew.bat assembleDebug
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add android-app docs/superpowers/plans/2026-07-01-android-offline-native-product.md

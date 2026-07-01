@@ -53,9 +53,25 @@ $gradleWrapperProperties = Join-Path $androidRoot "gradle\wrapper\gradle-wrapper
 $localProperties = Join-Path $androidRoot "local.properties"
 
 Add-Check "android-app directory" (Test-Path $androidRoot) $androidRoot | Out-Null
-Add-Check "Android manifest" (Test-Path (Join-Path $androidRoot "app\src\main\AndroidManifest.xml")) "app/src/main/AndroidManifest.xml" | Out-Null
-Add-Check "MainActivity" (Test-Path (Join-Path $androidRoot "app\src\main\java\com\cslearningos\mobile\MainActivity.java")) "WebView shell entry" | Out-Null
-Add-Check "Fallback asset" (Test-Path (Join-Path $assetRoot "www\index.html")) "app/src/main/assets/www/index.html" | Out-Null
+$manifestPath = Join-Path $androidRoot "app\src\main\AndroidManifest.xml"
+$manifestExists = Test-Path $manifestPath
+Add-Check "Android manifest" $manifestExists "app/src/main/AndroidManifest.xml" | Out-Null
+Add-Check "Native MainActivity" (Test-Path (Join-Path $androidRoot "app\src\main\java\com\cslearningos\mobile\MainActivity.kt")) "Compose native entry" | Out-Null
+
+$legacyFallbackAsset = Join-Path $assetRoot "www\index.html"
+Add-Check "No WebView fallback asset" (-not (Test-Path $legacyFallbackAsset)) "app/src/main/assets/www/index.html absent" | Out-Null
+
+if ($manifestExists) {
+    $manifestText = Get-Content -Raw $manifestPath
+    $offlineManifestOk = $manifestText -notmatch "android.permission.INTERNET" -and
+        $manifestText -notmatch "usesCleartextTraffic" -and
+        $manifestText -notmatch "networkSecurityConfig"
+    Add-Check "Offline manifest defaults" $offlineManifestOk "no INTERNET, cleartext, or network security config" | Out-Null
+    Add-Check "Automatic backup disabled" ($manifestText -match 'android:allowBackup="false"') 'android:allowBackup="false"' | Out-Null
+} else {
+    Add-Check "Offline manifest defaults" $false "manifest not found" | Out-Null
+    Add-Check "Automatic backup disabled" $false "manifest not found" | Out-Null
+}
 
 $privateAssetFindings = @()
 if (Test-Path $assetRoot) {
