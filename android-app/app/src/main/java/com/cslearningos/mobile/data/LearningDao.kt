@@ -31,6 +31,9 @@ interface LearningDao {
     @Query("SELECT * FROM quiz_items WHERE id = :id LIMIT 1")
     suspend fun getQuiz(id: String): QuizItemEntity?
 
+    @Query("SELECT * FROM quiz_items WHERE node_id = :nodeId AND deleted_at IS NULL")
+    suspend fun getActiveQuizzesForNode(nodeId: String): List<QuizItemEntity>
+
     @Query("SELECT * FROM review_states WHERE quiz_id = :quizId LIMIT 1")
     suspend fun getReviewState(quizId: String): ReviewStateEntity?
 

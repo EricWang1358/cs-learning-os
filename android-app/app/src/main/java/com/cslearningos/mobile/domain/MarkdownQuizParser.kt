@@ -23,6 +23,7 @@ object MarkdownQuizParser {
             }
 
             val fields = linkedMapOf<String, String>()
+            var currentKey: String? = null
             index += 1
             while (index < lines.size && lines[index].trim() != ":::") {
                 val line = lines[index]
@@ -31,6 +32,14 @@ object MarkdownQuizParser {
                     val key = line.substring(0, delimiter).trim().lowercase()
                     val value = line.substring(delimiter + 1).trim()
                     fields[key] = value
+                    currentKey = key
+                } else if (currentKey != null && line.startsWith(" ")) {
+                    val continuation = line.trim()
+                    if (continuation.isNotBlank()) {
+                        fields[currentKey] = listOf(fields[currentKey].orEmpty(), continuation)
+                            .filter { it.isNotBlank() }
+                            .joinToString("\n")
+                    }
                 }
                 index += 1
             }

@@ -37,6 +37,13 @@ object ReviewScheduler {
             ReviewRating.Again -> 0
             ReviewRating.Hard -> 1
             ReviewRating.Good -> {
+                if (input.intervalDays <= 0) {
+                    return ReviewScheduleResult(
+                        ease = nextEase,
+                        intervalDays = 1,
+                        dueAt = input.answeredAt.plusSeconds(DaySeconds)
+                    )
+                }
                 val base = if (input.intervalDays <= 0) 1 else input.intervalDays
                 max(1, (base * nextEase).roundToInt())
             }

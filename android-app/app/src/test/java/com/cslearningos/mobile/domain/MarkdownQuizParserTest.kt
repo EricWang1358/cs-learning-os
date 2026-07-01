@@ -40,4 +40,26 @@ class MarkdownQuizParserTest {
         assertEquals("quiz-1", cards.single().sourceAnchor)
         assertEquals("", cards.single().explanation)
     }
+
+    @Test
+    fun parsesIndentedMultilineFields() {
+        val markdown = """
+            :::quiz id=stack-frame
+            question: Why does `call` change `%rsp`?
+              Mention the return address.
+            answer: It pushes the return address.
+            explanation: The CPU stores where execution should resume.
+              That address becomes the top stack value.
+            :::
+        """.trimIndent()
+
+        val card = MarkdownQuizParser.parse(markdown).single()
+
+        assertEquals("Why does `call` change `%rsp`?\nMention the return address.", card.prompt)
+        assertEquals("It pushes the return address.", card.answer)
+        assertEquals(
+            "The CPU stores where execution should resume.\nThat address becomes the top stack value.",
+            card.explanation
+        )
+    }
 }

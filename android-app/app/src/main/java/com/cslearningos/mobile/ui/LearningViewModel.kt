@@ -40,6 +40,7 @@ data class LearningUiState(
     val quizPrompt: String = "",
     val quizAnswer: String = "",
     val quizExplanation: String = "",
+    val quizAnswerVisible: Boolean = false,
     val backupText: String = "",
     val message: String = ""
 )
@@ -120,6 +121,24 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun openSearchResult(result: SearchResultEntity) {
+        viewModelScope.launch {
+            when (result.type) {
+                "node" -> repository.getNode(result.id)?.let { openNode(it) }
+                "quiz" -> repository.getQuiz(result.id)?.let { quiz ->
+                    _state.update {
+                        it.copy(
+                            screen = AppScreen.Review,
+                            selectedQuiz = quiz,
+                            quizAnswerVisible = false,
+                            message = ""
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun setEditorTitle(value: String) {
         _state.update { it.copy(editorTitle = value) }
     }
@@ -130,6 +149,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun saveNode() {
         val snapshot = state.value
+        if (snapshot.editorTitle.isBlank() && snapshot.editorBody.isBlank()) {
+            _state.update { it.copy(message = "Add a title or some Markdown before saving.") }
+            return
+        }
         viewModelScope.launch {
             val node = repository.saveNode(
                 id = snapshot.editorNodeId,
@@ -146,8 +169,39 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun cancelEditor() {
+        _state.update {
+            it.copy(
+                screen = if (it.selectedNode == null) AppScreen.Home else AppScreen.Reader,
+                message = ""
+            )
+        }
+    }
+
+    fun deleteSelectedNode() {
+        val node = state.value.selectedNode ?: return
+        viewModelScope.launch {
+            repository.deleteNode(node.id)
+            _state.update {
+                it.copy(
+                    screen = AppScreen.Home,
+                    selectedNode = null,
+                    editorNodeId = null,
+                    editorTitle = "",
+                    editorBody = "",
+                    message = "Node moved out of your active library"
+                )
+            }
+        }
+    }
+
     fun setSearchQuery(value: String) {
-        _state.update { it.copy(searchQuery = value) }
+        _state.update {
+            it.copy(
+                searchQuery = value,
+                searchResults = if (value.isBlank()) emptyList() else it.searchResults
+            )
+        }
     }
 
     fun runSearch() {
@@ -188,6 +242,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun saveQuiz() {
         val snapshot = state.value
+        if (snapshot.quizPrompt.isBlank() || snapshot.quizAnswer.isBlank()) {
+            _state.update { it.copy(message = "Question and answer are required.") }
+            return
+        }
         viewModelScope.launch {
             repository.saveManualQuiz(
                 nodeId = snapshot.selectedNode?.id,
@@ -206,9 +264,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.Review,
                 selectedQuiz = it.dueQuizzes.firstOrNull(),
+                quizAnswerVisible = false,
                 message = ""
             )
         }
+    }
+
+    fun revealCurrentQuizAnswer() {
+        _state.update { it.copy(quizAnswerVisible = true, message = "") }
     }
 
     fun answerCurrentQuiz(rating: ReviewRating) {
@@ -219,6 +282,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 val remaining = current.dueQuizzes.filterNot { it.id == quiz.id }
                 current.copy(
                     selectedQuiz = remaining.firstOrNull(),
+                    quizAnswerVisible = false,
                     message = "Review saved"
                 )
             }

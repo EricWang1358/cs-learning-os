@@ -17,6 +17,8 @@ class LearningRepository(private val dao: LearningDao) {
 
     suspend fun getNode(id: String): LearningNodeEntity? = dao.getNode(id)
 
+    suspend fun getQuiz(id: String): QuizItemEntity? = dao.getQuiz(id)
+
     suspend fun saveNode(
         id: String?,
         title: String,
@@ -43,6 +45,7 @@ class LearningRepository(private val dao: LearningDao) {
 
     suspend fun markRead(nodeId: String, now: Long = System.currentTimeMillis()) {
         val node = dao.getNode(nodeId) ?: return
+        if (node.deletedAt != null) return
         val updated = node.copy(
             lastReadAt = now,
             updatedAt = now,
@@ -51,6 +54,30 @@ class LearningRepository(private val dao: LearningDao) {
         )
         dao.upsertNode(updated)
         indexNode(updated)
+    }
+
+    suspend fun deleteNode(nodeId: String, now: Long = System.currentTimeMillis()) {
+        val node = dao.getNode(nodeId) ?: return
+        val deletedNode = node.copy(
+            updatedAt = now,
+            revision = node.revision + 1,
+            syncStatus = SyncStatus.deleted,
+            deletedAt = now
+        )
+        dao.upsertNode(deletedNode)
+        dao.deleteNodeFts(node.id)
+
+        dao.getActiveQuizzesForNode(node.id).forEach { quiz ->
+            dao.upsertQuiz(
+                quiz.copy(
+                    updatedAt = now,
+                    revision = quiz.revision + 1,
+                    syncStatus = SyncStatus.deleted,
+                    deletedAt = now
+                )
+            )
+            dao.deleteQuizFts(quiz.id)
+        }
     }
 
     suspend fun saveManualQuiz(

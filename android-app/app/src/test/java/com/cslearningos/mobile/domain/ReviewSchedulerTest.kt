@@ -58,4 +58,20 @@ class ReviewSchedulerTest {
         assertTrue(result.intervalDays >= 10)
         assertEquals(now.plusSeconds(result.intervalDays * 86_400L), result.dueAt)
     }
+
+    @Test
+    fun firstGoodSchedulesTomorrowInsteadOfSkippingTooFarAhead() {
+        val result = ReviewScheduler.next(
+            input = ReviewScheduleInput(
+                ease = 2.5,
+                intervalDays = 0,
+                attemptCount = 0,
+                answeredAt = now
+            ),
+            rating = ReviewRating.Good
+        )
+
+        assertEquals(1, result.intervalDays)
+        assertEquals(now.plusSeconds(86_400), result.dueAt)
+    }
 }
