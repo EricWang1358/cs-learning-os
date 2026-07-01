@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,7 @@ fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
             modifier = Modifier
                 .fillMaxSize()
                 .workbenchGrid()
+                .safeDrawingPadding()
         ) {
             when {
                 maxWidth >= 1100.dp -> LandscapeWorkbench(state = state, viewModel = viewModel)
