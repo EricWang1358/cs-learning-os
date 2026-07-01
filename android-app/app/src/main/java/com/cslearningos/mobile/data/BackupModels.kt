@@ -6,5 +6,7 @@ data class LearningBackup(
     val nodes: List<LearningNodeEntity>,
     val quizzes: List<QuizItemEntity>,
     val reviewStates: List<ReviewStateEntity>,
-    val attempts: List<ReviewAttemptEntity>
+    val attempts: List<ReviewAttemptEntity>,
+    val readerQuestions: List<ReaderQuestionEntity> = emptyList(),
+    val captureSlips: List<CaptureSlipEntity> = emptyList()
 )

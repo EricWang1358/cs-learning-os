@@ -63,13 +63,13 @@ Add-Check "No WebView fallback asset" (-not (Test-Path $legacyFallbackAsset)) "a
 
 if ($manifestExists) {
     $manifestText = Get-Content -Raw $manifestPath
-    $offlineManifestOk = $manifestText -notmatch "android.permission.INTERNET" -and
+    $networkBoundaryOk = $manifestText -match "android.permission.INTERNET" -and
         $manifestText -notmatch "usesCleartextTraffic" -and
         $manifestText -notmatch "networkSecurityConfig"
-    Add-Check "Offline manifest defaults" $offlineManifestOk "no INTERNET, cleartext, or network security config" | Out-Null
+    Add-Check "Network permission boundary" $networkBoundaryOk "INTERNET allowed for user-configured AI; no cleartext or custom network security config" | Out-Null
     Add-Check "Automatic backup disabled" ($manifestText -match 'android:allowBackup="false"') 'android:allowBackup="false"' | Out-Null
 } else {
-    Add-Check "Offline manifest defaults" $false "manifest not found" | Out-Null
+    Add-Check "Network permission boundary" $false "manifest not found" | Out-Null
     Add-Check "Automatic backup disabled" $false "manifest not found" | Out-Null
 }
 

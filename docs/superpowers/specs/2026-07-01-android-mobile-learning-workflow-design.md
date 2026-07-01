@@ -319,6 +319,14 @@ Initial format can be Markdown/TXT:
 
 AI is important, but it should not be required for the offline product.
 
+The mobile settings UI should mirror mature service panels:
+
+- More -> Service owns provider, API key, base URL, model, and thinking mode.
+- API keys are local device configuration, not bundled app secrets.
+- Connection validation and model pulling are explicit user actions.
+- Capture slips can show an AI draft affordance only after settings are configured.
+- Before the AI adapter ships, validation controls must explain that no network request was sent.
+
 Recommended staged approach:
 
 1. Add an AI provider settings screen that explains the future optional-provider model.
@@ -371,12 +379,24 @@ The visual language should still match CS Learning OS:
 - Rework Home into a command center, not a scroll feed.
 - Keep existing node, review, search, and backup behavior working.
 
+Implemented direction:
+
+- Home uses large action tiles for Search, Capture, Create, and Review.
+- More owns AI provider settings and separates full backup from future readable export/import.
+- The AI provider screen is configured locally and does not add network behavior until AI drafts are implemented.
+
 ### A2: Capture Slip
 
 - Add CaptureSlip entity, DAO, repository methods, and UI.
 - Add Inbox view.
 - Allow capture slips to link to nodes.
 - Add tests for create, archive, and export preservation.
+
+Implemented direction:
+
+- Capture slips are first-class Room records with type, topic hint, source label, status, revision, sync status, and tombstone fields.
+- The first mobile conversion path turns a slip into a Markdown node draft for review before saving.
+- Capture slips are included in full JSON backup so phone recovery preserves the inbox.
 
 ### A3: Outline Editor
 

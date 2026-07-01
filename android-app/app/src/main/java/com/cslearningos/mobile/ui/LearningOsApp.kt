@@ -6,17 +6,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,32 +21,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,13 +40,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.QuizItemEntity
+import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.domain.ReviewRating
 import java.text.DateFormat
 import java.util.Date
 
-private val PanelShape = RoundedCornerShape(14.dp)
 private val CardShape = RoundedCornerShape(10.dp)
+
+data class MobileBottomNavItem(
+    val label: String,
+    val screen: AppScreen
+)
+
+fun mobileBottomNavItems(): List<MobileBottomNavItem> =
+    listOf(
+        MobileBottomNavItem("Home", AppScreen.Home),
+        MobileBottomNavItem("Capture", AppScreen.Capture),
+        MobileBottomNavItem("Library", AppScreen.Library),
+        MobileBottomNavItem("Review", AppScreen.Review),
+        MobileBottomNavItem("More", AppScreen.More)
+    )
 
 @Composable
 fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
@@ -91,16 +84,24 @@ fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
 
 @Composable
 private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewModel) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item { BrandBlock(state) }
-        item { MobileNav(state, viewModel) }
-        item { StatusBanner(state.message) }
-        item { ScreenContent(state, viewModel, isDetailPane = true) }
-        item { Spacer(modifier = Modifier.height(28.dp)) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 116.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item { BrandBlock(state) }
+            item { StatusBanner(state.message) }
+            item { ScreenContent(state, viewModel, isDetailPane = true) }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+        MobileBottomNav(
+            state = state,
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        )
     }
 }
 
@@ -179,15 +180,16 @@ private fun WorkbenchSidebar(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         BrandBlock(state)
-        NavButton("Library", state.screen == AppScreen.Home, viewModel::showHome)
-        NavButton("Search", state.screen == AppScreen.Search, viewModel::showSearch)
+        NavButton("Home", state.screen == AppScreen.Home, viewModel::showHome)
+        NavButton("Capture", state.screen == AppScreen.Capture, viewModel::showCapture)
+        NavButton("Library", state.screen == AppScreen.Library, viewModel::showLibrary)
         NavButton("Review (${state.dueQuizzes.size})", state.screen == AppScreen.Review, viewModel::showReview)
-        NavButton("Backup", state.screen == AppScreen.Backup, viewModel::showBackup)
+        NavButton("More", state.screen == AppScreen.More || state.screen == AppScreen.Backup, viewModel::showMore)
         Spacer(modifier = Modifier.height(4.dp))
-        WorkbenchCard {
+            WorkbenchCard {
             Eyebrow("offline first")
             Text(
-                text = "Local Markdown, Room database, explicit JSON backup. No account, no network.",
+                text = "Local Markdown, Room database, explicit JSON backup. No account required; AI is optional.",
                 color = WorkbenchColors.Muted,
                 fontSize = 13.sp,
                 lineHeight = 19.sp
@@ -218,29 +220,107 @@ private fun BrandBlock(state: LearningUiState) {
 }
 
 @Composable
-private fun MobileNav(state: LearningUiState, viewModel: LearningViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            NavButton("Library", state.screen == AppScreen.Home, viewModel::showHome, Modifier.weight(1f))
-            NavButton("Search", state.screen == AppScreen.Search, viewModel::showSearch, Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            NavButton("Review ${state.dueQuizzes.size}", state.screen == AppScreen.Review, viewModel::showReview, Modifier.weight(1f))
-            NavButton("Backup", state.screen == AppScreen.Backup, viewModel::showBackup, Modifier.weight(1f))
+private fun MobileBottomNav(
+    state: LearningUiState,
+    viewModel: LearningViewModel,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.96f))
+            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(22.dp))
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        mobileBottomNavItems().forEach { item ->
+            val selected = when (item.screen) {
+                AppScreen.More -> state.screen == AppScreen.More || state.screen == AppScreen.Backup
+                else -> state.screen == item.screen
+            }
+            BottomNavTab(
+                item = item,
+                selected = selected,
+                dueCount = state.dueQuizzes.size,
+                onClick = { item.open(viewModel) },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
+private fun BottomNavTab(
+    item: MobileBottomNavItem,
+    selected: Boolean,
+    dueCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) WorkbenchColors.Accent.copy(alpha = 0.16f) else WorkbenchColors.Surface.copy(alpha = 0.18f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = item.symbol(dueCount),
+            color = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1
+        )
+        Text(
+            text = item.label,
+            color = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1
+        )
+    }
+}
+
+private fun MobileBottomNavItem.open(viewModel: LearningViewModel) {
+    when (screen) {
+        AppScreen.Home -> viewModel.showHome()
+        AppScreen.Capture -> viewModel.showCapture()
+        AppScreen.Library -> viewModel.showLibrary()
+        AppScreen.Review -> viewModel.showReview()
+        AppScreen.More -> viewModel.showMore()
+        else -> viewModel.showHome()
+    }
+}
+
+private fun MobileBottomNavItem.symbol(dueCount: Int): String =
+    when (screen) {
+        AppScreen.Home -> "H"
+        AppScreen.Capture -> "+"
+        AppScreen.Library -> "L"
+        AppScreen.Review -> dueCount.takeIf { it > 0 }?.toString() ?: "R"
+        AppScreen.More -> "="
+        else -> label.take(1)
+    }
+
+@Composable
 private fun ScreenContent(state: LearningUiState, viewModel: LearningViewModel, isDetailPane: Boolean) {
     when (state.screen) {
-        AppScreen.Home -> LibraryScreen(state, viewModel)
+        AppScreen.Home -> DashboardScreen(state, viewModel)
+        AppScreen.Capture -> CaptureScreen(state, viewModel)
+        AppScreen.Library -> LibraryScreen(state, viewModel)
         AppScreen.Reader -> if (isDetailPane) ReaderScreen(state, viewModel) else LibraryScreen(state, viewModel)
         AppScreen.Editor -> if (isDetailPane) EditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
         AppScreen.Search -> SearchScreen(state, viewModel)
         AppScreen.QuizEditor -> if (isDetailPane) QuizEditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
         AppScreen.Review -> ReviewScreen(state, viewModel)
         AppScreen.Backup -> BackupScreen(state, viewModel)
+        AppScreen.More -> MoreScreen(state, viewModel)
     }
 }
 
@@ -371,7 +451,76 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
             WorkbenchButton("Add quiz", viewModel::startQuizForSelectedNode)
             WorkbenchButton("Delete", viewModel::deleteSelectedNode, danger = true)
         }
+        ReaderQuestionCapture(state = state, viewModel = viewModel, nodeId = node.id)
         MarkdownRenderer(markdown = node.markdownBody)
+    }
+}
+
+@Composable
+private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningViewModel, nodeId: String) {
+    val openQuestions = state.readerQuestions.filter { it.nodeId == nodeId }
+    WorkbenchCard(accent = openQuestions.isNotEmpty()) {
+        Eyebrow("q to be solved")
+        Text(
+            text = "What is unclear?",
+            color = WorkbenchColors.InkStrong,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            text = "Save questions while reading. Later, fold them into Markdown edits or quiz cards.",
+            color = WorkbenchColors.Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        )
+        WorkbenchTextField(
+            value = state.readerQuestionDraft,
+            onValueChange = viewModel::setReaderQuestionDraft,
+            label = "Example: This explanation skips why %eax changes here.",
+            minLines = 3
+        )
+        WorkbenchButton(
+            text = "Save question",
+            onClick = viewModel::saveReaderQuestion,
+            primary = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (openQuestions.isEmpty()) {
+            Text("0 open", color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "${openQuestions.size} open",
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
+                openQuestions.take(4).forEach { question ->
+                    ReaderQuestionRow(question = question, onResolve = { viewModel.resolveReaderQuestion(question) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReaderQuestionRow(question: ReaderQuestionEntity, onResolve: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line), CardShape)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = question.body,
+            color = WorkbenchColors.InkStrong,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        )
+        WorkbenchButton("Resolved", onResolve)
     }
 }
 
@@ -522,271 +671,6 @@ private fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             label = "Backup JSON",
             minLines = 14
         )
-    }
-}
-
-@Composable
-private fun SectionHeader(eyebrow: String, title: String, body: String) {
-    WorkbenchCard(accent = true) {
-        Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 25.sp, fontWeight = FontWeight.Black, lineHeight = 30.sp)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
-    }
-}
-
-@Composable
-private fun DetailHeading(eyebrow: String, title: String, body: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(BorderStroke(1.dp, WorkbenchColors.Line), PanelShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(WorkbenchColors.Accent.copy(alpha = 0.18f), Color.Transparent),
-                    radius = 620f
-                ),
-                PanelShape
-            )
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 31.sp, fontWeight = FontWeight.Black, lineHeight = 35.sp)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
-    }
-}
-
-@Composable
-private fun WorkbenchCard(
-    modifier: Modifier = Modifier,
-    accent: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = if (accent) 14.dp else 8.dp,
-                shape = CardShape,
-                ambientColor = WorkbenchColors.Surface.copy(alpha = 0.36f),
-                spotColor = WorkbenchColors.Surface.copy(alpha = 0.42f)
-            )
-            .drawBehind {
-                if (accent) {
-                    drawLine(
-                        color = WorkbenchColors.Accent,
-                        start = Offset(0f, 10.dp.toPx()),
-                        end = Offset(0f, size.height - 10.dp.toPx()),
-                        strokeWidth = 3.dp.toPx()
-                    )
-                }
-            },
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = WorkbenchColors.SurfaceCard),
-        border = BorderStroke(1.dp, if (accent) WorkbenchColors.Accent else WorkbenchColors.Line)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (accent) {
-                        Brush.linearGradient(
-                            listOf(WorkbenchColors.Accent.copy(alpha = 0.14f), Color.Transparent)
-                        )
-                    } else {
-                        Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                    }
-                )
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-            content = content
-        )
-    }
-}
-
-@Composable
-private fun InteractiveCard(onClick: () -> Unit, accent: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    WorkbenchCard(
-        accent = accent || pressed,
-        modifier = Modifier
-            .heightIn(min = 72.dp)
-            .clickable(
-                interactionSource = interaction,
-                indication = LocalIndication.current,
-                onClick = onClick
-            ),
-        content = content
-    )
-}
-
-@Composable
-private fun EmptyWorkbenchCard(title: String, body: String) {
-    WorkbenchCard {
-        Eyebrow("empty state")
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black)
-        Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
-    }
-}
-
-@Composable
-private fun WorkbenchButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    primary: Boolean = false,
-    danger: Boolean = false,
-    enabled: Boolean = true
-) {
-    val container = when {
-        primary -> WorkbenchColors.Accent
-        danger -> WorkbenchColors.SurfaceCard
-        else -> WorkbenchColors.SurfaceCard
-    }
-    val content = when {
-        primary -> WorkbenchColors.SurfaceSoft
-        danger -> WorkbenchColors.Danger
-        else -> WorkbenchColors.Accent
-    }
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = container,
-            contentColor = content,
-            disabledContainerColor = WorkbenchColors.SurfaceCard.copy(alpha = 0.44f),
-            disabledContentColor = WorkbenchColors.Muted
-        )
-    ) {
-        Text(text, fontWeight = FontWeight.Black)
-    }
-}
-
-@Composable
-private fun NavButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    WorkbenchButton(
-        text = text,
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        primary = selected
-    )
-}
-
-@Composable
-private fun WorkbenchTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    minLines: Int = 1
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label, color = WorkbenchColors.Muted) },
-        minLines = minLines,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = WorkbenchColors.Ink,
-            unfocusedTextColor = WorkbenchColors.Ink,
-            cursorColor = WorkbenchColors.Accent,
-            focusedBorderColor = WorkbenchColors.Accent,
-            unfocusedBorderColor = WorkbenchColors.LineStrong,
-            focusedContainerColor = WorkbenchColors.Surface,
-            unfocusedContainerColor = WorkbenchColors.Surface
-        )
-    )
-}
-
-@Composable
-private fun StatusBanner(message: String) {
-    if (message.isBlank()) return
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(WorkbenchColors.Accent.copy(alpha = 0.11f))
-            .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.32f)), CardShape)
-            .padding(12.dp)
-    ) {
-        Text(message, color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
-    }
-}
-
-@Composable
-private fun Eyebrow(text: String) {
-    Text(
-        text = text.uppercase(),
-        color = WorkbenchColors.Muted,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 1.2.sp
-    )
-}
-
-@Composable
-private fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(WorkbenchColors.Accent.copy(alpha = 0.12f), WorkbenchColors.SurfaceCard)
-                )
-            )
-            .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.28f)), RoundedCornerShape(999.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Text(value, color = WorkbenchColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-    }
-}
-
-@Composable
-private fun MetaPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(WorkbenchColors.Surface.copy(alpha = 0.56f))
-            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(10.dp))
-            .padding(9.dp)
-    ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black)
-        Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ToolbarRow(content: @Composable FlowRowScope.() -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth(),
-        content = content
-    )
-}
-
-private fun Modifier.workbenchGrid(): Modifier = drawBehind {
-    drawRect(WorkbenchColors.Surface)
-    val step = 44.dp.toPx()
-    val lineColor = WorkbenchColors.Accent.copy(alpha = 0.035f)
-    var x = 0f
-    while (x <= size.width) {
-        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-        x += step
-    }
-    var y = 0f
-    while (y <= size.height) {
-        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-        y += step
     }
 }
 

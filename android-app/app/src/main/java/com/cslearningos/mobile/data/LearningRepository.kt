@@ -12,6 +12,8 @@ import kotlin.math.absoluteValue
 class LearningRepository(private val dao: LearningDao) {
     val nodes: Flow<List<LearningNodeEntity>> = dao.observeNodes()
     val quizzes: Flow<List<QuizItemEntity>> = dao.observeQuizzes()
+    val openReaderQuestions: Flow<List<ReaderQuestionEntity>> = dao.observeOpenReaderQuestions()
+    val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeInboxCaptureSlips()
 
     fun dueQuizzes(now: Long): Flow<List<QuizItemEntity>> = dao.observeDueQuizzes(now)
 
@@ -46,12 +48,7 @@ class LearningRepository(private val dao: LearningDao) {
     suspend fun markRead(nodeId: String, now: Long = System.currentTimeMillis()) {
         val node = dao.getNode(nodeId) ?: return
         if (node.deletedAt != null) return
-        val updated = node.copy(
-            lastReadAt = now,
-            updatedAt = now,
-            revision = node.revision + 1,
-            syncStatus = SyncStatus.dirty
-        )
+        val updated = node.withReadTrace(now)
         dao.upsertNode(updated)
         indexNode(updated)
     }
@@ -78,6 +75,105 @@ class LearningRepository(private val dao: LearningDao) {
             )
             dao.deleteQuizFts(quiz.id)
         }
+
+        dao.getActiveReaderQuestionsForNode(node.id).forEach { question ->
+            dao.upsertReaderQuestion(
+                question.copy(
+                    syncStatus = SyncStatus.deleted,
+                    deletedAt = now
+                )
+            )
+        }
+    }
+
+    suspend fun saveReaderQuestion(
+        nodeId: String,
+        body: String,
+        now: Long = System.currentTimeMillis()
+    ): ReaderQuestionEntity {
+        val question = ReaderQuestionEntity(
+            id = UUID.randomUUID().toString(),
+            nodeId = nodeId,
+            body = body.trim(),
+            createdAt = now,
+            resolvedAt = null,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null
+        )
+        dao.upsertReaderQuestion(question)
+        return question
+    }
+
+    suspend fun resolveReaderQuestion(questionId: String, now: Long = System.currentTimeMillis()) {
+        val question = dao.getReaderQuestion(questionId) ?: return
+        dao.upsertReaderQuestion(
+            question.copy(
+                resolvedAt = now,
+                syncStatus = SyncStatus.dirty
+            )
+        )
+    }
+
+    suspend fun saveCaptureSlip(
+        body: String,
+        type: CaptureSlipType,
+        topicHint: String?,
+        sourceLabel: String?,
+        now: Long = System.currentTimeMillis()
+    ): CaptureSlipEntity {
+        val slip = CaptureSlipEntity(
+            id = UUID.randomUUID().toString(),
+            body = body.trim(),
+            type = type,
+            topicHint = topicHint?.trim()?.ifBlank { null },
+            sourceLabel = sourceLabel?.trim()?.ifBlank { null },
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = now,
+            updatedAt = now,
+            revision = 1L,
+            syncStatus = SyncStatus.dirty,
+            deletedAt = null
+        )
+        dao.upsertCaptureSlip(slip)
+        return slip
+    }
+
+    suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()) {
+        val slip = dao.getCaptureSlip(slipId) ?: return
+        dao.upsertCaptureSlip(
+            slip.copy(
+                status = CaptureSlipStatus.archived,
+                updatedAt = now,
+                revision = slip.revision + 1,
+                syncStatus = SyncStatus.dirty
+            )
+        )
+    }
+
+    suspend fun markCaptureSlipConverted(
+        slipId: String,
+        nodeId: String,
+        now: Long = System.currentTimeMillis()
+    ) {
+        val slip = dao.getCaptureSlip(slipId) ?: return
+        dao.upsertCaptureSlip(
+            slip.copy(
+                linkedNodeId = nodeId,
+                status = CaptureSlipStatus.converted,
+                updatedAt = now,
+                revision = slip.revision + 1,
+                syncStatus = SyncStatus.dirty
+            )
+        )
+    }
+
+    suspend fun seedStarterContent(pack: StarterContentPackage) {
+        dao.upsertNodes(pack.nodes)
+        dao.upsertQuizzes(pack.quizzes)
+        dao.upsertReviewStates(pack.reviewStates)
+        pack.nodes.forEach { indexNode(it) }
+        pack.quizzes.forEach { indexQuiz(it) }
     }
 
     suspend fun saveManualQuiz(
@@ -161,7 +257,9 @@ class LearningRepository(private val dao: LearningDao) {
                 nodes = dao.getAllNodes(),
                 quizzes = dao.getAllQuizzes(),
                 reviewStates = dao.getAllReviewStates(),
-                attempts = dao.getAllAttempts()
+                attempts = dao.getAllAttempts(),
+                readerQuestions = dao.getAllReaderQuestions(),
+                captureSlips = dao.getAllCaptureSlips()
             )
         )
 
@@ -172,6 +270,8 @@ class LearningRepository(private val dao: LearningDao) {
             quizzes = backup.quizzes,
             states = backup.reviewStates,
             attempts = backup.attempts,
+            questions = backup.readerQuestions,
+            captureSlips = backup.captureSlips,
             nodeFts = backup.nodes
                 .filter { it.deletedAt == null }
                 .map {
@@ -196,7 +296,24 @@ class LearningRepository(private val dao: LearningDao) {
     }
 
     private suspend fun syncMarkdownQuizzes(node: LearningNodeEntity, now: Long) {
-        MarkdownQuizParser.parse(node.markdownBody).forEach { parsed ->
+        val parsedCards = MarkdownQuizParser.parse(node.markdownBody)
+        val activeAnchors = parsedCards.mapTo(mutableSetOf()) { it.sourceAnchor }
+
+        dao.getActiveQuizzesForNode(node.id)
+            .filter { it.source == QuizSource.markdown && it.sourceAnchor !in activeAnchors }
+            .forEach { removed ->
+                dao.upsertQuiz(
+                    removed.copy(
+                        updatedAt = now,
+                        revision = removed.revision + 1,
+                        syncStatus = SyncStatus.deleted,
+                        deletedAt = now
+                    )
+                )
+                dao.deleteQuizFts(removed.id)
+            }
+
+        parsedCards.forEach { parsed ->
             val id = "${node.id}:${parsed.sourceAnchor}"
             val existing = dao.getQuiz(id)
             val quiz = QuizItemEntity(

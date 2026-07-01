@@ -14,6 +14,8 @@ object BackupCodec {
             .put("quizzes", JSONArray(backup.quizzes.map { it.toJson() }))
             .put("reviewStates", JSONArray(backup.reviewStates.map { it.toJson() }))
             .put("attempts", JSONArray(backup.attempts.map { it.toJson() }))
+            .put("readerQuestions", JSONArray(backup.readerQuestions.map { it.toJson() }))
+            .put("captureSlips", JSONArray(backup.captureSlips.map { it.toJson() }))
             .toString(2)
 
     fun decode(rawJson: String): LearningBackup {
@@ -28,7 +30,9 @@ object BackupCodec {
             nodes = root.getJSONArray("nodes").mapObjects { it.toNode() },
             quizzes = root.getJSONArray("quizzes").mapObjects { it.toQuiz() },
             reviewStates = root.getJSONArray("reviewStates").mapObjects { it.toReviewState() },
-            attempts = root.getJSONArray("attempts").mapObjects { it.toAttempt() }
+            attempts = root.getJSONArray("attempts").mapObjects { it.toAttempt() },
+            readerQuestions = root.optJSONArray("readerQuestions")?.mapObjects { it.toReaderQuestion() }.orEmpty(),
+            captureSlips = root.optJSONArray("captureSlips")?.mapObjects { it.toCaptureSlip() }.orEmpty()
         )
     }
 
@@ -77,6 +81,31 @@ object BackupCodec {
             .put("answeredAt", answeredAt)
             .put("scheduledDueAt", scheduledDueAt)
 
+    private fun ReaderQuestionEntity.toJson(): JSONObject =
+        JSONObject()
+            .put("id", id)
+            .put("nodeId", nodeId)
+            .put("body", body)
+            .put("createdAt", createdAt)
+            .put("resolvedAt", resolvedAt)
+            .put("syncStatus", syncStatus.name)
+            .put("deletedAt", deletedAt)
+
+    private fun CaptureSlipEntity.toJson(): JSONObject =
+        JSONObject()
+            .put("id", id)
+            .put("body", body)
+            .put("type", type.name)
+            .put("topicHint", topicHint)
+            .put("sourceLabel", sourceLabel)
+            .put("linkedNodeId", linkedNodeId)
+            .put("status", status.name)
+            .put("createdAt", createdAt)
+            .put("updatedAt", updatedAt)
+            .put("revision", revision)
+            .put("syncStatus", syncStatus.name)
+            .put("deletedAt", deletedAt)
+
     private fun JSONObject.toNode(): LearningNodeEntity =
         LearningNodeEntity(
             id = getString("id"),
@@ -124,6 +153,33 @@ object BackupCodec {
             result = ReviewResult.valueOf(getString("result")),
             answeredAt = getLong("answeredAt"),
             scheduledDueAt = getLong("scheduledDueAt")
+        )
+
+    private fun JSONObject.toReaderQuestion(): ReaderQuestionEntity =
+        ReaderQuestionEntity(
+            id = getString("id"),
+            nodeId = getString("nodeId"),
+            body = getString("body"),
+            createdAt = getLong("createdAt"),
+            resolvedAt = nullableLong("resolvedAt"),
+            syncStatus = SyncStatus.valueOf(getString("syncStatus")),
+            deletedAt = nullableLong("deletedAt")
+        )
+
+    private fun JSONObject.toCaptureSlip(): CaptureSlipEntity =
+        CaptureSlipEntity(
+            id = getString("id"),
+            body = getString("body"),
+            type = CaptureSlipType.valueOf(getString("type")),
+            topicHint = nullableString("topicHint"),
+            sourceLabel = nullableString("sourceLabel"),
+            linkedNodeId = nullableString("linkedNodeId"),
+            status = CaptureSlipStatus.valueOf(getString("status")),
+            createdAt = getLong("createdAt"),
+            updatedAt = getLong("updatedAt"),
+            revision = getLong("revision"),
+            syncStatus = SyncStatus.valueOf(getString("syncStatus")),
+            deletedAt = nullableLong("deletedAt")
         )
 
     private fun JSONObject.nullableLong(name: String): Long? =

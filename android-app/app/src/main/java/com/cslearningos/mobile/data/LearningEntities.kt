@@ -23,6 +23,21 @@ enum class ReviewResult {
     good
 }
 
+enum class CaptureSlipType {
+    unclear,
+    mistake,
+    video_note,
+    concept_seed,
+    question
+}
+
+enum class CaptureSlipStatus {
+    inbox,
+    linked,
+    converted,
+    archived
+}
+
 @Entity(tableName = "learning_nodes")
 data class LearningNodeEntity(
     @PrimaryKey val id: String,
@@ -31,6 +46,36 @@ data class LearningNodeEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "last_read_at") val lastReadAt: Long?,
+    val revision: Long,
+    @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?
+)
+
+fun LearningNodeEntity.withReadTrace(now: Long): LearningNodeEntity =
+    copy(lastReadAt = now)
+
+@Entity(tableName = "reader_questions")
+data class ReaderQuestionEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "node_id") val nodeId: String,
+    val body: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "resolved_at") val resolvedAt: Long?,
+    @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?
+)
+
+@Entity(tableName = "capture_slips")
+data class CaptureSlipEntity(
+    @PrimaryKey val id: String,
+    val body: String,
+    val type: CaptureSlipType,
+    @ColumnInfo(name = "topic_hint") val topicHint: String?,
+    @ColumnInfo(name = "source_label") val sourceLabel: String?,
+    @ColumnInfo(name = "linked_node_id") val linkedNodeId: String?,
+    val status: CaptureSlipStatus,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
     val revision: Long,
     @ColumnInfo(name = "sync_status") val syncStatus: SyncStatus,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long?

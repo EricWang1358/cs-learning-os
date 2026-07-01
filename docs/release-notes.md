@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.2
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.2-beta`
+
+Android version:
+
+- `versionCode`: 3
+- `versionName`: `0.1.2`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added Android starter content import from the shared desktop-compatible `content-demo` Markdown assets.
+- Added Markdown front matter parsing and standalone quiz import for first-launch demo nodes and due review cards.
+- Upgraded Capture Slip promotion into a structured editable node draft and marks slips converted after saving.
+- Kept APK/AAB outputs ignored; `.gitignore` already excludes local Android build artifacts and launcher scripts.
+
 ## Android Beta 0.1.1
 
 Date: 2026-07-01

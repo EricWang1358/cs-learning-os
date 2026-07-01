@@ -15,6 +15,12 @@ interface LearningDao {
     @Query("SELECT * FROM quiz_items WHERE deleted_at IS NULL ORDER BY updated_at DESC")
     fun observeQuizzes(): Flow<List<QuizItemEntity>>
 
+    @Query("SELECT * FROM reader_questions WHERE deleted_at IS NULL AND resolved_at IS NULL ORDER BY created_at DESC")
+    fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>>
+
+    @Query("SELECT * FROM capture_slips WHERE deleted_at IS NULL AND status = 'inbox' ORDER BY created_at DESC")
+    fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>>
+
     @Query(
         """
         SELECT quiz_items.* FROM quiz_items
@@ -31,8 +37,17 @@ interface LearningDao {
     @Query("SELECT * FROM quiz_items WHERE id = :id LIMIT 1")
     suspend fun getQuiz(id: String): QuizItemEntity?
 
+    @Query("SELECT * FROM reader_questions WHERE id = :id LIMIT 1")
+    suspend fun getReaderQuestion(id: String): ReaderQuestionEntity?
+
+    @Query("SELECT * FROM capture_slips WHERE id = :id LIMIT 1")
+    suspend fun getCaptureSlip(id: String): CaptureSlipEntity?
+
     @Query("SELECT * FROM quiz_items WHERE node_id = :nodeId AND deleted_at IS NULL")
     suspend fun getActiveQuizzesForNode(nodeId: String): List<QuizItemEntity>
+
+    @Query("SELECT * FROM reader_questions WHERE node_id = :nodeId AND deleted_at IS NULL")
+    suspend fun getActiveReaderQuestionsForNode(nodeId: String): List<ReaderQuestionEntity>
 
     @Query("SELECT * FROM review_states WHERE quiz_id = :quizId LIMIT 1")
     suspend fun getReviewState(quizId: String): ReviewStateEntity?
@@ -49,11 +64,23 @@ interface LearningDao {
     @Query("SELECT * FROM review_attempts")
     suspend fun getAllAttempts(): List<ReviewAttemptEntity>
 
+    @Query("SELECT * FROM reader_questions")
+    suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity>
+
+    @Query("SELECT * FROM capture_slips")
+    suspend fun getAllCaptureSlips(): List<CaptureSlipEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertNode(node: LearningNodeEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertQuiz(quiz: QuizItemEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReaderQuestion(question: ReaderQuestionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCaptureSlip(slip: CaptureSlipEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertReviewState(state: ReviewStateEntity)
@@ -72,6 +99,12 @@ interface LearningDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReaderQuestions(questions: List<ReaderQuestionEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCaptureSlips(slips: List<CaptureSlipEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertNodeFts(entity: NodeFtsEntity)
@@ -96,6 +129,12 @@ interface LearningDao {
 
     @Query("DELETE FROM review_attempts")
     suspend fun deleteAllAttempts()
+
+    @Query("DELETE FROM reader_questions")
+    suspend fun deleteAllReaderQuestions()
+
+    @Query("DELETE FROM capture_slips")
+    suspend fun deleteAllCaptureSlips()
 
     @Query("DELETE FROM node_fts")
     suspend fun deleteAllNodeFts()
@@ -126,6 +165,8 @@ interface LearningDao {
         deleteAllAttempts()
         deleteAllReviewStates()
         deleteAllQuizzes()
+        deleteAllReaderQuestions()
+        deleteAllCaptureSlips()
         deleteAllNodes()
         deleteAllQuizFts()
         deleteAllNodeFts()
@@ -137,6 +178,8 @@ interface LearningDao {
         quizzes: List<QuizItemEntity>,
         states: List<ReviewStateEntity>,
         attempts: List<ReviewAttemptEntity>,
+        questions: List<ReaderQuestionEntity>,
+        captureSlips: List<CaptureSlipEntity>,
         nodeFts: List<NodeFtsEntity>,
         quizFts: List<QuizFtsEntity>
     ) {
@@ -145,6 +188,8 @@ interface LearningDao {
         upsertQuizzes(quizzes)
         upsertReviewStates(states)
         insertAttempts(attempts)
+        upsertReaderQuestions(questions)
+        upsertCaptureSlips(captureSlips)
         nodeFts.forEach { upsertNodeFts(it) }
         quizFts.forEach { upsertQuizFts(it) }
     }

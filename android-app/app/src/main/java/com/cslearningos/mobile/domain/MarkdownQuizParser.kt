@@ -1,5 +1,7 @@
 package com.cslearningos.mobile.domain
 
+import java.security.MessageDigest
+
 data class ParsedQuizCard(
     val sourceAnchor: String,
     val prompt: String,
@@ -50,7 +52,7 @@ object MarkdownQuizParser {
                 cards += ParsedQuizCard(
                     sourceAnchor = match.groupValues.getOrNull(1)
                         ?.takeIf { it.isNotBlank() }
-                        ?: "quiz-${cards.size + 1}",
+                        ?: stableAnonymousAnchor(prompt = prompt, answer = answer),
                     prompt = prompt,
                     answer = answer,
                     explanation = fields["explanation"].orEmpty()
@@ -60,5 +62,14 @@ object MarkdownQuizParser {
         }
 
         return cards
+    }
+
+    private fun stableAnonymousAnchor(prompt: String, answer: String): String {
+        val raw = "$prompt\n---\n$answer"
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray(Charsets.UTF_8))
+            .take(8)
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        return "quiz-$digest"
     }
 }

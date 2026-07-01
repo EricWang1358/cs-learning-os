@@ -1,6 +1,8 @@
 package com.cslearningos.mobile.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MarkdownQuizParserTest {
@@ -37,8 +39,35 @@ class MarkdownQuizParserTest {
         val cards = MarkdownQuizParser.parse(markdown)
 
         assertEquals(1, cards.size)
-        assertEquals("quiz-1", cards.single().sourceAnchor)
+        assertTrue(cards.single().sourceAnchor.startsWith("quiz-"))
         assertEquals("", cards.single().explanation)
+    }
+
+    @Test
+    fun anonymousAnchorFollowsContentWhenEarlierAnonymousBlockIsRemoved() {
+        val original = """
+            :::quiz
+            question: First card?
+            answer: First answer.
+            :::
+
+            :::quiz
+            question: Second card?
+            answer: Second answer.
+            :::
+        """.trimIndent()
+        val edited = """
+            :::quiz
+            question: Second card?
+            answer: Second answer.
+            :::
+        """.trimIndent()
+
+        val originalCards = MarkdownQuizParser.parse(original)
+        val editedCard = MarkdownQuizParser.parse(edited).single()
+
+        assertNotEquals(originalCards[0].sourceAnchor, originalCards[1].sourceAnchor)
+        assertEquals(originalCards[1].sourceAnchor, editedCard.sourceAnchor)
     }
 
     @Test
