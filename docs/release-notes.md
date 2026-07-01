@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.3
+
+Date: 2026-07-01
+
+Git tag: `android-v0.1.3-beta`
+
+Android version:
+
+- `versionCode`: 4
+- `versionName`: `0.1.3`
+
+Status: implementation beta.
+
+Highlights:
+
+- Collapsed the Android `More` area into an expandable settings list with one active section at a time.
+- Added local system language preference with `Follow system`, `English`, and `Chinese` options.
+- Added app display mode preference with `Follow system`, `Day`, and `Night`; the app palette and system bars update together.
+- Replaced the AI thinking default switch with custom workbench buttons to keep the native UI visually consistent.
+
 ## Android Beta 0.1.2
 
 Date: 2026-07-01

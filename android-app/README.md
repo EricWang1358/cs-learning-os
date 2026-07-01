@@ -31,6 +31,7 @@ The Android app is a native offline minimum product.
 - Review due quiz cards using a deterministic local scheduler.
 - Search local nodes and quizzes through Room FTS.
 - Export and restore an explicit JSON backup.
+- Use a compact `More` settings center for AI service config, local data tools, language, and day/night display mode.
 - Avoid network permissions and automatic system backup of local learning data by default.
 
 ## Build Requirements
@@ -73,7 +74,7 @@ The APK is self-contained for this milestone. Install it on an emulator or phone
 The test APK version is defined in `app/build.gradle`:
 
 - `versionCode` must increase for every Android implementation commit that produces a phone-testable APK.
-- `versionName` should stay human-readable in the current beta line, such as `0.1.1`.
+- `versionName` should stay human-readable in the current beta line, such as `0.1.3`.
 - Docs-only/spec-only commits do not need a version bump unless a new APK is distributed.
 
 Build outputs such as `.apk` and `.aab` remain ignored by Git. Share or install the APK from `app/build/outputs/apk/debug/app-debug.apk`, but track which beta it is through Gradle and the commit message/handoff.

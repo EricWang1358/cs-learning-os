@@ -66,7 +66,7 @@ fun mobileBottomNavItems(): List<MobileBottomNavItem> =
 fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    WorkbenchTheme {
+    WorkbenchTheme(appearanceMode = state.appearanceMode) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()

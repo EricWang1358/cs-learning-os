@@ -74,6 +74,9 @@ data class LearningUiState(
     val captureSourceLabel: String = "",
     val captureType: CaptureSlipType = CaptureSlipType.unclear,
     val aiProviderSettings: AiProviderSettings = AiProviderSettings(),
+    val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
+    val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
+    val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
     val quizAnswerVisible: Boolean = false,
     val backupText: String = "",
     val message: String = ""
@@ -88,9 +91,16 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val dueReviewNow = MutableStateFlow(System.currentTimeMillis())
     val state: StateFlow<LearningUiState> = _state.asStateFlow()
     private val aiPrefs = application.getSharedPreferences("ai-provider-settings", Context.MODE_PRIVATE)
+    private val appPrefs = application.getSharedPreferences("app-settings", Context.MODE_PRIVATE)
 
     init {
-        _state.update { it.copy(aiProviderSettings = loadAiProviderSettings()) }
+        _state.update {
+            it.copy(
+                aiProviderSettings = loadAiProviderSettings(),
+                systemLanguage = loadSystemLanguage(),
+                appearanceMode = loadAppearanceMode()
+            )
+        }
         viewModelScope.launch {
             seedStarterContentIfNeeded()
         }
@@ -538,6 +548,25 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleMoreSection(section: MoreSectionId) {
+        _state.update {
+            it.copy(
+                expandedMoreSection = if (it.expandedMoreSection == section) null else section,
+                message = ""
+            )
+        }
+    }
+
+    fun setSystemLanguage(value: SystemLanguage) {
+        appPrefs.edit().putString("systemLanguage", value.name).apply()
+        _state.update { it.copy(systemLanguage = value, message = "Language preference saved locally") }
+    }
+
+    fun setAppearanceMode(value: AppearanceMode) {
+        appPrefs.edit().putString("appearanceMode", value.name).apply()
+        _state.update { it.copy(appearanceMode = value, message = "Display mode saved locally") }
+    }
+
     private fun updateAiSettings(reducer: (AiProviderSettings) -> AiProviderSettings) {
         _state.update { current ->
             val next = reducer(current.aiProviderSettings)
@@ -554,6 +583,16 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             model = aiPrefs.getString("model", null) ?: "deepseek-v4-flash",
             thinkingEnabled = aiPrefs.getBoolean("thinkingEnabled", false)
         )
+
+    private fun loadSystemLanguage(): SystemLanguage =
+        appPrefs.getString("systemLanguage", null)
+            ?.let { runCatching { SystemLanguage.valueOf(it) }.getOrNull() }
+            ?: SystemLanguage.FollowSystem
+
+    private fun loadAppearanceMode(): AppearanceMode =
+        appPrefs.getString("appearanceMode", null)
+            ?.let { runCatching { AppearanceMode.valueOf(it) }.getOrNull() }
+            ?: AppearanceMode.FollowSystem
 
     private fun saveAiProviderSettings(settings: AiProviderSettings) {
         aiPrefs.edit()

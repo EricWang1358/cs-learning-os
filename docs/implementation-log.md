@@ -1,5 +1,17 @@
 # Implementation Log
 
+## 2026-07-01: Android More Settings Center
+
+Completed:
+- Collapsed the Android `More` surface into an expandable settings list for System, Service, Data, and Support.
+- Added local language preferences: Follow system, English, and Chinese.
+- Added display mode preferences: Follow system, Day, and Night.
+- Wired display mode into the Compose palette plus Android status/navigation bars.
+- Updated Android beta metadata to `0.1.3`.
+
+Verified:
+- `.\gradlew.bat testDebugUnitTest`
+
 ## 2026-05-28: Backend Skeleton
 
 Completed:
