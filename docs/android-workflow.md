@@ -80,6 +80,7 @@ Do not mix unrelated scopes in one commit unless the coordinator explicitly says
 | Check | Command |
 | --- | --- |
 | Android beta release acceptance | `.\scripts\verify-android-beta.ps1` |
+| Android architecture verification | `.\scripts\verify-android-architecture.ps1` |
 | Toolchain and offline-product doctor | `.\scripts\android-doctor.ps1` |
 | Machine-readable Android doctor | `.\scripts\android-doctor.ps1 -Json` |
 | Android unit tests | `cd android-app; .\gradlew.bat testDebugUnitTest` |
@@ -92,11 +93,12 @@ The Gradle wrapper is checked in. The command still requires JDK 17+ and Android
 ## Local Runbook
 
 1. From the repo root, run `.\scripts\android-doctor.ps1`.
-2. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`.
-3. Run `cd android-app; .\gradlew.bat testDebugUnitTest`.
-4. Run `cd android-app; .\gradlew.bat assembleDebug`.
-5. Install over the existing app with `.\scripts\android-install-debug.ps1`; it uses `adb install -r` and preserves local data when `applicationId` and signing key stay the same.
-6. Manually smoke: create Markdown node, read it, edit it, add quiz, review it, search it, export backup, restore backup.
+2. Run `.\scripts\verify-android-architecture.ps1` to confirm the Android package layout is still on the approved path.
+3. If toolchain prerequisites are missing, install JDK 17+ and Android SDK 35, then expose them through `JAVA_HOME` and `ANDROID_HOME` or ignored `android-app/local.properties`.
+4. Run `cd android-app; .\gradlew.bat testDebugUnitTest`.
+5. Run `cd android-app; .\gradlew.bat assembleDebug`.
+6. Install over the existing app with `.\scripts\android-install-debug.ps1`; it uses `adb install -r` and preserves local data when `applicationId` and signing key stay the same.
+7. Manually smoke: create Markdown node, read it, edit it, add quiz, review it, search it, export backup, restore backup.
 
 ## Beta Update Rules
 
@@ -108,6 +110,8 @@ Android keeps app-local Room data across APK updates when all of these stay true
 - Room database versions only move forward and every schema change has a migration.
 
 Debug testing can use `.\scripts\android-install-debug.ps1`. Public beta should use a stable release signing key and increment `versionCode` for each distributed build.
+
+`.\scripts\verify-android-architecture.ps1` is the lightweight structure gate for this modularization effort. It always requires the legacy baseline packages plus `core/common/AndroidArchitectureConstants.kt`. Once any `feature/` package lands, the script also requires the full first-pass feature tree (`appshell`, `core`, and the named feature roots) so partial modularization is caught deterministically. The current first-pass guard also fails if `LearningViewModel.kt` grows past 38 KB or `LearningRepository.kt` grows past 30 KB, which keeps the compatibility shell/facade from expanding back into god files.
 
 Every Android implementation commit that produces a testable APK must update `android-app/app/build.gradle` before commit:
 

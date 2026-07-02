@@ -78,6 +78,14 @@ For phone-testable APK handoff or distribution, run the Android beta acceptance 
 
 This is the release acceptance command for Android beta builds. It checks that Gradle version metadata, `docs/release-notes.md`, and the expected Android Git tag agree, then runs the doctor, unit-test, and debug-build commands that remain useful on their own during normal development.
 
+For modularization work, run the architecture gate directly as well:
+
+```powershell
+.\scripts\verify-android-architecture.ps1
+```
+
+This harness is intentionally lightweight. It always requires the current baseline Android package layout plus `core/common/AndroidArchitectureConstants.kt`. Once any `feature/` package appears, it also requires the first-pass modular structure roots (`appshell`, `core`, `feature/settings`, `feature/backup`, `feature/library`, `feature/capture`, and `feature/review`) so partial folder migrations fail with a clear message. It also enforces first-pass legacy size caps for the compatibility shell (`LearningViewModel.kt` under 38 KB) and compatibility facade (`LearningRepository.kt` under 30 KB).
+
 ## Beta Versioning
 
 The test APK version is defined in `app/build.gradle`:

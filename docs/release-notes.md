@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.10
+
+Date: 2026-07-02
+
+Git tag: `android-v0.1.10-beta`
+
+Android version:
+
+- `versionCode`: 11
+- `versionName`: `0.1.10`
+
+Status: implementation beta.
+
+Highlights:
+
+- Split Android app wiring into `appshell`, `feature/settings`, `feature/backup`, `feature/library`, `feature/capture`, and `feature/review` boundaries with an architecture harness that now also guards legacy file size growth.
+- Reduced `LearningViewModel` into a smaller compatibility shell by moving UI models out, extracting OpenAI-compatible settings/network behavior, and clearing stale restore state after backup import.
+- Turned `LearningRepository` into a compatibility facade over feature repositories and added focused navigation/settings/repository regression coverage for the modularization pass.
+
 ## Android Beta 0.1.9
 
 Date: 2026-07-02

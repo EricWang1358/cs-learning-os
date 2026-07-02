@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cslearningos.mobile.R
-import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -17,14 +16,22 @@ import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentImporter
+import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.domain.ReviewRating
+import com.cslearningos.mobile.feature.backup.data.LearningRepositoryBackupRepository
+import com.cslearningos.mobile.feature.backup.domain.ExportBackupUseCase
+import com.cslearningos.mobile.feature.backup.domain.RestoreBackupUseCase
+import com.cslearningos.mobile.feature.capture.domain.GenerateCaptureDraftUseCase
+import com.cslearningos.mobile.feature.settings.data.OpenAiCompatibleDraftService
+import com.cslearningos.mobile.feature.settings.data.SettingsPreferencesStore
+import com.cslearningos.mobile.feature.settings.data.safeAiError
+import com.cslearningos.mobile.feature.settings.domain.ValidateAiSettingsUseCase
+import com.cslearningos.mobile.feature.settings.ui.SettingsUiState
+import com.cslearningos.mobile.feature.settings.ui.SettingsViewModel
 import com.cslearningos.mobile.ui.backup.BackupDocument
 import com.cslearningos.mobile.ui.backup.BackupTransferCoordinator
 import com.cslearningos.mobile.ui.backup.backupImportErrorKey
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,84 +40,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-
-enum class AppScreen {
-    Home,
-    Capture,
-    Library,
-    Reader,
-    Editor,
-    Search,
-    QuizEditor,
-    Review,
-    Backup,
-    More
-}
-
-data class AiProviderSettings(
-    val provider: String = "DeepSeek",
-    val apiKey: String = "",
-    val baseUrl: String = "https://api.deepseek.com/v1",
-    val model: String = "deepseek-v4-flash",
-    val thinkingEnabled: Boolean = false,
-    val apiKeyVisible: Boolean = false
-) {
-    val isConfigured: Boolean
-        get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
-}
-
-data class AppNotice(
-    val id: String,
-    val title: UiText,
-    val body: UiText,
-    val createdAt: Long = System.currentTimeMillis()
-)
-
-data class LearningUiState(
-    val screen: AppScreen = AppScreen.Home,
-    val areas: List<AreaEntity> = emptyList(),
-    val nodes: List<LearningNodeEntity> = emptyList(),
-    val trashNodes: List<LearningNodeEntity> = emptyList(),
-    val quizzes: List<QuizItemEntity> = emptyList(),
-    val dueQuizzes: List<QuizItemEntity> = emptyList(),
-    val readerQuestions: List<ReaderQuestionEntity> = emptyList(),
-    val captureSlips: List<CaptureSlipEntity> = emptyList(),
-    val selectedNode: LearningNodeEntity? = null,
-    val selectedQuiz: QuizItemEntity? = null,
-    val selectedLibraryAreaId: String? = null,
-    val libraryCheckedFilter: LibraryCheckedFilter = LibraryCheckedFilter.All,
-    val editorNodeId: String? = null,
-    val editorAreaId: String? = null,
-    val editorSourceCaptureSlipId: String? = null,
-    val editorTitle: String = "",
-    val editorBody: String = "",
-    val searchQuery: String = "",
-    val searchResults: List<SearchResultEntity> = emptyList(),
-    val quizPrompt: String = "",
-    val quizAnswer: String = "",
-    val quizExplanation: String = "",
-    val readerQuestionDraft: String = "",
-    val readerQuestionPanelExpanded: Boolean = false,
-    val captureDraft: String = "",
-    val captureTopicHint: String = "",
-    val captureSourceLabel: String = "",
-    val captureType: CaptureSlipType = CaptureSlipType.unclear,
-    val aiProviderSettings: AiProviderSettings = AiProviderSettings(),
-    val aiServiceStatus: AiServiceStatus = AiServiceStatus(),
-    val availableAiModels: List<String> = emptyList(),
-    val aiBusy: Boolean = false,
-    val pendingAiDraftSlipId: String? = null,
-    val notices: List<AppNotice> = emptyList(),
-    val collapsedLibraryAreas: Set<String> = emptySet(),
-    val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
-    val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
-    val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
-    val quizAnswerVisible: Boolean = false,
-    val message: UiText? = null
-)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
@@ -120,16 +49,41 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val _state = MutableStateFlow(LearningUiState())
     private val dueReviewNow = MutableStateFlow(System.currentTimeMillis())
     val state: StateFlow<LearningUiState> = _state.asStateFlow()
-    private val aiPrefs = application.getSharedPreferences("ai-provider-settings", Context.MODE_PRIVATE)
-    private val appPrefs = application.getSharedPreferences("app-settings", Context.MODE_PRIVATE)
+    private val validateAiSettingsUseCase = ValidateAiSettingsUseCase()
+    private val aiDraftService = OpenAiCompatibleDraftService()
+    private val generateCaptureDraftUseCase = GenerateCaptureDraftUseCase(aiDraftService)
+    private val settingsViewModel = SettingsViewModel(
+        store = SettingsPreferencesStore(
+            aiPrefs = application.getSharedPreferences("ai-provider-settings", Context.MODE_PRIVATE),
+            appPrefs = application.getSharedPreferences("app-settings", Context.MODE_PRIVATE)
+        ),
+        aiDraftService = aiDraftService,
+        validateAiSettings = validateAiSettingsUseCase,
+        missingFieldLabelResolver = ::localizedFieldLabelList
+    )
+    private val backupRepository = LearningRepositoryBackupRepository(repository)
+    private val exportBackupUseCase = ExportBackupUseCase(backupRepository)
+    private val restoreBackupUseCase = RestoreBackupUseCase(backupRepository)
 
     init {
-        _state.update {
-            it.copy(
-                aiProviderSettings = loadAiProviderSettings(),
-                systemLanguage = loadSystemLanguage(),
-                appearanceMode = loadAppearanceMode()
-            )
+        viewModelScope.launch {
+            settingsViewModel.uiState.collect { settingsState ->
+                _state.update { current ->
+                    current.copy(
+                        aiProviderSettings = settingsState.toAiProviderSettings(),
+                        aiServiceStatus = settingsState.aiServiceStatus,
+                        availableAiModels = settingsState.availableModels,
+                        aiBusy = settingsState.isBusy,
+                        systemLanguage = settingsState.systemLanguage,
+                        appearanceMode = settingsState.appearanceMode,
+                        message = if (settingsState.message != null || current.screen == AppScreen.More) {
+                            settingsState.message
+                        } else {
+                            current.message
+                        }
+                    )
+                }
+            }
         }
         viewModelScope.launch {
             seedStarterContentIfNeeded()
@@ -151,9 +105,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 _state.update { current ->
                     current.copy(
                         nodes = nodes,
-                        selectedNode = current.selectedNode?.let { selected ->
-                            nodes.firstOrNull { it.id == selected.id } ?: selected
-                        },
+                        selectedNode = current.selectedNode?.let { selected -> nodes.firstOrNull { it.id == selected.id } },
                         selectedLibraryAreaId = current.selectedLibraryAreaId?.takeIf { selectedAreaId ->
                             nodes.any { it.areaId == selectedAreaId && it.deletedAt == null && it.visibility != "trash" } ||
                                 current.areas.any { it.id == selectedAreaId && it.deletedAt == null }
@@ -179,7 +131,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             while (isActive) {
-                delay(DueReviewRefreshIntervalMillis)
+                delay(AndroidArchitectureConstants.DueReviewRefreshIntervalMillis)
                 refreshDueReviews()
             }
         }
@@ -550,7 +502,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun prepareAiDraftForSlip(slip: CaptureSlipEntity) {
         val settings = state.value.aiProviderSettings
-        val missing = settings.missingRequiredFields()
+        val missing = missingFieldNames(settings)
         if (missing.isNotEmpty()) {
             _state.update {
                 it.copy(
@@ -559,7 +511,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Warning,
                         title = uiText(R.string.ai_status_setup_needed_title),
-                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedLabelList(missing)))
+                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedFieldLabelList(missing)))
                     ),
                     message = uiText(R.string.message_configure_ai_before_drafting)
                 )
@@ -627,7 +579,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun draftCaptureSlipWithAi(slip: CaptureSlipEntity) {
         val snapshot = state.value
         val settings = snapshot.aiProviderSettings
-        val missing = settings.missingRequiredFields()
+        val missing = missingFieldNames(settings)
         if (missing.isNotEmpty()) {
             _state.update {
                 it.copy(
@@ -636,7 +588,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     aiServiceStatus = AiServiceStatus(
                         kind = AiServiceStatusKind.Warning,
                         title = uiText(R.string.ai_status_setup_needed_title),
-                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedLabelList(missing)))
+                        body = uiText(R.string.ai_status_setup_needed_body, UiText.Dynamic(localizedFieldLabelList(missing)))
                     ),
                     message = uiText(R.string.message_configure_ai_before_drafting)
                 )
@@ -662,7 +614,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 )
             }
             runCatching {
-                requestCaptureDraft(settings = settings, slip = slip, existingNodeTitles = snapshot.nodes.map { it.title })
+                generateCaptureDraftUseCase(
+                    settings = settings,
+                    slip = slip,
+                    existingNodeTitles = snapshot.nodes.map { it.title }
+                )
             }.onSuccess { markdown ->
                 repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_draft_ready)
                 val fallbackTitle = slip.topicHint?.takeIf { it.isNotBlank() } ?: "Capture Draft"
@@ -774,15 +730,20 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     suspend fun createBackupDocument(now: Long = System.currentTimeMillis()): BackupDocument =
         BackupTransferCoordinator.createBackupDocument(
-            rawJson = repository.exportBackup(now),
+            rawJson = exportBackupUseCase(now),
             exportedAt = now
         )
 
     fun restoreBackupFromJson(rawJson: String) {
         viewModelScope.launch {
-            runCatching { repository.restoreBackup(rawJson) }
+            runCatching { restoreBackupUseCase(rawJson) }
                 .onSuccess {
-                    _state.update { it.copy(screen = AppScreen.Home, message = uiText(R.string.message_backup_restored)) }
+                    _state.update { current ->
+                        current.resetTransientStateAfterRestore().copy(
+                            screen = AppScreen.Home,
+                            message = uiText(R.string.message_backup_restored)
+                        )
+                    }
                 }
                 .onFailure { error ->
                     showBackupError(error)
@@ -808,175 +769,49 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setAiProvider(value: String) {
-        updateAiSettings(savedField = uiText(R.string.more_provider_label)) { it.copy(provider = value) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.setProvider(value)
     }
 
     fun setAiApiKey(value: String) {
-        updateAiSettings(savedField = uiText(R.string.more_api_key_label)) { it.copy(apiKey = value) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.setApiKey(value)
     }
 
     fun setAiBaseUrl(value: String) {
-        updateAiSettings(savedField = uiText(R.string.more_base_url_label)) { it.copy(baseUrl = value) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.setBaseUrl(value)
     }
 
     fun setAiModel(value: String) {
-        updateAiSettings(savedField = uiText(R.string.more_model_label)) { it.copy(model = value) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.setModel(value)
     }
 
     fun setAiThinkingEnabled(value: Boolean) {
-        updateAiSettings(savedField = uiText(R.string.more_connection_label)) { it.copy(thinkingEnabled = value) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.setThinkingEnabled(value)
     }
 
     fun toggleAiKeyVisibility() {
-        _state.update {
-            it.copy(aiProviderSettings = it.aiProviderSettings.copy(apiKeyVisible = !it.aiProviderSettings.apiKeyVisible))
-        }
+        settingsViewModel.toggleApiKeyVisibility()
     }
 
     fun validateAiSettings() {
-        val settings = state.value.aiProviderSettings
-        val missing = settings.missingRequiredFields()
-        if (missing.isNotEmpty()) {
-            _state.update {
-                it.copy(
-                    aiServiceStatus = AiServiceStatus(
-                        kind = AiServiceStatusKind.Error,
-                        title = uiText(R.string.ai_status_settings_incomplete_title),
-                        body = uiText(R.string.ai_status_missing_fields_body, UiText.Dynamic(localizedLabelList(missing)))
-                    ),
-                    message = uiText(R.string.message_ai_settings_incomplete)
-                )
-            }
-            return
-        }
-
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    aiBusy = true,
-                    aiServiceStatus = AiServiceStatus(
-                        kind = AiServiceStatusKind.Loading,
-                        title = uiText(R.string.ai_status_validating_title),
-                        body = uiText(R.string.ai_status_validating_body, aiModelsUrl(settings.baseUrl))
-                    ),
-                    message = uiText(R.string.message_validating_ai_service)
-                )
-            }
-            runCatching { fetchModelIds(settings) }
-                .onSuccess { models ->
-                    _state.update {
-                        it.copy(
-                            aiBusy = false,
-                            availableAiModels = models,
-                            aiServiceStatus = AiServiceStatus(
-                                kind = AiServiceStatusKind.Success,
-                                title = uiText(R.string.ai_status_validated_title),
-                                body = if (models.isEmpty()) {
-                                    uiText(R.string.ai_status_validated_empty_body)
-                                } else {
-                                    uiText(R.string.ai_status_validated_models_body, models.size, settings.model)
-                                }
-                            ),
-                            message = uiText(R.string.message_ai_validation_succeeded)
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            aiBusy = false,
-                            aiServiceStatus = AiServiceStatus(
-                                kind = AiServiceStatusKind.Error,
-                                title = uiText(R.string.ai_status_validation_failed_title),
-                                body = UiText.Dynamic(error.safeAiError())
-                            ),
-                            message = uiText(R.string.message_ai_validation_failed)
-                        )
-                    }
-                }
-        }
+        settingsViewModel.validateService()
     }
 
     fun saveAiSettings() {
-        saveAiProviderSettings(state.value.aiProviderSettings)
-        _state.update {
-            it.copy(
-                aiServiceStatus = AiServiceStatus(
-                    kind = AiServiceStatusKind.Success,
-                    title = uiText(R.string.ai_status_settings_saved_title),
-                    body = uiText(R.string.ai_status_settings_saved_body)
-                ),
-                message = uiText(R.string.message_ai_settings_saved_locally)
-            )
-        }
+        settingsViewModel.save()
     }
 
     fun pullAiModels() {
-        val settings = state.value.aiProviderSettings
-        val missing = settings.missingRequiredFields()
-        if (missing.isNotEmpty()) {
-            _state.update {
-                it.copy(
-                    aiServiceStatus = AiServiceStatus(
-                        kind = AiServiceStatusKind.Warning,
-                        title = uiText(R.string.ai_status_pull_unavailable_title),
-                        body = uiText(R.string.ai_status_missing_fields_body, UiText.Dynamic(localizedLabelList(missing)))
-                    ),
-                    message = uiText(R.string.message_ai_settings_incomplete)
-                )
-            }
-            return
-        }
-
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    aiBusy = true,
-                    aiServiceStatus = AiServiceStatus(
-                        kind = AiServiceStatusKind.Loading,
-                        title = uiText(R.string.ai_status_pull_title),
-                        body = uiText(R.string.ai_status_pull_body, aiModelsUrl(settings.baseUrl))
-                    ),
-                    message = uiText(R.string.message_pulling_ai_models)
-                )
-            }
-            runCatching { fetchModelIds(settings) }
-                .onSuccess { models ->
-                    _state.update {
-                        it.copy(
-                            aiBusy = false,
-                            availableAiModels = models,
-                            aiServiceStatus = AiServiceStatus(
-                                kind = if (models.isEmpty()) AiServiceStatusKind.Warning else AiServiceStatusKind.Success,
-                                title = if (models.isEmpty()) uiText(R.string.ai_status_pull_empty_title) else uiText(R.string.ai_status_pull_success_title),
-                                body = if (models.isEmpty()) {
-                                    uiText(R.string.ai_status_pull_empty_body)
-                                } else {
-                                    uiText(R.string.ai_status_pull_success_body)
-                                }
-                            ),
-                            message = if (models.isEmpty()) uiText(R.string.message_no_model_ids) else uiText(R.string.message_ai_models_pulled)
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            aiBusy = false,
-                            aiServiceStatus = AiServiceStatus(
-                                kind = AiServiceStatusKind.Error,
-                                title = uiText(R.string.ai_status_pull_failed_title),
-                                body = UiText.Dynamic(error.safeAiError())
-                            ),
-                            message = uiText(R.string.message_model_pull_failed)
-                        )
-                    }
-                }
-        }
+        settingsViewModel.pullModels()
     }
 
     fun selectAiModel(modelId: String) {
-        updateAiSettings(savedField = uiText(R.string.more_model_label)) { it.copy(model = modelId) }
+        _state.update { it.copy(message = null) }
+        settingsViewModel.selectModel(modelId)
     }
 
     fun toggleMoreSection(section: MoreSectionId) {
@@ -1070,115 +905,33 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setSystemLanguage(value: SystemLanguage) {
-        appPrefs.edit().putString("systemLanguage", value.name).apply()
-        _state.update { it.copy(systemLanguage = value, message = uiText(R.string.message_language_saved)) }
+        settingsViewModel.setSystemLanguage(value)
     }
 
     fun setAppearanceMode(value: AppearanceMode) {
-        appPrefs.edit().putString("appearanceMode", value.name).apply()
-        _state.update { it.copy(appearanceMode = value, message = uiText(R.string.message_appearance_saved)) }
+        settingsViewModel.setAppearanceMode(value)
     }
 
-    private fun updateAiSettings(savedField: UiText, reducer: (AiProviderSettings) -> AiProviderSettings) {
-        _state.update { current ->
-            val next = reducer(current.aiProviderSettings)
-            saveAiProviderSettings(next)
-            current.copy(
-                aiProviderSettings = next,
-                aiServiceStatus = AiServiceStatus(
-                    kind = AiServiceStatusKind.Info,
-                    title = uiText(R.string.ai_status_autosaved_title, savedField),
-                    body = uiText(R.string.ai_status_autosaved_body)
-                ),
-                message = null
+    private fun localizedFieldLabelList(fields: List<String>): String =
+        fields.joinToString { field ->
+            localizedAppContext().getString(
+                when (field) {
+                    "provider" -> R.string.more_provider_label
+                    "apiKey" -> R.string.more_api_key_label
+                    "baseUrl" -> R.string.more_base_url_label
+                    "model" -> R.string.more_model_label
+                    else -> R.string.more_connection_label
+                }
             )
         }
-    }
 
-    private suspend fun fetchModelIds(settings: AiProviderSettings): List<String> =
-        withContext(Dispatchers.IO) {
-            val response = openAiGet(url = aiModelsUrl(settings.baseUrl), apiKey = settings.apiKey)
-            parseOpenAiModelIds(response)
-        }
-
-    private suspend fun requestCaptureDraft(
-        settings: AiProviderSettings,
-        slip: CaptureSlipEntity,
-        existingNodeTitles: List<String>
-    ): String =
-        withContext(Dispatchers.IO) {
-            val prompt = buildCaptureAiDraftPrompt(slip = slip, existingNodes = existingNodeTitles)
-            val payload = JSONObject()
-                .put("model", settings.model)
-                .put("temperature", 0.2)
-                .put(
-                    "messages",
-                    JSONArray()
-                        .put(
-                            JSONObject()
-                                .put("role", "system")
-                                .put("content", "You create concise, editable Markdown learning-node drafts for a local-first study app.")
-                        )
-                        .put(JSONObject().put("role", "user").put("content", prompt))
-                )
-            val response = openAiPost(
-                url = aiChatCompletionsUrl(settings.baseUrl),
-                apiKey = settings.apiKey,
-                payload = payload
-            )
-            parseOpenAiChatContent(response).ifBlank {
-                throw IllegalStateException("The model returned an empty draft.")
-            }
-        }
-
-    private fun openAiGet(url: String, apiKey: String): String {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = AiConnectTimeoutMillis
-            readTimeout = AiReadTimeoutMillis
-            setRequestProperty("Authorization", "Bearer $apiKey")
-            setRequestProperty("Accept", "application/json")
-        }
-        return connection.useResponse()
-    }
-
-    private fun openAiPost(url: String, apiKey: String, payload: JSONObject): String {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = AiConnectTimeoutMillis
-            readTimeout = AiReadTimeoutMillis
-            doOutput = true
-            setRequestProperty("Authorization", "Bearer $apiKey")
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "application/json")
-        }
-        connection.outputStream.use { stream ->
-            stream.write(payload.toString().toByteArray(Charsets.UTF_8))
-        }
-        return connection.useResponse()
-    }
-
-    private fun HttpURLConnection.useResponse(): String =
-        try {
-            val responseBody = (if (responseCode in 200..299) inputStream else errorStream)
-                ?.bufferedReader()
-                ?.use { it.readText() }
-                .orEmpty()
-            if (responseCode !in 200..299) {
-                throw IllegalStateException("HTTP $responseCode: ${responseBody.take(240)}")
-            }
-            responseBody
-        } finally {
-            disconnect()
-        }
-
-    private fun Throwable.safeAiError(): String =
-        (message ?: javaClass.simpleName)
-            .replace(Regex("sk-[A-Za-z0-9_-]+"), "sk-...")
-            .take(260)
-
-    private fun localizedLabelList(labelResIds: List<Int>): String =
-        labelResIds.joinToString { labelResId -> localizedAppContext().getString(labelResId) }
+    private fun missingFieldNames(settings: AiProviderSettings): List<String> =
+        validateAiSettingsUseCase(
+            provider = settings.provider,
+            apiKey = settings.apiKey,
+            baseUrl = settings.baseUrl,
+            model = settings.model
+        ).missingFields
 
     private fun localizedAppContext(): Context {
         val application = getApplication<Application>()
@@ -1186,66 +939,52 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         return application.localizedAppContext(state.value.systemLanguage, systemLanguageTag)
     }
 
-    private fun loadAiProviderSettings(): AiProviderSettings =
-        AiProviderSettings(
-            provider = aiPrefs.getString("provider", null) ?: "DeepSeek",
-            apiKey = aiPrefs.getString("apiKey", null) ?: "",
-            baseUrl = aiPrefs.getString("baseUrl", null) ?: "https://api.deepseek.com/v1",
-            model = aiPrefs.getString("model", null) ?: "deepseek-v4-flash",
-            thinkingEnabled = aiPrefs.getBoolean("thinkingEnabled", false)
-        )
-
-    private fun loadSystemLanguage(): SystemLanguage =
-        appPrefs.getString("systemLanguage", null)
-            ?.let { runCatching { SystemLanguage.valueOf(it) }.getOrNull() }
-            ?: SystemLanguage.FollowSystem
-
-    private fun loadAppearanceMode(): AppearanceMode =
-        appPrefs.getString("appearanceMode", null)
-            ?.let { runCatching { AppearanceMode.valueOf(it) }.getOrNull() }
-            ?: AppearanceMode.FollowSystem
-
-    private fun saveAiProviderSettings(settings: AiProviderSettings) {
-        aiPrefs.edit()
-            .putString("provider", settings.provider)
-            .putString("apiKey", settings.apiKey)
-            .putString("baseUrl", settings.baseUrl)
-            .putString("model", settings.model)
-            .putBoolean("thinkingEnabled", settings.thinkingEnabled)
-            .apply()
-    }
-
     private suspend fun seedStarterContentIfNeeded() {
         val prefs = getApplication<Application>()
             .getSharedPreferences("starter-content", Context.MODE_PRIVATE)
-        if (prefs.getInt("seededVersion", 0) >= StarterContentSeedVersion) return
+        if (prefs.getInt("seededVersion", 0) >= AndroidArchitectureConstants.StarterContentSeedVersion) return
 
         runCatching {
             StarterContentImporter.fromAssets(getApplication<Application>().assets)
         }.onSuccess { pack ->
             repository.seedStarterContent(pack)
-            prefs.edit().putInt("seededVersion", StarterContentSeedVersion).apply()
+            prefs.edit().putInt("seededVersion", AndroidArchitectureConstants.StarterContentSeedVersion).apply()
         }.onFailure { error ->
             _state.update { it.copy(message = error.message?.let(UiText::Dynamic) ?: uiText(R.string.message_starter_content_import_failed)) }
         }
     }
-
-    private companion object {
-        const val StarterContentSeedVersion = 2
-        const val AiConnectTimeoutMillis = 15_000
-        const val AiReadTimeoutMillis = 45_000
-    }
 }
 
-private fun LearningUiState.withNotice(title: UiText, body: UiText): LearningUiState =
+private fun SettingsUiState.toAiProviderSettings(): AiProviderSettings =
+    AiProviderSettings(
+        provider = provider,
+        apiKey = apiKey,
+        baseUrl = baseUrl,
+        model = model,
+        thinkingEnabled = thinkingEnabled,
+        apiKeyVisible = apiKeyVisible
+    )
+
+private fun LearningUiState.resetTransientStateAfterRestore(): LearningUiState =
     copy(
-        notices = (
-            listOf(
-                AppNotice(
-                    id = "notice-${System.currentTimeMillis()}-${notices.size}",
-                    title = title,
-                    body = body
-                )
-            ) + notices
-        ).take(6)
+        selectedNode = null,
+        selectedQuiz = null,
+        selectedLibraryAreaId = null,
+        editorNodeId = null,
+        editorAreaId = null,
+        editorSourceCaptureSlipId = null,
+        editorTitle = "",
+        editorBody = "",
+        searchQuery = "",
+        searchResults = emptyList(),
+        quizPrompt = "",
+        quizAnswer = "",
+        quizExplanation = "",
+        readerQuestionDraft = "",
+        readerQuestionPanelExpanded = false,
+        captureDraft = "",
+        captureTopicHint = "",
+        captureSourceLabel = "",
+        pendingAiDraftSlipId = null,
+        quizAnswerVisible = false
     )

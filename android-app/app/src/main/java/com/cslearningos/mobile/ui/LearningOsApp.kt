@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cslearningos.mobile.appshell.navigation.AppRoute
+import com.cslearningos.mobile.appshell.navigation.selectedBottomTabFor as selectedBottomRouteFor
+import com.cslearningos.mobile.appshell.navigation.toAppRoute
+import com.cslearningos.mobile.appshell.navigation.toAppScreen
+import com.cslearningos.mobile.appshell.state.AppShellState
+import com.cslearningos.mobile.appshell.state.AppShellViewModel
+import com.cslearningos.mobile.appshell.state.toAppShellState
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
@@ -72,25 +80,22 @@ import kotlinx.coroutines.launch
 private val CardShape = RoundedCornerShape(10.dp)
 
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
-    when (screen) {
-        AppScreen.Home -> AppScreen.Home
-        AppScreen.Capture -> AppScreen.Capture
-        AppScreen.Library,
-        AppScreen.Reader,
-        AppScreen.Editor,
-        AppScreen.Search,
-        AppScreen.QuizEditor -> AppScreen.Library
-        AppScreen.Review -> AppScreen.Review
-        AppScreen.Backup,
-        AppScreen.More -> AppScreen.More
-    }
+    selectedBottomRouteFor(screen.toAppRoute()).toAppScreen()
 
 @Composable
-fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val localizedContext = rememberLocalizedAppContext(state.systemLanguage)
+fun LearningOsApp(
+    shellViewModel: AppShellViewModel = viewModel(),
+    learningViewModel: LearningViewModel = viewModel()
+) {
+    val learningState by learningViewModel.state.collectAsStateWithLifecycle()
+    val shellState by shellViewModel.state.collectAsStateWithLifecycle()
+    val localizedContext = rememberLocalizedAppContext(learningState.systemLanguage)
 
-    WorkbenchTheme(appearanceMode = state.appearanceMode) {
+    LaunchedEffect(learningState.screen, learningState.message) {
+        shellViewModel.syncFrom(learningState.toAppShellState())
+    }
+
+    WorkbenchTheme(appearanceMode = learningState.appearanceMode) {
         CompositionLocalProvider(LocalContext provides localizedContext) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -99,9 +104,9 @@ fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
                     .safeDrawingPadding()
             ) {
                 when {
-                    maxWidth >= 1100.dp -> LandscapeWorkbench(state = state, viewModel = viewModel)
-                    maxWidth >= 840.dp -> TwoPaneWorkbench(state = state, viewModel = viewModel)
-                    else -> PortraitWorkbench(state = state, viewModel = viewModel)
+                    maxWidth >= 1100.dp -> LandscapeWorkbench(shellState = shellState, state = learningState, viewModel = learningViewModel)
+                    maxWidth >= 840.dp -> TwoPaneWorkbench(shellState = shellState, state = learningState, viewModel = learningViewModel)
+                    else -> PortraitWorkbench(shellState = shellState, state = learningState, viewModel = learningViewModel)
                 }
             }
         }
@@ -109,7 +114,11 @@ fun LearningOsApp(viewModel: LearningViewModel = viewModel()) {
 }
 
 @Composable
-private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewModel) {
+private fun PortraitWorkbench(
+    shellState: AppShellState,
+    state: LearningUiState,
+    viewModel: LearningViewModel
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -117,18 +126,19 @@ private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewMod
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                if (useCompactPortraitBrand(state.screen)) {
-                    CompactBrandBlock(state)
+                if (useCompactPortraitBrand(shellState.route.toAppScreen())) {
+                    CompactBrandBlock(route = shellState.route, state = state)
                 } else {
                     BrandBlock(state)
                 }
             }
-            item { StatusBanner(state.message) }
+            item { StatusBanner(shellState.message) }
             item { NoticeTray(state = state, viewModel = viewModel) }
-            item { ScreenContent(state, viewModel, isDetailPane = true) }
+            item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = true) }
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
         MobileBottomNav(
+            currentRoute = shellState.route,
             state = state,
             viewModel = viewModel,
             modifier = Modifier
@@ -139,9 +149,14 @@ private fun PortraitWorkbench(state: LearningUiState, viewModel: LearningViewMod
 }
 
 @Composable
-private fun TwoPaneWorkbench(state: LearningUiState, viewModel: LearningViewModel) {
+private fun TwoPaneWorkbench(
+    shellState: AppShellState,
+    state: LearningUiState,
+    viewModel: LearningViewModel
+) {
     Row(modifier = Modifier.fillMaxSize()) {
         WorkbenchSidebar(
+            currentRoute = shellState.route,
             state = state,
             viewModel = viewModel,
             modifier = Modifier
@@ -157,17 +172,22 @@ private fun TwoPaneWorkbench(state: LearningUiState, viewModel: LearningViewMode
                 .background(WorkbenchColors.Surface.copy(alpha = 0.88f))
                 .border(BorderStroke(1.dp, WorkbenchColors.Line))
         ) {
-            item { StatusBanner(state.message) }
+            item { StatusBanner(shellState.message) }
             item { NoticeTray(state = state, viewModel = viewModel) }
-            item { ScreenContent(state, viewModel, isDetailPane = true) }
+            item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = true) }
         }
     }
 }
 
 @Composable
-private fun LandscapeWorkbench(state: LearningUiState, viewModel: LearningViewModel) {
+private fun LandscapeWorkbench(
+    shellState: AppShellState,
+    state: LearningUiState,
+    viewModel: LearningViewModel
+) {
     Row(modifier = Modifier.fillMaxSize()) {
         WorkbenchSidebar(
+            currentRoute = shellState.route,
             state = state,
             viewModel = viewModel,
             modifier = Modifier
@@ -186,9 +206,9 @@ private fun LandscapeWorkbench(state: LearningUiState, viewModel: LearningViewMo
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                item { StatusBanner(state.message) }
+                item { StatusBanner(shellState.message) }
                 item { NoticeTray(state = state, viewModel = viewModel) }
-                item { ScreenContent(state, viewModel, isDetailPane = false) }
+                item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = false) }
             }
         }
         Box(
@@ -197,13 +217,14 @@ private fun LandscapeWorkbench(state: LearningUiState, viewModel: LearningViewMo
                 .fillMaxHeight()
                 .background(WorkbenchColors.Surface.copy(alpha = 0.86f))
         ) {
-            DetailPane(state = state, viewModel = viewModel)
+            DetailPane(route = shellState.route, state = state, viewModel = viewModel)
         }
     }
 }
 
 @Composable
 private fun WorkbenchSidebar(
+    currentRoute: AppRoute,
     state: LearningUiState,
     viewModel: LearningViewModel,
     modifier: Modifier = Modifier
@@ -215,18 +236,18 @@ private fun WorkbenchSidebar(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         BrandBlock(state)
-        NavButton(stringResource(R.string.nav_home_label), state.screen == AppScreen.Home, viewModel::showHome)
-        NavButton(stringResource(R.string.nav_capture_label), state.screen == AppScreen.Capture, viewModel::showCapture)
-        NavButton(stringResource(R.string.nav_library_label), state.screen == AppScreen.Library, viewModel::showLibrary)
+        NavButton(stringResource(R.string.nav_home_label), currentRoute == AppRoute.Home, onClick = { viewModel.openTopLevelRoute(AppRoute.Home) })
+        NavButton(stringResource(R.string.nav_capture_label), currentRoute == AppRoute.Capture, onClick = { viewModel.openTopLevelRoute(AppRoute.Capture) })
+        NavButton(stringResource(R.string.nav_library_label), currentRoute == AppRoute.Library, onClick = { viewModel.openTopLevelRoute(AppRoute.Library) })
         NavButton(
             stringResource(R.string.nav_review_count, state.dueQuizzes.size),
-            state.screen == AppScreen.Review,
-            viewModel::showReview
+            currentRoute == AppRoute.Review,
+            onClick = { viewModel.openTopLevelRoute(AppRoute.Review) }
         )
         NavButton(
             stringResource(R.string.nav_more_label),
-            state.screen == AppScreen.More || state.screen == AppScreen.Backup,
-            viewModel::showMore
+            currentRoute == AppRoute.More,
+            onClick = { viewModel.openTopLevelRoute(AppRoute.More) }
         )
         Spacer(modifier = Modifier.height(4.dp))
         WorkbenchCard {
@@ -263,7 +284,7 @@ private fun BrandBlock(state: LearningUiState) {
 }
 
 @Composable
-private fun CompactBrandBlock(state: LearningUiState) {
+private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,7 +304,7 @@ private fun CompactBrandBlock(state: LearningUiState) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(appScreenLabelResId(state.screen)),
+                text = stringResource(appScreenLabelResId(route.toAppScreen())),
                 color = WorkbenchColors.InkStrong,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
@@ -299,6 +320,7 @@ private fun CompactBrandBlock(state: LearningUiState) {
 
 @Composable
 private fun MobileBottomNav(
+    currentRoute: AppRoute,
     state: LearningUiState,
     viewModel: LearningViewModel,
     modifier: Modifier = Modifier
@@ -315,12 +337,12 @@ private fun MobileBottomNav(
         verticalAlignment = Alignment.CenterVertically
     ) {
         mobileBottomNavItems().forEach { item ->
-            val selected = selectedBottomTabFor(state.screen) == item.screen
+            val selected = selectedBottomRouteFor(currentRoute) == item.screen.toAppRoute()
             BottomNavTab(
                 item = item,
                 selected = selected,
                 dueCount = state.dueQuizzes.size,
-                onClick = { item.open(viewModel) },
+                onClick = { viewModel.openTopLevelRoute(item.screen.toAppRoute()) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -372,17 +394,6 @@ private fun BottomNavTab(
     }
 }
 
-private fun MobileBottomNavItem.open(viewModel: LearningViewModel) {
-    when (screen) {
-        AppScreen.Home -> viewModel.showHome()
-        AppScreen.Capture -> viewModel.showCapture()
-        AppScreen.Library -> viewModel.showLibrary()
-        AppScreen.Review -> viewModel.showReview()
-        AppScreen.More -> viewModel.showMore()
-        else -> viewModel.showHome()
-    }
-}
-
 private fun MobileBottomNavItem.icon(): ImageVector =
     when (screen) {
         AppScreen.Home -> Icons.Filled.Home
@@ -394,23 +405,23 @@ private fun MobileBottomNavItem.icon(): ImageVector =
     }
 
 @Composable
-private fun ScreenContent(state: LearningUiState, viewModel: LearningViewModel, isDetailPane: Boolean) {
-    when (state.screen) {
-        AppScreen.Home -> DashboardScreen(state, viewModel)
-        AppScreen.Capture -> CaptureScreen(state, viewModel)
-        AppScreen.Library -> LibraryScreen(state, viewModel)
-        AppScreen.Reader -> if (isDetailPane) ReaderScreen(state, viewModel) else LibraryScreen(state, viewModel)
-        AppScreen.Editor -> if (isDetailPane) EditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
-        AppScreen.Search -> SearchScreen(state, viewModel)
-        AppScreen.QuizEditor -> if (isDetailPane) QuizEditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
-        AppScreen.Review -> ReviewScreen(state, viewModel)
-        AppScreen.Backup -> BackupScreen(state, viewModel)
-        AppScreen.More -> MoreScreen(state, viewModel)
+private fun ScreenContent(route: AppRoute, state: LearningUiState, viewModel: LearningViewModel, isDetailPane: Boolean) {
+    when (route) {
+        AppRoute.Home -> DashboardScreen(state, viewModel)
+        AppRoute.Capture -> CaptureScreen(state, viewModel)
+        AppRoute.Library -> LibraryScreen(state, viewModel)
+        AppRoute.Reader -> if (isDetailPane) ReaderScreen(state, viewModel) else LibraryScreen(state, viewModel)
+        AppRoute.Editor -> if (isDetailPane) EditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
+        AppRoute.Search -> SearchScreen(state, viewModel)
+        AppRoute.QuizEditor -> if (isDetailPane) QuizEditorScreen(state, viewModel) else LibraryScreen(state, viewModel)
+        AppRoute.Review -> ReviewScreen(state, viewModel)
+        AppRoute.Backup -> BackupScreen(state, viewModel)
+        AppRoute.More -> MoreScreen(state, viewModel)
     }
 }
 
 @Composable
-private fun DetailPane(state: LearningUiState, viewModel: LearningViewModel) {
+private fun DetailPane(route: AppRoute, state: LearningUiState, viewModel: LearningViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -418,14 +429,25 @@ private fun DetailPane(state: LearningUiState, viewModel: LearningViewModel) {
             .padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        StatusBanner(state.message)
+        StatusBanner(state.toAppShellState().message)
         NoticeTray(state = state, viewModel = viewModel)
-        when (state.screen) {
-            AppScreen.Reader -> ReaderScreen(state, viewModel)
-            AppScreen.Editor -> EditorScreen(state, viewModel)
-            AppScreen.QuizEditor -> QuizEditorScreen(state, viewModel)
+        when (route) {
+            AppRoute.Reader -> ReaderScreen(state, viewModel)
+            AppRoute.Editor -> EditorScreen(state, viewModel)
+            AppRoute.QuizEditor -> QuizEditorScreen(state, viewModel)
             else -> DetailEmptyState(state)
         }
+    }
+}
+
+private fun LearningViewModel.openTopLevelRoute(route: AppRoute) {
+    when (selectedBottomRouteFor(route)) {
+        AppRoute.Home -> showHome()
+        AppRoute.Capture -> showCapture()
+        AppRoute.Library -> showLibrary()
+        AppRoute.Review -> showReview()
+        AppRoute.More -> showMore()
+        else -> showHome()
     }
 }
 

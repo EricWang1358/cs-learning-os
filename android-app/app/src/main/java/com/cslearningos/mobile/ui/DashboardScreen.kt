@@ -23,15 +23,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cslearningos.mobile.data.LearningNodeEntity
 
+private data class DashboardScreenState(
+    val summary: DashboardSummary,
+    val searchQuery: String,
+    val previewNodes: List<LearningNodeEntity>
+)
+
 @Composable
 fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
-    val summary = buildDashboardSummary(state)
+    val screenState = state.toDashboardScreenState()
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        FirstScreenActionStrip(summary = summary, viewModel = viewModel)
-        DashboardHero(state = state, viewModel = viewModel)
-        TodayStack(summary = summary)
-        ContinueReadingCard(summary = summary, viewModel = viewModel)
-        LibraryPreview(state = state, viewModel = viewModel)
+        FirstScreenActionStrip(summary = screenState.summary, viewModel = viewModel)
+        DashboardHero(state = screenState, viewModel = viewModel)
+        TodayStack(summary = screenState.summary)
+        ContinueReadingCard(summary = screenState.summary, viewModel = viewModel)
+        LibraryPreview(state = screenState, viewModel = viewModel)
     }
 }
 
@@ -61,7 +67,7 @@ private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: Learnin
 }
 
 @Composable
-private fun DashboardHero(state: LearningUiState, viewModel: LearningViewModel) {
+private fun DashboardHero(state: DashboardScreenState, viewModel: LearningViewModel) {
     WorkbenchCard {
         Eyebrow(stringResource(R.string.dashboard_hero_eyebrow))
         Text(
@@ -135,11 +141,11 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
 }
 
 @Composable
-private fun LibraryPreview(state: LearningUiState, viewModel: LearningViewModel) {
+private fun LibraryPreview(state: DashboardScreenState, viewModel: LearningViewModel) {
     WorkbenchCard {
         Eyebrow(stringResource(R.string.dashboard_library_preview_eyebrow))
         Text(stringResource(R.string.dashboard_library_preview_title), color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black)
-        if (state.nodes.isEmpty()) {
+        if (state.previewNodes.isEmpty()) {
             Text(
                 stringResource(R.string.dashboard_library_preview_empty_body),
                 color = WorkbenchColors.Muted,
@@ -148,7 +154,7 @@ private fun LibraryPreview(state: LearningUiState, viewModel: LearningViewModel)
             )
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.nodes.take(3).forEach { node ->
+                state.previewNodes.forEach { node ->
                     DashboardNodePreview(node = node, onOpen = { viewModel.openNode(node) })
                 }
             }
@@ -235,3 +241,10 @@ private fun DashboardAction.metric(summary: DashboardSummary): String? =
         DashboardAction.Review -> summary.dueReviewCount.toString()
         else -> null
     }
+
+private fun LearningUiState.toDashboardScreenState(): DashboardScreenState =
+    DashboardScreenState(
+        summary = buildDashboardSummary(this),
+        searchQuery = searchQuery,
+        previewNodes = nodes.take(3)
+    )

@@ -25,15 +25,29 @@ import androidx.compose.ui.unit.sp
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipType
 
+private data class CaptureScreenState(
+    val draft: String,
+    val topicHint: String,
+    val sourceLabel: String,
+    val type: CaptureSlipType,
+    val pendingAiDraftSlipId: String?,
+    val captureSlips: List<CaptureSlipEntity>,
+    val nodeTitles: List<String>,
+    val aiProviderSettings: AiProviderSettings,
+    val aiServiceStatus: AiServiceStatus,
+    val aiBusy: Boolean
+)
+
 @Composable
 fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val screenState = state.toCaptureScreenState()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
             eyebrow = stringResource(R.string.capture_eyebrow),
             title = stringResource(R.string.capture_title),
             body = stringResource(R.string.capture_body)
         )
-        CaptureComposer(state = state, viewModel = viewModel)
+        CaptureComposer(state = screenState, viewModel = viewModel)
         CollapsibleWorkbenchSection(
             eyebrow = stringResource(R.string.capture_composer_eyebrow),
             title = stringResource(R.string.capture_chain_title),
@@ -49,13 +63,13 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 lineHeight = 19.sp
             )
         }
-        AiDraftPreflight(state = state, viewModel = viewModel)
-        CaptureInbox(state = state, viewModel = viewModel)
+        AiDraftPreflight(state = screenState, viewModel = viewModel)
+        CaptureInbox(state = screenState, viewModel = viewModel)
     }
 }
 
 @Composable
-private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel) {
+private fun CaptureComposer(state: CaptureScreenState, viewModel: LearningViewModel) {
     WorkbenchCard(accent = true) {
         Eyebrow(stringResource(R.string.capture_composer_eyebrow))
         Text(
@@ -65,22 +79,22 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
             fontWeight = FontWeight.Black
         )
         WorkbenchTextField(
-            value = state.captureDraft,
+            value = state.draft,
             onValueChange = viewModel::setCaptureDraft,
             label = stringResource(R.string.capture_draft_field),
             minLines = 4
         )
         WorkbenchTextField(
-            value = state.captureTopicHint,
+            value = state.topicHint,
             onValueChange = viewModel::setCaptureTopicHint,
             label = stringResource(R.string.capture_topic_hint_field)
         )
         WorkbenchTextField(
-            value = state.captureSourceLabel,
+            value = state.sourceLabel,
             onValueChange = viewModel::setCaptureSourceLabel,
             label = stringResource(R.string.capture_source_label_field)
         )
-        CaptureTypeRow(selected = state.captureType, onSelect = viewModel::setCaptureType)
+        CaptureTypeRow(selected = state.type, onSelect = viewModel::setCaptureType)
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.capture_save_slip), viewModel::saveCaptureSlip, primary = true)
             WorkbenchButton(
@@ -92,10 +106,10 @@ private fun CaptureComposer(state: LearningUiState, viewModel: LearningViewModel
 }
 
 @Composable
-private fun AiDraftPreflight(state: LearningUiState, viewModel: LearningViewModel) {
+private fun AiDraftPreflight(state: CaptureScreenState, viewModel: LearningViewModel) {
     val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } } ?: return
     val settings = state.aiProviderSettings
-    val contextTitles = aiDraftContextNodeTitles(state.nodes.map { it.title })
+    val contextTitles = aiDraftContextNodeTitles(state.nodeTitles)
     WorkbenchCard(accent = true) {
         val context = LocalContext.current
         Eyebrow(stringResource(R.string.capture_preflight_eyebrow))
@@ -168,7 +182,7 @@ private fun CaptureTypeRow(selected: CaptureSlipType, onSelect: (CaptureSlipType
 }
 
 @Composable
-private fun CaptureInbox(state: LearningUiState, viewModel: LearningViewModel) {
+private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel) {
     WorkbenchCard {
         Eyebrow(stringResource(R.string.capture_inbox_eyebrow))
         Text(
@@ -266,3 +280,17 @@ private fun CaptureSlipType.label(): String =
         CaptureSlipType.concept_seed -> stringResource(R.string.capture_type_concept)
         CaptureSlipType.question -> stringResource(R.string.capture_type_question)
     }
+
+private fun LearningUiState.toCaptureScreenState(): CaptureScreenState =
+    CaptureScreenState(
+        draft = captureDraft,
+        topicHint = captureTopicHint,
+        sourceLabel = captureSourceLabel,
+        type = captureType,
+        pendingAiDraftSlipId = pendingAiDraftSlipId,
+        captureSlips = captureSlips,
+        nodeTitles = nodes.map { it.title },
+        aiProviderSettings = aiProviderSettings,
+        aiServiceStatus = aiServiceStatus,
+        aiBusy = aiBusy
+    )

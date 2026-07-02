@@ -1,28 +1,39 @@
 package com.cslearningos.mobile.data
 
-import com.cslearningos.mobile.domain.MarkdownQuizParser
+import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.domain.ReviewRating
-import com.cslearningos.mobile.domain.ReviewScheduleInput
-import com.cslearningos.mobile.domain.ReviewScheduler
+import com.cslearningos.mobile.feature.capture.data.CaptureRepository
+import com.cslearningos.mobile.feature.library.data.LibraryRepository
+import com.cslearningos.mobile.feature.review.data.ReviewRepository
 import kotlinx.coroutines.flow.Flow
-import java.text.Normalizer
-import java.time.Instant
 import java.util.UUID
 import kotlin.math.absoluteValue
 
-class LearningRepository(private val dao: LearningDao) {
-    val areas: Flow<List<AreaEntity>> = dao.observeAreas()
-    val nodes: Flow<List<LearningNodeEntity>> = dao.observeNodes()
-    val trashNodes: Flow<List<LearningNodeEntity>> = dao.observeTrashNodes()
-    val quizzes: Flow<List<QuizItemEntity>> = dao.observeQuizzes()
+class LearningRepository private constructor(
+    private val dao: LearningDao,
+    private val libraryRepository: LibraryRepository,
+    private val captureRepository: CaptureRepository,
+    private val reviewRepository: ReviewRepository
+) {
+    constructor(dao: LearningDao) : this(
+        dao = dao,
+        libraryRepository = LibraryRepository(dao),
+        captureRepository = CaptureRepository(dao),
+        reviewRepository = ReviewRepository(dao)
+    )
+
+    val areas: Flow<List<AreaEntity>> = libraryRepository.areas
+    val nodes: Flow<List<LearningNodeEntity>> = libraryRepository.nodes
+    val trashNodes: Flow<List<LearningNodeEntity>> = libraryRepository.trashNodes
+    val quizzes: Flow<List<QuizItemEntity>> = reviewRepository.quizzes
     val openReaderQuestions: Flow<List<ReaderQuestionEntity>> = dao.observeOpenReaderQuestions()
-    val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeInboxCaptureSlips()
+    val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = captureRepository.inboxCaptureSlips
 
-    fun dueQuizzes(now: Long): Flow<List<QuizItemEntity>> = dao.observeDueQuizzes(now)
+    fun dueQuizzes(now: Long): Flow<List<QuizItemEntity>> = reviewRepository.dueQuizzes(now)
 
-    suspend fun getNode(id: String): LearningNodeEntity? = dao.getNode(id)
+    suspend fun getNode(id: String): LearningNodeEntity? = libraryRepository.getNode(id)
 
-    suspend fun getQuiz(id: String): QuizItemEntity? = dao.getQuiz(id)
+    suspend fun getQuiz(id: String): QuizItemEntity? = reviewRepository.getQuiz(id)
 
     suspend fun saveNode(
         id: String?,
@@ -30,153 +41,32 @@ class LearningRepository(private val dao: LearningDao) {
         markdownBody: String,
         areaId: String? = null,
         now: Long = System.currentTimeMillis()
-    ): LearningNodeEntity {
-        val existing = id?.let { dao.getNode(it) }
-        val resolvedArea = resolveArea(areaId ?: existing?.areaId ?: existing?.area ?: DefaultAreaSlug, now)
-        val node = LearningNodeEntity(
-            id = existing?.id ?: UUID.randomUUID().toString(),
-            title = title.ifBlank { "Untitled" },
-            markdownBody = markdownBody,
-            createdAt = existing?.createdAt ?: now,
-            updatedAt = now,
-            lastReadAt = existing?.lastReadAt,
-            revision = (existing?.revision ?: 0L) + 1L,
-            syncStatus = SyncStatus.dirty,
-            deletedAt = null,
-            area = resolvedArea.slug,
-            areaId = resolvedArea.id,
-            track = existing?.track ?: "general",
-            order = existing?.order ?: 1000,
-            summary = existing?.summary ?: markdownBody.lineSequence()
-                .firstOrNull { it.isNotBlank() && !it.trim().startsWith("#") }
-                ?.trim()
-                .orEmpty(),
-            visibility = existing?.visibility ?: "support",
-            isStarter = existing?.isStarter ?: false,
-            isChecked = existing?.isChecked ?: false
-        )
-        dao.upsertNode(node)
-        indexNode(node)
-        syncMarkdownQuizzes(node, now)
-        return node
-    }
+    ): LearningNodeEntity = libraryRepository.saveNode(
+        id = id,
+        title = title,
+        markdownBody = markdownBody,
+        areaId = areaId,
+        now = now
+    )
 
     suspend fun markRead(nodeId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        if (node.deletedAt != null) return
-        val updated = node.withReadTrace(now)
-        dao.upsertNode(updated)
-        indexNode(updated)
+        libraryRepository.markRead(nodeId = nodeId, now = now)
     }
 
     suspend fun moveNodeToTrash(nodeId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        dao.upsertNode(
-            node.copy(
-                updatedAt = now,
-                revision = node.revision + 1,
-                syncStatus = SyncStatus.dirty,
-                visibility = "trash"
-            )
-        )
-        dao.deleteNodeFts(node.id)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + 1,
-                    syncStatus = SyncStatus.dirty,
-                    visibility = "trash"
-                )
-            )
-            dao.deleteQuizFts(quiz.id)
-        }
+        libraryRepository.moveNodeToTrash(nodeId = nodeId, now = now)
     }
 
     suspend fun restoreNodeFromTrash(nodeId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        if (node.deletedAt != null) return
-        val area = resolveArea(node.areaId.ifBlank { node.area }, now)
-        val restored = node.copy(
-            updatedAt = now,
-            revision = node.revision + 1,
-            syncStatus = SyncStatus.dirty,
-            area = area.slug,
-            areaId = area.id,
-            visibility = if (node.isStarter) "core" else "support"
-        )
-        dao.upsertNode(restored)
-        indexNode(restored)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            val restoredQuiz = quiz.copy(
-                updatedAt = now,
-                revision = quiz.revision + 1,
-                syncStatus = SyncStatus.dirty,
-                visibility = "practice"
-            )
-            dao.upsertQuiz(restoredQuiz)
-            indexQuiz(restoredQuiz)
-        }
+        libraryRepository.restoreNodeFromTrash(nodeId = nodeId, now = now)
     }
 
     suspend fun permanentlyDeleteNode(nodeId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        val deletedNode = node.copy(
-            updatedAt = now,
-            revision = node.revision + 1,
-            syncStatus = SyncStatus.deleted,
-            deletedAt = now
-        )
-        dao.upsertNode(deletedNode)
-        dao.deleteNodeFts(node.id)
-
-        dao.getActiveQuizzesForNode(node.id).forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + 1,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
-            )
-            dao.deleteQuizFts(quiz.id)
-            deleteReviewDataForQuiz(quiz.id)
-        }
-
-        dao.getActiveReaderQuestionsForNode(node.id).forEach { question ->
-            dao.upsertReaderQuestion(
-                question.copy(
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
-            )
-        }
+        libraryRepository.permanentlyDeleteNode(nodeId = nodeId, now = now)
     }
 
     suspend fun clearStarterContent(now: Long = System.currentTimeMillis()) {
-        dao.getStarterNodes().forEach { node ->
-            dao.upsertNode(
-                node.copy(
-                    updatedAt = now,
-                    revision = node.revision + 1,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
-            )
-            dao.deleteNodeFts(node.id)
-        }
-        dao.getStarterQuizzes().forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + 1,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
-            )
-            dao.deleteQuizFts(quiz.id)
-            deleteReviewDataForQuiz(quiz.id)
-        }
+        libraryRepository.clearStarterContent(now = now)
     }
 
     suspend fun saveReaderQuestion(
@@ -214,51 +104,27 @@ class LearningRepository(private val dao: LearningDao) {
         sourceLabel: String?,
         status: CaptureSlipStatus = CaptureSlipStatus.inbox,
         now: Long = System.currentTimeMillis()
-    ): CaptureSlipEntity {
-        val slip = CaptureSlipEntity(
-            id = UUID.randomUUID().toString(),
-            body = body.trim(),
-            type = type,
-            topicHint = topicHint?.trim()?.ifBlank { null },
-            sourceLabel = sourceLabel?.trim()?.ifBlank { null },
-            linkedNodeId = null,
-            status = status,
-            createdAt = now,
-            updatedAt = now,
-            revision = 1L,
-            syncStatus = SyncStatus.dirty,
-            deletedAt = null
-        )
-        dao.upsertCaptureSlip(slip)
-        return slip
-    }
+    ): CaptureSlipEntity = captureRepository.saveCaptureSlip(
+        body = body,
+        type = type,
+        topicHint = topicHint,
+        sourceLabel = sourceLabel,
+        status = status,
+        now = now
+    )
 
     suspend fun updateCaptureSlipStatus(
         slipId: String,
         status: CaptureSlipStatus,
         now: Long = System.currentTimeMillis()
-    ): CaptureSlipEntity? {
-        val slip = dao.getCaptureSlip(slipId) ?: return null
-        val updated = slip.copy(
-            status = status,
-            updatedAt = now,
-            revision = slip.revision + 1,
-            syncStatus = SyncStatus.dirty
-        )
-        dao.upsertCaptureSlip(updated)
-        return updated
-    }
+    ): CaptureSlipEntity? = captureRepository.updateCaptureSlipStatus(
+        slipId = slipId,
+        status = status,
+        now = now
+    )
 
     suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()) {
-        val slip = dao.getCaptureSlip(slipId) ?: return
-        dao.upsertCaptureSlip(
-            slip.copy(
-                status = CaptureSlipStatus.archived,
-                updatedAt = now,
-                revision = slip.revision + 1,
-                syncStatus = SyncStatus.dirty
-            )
-        )
+        captureRepository.archiveCaptureSlip(slipId = slipId, now = now)
     }
 
     suspend fun markCaptureSlipConverted(
@@ -266,33 +132,11 @@ class LearningRepository(private val dao: LearningDao) {
         nodeId: String,
         now: Long = System.currentTimeMillis()
     ) {
-        val slip = dao.getCaptureSlip(slipId) ?: return
-        dao.upsertCaptureSlip(
-            slip.copy(
-                linkedNodeId = nodeId,
-                status = CaptureSlipStatus.converted,
-                updatedAt = now,
-                revision = slip.revision + 1,
-                syncStatus = SyncStatus.dirty
-            )
-        )
+        captureRepository.markCaptureSlipConverted(slipId = slipId, nodeId = nodeId, now = now)
     }
 
     suspend fun seedStarterContent(pack: StarterContentPackage) {
-        pack.nodes.forEach { node ->
-            ensureAreaExists(areaId = node.areaId, slug = node.area, now = node.updatedAt)
-            if (dao.getNode(node.id) == null) {
-                dao.upsertNode(node)
-                indexNode(node)
-            }
-        }
-        pack.quizzes.forEach { quiz ->
-            if (dao.getQuiz(quiz.id) == null) {
-                dao.upsertQuiz(quiz)
-                pack.reviewStates.firstOrNull { it.quizId == quiz.id }?.let { dao.upsertReviewState(it) }
-                indexQuiz(quiz)
-            }
-        }
+        libraryRepository.seedStarterContent(pack)
     }
 
     suspend fun saveManualQuiz(
@@ -301,145 +145,41 @@ class LearningRepository(private val dao: LearningDao) {
         answer: String,
         explanation: String,
         now: Long = System.currentTimeMillis()
-    ): QuizItemEntity {
-        val quiz = QuizItemEntity(
-            id = UUID.randomUUID().toString(),
-            nodeId = nodeId,
-            prompt = prompt,
-            answer = answer,
-            explanation = explanation,
-            source = QuizSource.manual,
-            sourceAnchor = null,
-            createdAt = now,
-            updatedAt = now,
-            revision = 1,
-            syncStatus = SyncStatus.dirty,
-            deletedAt = null,
-            area = snapshotAreaForNode(nodeId),
-            track = snapshotTrackForNode(nodeId),
-            visibility = "practice",
-            isStarter = false
-        )
-        dao.upsertQuiz(quiz)
-        dao.upsertReviewState(defaultReviewState(quiz.id, now))
-        indexQuiz(quiz)
-        return quiz
-    }
+    ): QuizItemEntity = reviewRepository.saveManualQuiz(
+        nodeId = nodeId,
+        prompt = prompt,
+        answer = answer,
+        explanation = explanation,
+        now = now
+    )
 
     suspend fun answerQuiz(
         quizId: String,
         rating: ReviewRating,
         now: Long = System.currentTimeMillis()
     ) {
-        val state = dao.getReviewState(quizId) ?: defaultReviewState(quizId, now)
-        val result = ReviewScheduler.next(
-            input = ReviewScheduleInput(
-                ease = state.ease,
-                intervalDays = state.intervalDays,
-                attemptCount = state.attemptCount,
-                answeredAt = Instant.ofEpochMilli(now)
-            ),
-            rating = rating
-        )
-        dao.upsertReviewState(
-            state.copy(
-                ease = result.ease,
-                intervalDays = result.intervalDays,
-                dueAt = result.dueAt.toEpochMilli(),
-                lastResult = rating.toReviewResult(),
-                attemptCount = state.attemptCount + 1,
-                updatedAt = now
-            )
-        )
-        dao.insertAttempt(
-            ReviewAttemptEntity(
-                id = UUID.randomUUID().toString(),
-                quizId = quizId,
-                result = rating.toReviewResult(),
-                answeredAt = now,
-                scheduledDueAt = result.dueAt.toEpochMilli()
-            )
-        )
+        reviewRepository.answerQuiz(quizId = quizId, rating = rating, now = now)
     }
 
-    suspend fun createArea(name: String, now: Long = System.currentTimeMillis()): AreaEntity {
-        val normalizedName = name.trim().ifBlank { "New Area" }
-        val slug = uniqueAreaSlug(normalizedName)
-        val area = AreaEntity(
-            id = slug,
-            slug = slug,
-            name = normalizedName,
-            order = nextAreaOrder(),
-            createdAt = now,
-            updatedAt = now,
-            deletedAt = null
-        )
-        dao.upsertArea(area)
-        return area
-    }
+    suspend fun createArea(name: String, now: Long = System.currentTimeMillis()): AreaEntity =
+        libraryRepository.createArea(name = name, now = now)
 
     suspend fun renameArea(areaId: String, name: String, now: Long = System.currentTimeMillis()) {
-        val area = dao.getArea(areaId) ?: return
-        dao.upsertArea(
-            area.copy(
-                name = name.trim().ifBlank { area.name },
-                updatedAt = now
-            )
-        )
+        libraryRepository.renameArea(areaId = areaId, name = name, now = now)
     }
 
-    suspend fun deleteAreaIfEmpty(areaId: String, now: Long = System.currentTimeMillis()): Boolean {
-        if (dao.countActiveNodesInArea(areaId) > 0) return false
-        val area = dao.getArea(areaId) ?: return false
-        dao.upsertArea(area.copy(updatedAt = now, deletedAt = now))
-        return true
-    }
+    suspend fun deleteAreaIfEmpty(areaId: String, now: Long = System.currentTimeMillis()): Boolean =
+        libraryRepository.deleteAreaIfEmpty(areaId = areaId, now = now)
 
     suspend fun moveNodeToArea(nodeId: String, targetAreaId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        val area = resolveArea(targetAreaId, now)
-        val updated = node.copy(
-            updatedAt = now,
-            revision = node.revision + 1,
-            syncStatus = SyncStatus.dirty,
-            area = area.slug,
-            areaId = area.id
-        )
-        dao.upsertNode(updated)
-        indexNode(updated)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            val updatedQuiz = quiz.copy(
-                updatedAt = now,
-                revision = quiz.revision + 1,
-                syncStatus = SyncStatus.dirty,
-                area = area.slug
-            )
-            dao.upsertQuiz(updatedQuiz)
-            indexQuiz(updatedQuiz)
-        }
+        libraryRepository.moveNodeToArea(nodeId = nodeId, targetAreaId = targetAreaId, now = now)
     }
 
     suspend fun toggleNodeChecked(nodeId: String, now: Long = System.currentTimeMillis()) {
-        val node = dao.getNode(nodeId) ?: return
-        val updated = node.copy(
-            updatedAt = now,
-            revision = node.revision + 1,
-            syncStatus = SyncStatus.dirty,
-            isChecked = !node.isChecked
-        )
-        dao.upsertNode(updated)
-        indexNode(updated)
+        libraryRepository.toggleNodeChecked(nodeId = nodeId, now = now)
     }
 
-    suspend fun search(rawQuery: String): List<SearchResultEntity> {
-        val query = rawQuery
-            .trim()
-            .split(Regex("\\s+"))
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { "$it*" }
-        if (query.isBlank()) return emptyList()
-        return dao.searchNodes(query) + dao.searchQuizzes(query)
-    }
+    suspend fun search(rawQuery: String): List<SearchResultEntity> = libraryRepository.search(rawQuery)
 
     suspend fun exportBackup(now: Long = System.currentTimeMillis()): String =
         BackupCodec.encode(
@@ -459,7 +199,7 @@ class LearningRepository(private val dao: LearningDao) {
     suspend fun exportReadableMarkdown(now: Long = System.currentTimeMillis()): String {
         val areasById = dao.getAllAreas().associateBy { it.id }
         val activeNodes = dao.getAllNodes()
-            .filter { it.deletedAt == null && it.visibility != "trash" }
+            .filter { it.deletedAt == null && it.visibility != TrashVisibility }
             .sortedWith(compareBy<LearningNodeEntity> { it.area }.thenBy { it.track }.thenBy { it.order }.thenBy { it.title })
         val activeQuestions = dao.getAllReaderQuestions()
             .filter { it.deletedAt == null && it.resolvedAt == null }
@@ -552,7 +292,7 @@ class LearningRepository(private val dao: LearningDao) {
             questions = backup.readerQuestions,
             captureSlips = backup.captureSlips,
             nodeFts = backup.nodes
-                .filter { it.deletedAt == null && it.visibility != "trash" }
+                .filter { it.deletedAt == null && it.visibility != TrashVisibility }
                 .map {
                     NodeFtsEntity(
                         rowId = stableRowId(it.id),
@@ -562,7 +302,7 @@ class LearningRepository(private val dao: LearningDao) {
                     )
                 },
             quizFts = backup.quizzes
-                .filter { it.deletedAt == null && it.visibility != "trash" }
+                .filter { it.deletedAt == null && it.visibility != TrashVisibility }
                 .map {
                     QuizFtsEntity(
                         rowId = stableRowId(it.id),
@@ -574,160 +314,7 @@ class LearningRepository(private val dao: LearningDao) {
         )
     }
 
-    private suspend fun syncMarkdownQuizzes(node: LearningNodeEntity, now: Long) {
-        val parsedCards = MarkdownQuizParser.parse(node.markdownBody)
-        val activeAnchors = parsedCards.mapTo(mutableSetOf()) { it.sourceAnchor }
-
-        dao.getActiveQuizzesForNode(node.id)
-            .filter { it.source == QuizSource.markdown && it.sourceAnchor !in activeAnchors }
-            .forEach { removed ->
-                dao.upsertQuiz(
-                    removed.copy(
-                        updatedAt = now,
-                        revision = removed.revision + 1,
-                        syncStatus = SyncStatus.deleted,
-                        deletedAt = now
-                    )
-                )
-                dao.deleteQuizFts(removed.id)
-            }
-
-        parsedCards.forEach { parsed ->
-            val id = "${node.id}:${parsed.sourceAnchor}"
-            val existing = dao.getQuiz(id)
-            val quiz = QuizItemEntity(
-                id = id,
-                nodeId = node.id,
-                prompt = parsed.prompt,
-                answer = parsed.answer,
-                explanation = parsed.explanation,
-                source = QuizSource.markdown,
-                sourceAnchor = parsed.sourceAnchor,
-                createdAt = existing?.createdAt ?: now,
-                updatedAt = now,
-                revision = (existing?.revision ?: 0L) + 1L,
-                syncStatus = SyncStatus.dirty,
-                deletedAt = null,
-                area = node.area,
-                track = node.track,
-                visibility = "practice",
-                isStarter = node.isStarter
-            )
-            dao.upsertQuiz(quiz)
-            if (existing == null) {
-                dao.upsertReviewState(defaultReviewState(quiz.id, now))
-            }
-            indexQuiz(quiz)
-        }
-    }
-
-    private suspend fun indexNode(node: LearningNodeEntity) {
-        dao.deleteNodeFts(node.id)
-        if (node.deletedAt == null && node.visibility != "trash") {
-            dao.upsertNodeFts(
-                NodeFtsEntity(
-                    rowId = stableRowId(node.id),
-                    nodeId = node.id,
-                    title = node.title,
-                    body = node.markdownBody
-                )
-            )
-        }
-    }
-
-    private suspend fun indexQuiz(quiz: QuizItemEntity) {
-        dao.deleteQuizFts(quiz.id)
-        if (quiz.deletedAt == null && quiz.visibility != "trash") {
-            dao.upsertQuizFts(
-                QuizFtsEntity(
-                    rowId = stableRowId(quiz.id),
-                    quizId = quiz.id,
-                    prompt = quiz.prompt,
-                    answer = quiz.answer
-                )
-            )
-        }
-    }
-
-    private suspend fun deleteReviewDataForQuiz(quizId: String) {
-        dao.deleteReviewStateForQuiz(quizId)
-        dao.deleteReviewAttemptsForQuiz(quizId)
-    }
-
-    private fun defaultReviewState(quizId: String, now: Long): ReviewStateEntity =
-        ReviewStateEntity(
-            quizId = quizId,
-            ease = 2.5,
-            intervalDays = 0,
-            dueAt = now,
-            lastResult = ReviewResult.again,
-            attemptCount = 0,
-            updatedAt = now
-        )
-
-    private fun stableRowId(id: String): Int = id.hashCode().absoluteValue.coerceAtLeast(1)
-
-    private suspend fun snapshotAreaForNode(nodeId: String?): String =
-        nodeId?.let { dao.getNode(it)?.area } ?: DefaultAreaSlug
-
-    private suspend fun snapshotTrackForNode(nodeId: String?): String =
-        nodeId?.let { dao.getNode(it)?.track } ?: "general"
-
-    private suspend fun resolveArea(areaIdOrSlug: String, now: Long): AreaEntity =
-        dao.getArea(areaIdOrSlug)
-            ?: dao.getAreaBySlug(areaIdOrSlug)
-            ?: createImplicitArea(areaIdOrSlug, now)
-
-    private suspend fun ensureAreaExists(areaId: String, slug: String, now: Long) {
-        if (dao.getArea(areaId) != null || dao.getAreaBySlug(slug) != null) return
-        dao.upsertArea(
-            AreaEntity(
-                id = areaId,
-                slug = slug,
-                name = slug,
-                order = nextAreaOrder(),
-                createdAt = now,
-                updatedAt = now,
-                deletedAt = null
-            )
-        )
-    }
-
-    private suspend fun createImplicitArea(slugSeed: String, now: Long): AreaEntity {
-        val slug = slugSeed.ifBlank { DefaultAreaSlug }
-        val area = AreaEntity(
-            id = slug,
-            slug = slug,
-            name = slug,
-            order = nextAreaOrder(),
-            createdAt = now,
-            updatedAt = now,
-            deletedAt = null
-        )
-        dao.upsertArea(area)
-        return area
-    }
-
-    private suspend fun nextAreaOrder(): Int =
-        ((dao.getAllAreas().maxOfOrNull { it.order } ?: 0) + 10)
-
-    private suspend fun uniqueAreaSlug(name: String): String {
-        val base = slugify(name).ifBlank { DefaultAreaSlug }
-        var candidate = base
-        var suffix = 2
-        while (dao.getArea(candidate) != null || dao.getAreaBySlug(candidate) != null) {
-            candidate = "$base-$suffix"
-            suffix += 1
-        }
-        return candidate
-    }
-
-    private fun slugify(value: String): String =
-        Normalizer.normalize(value, Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase()
-            .replace(Regex("[^a-z0-9]+"), "-")
-            .trim('-')
+    private fun stableRowId(id: String): Int = id.hashCode().absoluteValue.coerceAtLeast(MinimumStableRowId)
 
     private fun inferAreasFromNodes(nodes: List<LearningNodeEntity>): List<AreaEntity> =
         nodes
@@ -738,9 +325,9 @@ class LearningRepository(private val dao: LearningDao) {
                     id = areaId,
                     slug = slug,
                     name = slug,
-                    order = (index + 1) * 10,
-                    createdAt = 0L,
-                    updatedAt = 0L,
+                    order = (index + 1) * AndroidArchitectureConstants.AreaOrderStep,
+                    createdAt = BackupRestoreTimestamp,
+                    updatedAt = BackupRestoreTimestamp,
                     deletedAt = null
                 )
             }
@@ -751,14 +338,9 @@ class LearningRepository(private val dao: LearningDao) {
             ?.takeIf { it.isNotBlank() }
             ?: node.area
 
-    private fun ReviewRating.toReviewResult(): ReviewResult =
-        when (this) {
-            ReviewRating.Again -> ReviewResult.again
-            ReviewRating.Hard -> ReviewResult.hard
-            ReviewRating.Good -> ReviewResult.good
-    }
-
     private companion object {
-        const val DefaultAreaSlug = "questions"
+        const val BackupRestoreTimestamp = 0L
+        const val MinimumStableRowId = 1
+        const val TrashVisibility = "trash"
     }
 }

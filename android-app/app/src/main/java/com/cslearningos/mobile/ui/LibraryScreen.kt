@@ -28,21 +28,31 @@ import androidx.compose.material3.TextButton
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.LearningNodeEntity
+import com.cslearningos.mobile.data.QuizItemEntity
 import java.text.DateFormat
 import java.util.Date
 
+private data class LibraryScreenState(
+    val areas: List<AreaEntity>,
+    val nodes: List<LearningNodeEntity>,
+    val dueQuizzes: List<QuizItemEntity>,
+    val selectedAreaId: String?,
+    val checkedFilter: LibraryCheckedFilter
+)
+
 @Composable
 fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val screenState = state.toLibraryScreenState()
     val context = LocalContext.current
-    val selectedArea = state.areas.firstOrNull { it.id == state.selectedLibraryAreaId }
-    val folders = buildLibraryRootFolders(state.areas, state.nodes, state.dueQuizzes, context)
-    val overview = buildLibraryOverview(state.areas, state.nodes, context)
-    val map = buildLibraryMap(state.areas, state.nodes, context)
+    val selectedArea = screenState.areas.firstOrNull { it.id == screenState.selectedAreaId }
+    val folders = buildLibraryRootFolders(screenState.areas, screenState.nodes, screenState.dueQuizzes, context)
+    val overview = buildLibraryOverview(screenState.areas, screenState.nodes, context)
+    val map = buildLibraryMap(screenState.areas, screenState.nodes, context)
     val detail = selectedArea?.let {
-        buildLibraryAreaDetail(it, state.nodes, state.dueQuizzes, state.libraryCheckedFilter, context)
+        buildLibraryAreaDetail(it, screenState.nodes, screenState.dueQuizzes, screenState.checkedFilter, context)
     }
 
-    var showCreateAreaDialog by rememberSaveable { mutableStateOf(state.areas.isEmpty()) }
+    var showCreateAreaDialog by rememberSaveable { mutableStateOf(screenState.areas.isEmpty()) }
     var createAreaDraft by rememberSaveable { mutableStateOf("") }
     var renameAreaId by rememberSaveable { mutableStateOf<String?>(null) }
     var renameAreaDraft by rememberSaveable { mutableStateOf("") }
@@ -64,13 +74,13 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
                     renameAreaDraft = area.name
                 },
                 onDeleteArea = { area -> viewModel.deleteArea(area.id) },
-                state = state
+                areas = screenState.areas
             )
         } else {
             LibraryAreaDetailScreen(
                 area = selectedArea,
                 detail = detail,
-                state = state,
+                checkedFilter = screenState.checkedFilter,
                 onBack = viewModel::closeLibraryArea,
                 onNewNode = { viewModel.startNewNode(selectedArea.id) },
                 onRenameArea = {
@@ -105,7 +115,7 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
         )
     }
 
-    val renameArea = state.areas.firstOrNull { it.id == renameAreaId }
+    val renameArea = screenState.areas.firstOrNull { it.id == renameAreaId }
     if (renameArea != null) {
         LibraryTextDialog(
             title = stringResource(R.string.library_rename_area_title),
@@ -124,14 +134,14 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
         )
     }
 
-    val movingNode = state.nodes.firstOrNull { it.id == moveNodeId }
+    val movingNode = screenState.nodes.firstOrNull { it.id == moveNodeId }
     if (movingNode != null) {
         AlertDialog(
             onDismissRequest = { moveNodeId = null },
             title = { Text(stringResource(R.string.library_move_node_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.areas
+                    screenState.areas
                         .filter { it.deletedAt == null && it.id != movingNode.areaId }
                         .forEach { area ->
                             TextButton(
@@ -164,7 +174,7 @@ private fun LibraryRootScreen(
     onCreateArea: () -> Unit,
     onRenameArea: (AreaEntity) -> Unit,
     onDeleteArea: (AreaEntity) -> Unit,
-    state: LearningUiState
+    areas: List<AreaEntity>
 ) {
     val context = LocalContext.current
 
@@ -184,7 +194,7 @@ private fun LibraryRootScreen(
     }
 
     folders.forEach { folder ->
-        val area = state.areas.firstOrNull { it.id == folder.areaId } ?: return@forEach
+        val area = areas.firstOrNull { it.id == folder.areaId } ?: return@forEach
         InteractiveCard(onClick = { onOpenArea(folder.areaId) }, accent = false) {
             Eyebrow(stringResource(R.string.library_folder_eyebrow))
             Row(
@@ -272,7 +282,7 @@ private fun LibraryRootScreen(
 private fun LibraryAreaDetailScreen(
     area: AreaEntity,
     detail: LibraryAreaDetail,
-    state: LearningUiState,
+    checkedFilter: LibraryCheckedFilter,
     onBack: () -> Unit,
     onNewNode: () -> Unit,
     onRenameArea: () -> Unit,
@@ -311,12 +321,12 @@ private fun LibraryAreaDetailScreen(
             WorkbenchButton(
                 text = stringResource(R.string.library_filter_all),
                 onClick = { onSetFilter(LibraryCheckedFilter.All) },
-                primary = state.libraryCheckedFilter == LibraryCheckedFilter.All
+                primary = checkedFilter == LibraryCheckedFilter.All
             )
             WorkbenchButton(
                 text = stringResource(R.string.library_filter_checked),
                 onClick = { onSetFilter(LibraryCheckedFilter.Checked) },
-                primary = state.libraryCheckedFilter == LibraryCheckedFilter.Checked
+                primary = checkedFilter == LibraryCheckedFilter.Checked
             )
         }
 
@@ -324,7 +334,7 @@ private fun LibraryAreaDetailScreen(
             EmptyWorkbenchCard(
                 title = stringResource(R.string.library_area_empty_title),
                 body = stringResource(
-                    if (state.libraryCheckedFilter == LibraryCheckedFilter.All) {
+                    if (checkedFilter == LibraryCheckedFilter.All) {
                         R.string.library_area_empty_body
                     } else {
                         R.string.library_checked_empty_body
@@ -413,3 +423,12 @@ private fun LibraryTextDialog(
 
 fun formatTime(epochMillis: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMillis))
+
+private fun LearningUiState.toLibraryScreenState(): LibraryScreenState =
+    LibraryScreenState(
+        areas = areas,
+        nodes = nodes,
+        dueQuizzes = dueQuizzes,
+        selectedAreaId = selectedLibraryAreaId,
+        checkedFilter = libraryCheckedFilter
+    )

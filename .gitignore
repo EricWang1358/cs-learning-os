@@ -21,6 +21,8 @@ var/
 data/
 !android-app/app/src/main/java/com/cslearningos/mobile/data/
 !android-app/app/src/main/java/com/cslearningos/mobile/data/**
+!android-app/app/src/main/java/com/cslearningos/mobile/feature/**/data/
+!android-app/app/src/main/java/com/cslearningos/mobile/feature/**/data/**
 !android-app/app/src/test/java/com/cslearningos/mobile/data/
 !android-app/app/src/test/java/com/cslearningos/mobile/data/**
 content/

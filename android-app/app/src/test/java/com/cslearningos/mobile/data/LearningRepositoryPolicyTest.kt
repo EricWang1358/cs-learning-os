@@ -257,6 +257,31 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun compatibilityFacadeAnswerQuizStillSchedulesReviewProgress() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.reviewStates["quiz-1"] = ReviewStateEntity(
+            quizId = "quiz-1",
+            ease = 2.5,
+            intervalDays = 0,
+            dueAt = 1_000L,
+            lastResult = ReviewResult.again,
+            attemptCount = 0,
+            updatedAt = 1_000L
+        )
+
+        repository.answerQuiz("quiz-1", rating = com.cslearningos.mobile.domain.ReviewRating.Good, now = 2_000L)
+
+        val updated = dao.reviewStates.getValue("quiz-1")
+        assertEquals(2.6, updated.ease, 0.0)
+        assertEquals(1, updated.intervalDays)
+        assertEquals(1, updated.attemptCount)
+        assertEquals(ReviewResult.good, updated.lastResult)
+        assertEquals(1, dao.reviewAttempts.size)
+        assertEquals("quiz-1", dao.reviewAttempts.values.single().quizId)
+    }
+
+    @Test
     fun moveRestoreAndPermanentDeleteNodeFollowTrashbinLifecycle() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)

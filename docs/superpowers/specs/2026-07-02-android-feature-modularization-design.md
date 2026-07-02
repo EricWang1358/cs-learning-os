@@ -391,6 +391,7 @@ The first practical version should verify at least:
 - `assembleDebug` still passes
 - the feature package structure exists for the migrated slices
 - the legacy god-file pattern does not continue growing unchecked
+  Current first-pass guardrail: `LearningViewModel.kt` must stay under 38 KB while it serves as a compatibility shell, and `LearningRepository.kt` must stay under 30 KB as a compatibility facade.
 - architecture verification can run from a repo-level PowerShell entry point
 
 The most practical first harness shape is:
