@@ -1,7 +1,5 @@
 package com.cslearningos.mobile.feature.settings.ui
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.feature.settings.data.AiDraftService
 import com.cslearningos.mobile.feature.settings.data.SettingsSnapshot
@@ -16,6 +14,7 @@ import com.cslearningos.mobile.ui.SystemLanguage
 import com.cslearningos.mobile.ui.UiText
 import com.cslearningos.mobile.ui.aiModelsUrl
 import com.cslearningos.mobile.ui.uiText
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +31,9 @@ class SettingsViewModel(
     private val missingFieldLabelResolver: (List<String>) -> String = { missingFields: List<String> ->
         missingFields.joinToString()
     },
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-) : ViewModel() {
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val scope: CoroutineScope
+) {
     private val _uiState = MutableStateFlow(
         store.loadSettings().toValidatedUiState()
     )
@@ -115,7 +115,7 @@ class SettingsViewModel(
             return
         }
 
-        viewModelScope.launch {
+        scope.launch {
             val requestState = uiState.value
             _uiState.update { current ->
                 current.copy(
@@ -188,7 +188,7 @@ class SettingsViewModel(
             return
         }
 
-        viewModelScope.launch {
+        scope.launch {
             val requestState = uiState.value
             _uiState.update { current ->
                 current.copy(

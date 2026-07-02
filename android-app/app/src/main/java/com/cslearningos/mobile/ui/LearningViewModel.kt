@@ -59,7 +59,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         ),
         aiDraftService = aiDraftService,
         validateAiSettings = validateAiSettingsUseCase,
-        missingFieldLabelResolver = ::localizedFieldLabelList
+        missingFieldLabelResolver = ::localizedFieldLabelList,
+        scope = viewModelScope
     )
     private val backupRepository = LearningRepositoryBackupRepository(repository)
     private val exportBackupUseCase = ExportBackupUseCase(backupRepository)
@@ -466,7 +467,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
                 sourceLabel = snapshot.captureSourceLabel,
-                status = if (snapshot.aiProviderSettings.isConfigured) CaptureSlipStatus.ai_queued else CaptureSlipStatus.inbox
+                status = CaptureSlipStatus.inbox
             )
             _state.update {
                 it.copy(
@@ -519,9 +520,6 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        viewModelScope.launch {
-            repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_queued)
-        }
         _state.update {
             it.copy(
                 pendingAiDraftSlipId = slip.id,

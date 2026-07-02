@@ -9,9 +9,11 @@ import com.cslearningos.mobile.feature.settings.domain.ValidateAiSettingsUseCase
 import com.cslearningos.mobile.ui.AppearanceMode
 import com.cslearningos.mobile.ui.AiServiceStatusKind
 import com.cslearningos.mobile.ui.SystemLanguage
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -43,7 +45,8 @@ class SettingsViewModelTest {
                 )
             ),
             aiDraftService = FakeAiDraftService(),
-            validateAiSettings = ValidateAiSettingsUseCase()
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
         )
 
         val state = viewModel.uiState.value
@@ -63,7 +66,8 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(
             store = store,
             aiDraftService = FakeAiDraftService(),
-            validateAiSettings = ValidateAiSettingsUseCase()
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
         )
 
         viewModel.setProvider("OpenAI Compatible")
@@ -88,7 +92,8 @@ class SettingsViewModelTest {
             store = FakeSettingsStore(),
             aiDraftService = FakeAiDraftService(),
             validateAiSettings = ValidateAiSettingsUseCase(),
-            missingFieldLabelResolver = { missingFields: List<String> -> missingFields.joinToString() }
+            missingFieldLabelResolver = { missingFields: List<String> -> missingFields.joinToString() },
+            scope = CoroutineScope(dispatcher)
         )
 
         viewModel.setApiKey("sk-test")
@@ -103,7 +108,8 @@ class SettingsViewModelTest {
 
     @Test
     fun validateServicePullsModelsAndPublishesSuccessStatus() = runTest {
-        Dispatchers.setMain(dispatcher)
+        val asyncDispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(asyncDispatcher)
         try {
             val viewModel = SettingsViewModel(
                 store = FakeSettingsStore(
@@ -120,11 +126,12 @@ class SettingsViewModelTest {
                 aiDraftService = FakeAiDraftService(modelIds = listOf("gpt-test", "gpt-fast")),
                 validateAiSettings = ValidateAiSettingsUseCase(),
                 missingFieldLabelResolver = { missingFields: List<String> -> missingFields.joinToString() },
-                ioDispatcher = dispatcher
+                ioDispatcher = asyncDispatcher,
+                scope = CoroutineScope(asyncDispatcher)
             )
 
             viewModel.validateService()
-            dispatcher.scheduler.advanceUntilIdle()
+            advanceUntilIdle()
 
             val state = viewModel.uiState.value
             assertEquals(listOf("gpt-test", "gpt-fast"), state.availableModels)
@@ -138,7 +145,8 @@ class SettingsViewModelTest {
 
     @Test
     fun updateSystemSettingsPersistsThroughStore() = runTest {
-        Dispatchers.setMain(dispatcher)
+        val asyncDispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(asyncDispatcher)
         try {
             val store = FakeSettingsStore()
             val viewModel = SettingsViewModel(
@@ -146,12 +154,13 @@ class SettingsViewModelTest {
                 aiDraftService = FakeAiDraftService(),
                 validateAiSettings = ValidateAiSettingsUseCase(),
                 missingFieldLabelResolver = { missingFields: List<String> -> missingFields.joinToString() },
-                ioDispatcher = dispatcher
+                ioDispatcher = asyncDispatcher,
+                scope = CoroutineScope(asyncDispatcher)
             )
 
             viewModel.setSystemLanguage(SystemLanguage.Chinese)
             viewModel.setAppearanceMode(AppearanceMode.Day)
-            dispatcher.scheduler.advanceUntilIdle()
+            advanceUntilIdle()
 
             assertEquals(SystemLanguage.Chinese, viewModel.uiState.value.systemLanguage)
             assertEquals(AppearanceMode.Day, viewModel.uiState.value.appearanceMode)

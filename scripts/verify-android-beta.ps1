@@ -68,10 +68,12 @@ function Invoke-ExternalCommand {
 function Get-GitStatusLines {
     param(
         [string]$WorkingDirectory,
-        [string[]]$Pathspecs = @()
+        [string[]]$Pathspecs = @(),
+        [switch]$IgnoreUntracked
     )
 
-    $statusRun = Invoke-ExternalCommand -FilePath "git" -Arguments @("status", "--porcelain", "--untracked-files=all", "--") + $Pathspecs -WorkingDirectory $WorkingDirectory
+    $untrackedMode = if ($IgnoreUntracked) { "no" } else { "all" }
+    $statusRun = Invoke-ExternalCommand -FilePath "git" -Arguments @("status", "--porcelain", "--untracked-files=$untrackedMode", "--") + $Pathspecs -WorkingDirectory $WorkingDirectory
     if ($statusRun.exitCode -ne 0) {
         return [pscustomobject]@{
             ok = $false
@@ -302,7 +304,7 @@ $releasePathspecs = @(
     "scripts/verify-android-beta.ps1",
     "scripts/verify-android-architecture.ps1"
 )
-$releaseStatus = Get-GitStatusLines -WorkingDirectory $ProjectRoot -Pathspecs $releasePathspecs
+$releaseStatus = Get-GitStatusLines -WorkingDirectory $ProjectRoot -Pathspecs $releasePathspecs -IgnoreUntracked
 $releaseWorkingTreeClean = [bool]($releaseStatus.ok -and $releaseStatus.lines.Count -eq 0)
 $releaseWorkingTreeDetail = if (-not $releaseStatus.ok) {
     "Could not read git status for Android release paths. $($releaseStatus.detail)"
