@@ -2,6 +2,15 @@
 
 package com.cslearningos.mobile.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -37,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -102,11 +112,32 @@ fun DetailHeading(eyebrow: String, title: String, body: String) {
 fun WorkbenchCard(
     modifier: Modifier = Modifier,
     accent: Boolean = false,
+    motionPolicy: ScreenMotionPolicy = screenMotionPolicy(AppScreen.Capture),
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val borderColor by animateColorAsState(
+        targetValue = if (accent) WorkbenchColors.Accent else WorkbenchColors.Line,
+        animationSpec = tween(motionPolicy.fadeMillis, easing = FastOutSlowInEasing),
+        label = "workbench-card-border"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (accent) {
+            WorkbenchColors.SurfaceCard.copy(alpha = 0.99f)
+        } else {
+            WorkbenchColors.SurfaceCard
+        },
+        animationSpec = tween(motionPolicy.fadeMillis, easing = FastOutSlowInEasing),
+        label = "workbench-card-container"
+    )
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize(
+                animationSpec = tween(
+                    durationMillis = motionPolicy.expandMillis,
+                    easing = FastOutSlowInEasing
+                )
+            )
             .shadow(
                 elevation = if (accent) 14.dp else 8.dp,
                 shape = CardShape,
@@ -124,8 +155,8 @@ fun WorkbenchCard(
                 }
             },
         shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = WorkbenchColors.SurfaceCard),
-        border = BorderStroke(1.dp, if (accent) WorkbenchColors.Accent else WorkbenchColors.Line)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
             modifier = Modifier
@@ -151,14 +182,22 @@ fun InteractiveCard(
     onClick: () -> Unit,
     accent: Boolean,
     modifier: Modifier = Modifier,
+    motionPolicy: ScreenMotionPolicy = screenMotionPolicy(AppScreen.Capture),
     content: @Composable ColumnScope.() -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val pressAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = tween(motionPolicy.pressMillis, easing = FastOutSlowInEasing),
+        label = "interactive-card-press-alpha"
+    )
     WorkbenchCard(
         accent = accent || pressed,
+        motionPolicy = motionPolicy,
         modifier = modifier
             .heightIn(min = 72.dp)
+            .alpha(pressAlpha)
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
@@ -221,7 +260,7 @@ fun WorkbenchButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 72.dp),
+        modifier = modifier.heightIn(min = 44.dp).widthIn(min = 64.dp),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
         colors = ButtonDefaults.buttonColors(
@@ -308,16 +347,22 @@ fun WorkbenchTextField(
 
 @Composable
 fun StatusBanner(message: UiText?) {
-    val resolved = message.resolve() ?: return
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(WorkbenchColors.Accent.copy(alpha = 0.11f))
-            .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.32f)), CardShape)
-            .padding(12.dp)
+    val resolved = message.resolve()
+    AnimatedVisibility(
+        visible = resolved != null,
+        enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
+        exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
     ) {
-        Text(resolved, color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(CardShape)
+                .background(WorkbenchColors.Accent.copy(alpha = 0.11f))
+                .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.32f)), CardShape)
+                .padding(12.dp)
+        ) {
+            Text(resolved.orEmpty(), color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        }
     }
 }
 
@@ -415,7 +460,8 @@ fun CollapsibleWorkbenchSection(
     content: @Composable ColumnScope.() -> Unit
 ) {
     var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
-    WorkbenchCard(accent = expanded) {
+    val motionPolicy = screenMotionPolicy(if (initiallyExpanded) AppScreen.Home else AppScreen.Capture)
+    WorkbenchCard(accent = expanded, motionPolicy = motionPolicy) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -439,9 +485,15 @@ fun CollapsibleWorkbenchSection(
                 onClick = { expanded = !expanded }
             )
         }
-        if (expanded) {
-            Text(body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            content()
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(motionPolicy.fadeMillis)) + expandVertically(tween(motionPolicy.expandMillis)),
+            exit = fadeOut(tween(motionPolicy.fadeMillis)) + shrinkVertically(tween(motionPolicy.expandMillis))
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                content()
+            }
         }
     }
 }

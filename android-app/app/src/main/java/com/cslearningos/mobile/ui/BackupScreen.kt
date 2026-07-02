@@ -7,12 +7,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,7 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             WorkbenchButton(
                 text = stringResource(R.string.backup_share_full),
                 primary = true,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     scope.launch {
                         runCatching {
@@ -92,6 +95,7 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             )
             WorkbenchButton(
                 text = stringResource(R.string.backup_save_local),
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     scope.launch {
                         runCatching { viewModel.createBackupDocument() }
@@ -107,6 +111,7 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             )
             WorkbenchButton(
                 text = stringResource(R.string.backup_import_file),
+                modifier = Modifier.fillMaxWidth(),
                 onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
                 danger = true
             )

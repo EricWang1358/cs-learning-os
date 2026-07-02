@@ -296,21 +296,21 @@ private fun LibraryAreaDetailScreen(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         WorkbenchCard {
             Eyebrow(stringResource(R.string.library_folder_eyebrow))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(detail.title, color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MetaPill(stringResource(R.string.common_nodes), detail.nodeCount.toString())
-                        MetaPill(stringResource(R.string.library_checked_filter), detail.checkedCount.toString())
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    detail.title,
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 22.sp,
+                    lineHeight = 26.sp,
+                    fontWeight = FontWeight.Black
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MetaPill(stringResource(R.string.common_nodes), detail.nodeCount.toString())
+                    MetaPill(stringResource(R.string.library_checked_filter), detail.checkedCount.toString())
+                    WorkbenchButton(stringResource(R.string.library_back_to_areas), onBack)
                 }
-                WorkbenchButton(stringResource(R.string.library_back_to_areas), onBack)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ToolbarRow {
                 WorkbenchButton(stringResource(R.string.library_create_in_area_button), onNewNode, primary = true)
                 WorkbenchButton(stringResource(R.string.common_edit), onRenameArea)
                 WorkbenchButton(stringResource(R.string.common_delete), onDeleteArea, danger = true)
@@ -377,7 +377,7 @@ private fun LibraryAreaDetailScreen(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToolbarRow {
                             WorkbenchButton(stringResource(R.string.common_read), { onOpenNode(item.node) }, primary = true)
                             WorkbenchButton(stringResource(R.string.common_edit), { onEditNode(item.node) })
                             WorkbenchButton(stringResource(R.string.library_move_node_button), { onMoveNode(item.node) })

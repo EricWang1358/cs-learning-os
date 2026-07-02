@@ -6,6 +6,15 @@ import com.cslearningos.mobile.R
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -272,8 +281,7 @@ private fun BrandBlock(state: LearningUiState) {
                 color = WorkbenchColors.Accent,
                 fontSize = 30.sp,
                 lineHeight = 31.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-1).sp
+                fontWeight = FontWeight.Black
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -288,17 +296,18 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 androidx.compose.ui.graphics.Brush.horizontalGradient(
                     listOf(
-                        WorkbenchColors.SurfaceCard.copy(alpha = 0.97f),
-                        WorkbenchColors.Surface.copy(alpha = 0.92f)
+                        WorkbenchColors.SurfaceCard.copy(alpha = 0.92f),
+                        WorkbenchColors.Surface.copy(alpha = 0.82f)
                     )
                 )
             )
-            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong.copy(alpha = 0.8f)), RoundedCornerShape(20.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .border(BorderStroke(1.dp, WorkbenchColors.Line.copy(alpha = 0.86f)), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -306,15 +315,33 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
             Text(
                 text = stringResource(appScreenLabelResId(route.toAppScreen())),
                 color = WorkbenchColors.InkStrong,
-                fontSize = 28.sp,
+                fontSize = 20.sp,
+                lineHeight = 23.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = (-0.8).sp
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            InlineMetricBadge(stringResource(R.string.common_nodes), state.nodes.size.toString())
-            InlineMetricBadge(stringResource(R.string.common_due), state.dueQuizzes.size.toString())
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            CompactMetricBadge(stringResource(R.string.common_nodes), state.nodes.size.toString())
+            CompactMetricBadge(stringResource(R.string.common_due), state.dueQuizzes.size.toString())
         }
+    }
+}
+
+@Composable
+private fun CompactMetricBadge(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(WorkbenchColors.Surface.copy(alpha = 0.64f))
+            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong.copy(alpha = 0.7f)), RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1)
     }
 }
 
@@ -357,11 +384,27 @@ private fun BottomNavTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) WorkbenchColors.Accent.copy(alpha = 0.16f) else WorkbenchColors.Surface.copy(alpha = 0.18f),
+        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        label = "bottom-nav-background"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
+        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        label = "bottom-nav-icon"
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
+        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        label = "bottom-nav-label"
+    )
     Column(
         modifier = modifier
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) WorkbenchColors.Accent.copy(alpha = 0.16f) else WorkbenchColors.Surface.copy(alpha = 0.18f))
+            .background(backgroundColor)
+            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -371,7 +414,7 @@ private fun BottomNavTab(
             Icon(
                 imageVector = item.icon(),
                 contentDescription = stringResource(item.contentDescriptionResId),
-                tint = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
+                tint = iconColor,
                 modifier = Modifier.height(22.dp)
             )
             if (item.screen == AppScreen.Review && dueCount > 0) {
@@ -386,7 +429,7 @@ private fun BottomNavTab(
         }
         Text(
             text = stringResource(item.labelResId),
-            color = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
+            color = labelColor,
             fontSize = 10.sp,
             fontWeight = FontWeight.Black,
             maxLines = 1
@@ -529,7 +572,11 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 viewModel::toggleReaderQuestionPanel
             )
         }
-        if (state.readerQuestionPanelExpanded) {
+        AnimatedVisibility(
+            visible = state.readerQuestionPanelExpanded,
+            enter = fadeIn(tween(WorkbenchMotion.DetailFadeMillis)) + expandVertically(tween(WorkbenchMotion.DetailExpandMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.DetailFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.DetailExpandMillis))
+        ) {
             ReaderQuestionCapture(state = state, viewModel = viewModel, nodeId = node.id)
         }
         MarkdownRenderer(markdown = node.markdownBody)
@@ -705,12 +752,19 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
             if (!state.quizAnswerVisible) {
                 Text(stringResource(R.string.review_answer_hidden), color = WorkbenchColors.Muted, fontSize = 14.sp)
                 WorkbenchButton(stringResource(R.string.review_reveal_answer), viewModel::revealCurrentQuizAnswer, primary = true, modifier = Modifier.fillMaxWidth())
-            } else {
-                AnswerBlock(quiz)
-                ToolbarRow {
-                    WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
-                    WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
-                    WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)
+            }
+            AnimatedVisibility(
+                visible = state.quizAnswerVisible,
+                enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
+                exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    AnswerBlock(quiz)
+                    ToolbarRow {
+                        WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
+                        WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
+                        WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)
+                    }
                 }
             }
         }

@@ -26,8 +26,8 @@ android {
         applicationId "com.cslearningos.mobile"
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName "0.1.10"
+        versionCode 12
+        versionName "0.1.11"
     }
 
     sourceSets {
@@ -57,6 +57,7 @@ tasks.matching { it.name.startsWith("generate") && it.name.endsWith("Assets") }.
 dependencies {
     implementation platform("androidx.compose:compose-bom:2024.12.01")
     implementation "androidx.activity:activity-compose:1.9.3"
+    implementation "androidx.compose.animation:animation"
     implementation "androidx.compose.foundation:foundation"
     implementation "androidx.compose.material3:material3"
     implementation "androidx.compose.material:material-icons-core"

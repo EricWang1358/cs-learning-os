@@ -3,6 +3,15 @@
 package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.R
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,13 +82,24 @@ private fun MoreSectionRow(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (expanded) WorkbenchColors.Surface.copy(alpha = 0.62f) else WorkbenchColors.Surface.copy(alpha = 0.34f),
+        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        label = "more-section-background"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (expanded) WorkbenchColors.Accent.copy(alpha = 0.56f) else WorkbenchColors.Line,
+        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        label = "more-section-border"
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
             .clip(RoundedCornerShape(14.dp))
-            .background(if (expanded) WorkbenchColors.Surface.copy(alpha = 0.62f) else WorkbenchColors.Surface.copy(alpha = 0.34f))
+            .background(backgroundColor)
             .border(
-                BorderStroke(1.dp, if (expanded) WorkbenchColors.Accent.copy(alpha = 0.56f) else WorkbenchColors.Line),
+                BorderStroke(1.dp, borderColor),
                 RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onToggle)
@@ -106,8 +127,14 @@ private fun MoreSectionRow(
                 )
             }
         }
-        if (expanded) {
-            content()
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                content()
+            }
         }
     }
 }

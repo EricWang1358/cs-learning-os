@@ -3,6 +3,12 @@
 package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.R
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,7 +69,7 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 lineHeight = 19.sp
             )
         }
-        AiDraftPreflight(state = screenState, viewModel = viewModel)
+        AiDraftPreflightHost(state = screenState, viewModel = viewModel)
         CaptureInbox(state = screenState, viewModel = viewModel)
     }
 }
@@ -106,8 +112,25 @@ private fun CaptureComposer(state: CaptureScreenState, viewModel: LearningViewMo
 }
 
 @Composable
-private fun AiDraftPreflight(state: CaptureScreenState, viewModel: LearningViewModel) {
-    val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } } ?: return
+private fun AiDraftPreflightHost(state: CaptureScreenState, viewModel: LearningViewModel) {
+    val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } }
+    AnimatedVisibility(
+        visible = slip != null,
+        enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
+        exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+    ) {
+        if (slip != null) {
+            AiDraftPreflight(slip = slip, state = state, viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+private fun AiDraftPreflight(
+    slip: CaptureSlipEntity,
+    state: CaptureScreenState,
+    viewModel: LearningViewModel
+) {
     val settings = state.aiProviderSettings
     val contextTitles = aiDraftContextNodeTitles(state.nodeTitles)
     WorkbenchCard(accent = true) {

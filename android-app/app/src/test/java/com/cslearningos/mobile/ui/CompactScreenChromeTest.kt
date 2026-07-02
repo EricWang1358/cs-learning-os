@@ -2,6 +2,7 @@ package com.cslearningos.mobile.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CompactScreenChromeTest {
@@ -48,5 +49,18 @@ class CompactScreenChromeTest {
         assertFalse(screenHelpInitiallyExpanded(AppScreen.Capture))
         assertFalse(screenHelpInitiallyExpanded(AppScreen.Backup))
         assertFalse(screenHelpInitiallyExpanded(AppScreen.More))
+    }
+
+    @Test
+    fun compactScreensUseQuickerMotionThanHome() {
+        val home = screenMotionPolicy(AppScreen.Home)
+        val capture = screenMotionPolicy(AppScreen.Capture)
+        val reader = screenMotionPolicy(AppScreen.Reader)
+
+        assertEquals(MotionEmphasis.Expressive, home.emphasis)
+        assertEquals(MotionEmphasis.Compact, capture.emphasis)
+        assertEquals(MotionEmphasis.Detail, reader.emphasis)
+        assertTrue(capture.expandMillis < home.expandMillis)
+        assertTrue(reader.expandMillis <= capture.expandMillis)
     }
 }

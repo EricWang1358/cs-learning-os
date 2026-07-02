@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.11
+
+Date: 2026-07-02
+
+Git tag: `android-v0.1.11-beta`
+
+Android version:
+
+- `versionCode`: 12
+- `versionName`: `0.1.11`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added a shared Android motion policy and Compose animation layer for card emphasis, collapsible sections, status banners, bottom navigation, review answer reveal, reader question capture, and Capture AI preflight.
+- Tightened phone top chrome on non-home screens so the route title, node count, and due count stay in one compact row with less visual weight.
+- Improved narrow-screen density in Backup and Library by making file actions and folder/node toolbars wrap more naturally.
+
 ## Android Beta 0.1.10
 
 Date: 2026-07-02
