@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.22
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.22-beta`
+
+Android version:
+
+- `versionCode`: 23
+- `versionName`: `0.1.22`
+
+Status: implementation beta.
+
+Highlights:
+
+- Completed the mobile Knowledge Assistant learning loop: it keeps local conversation history, works with editable drafts instead of prematurely saving a first message, and can prepare capture, node, and review actions only after an explicit user confirmation.
+- Added an interview-style daily review workflow for the Assistant, including persisted review prompts, follow-up evaluation, and direct handoff into the local review queue.
+- Refined phone density across the Library: Area folders use fixed-size metrics, balanced compact actions, a right-aligned Area creation action, and a lighter secondary-page header.
+- Strengthened Android release discipline with the existing beta acceptance harness so Gradle metadata, release notes, Git tag, architecture checks, doctor, tests, and APK assembly are validated together before distribution.
+
 ## Android Beta 0.1.12
 
 Date: 2026-07-10
