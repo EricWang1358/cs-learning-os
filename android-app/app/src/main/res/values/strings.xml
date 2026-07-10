@@ -46,6 +46,7 @@
     <string name="assistant_local_empty">No matching local sources.</string>
     <string name="assistant_streaming">Thinking…</string>
     <string name="assistant_stopped">Reply stopped.</string>
+    <string name="assistant_draft_updated">Working draft updated. Open it to review or edit.</string>
     <string name="assistant_reply_interrupted">Reply interrupted.</string>
     <string name="message_assistant_input_required">Write a question before sending.</string>
     <string name="message_assistant_draft_ready">Draft ready. Review and save it when you agree.</string>

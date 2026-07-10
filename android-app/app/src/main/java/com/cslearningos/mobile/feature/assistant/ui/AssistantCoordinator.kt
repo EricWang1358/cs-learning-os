@@ -53,7 +53,8 @@ class AssistantCoordinator(
             if (mutableState.value.messages.isEmpty()) {
                 conversationId = conversation.id
                 mutableState.value = AssistantUiState(
-                    messages = conversation.messages.map(AssistantConversationMessage::toUiMessage)
+                    messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
+                    workingDraft = conversation.workingDraft
                 )
             }
         }
@@ -77,7 +78,7 @@ class AssistantCoordinator(
         val input = snapshot.input.trim()
         if (input.isBlank() || snapshot.isBusy) return false
 
-        val mode = assistantRequestModeFor(input)
+        val mode = if (snapshot.workingDraft != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
         val userMessage = AssistantMessage(
             id = messageId("user"),
             role = AssistantMessageRole.User,
@@ -121,19 +122,34 @@ class AssistantCoordinator(
                     message = input,
                     context = localContext,
                     areas = areas,
+                    workingDraft = snapshot.workingDraft,
                     onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
                 )
+                var completedDecision: AssistantReplyDecision? = null
                 updateMessage(responseMessageId) { message ->
                     val body = message.body.trim()
-                    val action = body.takeIf(String::isNotBlank)?.let { answer ->
-                        assistantReplyAction(mode, input, answer, areas)
+                    val decision = assistantReplyDecision(
+                        mode = mode,
+                        request = input,
+                        reply = body,
+                        areas = areas,
+                        workingDraft = snapshot.workingDraft
+                    )
+                    completedDecision = decision
+                    val visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
+                        string(R.string.assistant_draft_updated)
+                    } else {
+                        decision.visibleReply
                     }
-                    val visibleBody = (action as? AssistantMessageAction.OpenEditableDraft)?.markdown ?: body
                     message.copy(
                         body = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
-                        action = action,
+                        action = decision.action,
+                        captureSuggestion = decision.captureSuggestion,
                         isStreaming = false
                     )
+                }
+                completedDecision?.workingDraft?.let { draft ->
+                    mutableState.update { it.copy(workingDraft = draft) }
                 }
                 persistConversation()
             } catch (error: CancellationException) {
@@ -232,7 +248,11 @@ class AssistantCoordinator(
             .map(AssistantMessage::toStoredMessage)
         if (messages.isNotEmpty()) {
             repository.saveAssistantConversation(
-                AssistantConversation(id = conversationId, messages = messages)
+                AssistantConversation(
+                    id = conversationId,
+                    messages = messages,
+                    workingDraft = mutableState.value.workingDraft
+                )
             )
         }
     }

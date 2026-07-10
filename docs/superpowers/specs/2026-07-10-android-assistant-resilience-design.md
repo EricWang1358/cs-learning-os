@@ -9,11 +9,13 @@ Make the mobile knowledge assistant readable on a phone and reliable when an Ope
 - The conversation owns the screen: a compact top bar, left/right message bubbles, and one fixed composer.
 - Quick prompts only prefill the composer so a generic label is never stored as a conversation turn or capture.
 - Conversations persist locally in Room and restore the most recent displayable session after app restart.
+- A conversation may own one persistent working draft. Follow-up messages revise that full draft instead of creating parallel note replies.
 - The composer has one placeholder rather than a duplicated label and placeholder.
 - Assistant replies render with the existing CommonMark pipeline after streaming completes; partial tokens remain plain text until then.
 - A failed reply retains any useful partial text, explains the interruption, and exposes a retry action for the original request.
 - The configured cloud model may answer from general knowledge when local search has no match. It does not claim to perform independent live web search.
 - For explicit note-creation requests, the model selects only from the supplied existing Areas and sends the selected Area into the editable draft.
+- The model may mark truly unrelated, useful fragments as a capture suggestion; the suggestion remains a separate user-confirmed action.
 
 ## Reliability Rules
 
@@ -30,4 +32,5 @@ Make the mobile knowledge assistant readable on a phone and reliable when an Ope
 - `AssistantActionClaimsTest` verifies retry action lookup and single-claim capture saving.
 - `:app:testDebugUnitTest` is the full regression gate.
 - `AssistantConversationCodecTest` verifies lossless local display-history encoding.
-- `:app:assembleDebug` produces a package whose manifest is `versionCode 15` and `versionName 0.1.14`.
+- `AssistantActionClaimsTest` verifies draft replacement, Area selection, and capture-suggestion separation.
+- `:app:assembleDebug` produces a package whose manifest is `versionCode 16` and `versionName 0.1.15`.

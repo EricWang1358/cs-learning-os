@@ -2,6 +2,7 @@ package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
+import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 
 enum class AssistantMessageRole {
     User,
@@ -39,6 +40,7 @@ data class AssistantMessage(
     val body: String,
     val citations: List<AssistantCitation> = emptyList(),
     val action: AssistantMessageAction? = null,
+    val captureSuggestion: String? = null,
     val isStreaming: Boolean = false
 )
 
@@ -51,14 +53,19 @@ fun claimCaptureSaveAction(
     messages: List<AssistantMessage>,
     messageId: String
 ): CaptureSaveActionClaim? {
-    val action = messages
-        .firstOrNull { it.id == messageId }
-        ?.action as? AssistantMessageAction.SaveCapture
+    val message = messages.firstOrNull { it.id == messageId } ?: return null
+    val action = (message.action as? AssistantMessageAction.SaveCapture)
+        ?: message.captureSuggestion?.let(AssistantMessageAction::SaveCapture)
         ?: return null
     return CaptureSaveActionClaim(
         action = action,
         messages = messages.map { message ->
-            if (message.id == messageId) message.copy(action = null) else message
+            if (message.id == messageId) {
+                message.copy(
+                    action = message.action.takeUnless { it is AssistantMessageAction.SaveCapture },
+                    captureSuggestion = null
+                )
+            } else message
         }
     )
 }
@@ -73,24 +80,59 @@ fun assistantReplyAction(
     reply: String,
     areas: List<AssistantAreaOption>
 ): AssistantMessageAction? =
+    assistantReplyDecision(mode, request, reply, areas).action
+
+data class AssistantReplyDecision(
+    val visibleReply: String,
+    val action: AssistantMessageAction?,
+    val workingDraft: AssistantWorkingDraft? = null,
+    val captureSuggestion: String? = null
+)
+
+fun assistantReplyDecision(
+    mode: AssistantRequestMode,
+    request: String,
+    reply: String,
+    areas: List<AssistantAreaOption>,
+    workingDraft: AssistantWorkingDraft? = null
+): AssistantReplyDecision =
     when (mode) {
         AssistantRequestMode.Answer -> {
-            if (request.trim() in GenericQuickPrompts) null else AssistantMessageAction.SaveCapture(reply)
+            AssistantReplyDecision(
+                visibleReply = reply,
+                action = if (request.normalizedQuickPrompt() in GenericQuickPrompts) null else AssistantMessageAction.SaveCapture(reply)
+            )
         }
 
         AssistantRequestMode.Draft -> {
             val placement = assistantDraftPlacement(reply, areas)
-            AssistantMessageAction.OpenEditableDraft(
-                titleHint = request.take(MaximumDraftTitleHintCharacters),
-                markdown = placement.markdown,
-                areaId = placement.areaId
+            val markdown = placement.markdown.ifBlank { workingDraft?.markdown.orEmpty() }
+            val nextDraft = markdown.takeIf(String::isNotBlank)?.let {
+                AssistantWorkingDraft(
+                    titleHint = workingDraft?.titleHint ?: request.take(MaximumDraftTitleHintCharacters),
+                    markdown = it,
+                    areaId = placement.areaId ?: workingDraft?.areaId
+                )
+            }
+            AssistantReplyDecision(
+                visibleReply = placement.markdown,
+                action = nextDraft?.let { draft ->
+                    AssistantMessageAction.OpenEditableDraft(
+                        titleHint = draft.titleHint,
+                        markdown = draft.markdown,
+                        areaId = draft.areaId
+                    )
+                },
+                workingDraft = nextDraft,
+                captureSuggestion = placement.captureSuggestion
             )
         }
     }
 
 data class AssistantDraftPlacement(
     val markdown: String,
-    val areaId: String?
+    val areaId: String?,
+    val captureSuggestion: String?
 )
 
 private fun assistantDraftPlacement(
@@ -100,13 +142,23 @@ private fun assistantDraftPlacement(
     val match = AssistantAreaDirective.find(reply)
     val requestedAreaId = match?.groupValues?.get(1)?.trim()
     val areaId = areas.firstOrNull { it.id == requestedAreaId }?.id
+    val captureSuggestion = AssistantCaptureDirective
+        .findAll(reply)
+        .map { it.groupValues[1].trim() }
+        .filter { it.isNotBlank() }
+        .joinToString(separator = "\n\n")
+        .takeIf { it.isNotBlank() }
     return AssistantDraftPlacement(
-        markdown = reply.replaceFirst(AssistantAreaDirective, "").trim(),
-        areaId = areaId
+        markdown = reply.replace(AssistantAreaDirective, "").replace(AssistantCaptureDirective, "").trim(),
+        areaId = areaId,
+        captureSuggestion = captureSuggestion
     )
 }
 
-private val AssistantAreaDirective = Regex("^\\s*<!--\\s*cs-area:\\s*([^>]+?)\\s*-->\\s*")
+private fun String.normalizedQuickPrompt(): String = trim().trimEnd(':', '：')
+
+private val AssistantAreaDirective = Regex("^\\s*<!--\\s*cs-area:\\s*([^>]+?)\\s*-->\\s*", RegexOption.MULTILINE)
+private val AssistantCaptureDirective = Regex("^\\s*<!--\\s*cs-capture:\\s*([^>]+?)\\s*-->\\s*", RegexOption.MULTILINE)
 private val GenericQuickPrompts = setOf("解释一个概念", "Explain a concept")
 private const val MaximumDraftTitleHintCharacters = 72
 
@@ -114,5 +166,6 @@ data class AssistantUiState(
     val input: String = "",
     val messages: List<AssistantMessage> = emptyList(),
     val isBusy: Boolean = false,
-    val lastRequestMode: AssistantRequestMode = AssistantRequestMode.Answer
+    val lastRequestMode: AssistantRequestMode = AssistantRequestMode.Answer,
+    val workingDraft: AssistantWorkingDraft? = null
 )

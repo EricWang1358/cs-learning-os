@@ -4,6 +4,7 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCitation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -37,13 +38,31 @@ object AssistantConversationCodec {
                     }
                 }
             )
+            .apply {
+                conversation.workingDraft?.let { draft ->
+                    put(
+                        "working_draft",
+                        JSONObject()
+                            .put("title_hint", draft.titleHint)
+                            .put("markdown", draft.markdown)
+                            .put("area_id", draft.areaId)
+                    )
+                }
+            }
             .toString()
 
     fun decode(raw: String): AssistantConversation {
         val root = JSONObject(raw)
         return AssistantConversation(
             id = root.getString("id"),
-            messages = root.getJSONArray("messages").toMessages()
+            messages = root.getJSONArray("messages").toMessages(),
+            workingDraft = root.optJSONObject("working_draft")?.let { draft ->
+                AssistantWorkingDraft(
+                    titleHint = draft.getString("title_hint"),
+                    markdown = draft.getString("markdown"),
+                    areaId = draft.optString("area_id").takeIf { it.isNotBlank() }
+                )
+            }
         )
     }
 

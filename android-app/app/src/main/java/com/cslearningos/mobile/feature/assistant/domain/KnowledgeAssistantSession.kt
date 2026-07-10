@@ -39,6 +39,7 @@ class KnowledgeAssistantSession(
         message: String,
         context: List<AssistantCitation>,
         areas: List<AssistantAreaOption>,
+        workingDraft: AssistantWorkingDraft?,
         onDelta: suspend (String) -> Unit
     ) {
         val selectedContext = selectAssistantContext(
@@ -48,7 +49,7 @@ class KnowledgeAssistantSession(
             baseUrl = settings.baseUrl,
             apiKey = settings.apiKey,
             model = settings.model,
-            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext, areas),
+            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext, areas, workingDraft),
             userPrompt = buildKnowledgeAssistantUserPrompt(history, message),
             onDelta = onDelta
         )

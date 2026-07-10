@@ -2,6 +2,7 @@ package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
+import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -65,5 +66,24 @@ class AssistantActionClaimsTest {
 
         assertEquals("algorithms", action.areaId)
         assertEquals("# Divide and conquer", action.markdown)
+    }
+
+    @Test
+    fun draftRevisionReplacesTheWorkingDraftAndSeparatesCaptureOnlyContent() {
+        val decision = assistantReplyDecision(
+            mode = AssistantRequestMode.Draft,
+            request = "补一段每周计划",
+            reply = "<!-- cs-capture: 找朋友一起刷题 -->\n<!-- cs-area: algorithms -->\n# LeetCode plan\n\n## Weekly plan",
+            areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms")),
+            workingDraft = AssistantWorkingDraft(
+                titleHint = "LeetCode plan",
+                markdown = "# LeetCode plan",
+                areaId = "algorithms"
+            )
+        )
+
+        assertEquals("# LeetCode plan\n\n## Weekly plan", decision.workingDraft?.markdown)
+        assertEquals("algorithms", decision.workingDraft?.areaId)
+        assertEquals("找朋友一起刷题", decision.captureSuggestion)
     }
 }

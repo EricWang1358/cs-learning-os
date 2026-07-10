@@ -267,6 +267,12 @@ private fun AssistantMessageBubble(
 
                 null -> Unit
             }
+            if (message.captureSuggestion != null) {
+                WorkbenchButton(
+                    text = stringResource(R.string.assistant_save_capture),
+                    onClick = onSaveCapture
+                )
+            }
         }
     }
 }
