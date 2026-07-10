@@ -9,5 +9,5 @@ object AndroidArchitectureConstants {
     const val AiReadTimeoutMillis: Int = 45_000
     const val AppNoticeLimit: Int = 6
     const val AreaOrderStep: Int = 10
-    const val StarterContentSeedVersion: Int = 2
+    const val StarterContentSeedVersion: Int = 3
 }
