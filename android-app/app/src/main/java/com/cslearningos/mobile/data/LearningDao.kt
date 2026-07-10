@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -98,6 +99,9 @@ interface LearningDao {
     @Query("SELECT * FROM capture_slips")
     suspend fun getAllCaptureSlips(): List<CaptureSlipEntity>
 
+    @Query("SELECT * FROM assistant_conversations ORDER BY updated_at DESC LIMIT 1")
+    suspend fun latestAssistantConversation(): AssistantConversationEntity?
+
     @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
     suspend fun countActiveNodesInArea(areaId: String): Int
 
@@ -115,6 +119,9 @@ interface LearningDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCaptureSlip(slip: CaptureSlipEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAssistantConversation(conversation: AssistantConversationEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertReviewState(state: ReviewStateEntity)

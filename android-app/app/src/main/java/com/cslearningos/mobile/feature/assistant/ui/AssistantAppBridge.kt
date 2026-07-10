@@ -19,7 +19,7 @@ class AssistantAppBridge(
 
     fun setInput(value: String) = coordinator.setInput(value)
 
-    fun sendQuickMessage(value: String) = coordinator.sendQuickMessage(value, currentSettings())
+    fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)
 
     fun sendMessage() = coordinator.send(currentSettings())
 
@@ -34,7 +34,7 @@ class AssistantAppBridge(
                 screen = AppScreen.Editor,
                 selectedNode = null,
                 editorNodeId = null,
-                editorAreaId = null,
+                editorAreaId = action.areaId,
                 editorSourceCaptureSlipId = null,
                 editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),
                 editorBody = action.markdown,

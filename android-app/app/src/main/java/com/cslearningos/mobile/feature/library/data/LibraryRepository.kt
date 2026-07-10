@@ -44,7 +44,11 @@ class LibraryRepository(
         now: Long = System.currentTimeMillis()
     ): LearningNodeEntity {
         val existing = id?.let { dao.getNode(it) }
-        val resolvedArea = resolveArea(areaId ?: existing?.areaId ?: existing?.area ?: DefaultAreaSlug, now)
+        val resolvedArea = if (areaId != null) {
+            dao.getArea(areaId) ?: throw IllegalArgumentException("Selected Area is no longer available.")
+        } else {
+            resolveArea(existing?.areaId ?: existing?.area ?: DefaultAreaSlug, now)
+        }
         val node = LearningNodeEntity(
             id = existing?.id ?: UUID.randomUUID().toString(),
             title = title.ifBlank { UntitledNodeTitle },

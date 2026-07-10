@@ -14,6 +14,7 @@ import com.cslearningos.mobile.data.ReviewResult
 import com.cslearningos.mobile.data.ReviewStateEntity
 import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.review.data.ReviewRepository
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 import com.cslearningos.mobile.feature.review.domain.AnswerQuizUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -88,12 +89,14 @@ private class FakeReviewLearningDao(
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = unsupported()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = unsupported()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = unsupported()
+    override suspend fun latestAssistantConversation(): AssistantConversationEntity? = unsupported()
     override suspend fun countActiveNodesInArea(areaId: String): Int = unsupported()
     override suspend fun upsertArea(area: AreaEntity) = unsupported()
     override suspend fun upsertNode(node: LearningNodeEntity) = unsupported()
     override suspend fun upsertQuiz(quiz: QuizItemEntity) = unsupported()
     override suspend fun upsertReaderQuestion(question: ReaderQuestionEntity) = unsupported()
     override suspend fun upsertCaptureSlip(slip: CaptureSlipEntity) = unsupported()
+    override suspend fun upsertAssistantConversation(conversation: AssistantConversationEntity) = unsupported()
     override suspend fun upsertReviewState(state: ReviewStateEntity) {
         states[state.quizId] = state
     }

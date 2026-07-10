@@ -2,6 +2,7 @@ package com.cslearningos.mobile.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,6 +31,22 @@ class LearningRepositoryPolicyTest {
         assertEquals(7L, updated.revision)
         assertEquals(SyncStatus.clean, updated.syncStatus)
         assertNull(updated.deletedAt)
+    }
+
+    @Test
+    fun explicitMissingAreaCannotBeRecreatedWhileSavingANode() = runTest {
+        val repository = LearningRepository(FakeLearningDao())
+
+        val result = runCatching {
+            repository.saveNode(
+                id = null,
+                title = "Area race",
+                markdownBody = "# Area race",
+                areaId = "deleted-area"
+            )
+        }
+
+        assertTrue(result.isFailure)
     }
 
     @Test
@@ -664,6 +681,7 @@ private class FakeLearningDao : LearningDao {
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = reviewAttempts.values.toList()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = readerQuestions.values.toList()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = captureSlips.values.toList()
+    override suspend fun latestAssistantConversation(): AssistantConversationEntity? = null
     override suspend fun countActiveNodesInArea(areaId: String): Int =
         nodes.values.count { it.areaId == areaId && it.deletedAt == null }
     override suspend fun upsertArea(area: AreaEntity) {
@@ -681,6 +699,7 @@ private class FakeLearningDao : LearningDao {
     override suspend fun upsertCaptureSlip(slip: CaptureSlipEntity) {
         captureSlips[slip.id] = slip
     }
+    override suspend fun upsertAssistantConversation(conversation: AssistantConversationEntity) = Unit
     override suspend fun upsertReviewState(state: ReviewStateEntity) {
         reviewStates[state.quizId] = state
     }

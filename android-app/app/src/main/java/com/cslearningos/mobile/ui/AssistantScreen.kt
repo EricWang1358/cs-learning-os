@@ -71,7 +71,7 @@ fun AssistantScreen(
             verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.ListItemSpacing)
         ) {
             if (assistant.messages.isEmpty()) {
-                item { AssistantEmptyState(onQuickMessage = viewModel.assistantActions::sendQuickMessage) }
+                item { AssistantEmptyState(onQuickMessage = viewModel.assistantActions::prefillQuickPrompt) }
             }
             items(assistant.messages, key = { it.id }) { message ->
                 AssistantMessageBubble(
@@ -161,7 +161,7 @@ private fun AssistantEmptyState(onQuickMessage: (String) -> Unit) {
         ToolbarRow {
             WorkbenchButton(
                 text = explainLabel,
-                onClick = { onQuickMessage(explainLabel) },
+                onClick = { onQuickMessage("$explainLabel: ") },
                 primary = true
             )
             WorkbenchButton(text = draftLabel, onClick = { onQuickMessage(draftLabel) })

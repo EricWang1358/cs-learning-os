@@ -5,6 +5,7 @@ import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.ui.AssistantCitation
 import com.cslearningos.mobile.feature.assistant.ui.AssistantMessage
 import com.cslearningos.mobile.ui.AiProviderSettings
+import kotlinx.coroutines.flow.first
 
 class KnowledgeAssistantSession(
     private val repository: LearningRepository,
@@ -37,6 +38,7 @@ class KnowledgeAssistantSession(
         history: List<AssistantMessage>,
         message: String,
         context: List<AssistantCitation>,
+        areas: List<AssistantAreaOption>,
         onDelta: suspend (String) -> Unit
     ) {
         val selectedContext = selectAssistantContext(
@@ -46,9 +48,12 @@ class KnowledgeAssistantSession(
             baseUrl = settings.baseUrl,
             apiKey = settings.apiKey,
             model = settings.model,
-            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext),
+            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext, areas),
             userPrompt = buildKnowledgeAssistantUserPrompt(history, message),
             onDelta = onDelta
         )
     }
+
+    suspend fun availableAreas(): List<AssistantAreaOption> =
+        repository.areas.first().map { area -> AssistantAreaOption(id = area.id, name = area.name) }
 }

@@ -3,6 +3,8 @@ package com.cslearningos.mobile.data
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.capture.data.CaptureRepository
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationRepository
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.library.data.LibraryRepository
 import com.cslearningos.mobile.feature.review.data.ReviewRepository
 import kotlinx.coroutines.flow.Flow
@@ -13,13 +15,15 @@ class LearningRepository private constructor(
     private val dao: LearningDao,
     private val libraryRepository: LibraryRepository,
     private val captureRepository: CaptureRepository,
-    private val reviewRepository: ReviewRepository
+    private val reviewRepository: ReviewRepository,
+    private val assistantConversationRepository: AssistantConversationRepository
 ) {
     constructor(dao: LearningDao) : this(
         dao = dao,
         libraryRepository = LibraryRepository(dao),
         captureRepository = CaptureRepository(dao),
-        reviewRepository = ReviewRepository(dao)
+        reviewRepository = ReviewRepository(dao),
+        assistantConversationRepository = AssistantConversationRepository(dao)
     )
 
     val areas: Flow<List<AreaEntity>> = libraryRepository.areas
@@ -112,6 +116,13 @@ class LearningRepository private constructor(
         status = status,
         now = now
     )
+
+    suspend fun latestAssistantConversation(): AssistantConversation? =
+        assistantConversationRepository.latest()
+
+    suspend fun saveAssistantConversation(conversation: AssistantConversation) {
+        assistantConversationRepository.save(conversation)
+    }
 
     suspend fun updateCaptureSlipStatus(
         slipId: String,

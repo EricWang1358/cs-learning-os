@@ -15,6 +15,11 @@ data class AssistantContextSource(
     val excerpt: String
 )
 
+data class AssistantAreaOption(
+    val id: String,
+    val name: String
+)
+
 enum class AssistantRequestMode {
     Answer,
     Draft

@@ -36,4 +36,15 @@ class AssistantSafetyPolicyTest {
         assertEquals(AssistantRequestMode.Draft, assistantRequestModeFor("create a note about cache locality"))
         assertEquals(AssistantRequestMode.Answer, assistantRequestModeFor("为什么 TLB miss 会变慢？"))
     }
+
+    @Test
+    fun generalQuestionsUseConfiguredModelKnowledgeWhenLocalSearchIsEmpty() {
+        val prompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Answer,
+            context = emptyList()
+        )
+
+        assertTrue(prompt.contains("general knowledge"))
+        assertFalse(prompt.contains("local library is insufficient"))
+    }
 }

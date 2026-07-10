@@ -7,10 +7,14 @@
 - [x] Reuse the established Markdown renderer without nested card chrome for completed assistant replies.
 - [x] Preserve partial replies on failure and add a retry message action.
 - [x] Add visible feedback for failed capture saves and unavailable citations.
+- [x] Change quick prompts into editable input prefills instead of automatic generic requests.
+- [x] Allow configured cloud-model knowledge when local search has no match.
+- [x] Carry a validated existing Area choice into AI-generated editable drafts.
+- [x] Persist the most recent local assistant conversation through a Room migration.
 - [x] Add retry action model coverage and run the full unit-test and debug-build gates.
 
 ## Release Gate
 
 - [x] Debug APK builds successfully.
-- [x] APK manifest reports `versionCode 14` and `versionName 0.1.13`.
+- [x] APK manifest reports `versionCode 15` and `versionName 0.1.14`.
 - [x] User-visible streaming-null regression is covered by a unit test.

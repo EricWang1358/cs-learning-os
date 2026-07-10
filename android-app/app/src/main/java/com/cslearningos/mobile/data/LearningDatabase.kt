@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 
 @Database(
     entities = [
@@ -18,9 +19,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReviewStateEntity::class,
         ReviewAttemptEntity::class,
         NodeFtsEntity::class,
-        QuizFtsEntity::class
+        QuizFtsEntity::class,
+        AssistantConversationEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -116,13 +118,28 @@ abstract class LearningDatabase : RoomDatabase() {
             }
         }
 
+        private val Migration5To6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `assistant_conversations` (
+                        `id` TEXT NOT NULL,
+                        `messages_json` TEXT NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 LearningDatabase::class.java,
                 "learning-os.db"
             )
-                .addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5)
+                .addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6)
                 .build()
     }
 }

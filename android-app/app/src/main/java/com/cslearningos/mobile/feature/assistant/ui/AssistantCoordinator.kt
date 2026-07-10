@@ -6,6 +6,10 @@ import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.LearningRepository
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCitation
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantSession
 import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.UUID
 
 sealed interface AssistantDestination {
     data class Node(val node: LearningNodeEntity) : AssistantDestination
@@ -38,12 +43,26 @@ class AssistantCoordinator(
     private val captureSaveMutex = Mutex()
     private var replyJob: Job? = null
     private var activeReplyMessageId: String? = null
+    private var conversationId: String = newConversationId()
 
     val state: StateFlow<AssistantUiState> = mutableState.asStateFlow()
+
+    init {
+        scope.launch {
+            val conversation = repository.latestAssistantConversation() ?: return@launch
+            if (mutableState.value.messages.isEmpty()) {
+                conversationId = conversation.id
+                mutableState.value = AssistantUiState(
+                    messages = conversation.messages.map(AssistantConversationMessage::toUiMessage)
+                )
+            }
+        }
+    }
 
     fun newChat() {
         activeReplyMessageId = null
         replyJob?.cancel()
+        conversationId = newConversationId()
         mutableState.value = AssistantUiState()
     }
 
@@ -51,10 +70,7 @@ class AssistantCoordinator(
         mutableState.update { it.copy(input = value) }
     }
 
-    fun sendQuickMessage(value: String, settings: AiProviderSettings) {
-        mutableState.update { it.copy(input = value) }
-        send(settings)
-    }
+    fun prefillQuickPrompt(value: String) = setInput(value)
 
     fun send(settings: AiProviderSettings): Boolean {
         val snapshot = mutableState.value
@@ -85,6 +101,7 @@ class AssistantCoordinator(
         replyJob = scope.launch {
             try {
                 val localContext = session.findLocalContext(input)
+                val areas = session.availableAreas()
                 updateMessage(responseMessageId) { it.copy(citations = localContext) }
                 if (!settings.isConfigured) {
                     updateMessage(responseMessageId) {
@@ -94,6 +111,7 @@ class AssistantCoordinator(
                             isStreaming = false
                         )
                     }
+                    persistConversation()
                     return@launch
                 }
                 session.streamReply(
@@ -102,24 +120,22 @@ class AssistantCoordinator(
                     history = snapshot.messages + userMessage,
                     message = input,
                     context = localContext,
+                    areas = areas,
                     onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
                 )
                 updateMessage(responseMessageId) { message ->
                     val body = message.body.trim()
+                    val action = body.takeIf(String::isNotBlank)?.let { answer ->
+                        assistantReplyAction(mode, input, answer, areas)
+                    }
+                    val visibleBody = (action as? AssistantMessageAction.OpenEditableDraft)?.markdown ?: body
                     message.copy(
-                        body = body.ifBlank { string(R.string.assistant_local_empty) },
-                        action = body.takeIf(String::isNotBlank)?.let { answer ->
-                            when (mode) {
-                                AssistantRequestMode.Draft -> AssistantMessageAction.OpenEditableDraft(
-                                    titleHint = input.take(MaximumTitleHintCharacters),
-                                    markdown = answer
-                                )
-                                AssistantRequestMode.Answer -> AssistantMessageAction.SaveCapture(answer)
-                            }
-                        },
+                        body = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
+                        action = action,
                         isStreaming = false
                     )
                 }
+                persistConversation()
             } catch (error: CancellationException) {
                 updateMessage(responseMessageId) { message ->
                     message.copy(
@@ -127,6 +143,7 @@ class AssistantCoordinator(
                         isStreaming = false
                     )
                 }
+                persistConversation()
                 throw error
             } catch (error: Throwable) {
                 updateMessage(responseMessageId) { message ->
@@ -138,6 +155,7 @@ class AssistantCoordinator(
                         isStreaming = false
                     )
                 }
+                persistConversation()
             } finally {
                 if (activeReplyMessageId == responseMessageId) {
                     activeReplyMessageId = null
@@ -208,7 +226,51 @@ class AssistantCoordinator(
     private fun messageId(role: String): String =
         "$role-${System.currentTimeMillis()}-${mutableState.value.messages.size}"
 
-    private companion object {
-        const val MaximumTitleHintCharacters = 72
+    private suspend fun persistConversation() {
+        val messages = mutableState.value.messages
+            .filter { !it.isStreaming && it.body.isNotBlank() }
+            .map(AssistantMessage::toStoredMessage)
+        if (messages.isNotEmpty()) {
+            repository.saveAssistantConversation(
+                AssistantConversation(id = conversationId, messages = messages)
+            )
+        }
     }
+
+    private fun newConversationId(): String = UUID.randomUUID().toString()
 }
+
+private fun AssistantConversationMessage.toUiMessage(): AssistantMessage =
+    AssistantMessage(
+        id = "history-${UUID.randomUUID()}",
+        role = when (role) {
+            AssistantConversationRole.User -> AssistantMessageRole.User
+            AssistantConversationRole.Assistant -> AssistantMessageRole.Assistant
+        },
+        body = body,
+        citations = citations.map { citation ->
+            AssistantCitation(
+                id = citation.id,
+                type = citation.type,
+                title = citation.title,
+                excerpt = citation.excerpt
+            )
+        }
+    )
+
+private fun AssistantMessage.toStoredMessage(): AssistantConversationMessage =
+    AssistantConversationMessage(
+        role = when (role) {
+            AssistantMessageRole.User -> AssistantConversationRole.User
+            AssistantMessageRole.Assistant -> AssistantConversationRole.Assistant
+        },
+        body = body,
+        citations = citations.map { citation ->
+            AssistantConversationCitation(
+                id = citation.id,
+                type = citation.type,
+                title = citation.title,
+                excerpt = citation.excerpt
+            )
+        }
+    )

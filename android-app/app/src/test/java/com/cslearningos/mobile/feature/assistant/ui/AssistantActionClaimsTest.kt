@@ -1,5 +1,7 @@
 package com.cslearningos.mobile.feature.assistant.ui
 
+import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -38,5 +40,30 @@ class AssistantActionClaimsTest {
 
         assertEquals("Explain virtual memory", retryAssistantRequest(messages, "reply"))
         assertNull(retryAssistantRequest(messages, "missing"))
+    }
+
+    @Test
+    fun genericQuickPromptDoesNotOfferItsClarifyingReplyAsACapture() {
+        assertNull(
+            assistantReplyAction(
+                mode = AssistantRequestMode.Answer,
+                request = "解释一个概念",
+                reply = "请告诉我想解释的具体概念。",
+                areas = emptyList()
+            )
+        )
+    }
+
+    @Test
+    fun draftActionUsesOnlyAnExistingAreaDirectiveAndStripsItFromMarkdown() {
+        val action = assistantReplyAction(
+            mode = AssistantRequestMode.Draft,
+            request = "帮我整理成笔记",
+            reply = "<!-- cs-area: algorithms -->\n# Divide and conquer",
+            areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+        ) as AssistantMessageAction.OpenEditableDraft
+
+        assertEquals("algorithms", action.areaId)
+        assertEquals("# Divide and conquer", action.markdown)
     }
 }
