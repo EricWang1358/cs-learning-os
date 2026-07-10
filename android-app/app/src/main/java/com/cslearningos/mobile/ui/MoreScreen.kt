@@ -253,15 +253,11 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )
-            ToolbarRow {
-                state.availableAiModels.take(8).forEach { modelId ->
-                    WorkbenchButton(
-                        text = modelId,
-                        onClick = { viewModel.selectAiModel(modelId) },
-                        primary = settings.model == modelId
-                    )
-                }
-            }
+            LoadedModelPicker(
+                selectedModel = settings.model,
+                availableModels = state.availableAiModels,
+                onSelect = viewModel::selectAiModel
+            )
         }
         ToolbarRow {
             WorkbenchButton(
@@ -284,6 +280,25 @@ private fun AiProviderContent(state: LearningUiState, viewModel: LearningViewMod
         }
     }
 }
+
+@Composable
+private fun LoadedModelPicker(
+    selectedModel: String,
+    availableModels: List<String>,
+    onSelect: (String) -> Unit
+) {
+    WorkbenchMenuButton(
+        text = selectedModel,
+        options = availableModels.distinct().take(MaxLoadedModelChoices).map { modelId ->
+            WorkbenchMenuOption(modelId) { onSelect(modelId) }
+        },
+        primary = true,
+        modifier = Modifier.fillMaxWidth(),
+        expandToContainer = true
+    )
+}
+
+private const val MaxLoadedModelChoices = 8
 
 @Composable
 private fun AiServiceStatusBlock(status: AiServiceStatus) {

@@ -39,6 +39,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,11 +72,17 @@ private val CardShape = RoundedCornerShape(10.dp)
 
 private object WorkbenchActionTokens {
     val Gap = 8.dp
-    val MinHeight = 40.dp
+    val MinHeight = 44.dp
     val HorizontalPadding = 12.dp
     val CornerRadius = 8.dp
-    val FontSize = 12.sp
+    val FontSize = 13.sp
+    const val MenuLabelMaxLines = 2
 }
+
+data class WorkbenchMenuOption(
+    val text: String,
+    val onClick: () -> Unit
+)
 
 fun eyebrowLetterSpacingValue(text: String): Float {
     val trimmed = text.trim()
@@ -288,6 +296,40 @@ fun WorkbenchButton(
             fontWeight = FontWeight.Bold,
             fontSize = WorkbenchActionTokens.FontSize
         )
+    }
+}
+
+@Composable
+fun WorkbenchMenuButton(
+    text: String,
+    options: List<WorkbenchMenuOption>,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    expandToContainer: Boolean = false
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        WorkbenchButton(
+            text = text,
+            onClick = { expanded = true },
+            modifier = if (expandToContainer) Modifier.fillMaxWidth() else Modifier,
+            primary = primary,
+            enabled = options.isNotEmpty()
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.text, maxLines = WorkbenchActionTokens.MenuLabelMaxLines) },
+                    onClick = {
+                        option.onClick()
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }
 

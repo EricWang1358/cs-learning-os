@@ -599,18 +599,27 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 node.lastReadAt?.let(::formatTime) ?: stringResource(R.string.common_not_recorded)
             )
         )
+        val readerQuestionLabel = readerQuestionButtonLabel(
+            openQuestionCount = state.readerQuestions.count { it.nodeId == node.id },
+            expanded = state.readerQuestionPanelExpanded,
+            context = LocalContext.current
+        )
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.common_back), viewModel::showHome)
             WorkbenchButton(stringResource(R.string.reader_edit_mode_button), { viewModel.editNode(node) }, primary = true)
-            WorkbenchButton(stringResource(R.string.reader_add_quiz_button), viewModel::startQuizForSelectedNode)
             WorkbenchButton(stringResource(R.string.common_delete), viewModel::deleteSelectedNode, danger = true)
-            WorkbenchButton(
-                readerQuestionButtonLabel(
-                    openQuestionCount = state.readerQuestions.count { it.nodeId == node.id },
-                    expanded = state.readerQuestionPanelExpanded,
-                    context = LocalContext.current
-                ),
-                viewModel::toggleReaderQuestionPanel
+            WorkbenchMenuButton(
+                text = stringResource(R.string.nav_more_label),
+                options = listOf(
+                    WorkbenchMenuOption(
+                        text = stringResource(R.string.reader_add_quiz_button),
+                        onClick = viewModel::startQuizForSelectedNode
+                    ),
+                    WorkbenchMenuOption(
+                        text = readerQuestionLabel,
+                        onClick = viewModel::toggleReaderQuestionPanel
+                    )
+                )
             )
         }
         AnimatedVisibility(

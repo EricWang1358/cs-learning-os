@@ -67,7 +67,6 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             WorkbenchButton(
                 text = stringResource(R.string.backup_share_full),
                 primary = true,
-                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     scope.launch {
                         runCatching {
@@ -95,7 +94,6 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             )
             WorkbenchButton(
                 text = stringResource(R.string.backup_save_local),
-                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     scope.launch {
                         runCatching { viewModel.createBackupDocument() }
@@ -111,7 +109,6 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             )
             WorkbenchButton(
                 text = stringResource(R.string.backup_import_file),
-                modifier = Modifier.fillMaxWidth(),
                 onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
                 danger = true
             )

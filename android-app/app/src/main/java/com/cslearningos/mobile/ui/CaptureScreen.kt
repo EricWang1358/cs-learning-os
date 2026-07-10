@@ -193,15 +193,15 @@ private fun AiDraftPreflight(
 
 @Composable
 private fun CaptureTypeRow(selected: CaptureSlipType, onSelect: (CaptureSlipType) -> Unit) {
-    ToolbarRow {
-        CaptureSlipType.entries.forEach { type ->
-            WorkbenchButton(
-                text = type.label(),
-                onClick = { onSelect(type) },
-                primary = selected == type
-            )
-        }
-    }
+    WorkbenchMenuButton(
+        text = selected.label(),
+        options = CaptureSlipType.entries.map { type ->
+            WorkbenchMenuOption(type.label()) { onSelect(type) }
+        },
+        primary = true,
+        modifier = Modifier.fillMaxWidth(),
+        expandToContainer = true
+    )
 }
 
 @Composable
