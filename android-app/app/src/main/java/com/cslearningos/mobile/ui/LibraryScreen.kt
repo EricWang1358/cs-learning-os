@@ -223,7 +223,7 @@ private fun LibraryRootScreen(
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ToolbarRow {
                 WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, primary = true)
                 WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) })
                 WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, danger = true)
@@ -307,6 +307,8 @@ private fun LibraryAreaDetailScreen(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetaPill(stringResource(R.string.common_nodes), detail.nodeCount.toString())
                     MetaPill(stringResource(R.string.library_checked_filter), detail.checkedCount.toString())
+                }
+                ToolbarRow {
                     WorkbenchButton(stringResource(R.string.library_back_to_areas), onBack)
                 }
             }
@@ -317,7 +319,7 @@ private fun LibraryAreaDetailScreen(
             }
         }
 
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ToolbarRow {
             WorkbenchButton(
                 text = stringResource(R.string.library_filter_all),
                 onClick = { onSetFilter(LibraryCheckedFilter.All) },

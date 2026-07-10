@@ -25,8 +25,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -56,16 +56,25 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val PanelShape = RoundedCornerShape(14.dp)
 private val CardShape = RoundedCornerShape(10.dp)
+
+private object WorkbenchActionTokens {
+    val Gap = 8.dp
+    val MinHeight = 40.dp
+    val HorizontalPadding = 12.dp
+    val CornerRadius = 8.dp
+    val FontSize = 12.sp
+}
 
 fun eyebrowLetterSpacingValue(text: String): Float {
     val trimmed = text.trim()
@@ -263,9 +272,10 @@ fun WorkbenchButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 64.dp),
-        shape = RoundedCornerShape(8.dp),
+        modifier = modifier.heightIn(min = WorkbenchActionTokens.MinHeight),
+        shape = RoundedCornerShape(WorkbenchActionTokens.CornerRadius),
         border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
+        contentPadding = PaddingValues(horizontal = WorkbenchActionTokens.HorizontalPadding),
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
             contentColor = content,
@@ -275,10 +285,8 @@ fun WorkbenchButton(
     ) {
         Text(
             text = text,
-            fontWeight = FontWeight.Black,
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            fontWeight = FontWeight.Bold,
+            fontSize = WorkbenchActionTokens.FontSize
         )
     }
 }
@@ -449,15 +457,83 @@ fun MetaPill(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-fun ToolbarRow(content: @Composable FlowRowScope.() -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth(),
-        content = content
-    )
+internal fun toolbarRows(itemWidths: List<Int>, availableWidth: Int, gap: Int): List<List<Int>> {
+    if (itemWidths.isEmpty()) return emptyList()
+    if (itemWidths.sum() + gap * (itemWidths.size - 1) <= availableWidth) {
+        return listOf(itemWidths.indices.toList())
+    }
+
+    val columnWidth = (availableWidth - gap).coerceAtLeast(0) / TwoColumns
+    return buildList {
+        var index = 0
+        while (index < itemWidths.size) {
+            val currentCanShare = itemWidths[index] <= columnWidth
+            val nextCanShare = itemWidths.getOrNull(index + 1)?.let { it <= columnWidth } == true
+            if (currentCanShare && nextCanShare) {
+                add(listOf(index, index + 1))
+                index += TwoColumns
+            } else {
+                add(listOf(index))
+                index += OneColumn
+            }
+        }
+    }
 }
+
+@Composable
+fun ToolbarRow(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        content = content,
+        modifier = modifier.fillMaxWidth()
+    ) { measurables, constraints ->
+        val availableWidth = constraints.maxWidth.takeUnless { it == Constraints.Infinity }
+            ?: measurables.sumOf { it.maxIntrinsicWidth(constraints.maxHeight) }
+        val gap = WorkbenchActionTokens.Gap.toPx().toInt()
+        val readableWidths = measurables.map { measurable ->
+            measurable.maxIntrinsicWidth(constraints.maxHeight).coerceAtMost(availableWidth)
+        }
+        val rows = toolbarRows(readableWidths, availableWidth, gap)
+        val placeables = arrayOfNulls<androidx.compose.ui.layout.Placeable>(measurables.size)
+
+        rows.forEach { row ->
+            val targetWidth = when (row.size) {
+                OneColumn -> availableWidth
+                else -> (availableWidth - gap * (row.size - OneColumn)).coerceAtLeast(0) / row.size
+            }
+            row.forEach { index ->
+                val measureConstraints = if (rows.size == OneColumn) {
+                    constraints.copy(minWidth = 0, maxWidth = availableWidth)
+                } else {
+                    constraints.copy(minWidth = targetWidth, maxWidth = targetWidth)
+                }
+                placeables[index] = measurables[index].measure(measureConstraints)
+            }
+        }
+
+        val rowHeights = rows.map { row -> row.maxOf { placeables[it]!!.height } }
+        val height = (rowHeights.sum() + gap * (rows.size - OneColumn).coerceAtLeast(0))
+            .coerceIn(constraints.minHeight, constraints.maxHeight)
+
+        layout(availableWidth, height) {
+            var y = 0
+            rows.zip(rowHeights).forEach { (row, rowHeight) ->
+                var x = 0
+                row.forEach { index ->
+                    val placeable = placeables[index]!!
+                    placeable.placeRelative(x, y + (rowHeight - placeable.height) / TwoColumns)
+                    x += placeable.width + gap
+                }
+                y += rowHeight + gap
+            }
+        }
+    }
+}
+
+private const val OneColumn = 1
+private const val TwoColumns = 2
 
 @Composable
 fun CollapsibleWorkbenchSection(
