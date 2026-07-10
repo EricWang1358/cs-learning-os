@@ -58,6 +58,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -128,6 +133,10 @@ private fun PortraitWorkbench(
     state: LearningUiState,
     viewModel: LearningViewModel
 ) {
+    if (shellState.route == AppRoute.Assistant) {
+        AssistantScreen(state = state, viewModel = viewModel)
+        return
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -138,7 +147,10 @@ private fun PortraitWorkbench(
                 if (useCompactPortraitBrand(shellState.route.toAppScreen())) {
                     CompactBrandBlock(route = shellState.route, state = state)
                 } else {
-                    BrandBlock(state)
+                    BrandBlock(
+                        state = state,
+                        onAssistantClick = viewModel::showAssistant
+                    )
                 }
             }
             item { StatusBanner(shellState.message) }
@@ -163,6 +175,10 @@ private fun TwoPaneWorkbench(
     state: LearningUiState,
     viewModel: LearningViewModel
 ) {
+    if (shellState.route == AppRoute.Assistant) {
+        AssistantScreen(state = state, viewModel = viewModel)
+        return
+    }
     Row(modifier = Modifier.fillMaxSize()) {
         WorkbenchSidebar(
             currentRoute = shellState.route,
@@ -194,6 +210,10 @@ private fun LandscapeWorkbench(
     state: LearningUiState,
     viewModel: LearningViewModel
 ) {
+    if (shellState.route == AppRoute.Assistant) {
+        AssistantScreen(state = state, viewModel = viewModel)
+        return
+    }
     Row(modifier = Modifier.fillMaxSize()) {
         WorkbenchSidebar(
             currentRoute = shellState.route,
@@ -244,7 +264,10 @@ private fun WorkbenchSidebar(
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        BrandBlock(state)
+        BrandBlock(
+            state = state,
+            onAssistantClick = if (currentRoute == AppRoute.Home) viewModel::showAssistant else null
+        )
         NavButton(stringResource(R.string.nav_home_label), currentRoute == AppRoute.Home, onClick = { viewModel.openTopLevelRoute(AppRoute.Home) })
         NavButton(stringResource(R.string.nav_capture_label), currentRoute == AppRoute.Capture, onClick = { viewModel.openTopLevelRoute(AppRoute.Capture) })
         NavButton(stringResource(R.string.nav_library_label), currentRoute == AppRoute.Library, onClick = { viewModel.openTopLevelRoute(AppRoute.Library) })
@@ -272,8 +295,22 @@ private fun WorkbenchSidebar(
 }
 
 @Composable
-private fun BrandBlock(state: LearningUiState) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun BrandBlock(state: LearningUiState, onAssistantClick: (() -> Unit)? = null) {
+    val assistantDescription = stringResource(R.string.assistant_open_description)
+    val brandModifier = if (onAssistantClick == null) {
+        Modifier
+    } else {
+        Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onAssistantClick)
+            .semantics {
+                role = Role.Button
+                contentDescription = assistantDescription
+            }
+            .padding(6.dp)
+    }
+    Column(modifier = brandModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
             Eyebrow(stringResource(R.string.brand_eyebrow))
             Text(
@@ -405,7 +442,8 @@ private fun BottomNavTab(
             .clip(RoundedCornerShape(16.dp))
             .background(backgroundColor)
             .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(horizontal = 4.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -440,6 +478,7 @@ private fun BottomNavTab(
 private fun MobileBottomNavItem.icon(): ImageVector =
     when (screen) {
         AppScreen.Home -> Icons.Filled.Home
+        AppScreen.Assistant -> Icons.Filled.Home
         AppScreen.Capture -> Icons.Filled.Add
         AppScreen.Library -> Icons.AutoMirrored.Filled.List
         AppScreen.Review -> Icons.Filled.CheckCircle
@@ -451,6 +490,7 @@ private fun MobileBottomNavItem.icon(): ImageVector =
 private fun ScreenContent(route: AppRoute, state: LearningUiState, viewModel: LearningViewModel, isDetailPane: Boolean) {
     when (route) {
         AppRoute.Home -> DashboardScreen(state, viewModel)
+        AppRoute.Assistant -> AssistantScreen(state, viewModel)
         AppRoute.Capture -> CaptureScreen(state, viewModel)
         AppRoute.Library -> LibraryScreen(state, viewModel)
         AppRoute.Reader -> if (isDetailPane) ReaderScreen(state, viewModel) else LibraryScreen(state, viewModel)
@@ -486,6 +526,7 @@ private fun DetailPane(route: AppRoute, state: LearningUiState, viewModel: Learn
 private fun LearningViewModel.openTopLevelRoute(route: AppRoute) {
     when (selectedBottomRouteFor(route)) {
         AppRoute.Home -> showHome()
+        AppRoute.Assistant -> showAssistant()
         AppRoute.Capture -> showCapture()
         AppRoute.Library -> showLibrary()
         AppRoute.Review -> showReview()

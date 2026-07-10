@@ -42,6 +42,7 @@ class MobileNavigationModelsTest {
         assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.Editor))
         assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.Search))
         assertEquals(AppScreen.Library, selectedBottomTabFor(AppScreen.QuizEditor))
+        assertEquals(AppScreen.Home, selectedBottomTabFor(AppScreen.Assistant))
         assertEquals(AppScreen.More, selectedBottomTabFor(AppScreen.Backup))
     }
 
@@ -51,6 +52,7 @@ class MobileNavigationModelsTest {
         assertEquals(AppRoute.Library, selectedBottomTabFor(AppRoute.Editor))
         assertEquals(AppRoute.Library, selectedBottomTabFor(AppRoute.Search))
         assertEquals(AppRoute.Library, selectedBottomTabFor(AppRoute.QuizEditor))
+        assertEquals(AppRoute.Home, selectedBottomTabFor(AppRoute.Assistant))
         assertEquals(AppRoute.More, selectedBottomTabFor(AppRoute.Backup))
     }
 

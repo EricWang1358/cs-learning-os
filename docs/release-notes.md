@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.12
+
+Date: 2026-07-10
+
+Git tag: `android-v0.1.12-beta`
+
+Android version:
+
+- `versionCode`: 13
+- `versionName`: `0.1.12`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added the Home-logo Knowledge Assistant: a dedicated phone chat workspace with local-source citations, keyboard send, stop/new-chat controls, and an OpenAI-compatible streaming reply adapter.
+- Added a constrained mobile MCP-style tool boundary: the assistant can search local knowledge, open a cited node or quiz, prepare an editable note draft, or save a reply to Capture only after a distinct user tap. It cannot delete, move, archive, mutate Areas, or restore backups.
+- Extracted assistant coordination from `LearningViewModel` into `feature/assistant`, added SSE framing/cancellation coverage, restored the architecture size harness, and moved existing AI draft networking onto the IO dispatcher.
+
 ## Android Beta 0.1.11
 
 Date: 2026-07-02

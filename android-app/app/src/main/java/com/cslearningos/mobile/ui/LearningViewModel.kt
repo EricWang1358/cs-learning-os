@@ -21,6 +21,9 @@ import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.backup.data.LearningRepositoryBackupRepository
 import com.cslearningos.mobile.feature.backup.domain.ExportBackupUseCase
 import com.cslearningos.mobile.feature.backup.domain.RestoreBackupUseCase
+import com.cslearningos.mobile.feature.assistant.data.OpenAiCompatibleKnowledgeAssistantService
+import com.cslearningos.mobile.feature.assistant.ui.AssistantAppBridge
+import com.cslearningos.mobile.feature.assistant.ui.AssistantCoordinator
 import com.cslearningos.mobile.feature.capture.domain.GenerateCaptureDraftUseCase
 import com.cslearningos.mobile.feature.settings.data.OpenAiCompatibleDraftService
 import com.cslearningos.mobile.feature.settings.data.SettingsPreferencesStore
@@ -65,6 +68,19 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     private val backupRepository = LearningRepositoryBackupRepository(repository)
     private val exportBackupUseCase = ExportBackupUseCase(backupRepository)
     private val restoreBackupUseCase = RestoreBackupUseCase(backupRepository)
+    private val assistantCoordinator = AssistantCoordinator(
+        repository = repository,
+        service = OpenAiCompatibleKnowledgeAssistantService(),
+        string = { resourceId -> localizedAppContext().getString(resourceId) },
+        scope = viewModelScope
+    )
+    val assistantActions = AssistantAppBridge(
+        coordinator = assistantCoordinator,
+        currentSettings = { state.value.aiProviderSettings },
+        updateState = { transform -> _state.update(transform) },
+        scope = viewModelScope,
+        onOpenNode = ::openNode
+    )
 
     init {
         viewModelScope.launch {
@@ -84,6 +100,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         }
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            assistantCoordinator.state.collect { assistant ->
+                _state.update { current -> current.copy(assistant = assistant) }
             }
         }
         viewModelScope.launch {
@@ -151,6 +172,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     fun showHome() {
         refreshDueReviews()
         _state.update { it.copy(screen = AppScreen.Home, message = null) }
+    }
+
+    fun showAssistant() {
+        _state.update { it.copy(screen = AppScreen.Assistant, message = null) }
     }
 
     fun showLibrary() {

@@ -10,6 +10,7 @@ import com.cslearningos.mobile.ui.AppScreen
  */
 enum class AppRoute {
     Home,
+    Assistant,
     Capture,
     Library,
     Reader,
@@ -24,6 +25,7 @@ enum class AppRoute {
 fun AppRoute.toAppScreen(): AppScreen =
     when (this) {
         AppRoute.Home -> AppScreen.Home
+        AppRoute.Assistant -> AppScreen.Assistant
         AppRoute.Capture -> AppScreen.Capture
         AppRoute.Library -> AppScreen.Library
         AppRoute.Reader -> AppScreen.Reader
@@ -38,6 +40,7 @@ fun AppRoute.toAppScreen(): AppScreen =
 fun AppScreen.toAppRoute(): AppRoute =
     when (this) {
         AppScreen.Home -> AppRoute.Home
+        AppScreen.Assistant -> AppRoute.Assistant
         AppScreen.Capture -> AppRoute.Capture
         AppScreen.Library -> AppRoute.Library
         AppScreen.Reader -> AppRoute.Reader
@@ -51,7 +54,8 @@ fun AppScreen.toAppRoute(): AppRoute =
 
 fun selectedBottomTabFor(route: AppRoute): AppRoute =
     when (route) {
-        AppRoute.Home -> AppRoute.Home
+        AppRoute.Home,
+        AppRoute.Assistant -> AppRoute.Home
         AppRoute.Capture -> AppRoute.Capture
         AppRoute.Library,
         AppRoute.Reader,

@@ -8,9 +8,11 @@ import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
+import com.cslearningos.mobile.feature.assistant.ui.AssistantUiState
 
 enum class AppScreen {
     Home,
+    Assistant,
     Capture,
     Library,
     Reader,
@@ -43,6 +45,7 @@ data class AppNotice(
 
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
+    val assistant: AssistantUiState = AssistantUiState(),
     val areas: List<AreaEntity> = emptyList(),
     val nodes: List<LearningNodeEntity> = emptyList(),
     val trashNodes: List<LearningNodeEntity> = emptyList(),

@@ -1,0 +1,69 @@
+package com.cslearningos.mobile.feature.assistant.ui
+
+import com.cslearningos.mobile.R
+import com.cslearningos.mobile.ui.AppScreen
+import com.cslearningos.mobile.ui.LearningUiState
+import com.cslearningos.mobile.ui.titleFromAiMarkdown
+import com.cslearningos.mobile.ui.uiText
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+class AssistantAppBridge(
+    private val coordinator: AssistantCoordinator,
+    private val currentSettings: () -> com.cslearningos.mobile.ui.AiProviderSettings,
+    private val updateState: ((LearningUiState) -> LearningUiState) -> Unit,
+    private val scope: CoroutineScope,
+    private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit
+) {
+    fun newChat() = coordinator.newChat()
+
+    fun setInput(value: String) = coordinator.setInput(value)
+
+    fun sendQuickMessage(value: String) = coordinator.sendQuickMessage(value, currentSettings())
+
+    fun sendMessage() = coordinator.send(currentSettings())
+
+    fun cancelReply() = coordinator.cancelReply()
+
+    fun openDraft(messageId: String) {
+        val action = coordinator.draftAction(messageId) ?: return
+        updateState {
+            it.copy(
+                screen = AppScreen.Editor,
+                selectedNode = null,
+                editorNodeId = null,
+                editorAreaId = null,
+                editorSourceCaptureSlipId = null,
+                editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),
+                editorBody = action.markdown,
+                message = uiText(R.string.message_assistant_draft_ready)
+            )
+        }
+    }
+
+    fun saveReplyToCapture(messageId: String) {
+        scope.launch {
+            if (coordinator.saveReplyToCapture(messageId)) {
+                updateState { it.copy(message = uiText(R.string.message_assistant_capture_saved)) }
+            }
+        }
+    }
+
+    fun openCitation(type: String, id: String) {
+        scope.launch {
+            when (val destination = coordinator.resolveDestination(type, id)) {
+                is AssistantDestination.Node -> onOpenNode(destination.node)
+                is AssistantDestination.Quiz -> updateState {
+                    it.copy(
+                        screen = AppScreen.Review,
+                        selectedQuiz = destination.quiz,
+                        quizAnswerVisible = false,
+                        message = null
+                    )
+                }
+
+                null -> Unit
+            }
+        }
+    }
+}

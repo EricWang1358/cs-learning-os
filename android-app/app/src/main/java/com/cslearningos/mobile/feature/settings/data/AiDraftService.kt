@@ -7,6 +7,8 @@ import com.cslearningos.mobile.ui.parseOpenAiChatContent
 import com.cslearningos.mobile.ui.parseOpenAiModelIds
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -18,19 +20,21 @@ interface AiDraftService {
 
 class OpenAiCompatibleDraftService : AiDraftService {
     override suspend fun fetchModelIds(baseUrl: String, apiKey: String): List<String> =
-        parseOpenAiModelIds(
-            openAiGet(
-                url = aiModelsUrl(baseUrl),
-                apiKey = apiKey
+        withContext(Dispatchers.IO) {
+            parseOpenAiModelIds(
+                openAiGet(
+                    url = aiModelsUrl(baseUrl),
+                    apiKey = apiKey
+                )
             )
-        )
+        }
 
     override suspend fun requestDraft(
         baseUrl: String,
         apiKey: String,
         model: String,
         prompt: String
-    ): String {
+    ): String = withContext(Dispatchers.IO) {
         val payload = JSONObject()
             .put("model", model)
             .put("temperature", 0.2)
@@ -47,7 +51,7 @@ class OpenAiCompatibleDraftService : AiDraftService {
                     )
                     .put(JSONObject().put("role", "user").put("content", prompt))
             )
-        return parseOpenAiChatContent(
+        parseOpenAiChatContent(
             openAiPost(
                 url = aiChatCompletionsUrl(baseUrl),
                 apiKey = apiKey,

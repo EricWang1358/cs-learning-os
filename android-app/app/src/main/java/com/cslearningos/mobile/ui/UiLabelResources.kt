@@ -23,6 +23,7 @@ fun mobileBottomNavItems(): List<MobileBottomNavItem> =
 fun appScreenLabelResId(screen: AppScreen): Int =
     when (screen) {
         AppScreen.Home -> R.string.nav_home_label
+        AppScreen.Assistant -> R.string.assistant_title
         AppScreen.Capture -> R.string.nav_capture_label
         AppScreen.Library -> R.string.nav_library_label
         AppScreen.Reader -> R.string.common_read

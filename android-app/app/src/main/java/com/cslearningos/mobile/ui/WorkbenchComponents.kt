@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -260,7 +263,7 @@ fun WorkbenchButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 44.dp).widthIn(min = 64.dp),
+        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 64.dp),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
         colors = ButtonDefaults.buttonColors(
@@ -295,7 +298,8 @@ fun WorkbenchTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
-    minLines: Int = 1
+    minLines: Int = 1,
+    onSubmit: (() -> Unit)? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -308,6 +312,12 @@ fun WorkbenchTextField(
         onValueChange = onValueChange,
         minLines = minLines,
         cursorBrush = SolidColor(WorkbenchColors.Accent),
+        keyboardOptions = KeyboardOptions(
+            imeAction = if (onSubmit == null) ImeAction.Default else ImeAction.Send
+        ),
+        keyboardActions = KeyboardActions(
+            onSend = { onSubmit?.invoke() }
+        ),
         textStyle = TextStyle(
             color = WorkbenchColors.Ink,
             fontSize = 15.sp,

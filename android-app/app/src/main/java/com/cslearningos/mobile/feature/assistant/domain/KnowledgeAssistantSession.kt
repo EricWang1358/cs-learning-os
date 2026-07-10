@@ -1,0 +1,54 @@
+package com.cslearningos.mobile.feature.assistant.domain
+
+import com.cslearningos.mobile.data.LearningRepository
+import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
+import com.cslearningos.mobile.feature.assistant.ui.AssistantCitation
+import com.cslearningos.mobile.feature.assistant.ui.AssistantMessage
+import com.cslearningos.mobile.ui.AiProviderSettings
+
+class KnowledgeAssistantSession(
+    private val repository: LearningRepository,
+    private val service: KnowledgeAssistantService
+) {
+    suspend fun findLocalContext(query: String): List<AssistantCitation> {
+        val candidates = runCatching { repository.search(query) }
+            .getOrDefault(emptyList())
+            .map { result ->
+                AssistantCitation(
+                    id = result.id,
+                    type = result.type,
+                    title = result.title,
+                    excerpt = result.snippet.replace("[", "").replace("]", "")
+                )
+            }
+        return selectAssistantContext(
+            candidates.map { citation -> AssistantContextSource(citation.title, citation.excerpt) }
+        ).mapNotNull { source ->
+            candidates.firstOrNull { candidate ->
+                candidate.title == source.title && candidate.excerpt.startsWith(source.excerpt)
+            }
+                ?.copy(excerpt = source.excerpt)
+        }
+    }
+
+    suspend fun streamReply(
+        settings: AiProviderSettings,
+        mode: AssistantRequestMode,
+        history: List<AssistantMessage>,
+        message: String,
+        context: List<AssistantCitation>,
+        onDelta: suspend (String) -> Unit
+    ) {
+        val selectedContext = selectAssistantContext(
+            context.map { citation -> AssistantContextSource(citation.title, citation.excerpt) }
+        )
+        service.streamReply(
+            baseUrl = settings.baseUrl,
+            apiKey = settings.apiKey,
+            model = settings.model,
+            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext),
+            userPrompt = buildKnowledgeAssistantUserPrompt(history, message),
+            onDelta = onDelta
+        )
+    }
+}
