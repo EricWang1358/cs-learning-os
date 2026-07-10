@@ -130,7 +130,13 @@ class AssistantCoordinator(
                 throw error
             } catch (error: Throwable) {
                 updateMessage(responseMessageId) { message ->
-                    message.copy(body = error.safeAiError(), isStreaming = false)
+                    val partialReply = message.body.trim()
+                    val failureMessage = error.safeAiError()
+                    message.copy(
+                        body = if (partialReply.isBlank()) failureMessage else "$partialReply\n\n${string(R.string.assistant_reply_interrupted)} $failureMessage",
+                        action = AssistantMessageAction.RetryRequest(input),
+                        isStreaming = false
+                    )
                 }
             } finally {
                 if (activeReplyMessageId == responseMessageId) {
@@ -140,6 +146,12 @@ class AssistantCoordinator(
             }
         }
         return true
+    }
+
+    fun retry(messageId: String, settings: AiProviderSettings): Boolean {
+        val prompt = retryAssistantRequest(mutableState.value.messages, messageId) ?: return false
+        setInput(prompt)
+        return send(settings)
     }
 
     fun cancelReply() {

@@ -18,6 +18,8 @@ class AssistantStreamParserTest {
     fun ignoresTerminalAndNonContentEvents() {
         assertNull(assistantStreamDelta("data: [DONE]"))
         assertNull(assistantStreamDelta("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}"))
+        assertNull(assistantStreamDelta("data: {\"choices\":[{\"delta\":{\"content\":null}}]}"))
+        assertNull(assistantStreamDelta("data: {\"choices\":[{\"delta\":{\"content\":\"null\"}}]}"))
     }
 
     @Test

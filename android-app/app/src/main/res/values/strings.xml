@@ -46,9 +46,12 @@
     <string name="assistant_local_empty">No matching local sources.</string>
     <string name="assistant_streaming">Thinking…</string>
     <string name="assistant_stopped">Reply stopped.</string>
+    <string name="assistant_reply_interrupted">Reply interrupted.</string>
     <string name="message_assistant_input_required">Write a question before sending.</string>
     <string name="message_assistant_draft_ready">Draft ready. Review and save it when you agree.</string>
     <string name="message_assistant_capture_saved">Assistant reply saved to Capture.</string>
+    <string name="message_assistant_capture_save_failed">Could not save this reply. Try again.</string>
+    <string name="message_assistant_source_unavailable">That local source is no longer available.</string>
 
     <string name="language_follow_system">Follow system</string>
     <string name="language_english">English</string>

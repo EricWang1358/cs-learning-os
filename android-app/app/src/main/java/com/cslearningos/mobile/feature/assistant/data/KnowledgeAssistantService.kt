@@ -112,7 +112,8 @@ fun assistantStreamDelta(line: String): String? {
         ?.optJSONObject(0)
         ?.optJSONObject("delta")
         ?.optString("content")
-        ?.takeIf { it.isNotBlank() }
+        // Some compatible gateways serialize an absent token as the string "null".
+        ?.takeUnless { it.isNullAssistantToken() }
 }
 
 fun isAssistantSseControlLine(line: String): Boolean {
@@ -140,3 +141,6 @@ private fun assistantSsePayload(line: String): String? =
 
 private const val SseDataPrefix = "data:"
 private const val SseDoneMarker = "[DONE]"
+
+private fun String.isNullAssistantToken(): Boolean =
+    isBlank() || equals("null", ignoreCase = true)

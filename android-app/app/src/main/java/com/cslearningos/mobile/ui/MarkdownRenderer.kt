@@ -51,22 +51,26 @@ private val BlockShape = RoundedCornerShape(10.dp)
 private val PillShape = RoundedCornerShape(999.dp)
 
 @Composable
-fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier) {
+fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier, card: Boolean = true) {
     val blocks = remember(markdown) { QuizAwareMarkdownDocument.parse(markdown) }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = CardShape,
-                ambientColor = WorkbenchColors.Surface.copy(alpha = 0.32f),
-                spotColor = WorkbenchColors.Surface.copy(alpha = 0.38f)
-            )
-            .clip(CardShape)
-            .background(WorkbenchColors.SurfaceCard)
-            .border(1.dp, WorkbenchColors.Line, CardShape)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = if (card) {
+            modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CardShape,
+                    ambientColor = WorkbenchColors.Surface.copy(alpha = 0.32f),
+                    spotColor = WorkbenchColors.Surface.copy(alpha = 0.38f)
+                )
+                .clip(CardShape)
+                .background(WorkbenchColors.SurfaceCard)
+                .border(1.dp, WorkbenchColors.Line, CardShape)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        } else {
+            modifier.fillMaxWidth()
+        },
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         blocks.forEach { block ->

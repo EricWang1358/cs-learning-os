@@ -24,4 +24,19 @@ class AssistantActionClaimsTest {
         assertEquals("A useful explanation", firstClaim?.action?.body)
         assertNull(secondClaim)
     }
+
+    @Test
+    fun retryRequestIsAvailableOnlyForFailedAssistantReply() {
+        val messages = listOf(
+            AssistantMessage(
+                id = "reply",
+                role = AssistantMessageRole.Assistant,
+                body = "The connection stopped.",
+                action = AssistantMessageAction.RetryRequest("Explain virtual memory")
+            )
+        )
+
+        assertEquals("Explain virtual memory", retryAssistantRequest(messages, "reply"))
+        assertNull(retryAssistantRequest(messages, "missing"))
+    }
 }

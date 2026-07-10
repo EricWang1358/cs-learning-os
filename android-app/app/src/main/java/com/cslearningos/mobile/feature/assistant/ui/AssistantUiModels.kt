@@ -24,6 +24,10 @@ sealed interface AssistantMessageAction {
         val body: String
     ) : AssistantMessageAction
 
+    data class RetryRequest(
+        val prompt: String
+    ) : AssistantMessageAction
+
     data object ConfigureAi : AssistantMessageAction
 }
 
@@ -56,6 +60,10 @@ fun claimCaptureSaveAction(
         }
     )
 }
+
+fun retryAssistantRequest(messages: List<AssistantMessage>, messageId: String): String? =
+    (messages.firstOrNull { it.id == messageId }?.action as? AssistantMessageAction.RetryRequest)
+        ?.prompt
 
 data class AssistantUiState(
     val input: String = "",

@@ -436,7 +436,10 @@
     <string name="assistant_local_empty">没有找到匹配的本地资料。</string>
     <string name="assistant_streaming">正在思考…</string>
     <string name="assistant_stopped">回复已停止。</string>
+    <string name="assistant_reply_interrupted">回复中断。</string>
     <string name="message_assistant_input_required">先写下你的问题，再发送。</string>
     <string name="message_assistant_draft_ready">草稿已准备好，请检查后再保存。</string>
     <string name="message_assistant_capture_saved">助理回复已保存到随手记。</string>
+    <string name="message_assistant_capture_save_failed">无法保存这条回复，请重试。</string>
+    <string name="message_assistant_source_unavailable">这条本地资料已不可用。</string>
 </resources>

@@ -23,6 +23,8 @@ class AssistantAppBridge(
 
     fun sendMessage() = coordinator.send(currentSettings())
 
+    fun retryMessage(messageId: String) = coordinator.retry(messageId, currentSettings())
+
     fun cancelReply() = coordinator.cancelReply()
 
     fun openDraft(messageId: String) {
@@ -45,6 +47,8 @@ class AssistantAppBridge(
         scope.launch {
             if (coordinator.saveReplyToCapture(messageId)) {
                 updateState { it.copy(message = uiText(R.string.message_assistant_capture_saved)) }
+            } else {
+                updateState { it.copy(message = uiText(R.string.message_assistant_capture_save_failed)) }
             }
         }
     }
@@ -62,7 +66,7 @@ class AssistantAppBridge(
                     )
                 }
 
-                null -> Unit
+                null -> updateState { it.copy(message = uiText(R.string.message_assistant_source_unavailable)) }
             }
         }
     }
