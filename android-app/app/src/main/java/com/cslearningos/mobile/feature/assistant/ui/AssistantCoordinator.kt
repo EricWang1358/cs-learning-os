@@ -84,7 +84,8 @@ class AssistantCoordinator(
                     markdown = node.markdownBody,
                     areaId = node.areaId.ifBlank { node.area },
                     nodeId = node.id
-                )
+                ),
+                reviewSession = null
             )
         }
     }
@@ -123,7 +124,7 @@ class AssistantCoordinator(
         val mode = when (snapshot.reviewSession) {
             AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
             is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
-            is AssistantReviewSession.Evaluated,
+            is AssistantReviewSession.Evaluated -> AssistantRequestMode.Answer
             null -> if (snapshot.workingDraft != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
         }
         val userMessage = AssistantMessage(

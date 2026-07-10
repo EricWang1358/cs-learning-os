@@ -88,4 +88,26 @@ class AssistantActionClaimsTest {
         assertEquals("node-42", decision.workingDraft?.nodeId)
         assertEquals("找朋友一起刷题", decision.captureSuggestion)
     }
+
+    @Test
+    fun revisionOfAnExistingNodeKeepsItsCurrentAreaEvenWhenTheReplySuggestsAnother() {
+        val decision = assistantReplyDecision(
+            mode = AssistantRequestMode.Draft,
+            request = "Refine this node",
+            reply = "<!-- cs-area: systems -->\n# Graph traversal",
+            areas = listOf(
+                AssistantAreaOption(id = "algorithms", name = "Algorithms"),
+                AssistantAreaOption(id = "systems", name = "Systems")
+            ),
+            workingDraft = AssistantWorkingDraft(
+                titleHint = "Graph traversal",
+                markdown = "# Graph traversal",
+                areaId = "algorithms",
+                nodeId = "node-42"
+            )
+        )
+
+        assertEquals("algorithms", decision.workingDraft?.areaId)
+        assertEquals("node-42", decision.workingDraft?.nodeId)
+    }
 }

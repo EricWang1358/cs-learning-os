@@ -115,7 +115,11 @@ fun assistantReplyDecision(
                 AssistantWorkingDraft(
                     titleHint = workingDraft?.titleHint ?: request.take(MaximumDraftTitleHintCharacters),
                     markdown = it,
-                    areaId = placement.areaId ?: workingDraft?.areaId,
+                    areaId = if (workingDraft?.nodeId != null) {
+                        workingDraft.areaId
+                    } else {
+                        placement.areaId ?: workingDraft?.areaId
+                    },
                     nodeId = workingDraft?.nodeId
                 )
             }
