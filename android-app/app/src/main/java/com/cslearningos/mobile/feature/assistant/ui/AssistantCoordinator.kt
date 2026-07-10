@@ -11,8 +11,10 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCit
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
+import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantSession
 import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantReviewEvaluation
 import com.cslearningos.mobile.feature.settings.data.safeAiError
 import com.cslearningos.mobile.ui.AiProviderSettings
 import kotlinx.coroutines.CancellationException
@@ -73,12 +75,43 @@ class AssistantCoordinator(
 
     fun prefillQuickPrompt(value: String) = setInput(value)
 
+    fun startInterviewReview() {
+        if (mutableState.value.isBusy) return
+        val messageId = messageId("assistant")
+        mutableState.update { current ->
+            current.copy(
+                messages = current.messages + AssistantMessage(
+                    id = messageId,
+                    role = AssistantMessageRole.Assistant,
+                    body = string(R.string.assistant_review_topic_prompt)
+                ),
+                reviewSession = AssistantReviewSession.AwaitingTopic
+            )
+        }
+        scope.launch {
+            val hints = session.reviewTopicHints()
+            if (hints.isNotEmpty()) {
+                val topicPrompt = string(R.string.assistant_review_topic_prompt) +
+                    "\n\n${string(R.string.assistant_review_materials)} ${hints.joinToString(" / ")}".trimEnd()
+                updateMessage(messageId) {
+                    it.copy(body = topicPrompt)
+                }
+            }
+            persistConversation()
+        }
+    }
+
     fun send(settings: AiProviderSettings): Boolean {
         val snapshot = mutableState.value
         val input = snapshot.input.trim()
         if (input.isBlank() || snapshot.isBusy) return false
 
-        val mode = if (snapshot.workingDraft != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
+        val mode = when (snapshot.reviewSession) {
+            AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
+            is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
+            is AssistantReviewSession.Evaluated,
+            null -> if (snapshot.workingDraft != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
+        }
         val userMessage = AssistantMessage(
             id = messageId("user"),
             role = AssistantMessageRole.User,
@@ -125,31 +158,80 @@ class AssistantCoordinator(
                     workingDraft = snapshot.workingDraft,
                     onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
                 )
-                var completedDecision: AssistantReplyDecision? = null
-                updateMessage(responseMessageId) { message ->
-                    val body = message.body.trim()
-                    val decision = assistantReplyDecision(
-                        mode = mode,
-                        request = input,
-                        reply = body,
-                        areas = areas,
-                        workingDraft = snapshot.workingDraft
-                    )
-                    completedDecision = decision
-                    val visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
-                        string(R.string.assistant_draft_updated)
-                    } else {
-                        decision.visibleReply
+                val rawReply = mutableState.value.messages
+                    .firstOrNull { it.id == responseMessageId }
+                    ?.body
+                    ?.trim()
+                    .orEmpty()
+                var action: AssistantMessageAction? = null
+                var captureSuggestion: String? = null
+                var visibleBody = rawReply
+                var nextDraft = snapshot.workingDraft
+                var nextReviewSession = snapshot.reviewSession
+                when (mode) {
+                    AssistantRequestMode.ReviewQuestion -> {
+                        nextReviewSession = AssistantReviewSession.AwaitingAnswer(
+                            topic = input,
+                            question = rawReply
+                        )
                     }
+
+                    AssistantRequestMode.ReviewEvaluation -> {
+                        val review = snapshot.reviewSession as? AssistantReviewSession.AwaitingAnswer
+                        val evaluation = parseAssistantReviewEvaluation(rawReply)
+                        val quiz = review?.let { session ->
+                            evaluation.dailyReviewAnswer?.let { answer ->
+                                repository.saveManualQuiz(
+                                    nodeId = null,
+                                    prompt = session.question,
+                                    answer = answer,
+                                    explanation = evaluation.feedback
+                                )
+                            }
+                        }
+                        visibleBody = evaluation.feedback
+                        action = quiz?.let { AssistantMessageAction.OpenDailyReview }
+                        nextReviewSession = review?.let { session ->
+                            AssistantReviewSession.Evaluated(
+                                topic = session.topic,
+                                question = session.question,
+                                quizId = quiz?.id
+                            )
+                        }
+                    }
+
+                    AssistantRequestMode.Answer,
+                    AssistantRequestMode.Draft -> {
+                        val decision = assistantReplyDecision(
+                            mode = mode,
+                            request = input,
+                            reply = rawReply,
+                            areas = areas,
+                            workingDraft = snapshot.workingDraft
+                        )
+                        action = decision.action
+                        captureSuggestion = decision.captureSuggestion
+                        nextDraft = decision.workingDraft ?: nextDraft
+                        visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
+                            string(R.string.assistant_draft_updated)
+                        } else {
+                            decision.visibleReply
+                        }
+                    }
+                }
+                updateMessage(responseMessageId) { message ->
                     message.copy(
                         body = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
-                        action = decision.action,
-                        captureSuggestion = decision.captureSuggestion,
+                        action = action,
+                        captureSuggestion = captureSuggestion,
                         isStreaming = false
                     )
                 }
-                completedDecision?.workingDraft?.let { draft ->
-                    mutableState.update { it.copy(workingDraft = draft) }
+                mutableState.update {
+                    it.copy(
+                        workingDraft = nextDraft,
+                        reviewSession = nextReviewSession
+                    )
                 }
                 persistConversation()
             } catch (error: CancellationException) {

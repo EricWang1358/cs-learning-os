@@ -13,7 +13,8 @@ class AssistantAppBridge(
     private val currentSettings: () -> com.cslearningos.mobile.ui.AiProviderSettings,
     private val updateState: ((LearningUiState) -> LearningUiState) -> Unit,
     private val scope: CoroutineScope,
-    private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit
+    private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit,
+    private val onOpenDailyReview: () -> Unit
 ) {
     fun newChat() = coordinator.newChat()
 
@@ -21,11 +22,15 @@ class AssistantAppBridge(
 
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)
 
+    fun startInterviewReview() = coordinator.startInterviewReview()
+
     fun sendMessage() = coordinator.send(currentSettings())
 
     fun retryMessage(messageId: String) = coordinator.retry(messageId, currentSettings())
 
     fun cancelReply() = coordinator.cancelReply()
+
+    fun openDailyReview() = onOpenDailyReview()
 
     fun openDraft(messageId: String) {
         val action = coordinator.draftAction(messageId) ?: return

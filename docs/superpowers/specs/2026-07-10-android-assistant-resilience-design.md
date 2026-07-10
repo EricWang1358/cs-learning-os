@@ -16,6 +16,7 @@ Make the mobile knowledge assistant readable on a phone and reliable when an Ope
 - The configured cloud model may answer from general knowledge when local search has no match. It does not claim to perform independent live web search.
 - For explicit note-creation requests, the model selects only from the supplied existing Areas and sends the selected Area into the editable draft.
 - The model may mark truly unrelated, useful fragments as a capture suggestion; the suggestion remains a separate user-confirmed action.
+- Review starts as an interviewer session: select a topic, receive one question, answer it, receive structured feedback, then save the generated canonical answer into the existing daily-review queue.
 
 ## Reliability Rules
 
@@ -33,4 +34,5 @@ Make the mobile knowledge assistant readable on a phone and reliable when an Ope
 - `:app:testDebugUnitTest` is the full regression gate.
 - `AssistantConversationCodecTest` verifies lossless local display-history encoding.
 - `AssistantActionClaimsTest` verifies draft replacement, Area selection, and capture-suggestion separation.
-- `:app:assembleDebug` produces a package whose manifest is `versionCode 16` and `versionName 0.1.15`.
+- `AssistantReviewProtocolTest` verifies the AI review-card directive is stripped from visible feedback and remains mandatory in the evaluation prompt.
+- `:app:assembleDebug` produces a package whose manifest is `versionCode 17` and `versionName 0.1.16`.

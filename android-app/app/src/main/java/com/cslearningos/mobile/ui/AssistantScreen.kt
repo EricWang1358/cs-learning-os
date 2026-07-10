@@ -71,7 +71,12 @@ fun AssistantScreen(
             verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.ListItemSpacing)
         ) {
             if (assistant.messages.isEmpty()) {
-                item { AssistantEmptyState(onQuickMessage = viewModel.assistantActions::prefillQuickPrompt) }
+                item {
+                    AssistantEmptyState(
+                        onQuickMessage = viewModel.assistantActions::prefillQuickPrompt,
+                        onStartReview = viewModel.assistantActions::startInterviewReview
+                    )
+                }
             }
             items(assistant.messages, key = { it.id }) { message ->
                 AssistantMessageBubble(
@@ -80,6 +85,7 @@ fun AssistantScreen(
                     onOpenDraft = { viewModel.assistantActions.openDraft(message.id) },
                     onSaveCapture = { viewModel.assistantActions.saveReplyToCapture(message.id) },
                     onRetry = { viewModel.assistantActions.retryMessage(message.id) },
+                    onOpenDailyReview = viewModel.assistantActions::openDailyReview,
                     onConfigureAi = viewModel::showAiServiceSettings
                 )
             }
@@ -144,7 +150,10 @@ private fun AssistantHeaderAction(text: String, onClick: () -> Unit, accent: Boo
 }
 
 @Composable
-private fun AssistantEmptyState(onQuickMessage: (String) -> Unit) {
+private fun AssistantEmptyState(
+    onQuickMessage: (String) -> Unit,
+    onStartReview: () -> Unit
+) {
     val explainLabel = stringResource(R.string.assistant_quick_explain)
     val draftLabel = stringResource(R.string.assistant_quick_draft)
     val reviewLabel = stringResource(R.string.assistant_quick_review)
@@ -165,7 +174,7 @@ private fun AssistantEmptyState(onQuickMessage: (String) -> Unit) {
                 primary = true
             )
             WorkbenchButton(text = draftLabel, onClick = { onQuickMessage(draftLabel) })
-            WorkbenchButton(text = reviewLabel, onClick = { onQuickMessage(reviewLabel) })
+            WorkbenchButton(text = reviewLabel, onClick = onStartReview)
         }
     }
 }
@@ -177,6 +186,7 @@ private fun AssistantMessageBubble(
     onOpenDraft: () -> Unit,
     onSaveCapture: () -> Unit,
     onRetry: () -> Unit,
+    onOpenDailyReview: () -> Unit,
     onConfigureAi: () -> Unit
 ) {
     val isUser = message.role == AssistantMessageRole.User
@@ -256,6 +266,12 @@ private fun AssistantMessageBubble(
                 is AssistantMessageAction.RetryRequest -> WorkbenchButton(
                     text = stringResource(R.string.assistant_retry),
                     onClick = onRetry,
+                    primary = true
+                )
+
+                AssistantMessageAction.OpenDailyReview -> WorkbenchButton(
+                    text = stringResource(R.string.assistant_open_daily_review),
+                    onClick = onOpenDailyReview,
                     primary = true
                 )
 

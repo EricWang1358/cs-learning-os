@@ -437,6 +437,9 @@
     <string name="assistant_streaming">正在思考…</string>
     <string name="assistant_stopped">回复已停止。</string>
     <string name="assistant_draft_updated">草稿已更新，可打开后继续检查或编辑。</string>
+    <string name="assistant_review_topic_prompt">今日想复习什么？可以说一个 Area、课程、笔记或面试主题，我会先出一道题。</string>
+    <string name="assistant_review_materials">你的本地资料包括：</string>
+    <string name="assistant_open_daily_review">去每日复习</string>
     <string name="assistant_reply_interrupted">回复中断。</string>
     <string name="message_assistant_input_required">先写下你的问题，再发送。</string>
     <string name="message_assistant_draft_ready">草稿已准备好，请检查后再保存。</string>

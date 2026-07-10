@@ -3,7 +3,8 @@ package com.cslearningos.mobile.feature.assistant.domain
 enum class AssistantTool {
     LocalSearch,
     OpenEditableDraft,
-    SaveCapture
+    SaveCapture,
+    SaveDailyReview
 }
 
 data class AssistantToolPolicy(
@@ -22,7 +23,9 @@ data class AssistantAreaOption(
 
 enum class AssistantRequestMode {
     Answer,
-    Draft
+    Draft,
+    ReviewQuestion,
+    ReviewEvaluation
 }
 
 object AssistantSafetyLimits {

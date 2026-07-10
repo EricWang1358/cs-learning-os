@@ -3,6 +3,7 @@ package com.cslearningos.mobile.feature.assistant.ui
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
 import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
+import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 
 enum class AssistantMessageRole {
     User,
@@ -30,6 +31,8 @@ sealed interface AssistantMessageAction {
     data class RetryRequest(
         val prompt: String
     ) : AssistantMessageAction
+
+    data object OpenDailyReview : AssistantMessageAction
 
     data object ConfigureAi : AssistantMessageAction
 }
@@ -127,6 +130,12 @@ fun assistantReplyDecision(
                 captureSuggestion = placement.captureSuggestion
             )
         }
+
+        AssistantRequestMode.ReviewQuestion,
+        AssistantRequestMode.ReviewEvaluation -> AssistantReplyDecision(
+            visibleReply = reply,
+            action = null
+        )
     }
 
 data class AssistantDraftPlacement(
@@ -167,5 +176,6 @@ data class AssistantUiState(
     val messages: List<AssistantMessage> = emptyList(),
     val isBusy: Boolean = false,
     val lastRequestMode: AssistantRequestMode = AssistantRequestMode.Answer,
-    val workingDraft: AssistantWorkingDraft? = null
+    val workingDraft: AssistantWorkingDraft? = null,
+    val reviewSession: AssistantReviewSession? = null
 )

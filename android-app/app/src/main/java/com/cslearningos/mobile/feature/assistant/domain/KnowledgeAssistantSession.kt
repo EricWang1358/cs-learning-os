@@ -57,4 +57,17 @@ class KnowledgeAssistantSession(
 
     suspend fun availableAreas(): List<AssistantAreaOption> =
         repository.areas.first().map { area -> AssistantAreaOption(id = area.id, name = area.name) }
+
+    suspend fun reviewTopicHints(): List<String> {
+        val nodeTitles = repository.nodes.first()
+            .map { node -> node.title.trim() }
+            .filter { title -> title.isNotBlank() }
+            .distinct()
+            .take(MaximumReviewTopicHints)
+        return if (nodeTitles.isNotEmpty()) nodeTitles else availableAreas().map { it.name }.take(MaximumReviewTopicHints)
+    }
+
+    private companion object {
+        const val MaximumReviewTopicHints = 6
+    }
 }

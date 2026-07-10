@@ -79,7 +79,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         currentSettings = { state.value.aiProviderSettings },
         updateState = { transform -> _state.update(transform) },
         scope = viewModelScope,
-        onOpenNode = ::openNode
+        onOpenNode = ::openNode,
+        onOpenDailyReview = ::showReview
     )
 
     init {

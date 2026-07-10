@@ -13,10 +13,11 @@
 - [x] Persist the most recent local assistant conversation through a Room migration.
 - [x] Keep one persistent working draft per conversation and route follow-up requests into full-draft revisions.
 - [x] Let the model separate unrelated capture suggestions from the working draft.
+- [x] Add a topic-first interviewer review loop that saves evaluated questions into the existing daily review queue.
 - [x] Add retry action model coverage and run the full unit-test and debug-build gates.
 
 ## Release Gate
 
 - [x] Debug APK builds successfully.
-- [x] APK manifest reports `versionCode 16` and `versionName 0.1.15`.
+- [x] APK manifest reports `versionCode 17` and `versionName 0.1.16`.
 - [x] User-visible streaming-null regression is covered by a unit test.
