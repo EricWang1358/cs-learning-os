@@ -21,7 +21,8 @@ sealed interface AssistantMessageAction {
     data class OpenEditableDraft(
         val titleHint: String,
         val markdown: String,
-        val areaId: String? = null
+        val areaId: String? = null,
+        val nodeId: String? = null
     ) : AssistantMessageAction
 
     data class SaveCapture(
@@ -114,7 +115,8 @@ fun assistantReplyDecision(
                 AssistantWorkingDraft(
                     titleHint = workingDraft?.titleHint ?: request.take(MaximumDraftTitleHintCharacters),
                     markdown = it,
-                    areaId = placement.areaId ?: workingDraft?.areaId
+                    areaId = placement.areaId ?: workingDraft?.areaId,
+                    nodeId = workingDraft?.nodeId
                 )
             }
             AssistantReplyDecision(
@@ -123,7 +125,8 @@ fun assistantReplyDecision(
                     AssistantMessageAction.OpenEditableDraft(
                         titleHint = draft.titleHint,
                         markdown = draft.markdown,
-                        areaId = draft.areaId
+                        areaId = draft.areaId,
+                        nodeId = draft.nodeId
                     )
                 },
                 workingDraft = nextDraft,

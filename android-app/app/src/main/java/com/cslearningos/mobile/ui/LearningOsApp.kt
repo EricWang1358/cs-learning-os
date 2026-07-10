@@ -612,6 +612,10 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 text = stringResource(R.string.nav_more_label),
                 options = listOf(
                     WorkbenchMenuOption(
+                        text = stringResource(R.string.assistant_quick_draft),
+                        onClick = { viewModel.assistantActions.reviseNode(node) }
+                    ),
+                    WorkbenchMenuOption(
                         text = stringResource(R.string.reader_add_quiz_button),
                         onClick = viewModel::startQuizForSelectedNode
                     ),

@@ -14,13 +14,19 @@ class AssistantAppBridge(
     private val updateState: ((LearningUiState) -> LearningUiState) -> Unit,
     private val scope: CoroutineScope,
     private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit,
-    private val onOpenDailyReview: () -> Unit
+    private val onOpenDailyReview: () -> Unit,
+    private val onShowAssistant: () -> Unit
 ) {
     fun newChat() = coordinator.newChat()
 
     fun setInput(value: String) = coordinator.setInput(value)
 
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)
+
+    fun reviseNode(node: com.cslearningos.mobile.data.LearningNodeEntity) {
+        coordinator.reviseNode(node)
+        onShowAssistant()
+    }
 
     fun startInterviewReview() = coordinator.startInterviewReview()
 
@@ -38,7 +44,7 @@ class AssistantAppBridge(
             it.copy(
                 screen = AppScreen.Editor,
                 selectedNode = null,
-                editorNodeId = null,
+                editorNodeId = action.nodeId,
                 editorAreaId = action.areaId,
                 editorSourceCaptureSlipId = null,
                 editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),

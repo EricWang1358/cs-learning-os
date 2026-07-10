@@ -80,7 +80,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         updateState = { transform -> _state.update(transform) },
         scope = viewModelScope,
         onOpenNode = ::openNode,
-        onOpenDailyReview = ::showReview
+        onOpenDailyReview = ::showReview,
+        onShowAssistant = ::showAssistant
     )
 
     init {

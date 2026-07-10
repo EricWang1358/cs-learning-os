@@ -75,6 +75,20 @@ class AssistantCoordinator(
 
     fun prefillQuickPrompt(value: String) = setInput(value)
 
+    fun reviseNode(node: LearningNodeEntity) {
+        mutableState.update {
+            it.copy(
+                input = "Improve this knowledge node while preserving its useful content.",
+                workingDraft = com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft(
+                    titleHint = node.title,
+                    markdown = node.markdownBody,
+                    areaId = node.areaId.ifBlank { node.area },
+                    nodeId = node.id
+                )
+            )
+        }
+    }
+
     fun startInterviewReview() {
         if (mutableState.value.isBusy) return
         val messageId = messageId("assistant")

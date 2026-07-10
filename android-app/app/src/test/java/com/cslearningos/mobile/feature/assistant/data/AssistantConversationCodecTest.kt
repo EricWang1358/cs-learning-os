@@ -25,7 +25,8 @@ class AssistantConversationCodecTest {
             workingDraft = AssistantWorkingDraft(
                 titleHint = "Virtual memory",
                 markdown = "# Virtual memory",
-                areaId = "systems"
+                areaId = "systems",
+                nodeId = "node-42"
             )
         )
 

@@ -78,12 +78,14 @@ class AssistantActionClaimsTest {
             workingDraft = AssistantWorkingDraft(
                 titleHint = "LeetCode plan",
                 markdown = "# LeetCode plan",
-                areaId = "algorithms"
+                areaId = "algorithms",
+                nodeId = "node-42"
             )
         )
 
         assertEquals("# LeetCode plan\n\n## Weekly plan", decision.workingDraft?.markdown)
         assertEquals("algorithms", decision.workingDraft?.areaId)
+        assertEquals("node-42", decision.workingDraft?.nodeId)
         assertEquals("找朋友一起刷题", decision.captureSuggestion)
     }
 }
