@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,6 +56,7 @@ fun AssistantScreen(
             onBack = viewModel::showHome,
             onNewChat = viewModel.assistantActions::newChat
         )
+        StatusBanner(state.message)
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
@@ -184,7 +186,11 @@ private fun AssistantMessageBubble(
                     color = WorkbenchColors.Accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onOpenCitation(citation.type, citation.id) }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable { onOpenCitation(citation.type, citation.id) }
+                        .padding(vertical = 12.dp)
                 )
             }
         }

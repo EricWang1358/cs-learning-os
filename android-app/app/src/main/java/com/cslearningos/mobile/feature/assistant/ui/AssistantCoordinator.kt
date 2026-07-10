@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 sealed interface AssistantDestination {
     data class Node(val node: LearningNodeEntity) : AssistantDestination
@@ -33,11 +35,14 @@ class AssistantCoordinator(
 ) {
     private val session = KnowledgeAssistantSession(repository, service)
     private val mutableState = MutableStateFlow(AssistantUiState())
+    private val captureSaveMutex = Mutex()
     private var replyJob: Job? = null
+    private var activeReplyMessageId: String? = null
 
     val state: StateFlow<AssistantUiState> = mutableState.asStateFlow()
 
     fun newChat() {
+        activeReplyMessageId = null
         replyJob?.cancel()
         mutableState.value = AssistantUiState()
     }
@@ -63,6 +68,7 @@ class AssistantCoordinator(
             body = input
         )
         val responseMessageId = messageId("assistant")
+        activeReplyMessageId = responseMessageId
         mutableState.update { current ->
             current.copy(
                 input = "",
@@ -127,7 +133,10 @@ class AssistantCoordinator(
                     message.copy(body = error.safeAiError(), isStreaming = false)
                 }
             } finally {
-                mutableState.update { it.copy(isBusy = false) }
+                if (activeReplyMessageId == responseMessageId) {
+                    activeReplyMessageId = null
+                    mutableState.update { it.copy(isBusy = false) }
+                }
             }
         }
         return true
@@ -142,19 +151,29 @@ class AssistantCoordinator(
             .firstOrNull { it.id == messageId }
             ?.action as? AssistantMessageAction.OpenEditableDraft
 
-    suspend fun saveReplyToCapture(messageId: String): Boolean {
-        val action = mutableState.value.messages
-            .firstOrNull { it.id == messageId }
-            ?.action as? AssistantMessageAction.SaveCapture
-            ?: return false
-        repository.saveCaptureSlip(
-            body = action.body,
-            type = CaptureSlipType.concept_seed,
-            topicHint = "",
-            sourceLabel = AssistantSourceLabel
-        )
-        updateMessage(messageId) { it.copy(action = null) }
-        return true
+    suspend fun saveReplyToCapture(messageId: String): Boolean = captureSaveMutex.withLock {
+        val claim = claimCaptureSaveAction(mutableState.value.messages, messageId) ?: return false
+        mutableState.update { it.copy(messages = claim.messages) }
+        runCatching {
+            repository.saveCaptureSlip(
+                body = claim.action.body,
+                type = CaptureSlipType.concept_seed,
+                topicHint = "",
+                sourceLabel = string(R.string.assistant_title)
+            )
+        }.onFailure {
+            mutableState.update { current ->
+                current.copy(
+                    messages = current.messages.map { message ->
+                        if (message.id == messageId && message.action == null) {
+                            message.copy(action = claim.action)
+                        } else {
+                            message
+                        }
+                    }
+                )
+            }
+        }.isSuccess
     }
 
     suspend fun resolveDestination(type: String, id: String): AssistantDestination? =
@@ -178,7 +197,6 @@ class AssistantCoordinator(
         "$role-${System.currentTimeMillis()}-${mutableState.value.messages.size}"
 
     private companion object {
-        const val AssistantSourceLabel = "Knowledge assistant"
         const val MaximumTitleHintCharacters = 72
     }
 }
