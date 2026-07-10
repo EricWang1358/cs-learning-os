@@ -140,7 +140,7 @@ private fun PortraitWorkbench(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 116.dp),
+            contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
@@ -334,17 +334,7 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    listOf(
-                        WorkbenchColors.SurfaceCard.copy(alpha = 0.92f),
-                        WorkbenchColors.Surface.copy(alpha = 0.82f)
-                    )
-                )
-            )
-            .border(BorderStroke(1.dp, WorkbenchColors.Line.copy(alpha = 0.86f)), RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -352,8 +342,8 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
             Text(
                 text = stringResource(appScreenLabelResId(route.toAppScreen())),
                 color = WorkbenchColors.InkStrong,
-                fontSize = 20.sp,
-                lineHeight = 23.sp,
+                fontSize = 19.sp,
+                lineHeight = 22.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

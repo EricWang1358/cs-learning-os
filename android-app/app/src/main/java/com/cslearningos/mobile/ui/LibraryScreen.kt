@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,12 @@ private data class LibraryScreenState(
     val selectedAreaId: String?,
     val checkedFilter: LibraryCheckedFilter
 )
+
+private object LibraryLayoutTokens {
+    val FolderMetricSize = 52.dp
+    const val FolderActionGroupWidthFraction = 0.76f
+    val FolderActionGap = 8.dp
+}
 
 @Composable
 fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
@@ -178,7 +185,7 @@ private fun LibraryRootScreen(
 ) {
     val context = LocalContext.current
 
-    ToolbarRow {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         WorkbenchButton(
             text = stringResource(R.string.library_create_area_button),
             onClick = onCreateArea,
@@ -215,18 +222,23 @@ private fun LibraryRootScreen(
                         )
                     }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString())
-                    MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
+                    MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
                     if (folder.dueCount > 0) {
-                        MetaPill(stringResource(R.string.common_due), folder.dueCount.toString())
+                        MetaPill(stringResource(R.string.common_due), folder.dueCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
                     }
                 }
             }
-            ToolbarRow {
-                WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, primary = true)
-                WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) })
-                WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, danger = true)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Row(
+                    modifier = Modifier.weight(LibraryLayoutTokens.FolderActionGroupWidthFraction),
+                    horizontalArrangement = Arrangement.spacedBy(LibraryLayoutTokens.FolderActionGap)
+                ) {
+                    WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, Modifier.weight(1f), primary = true)
+                    WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) }, Modifier.weight(1f))
+                    WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, Modifier.weight(1f), danger = true)
+                }
             }
         }
     }
