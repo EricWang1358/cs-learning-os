@@ -69,6 +69,85 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingNodeWithStaleExpectedRevisionFailsWithoutChangingNode() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = LearningNodeEntity(
+            id = "node-1",
+            title = "Original node",
+            markdownBody = "# Original node",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 4L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            areaId = "systems",
+            track = "memory"
+        )
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+        dao.nodes[original.id] = original
+
+        val failure = runCatching {
+            repository.saveNode(
+                id = original.id,
+                expectedRevision = 3L,
+                title = "Updated node",
+                markdownBody = "# Updated node",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.nodes.getValue(original.id))
+    }
+
+    @Test
+    fun savingTombstonedExplicitNodeFailsAndLeavesNodeTombstoned() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = LearningNodeEntity(
+            id = "node-1",
+            title = "Deleted node",
+            markdownBody = "# Deleted node",
+            createdAt = 1_000L,
+            updatedAt = 1_500L,
+            lastReadAt = null,
+            revision = 4L,
+            syncStatus = SyncStatus.deleted,
+            deletedAt = 1_500L,
+            area = "systems",
+            areaId = "systems",
+            track = "memory"
+        )
+        dao.nodes[original.id] = original
+
+        val failure = runCatching {
+            repository.saveNode(
+                id = original.id,
+                expectedRevision = original.revision,
+                title = "Resurrected node",
+                markdownBody = "# Resurrected node",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.nodes.getValue(original.id))
+        assertEquals(1_500L, dao.nodes.getValue(original.id).deletedAt)
+        assertEquals(SyncStatus.deleted, dao.nodes.getValue(original.id).syncStatus)
+    }
+
+    @Test
     fun backupRoundTripPreservesReaderQuestions() {
         val backup = LearningBackup(
             schemaVersion = BackupCodec.SchemaVersion,
@@ -392,6 +471,42 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingTombstonedExplicitCaptureSlipFailsAndLeavesSlipUnchanged() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = CaptureSlipEntity(
+            id = "slip-1",
+            body = "Deleted capture",
+            type = CaptureSlipType.question,
+            topicHint = "Virtual memory",
+            sourceLabel = "lecture",
+            linkedNodeId = "node-1",
+            status = CaptureSlipStatus.archived,
+            createdAt = 1_000L,
+            updatedAt = 1_500L,
+            revision = 4L,
+            syncStatus = SyncStatus.deleted,
+            deletedAt = 1_500L
+        )
+        dao.captureSlips[original.id] = original
+
+        val failure = runCatching {
+            repository.saveCaptureSlip(
+                id = original.id,
+                expectedRevision = original.revision,
+                body = "Resurrected capture",
+                type = CaptureSlipType.mistake,
+                topicHint = null,
+                sourceLabel = null,
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.captureSlips.getValue(original.id))
+    }
+
+    @Test
     fun savingExistingQuizForItsOriginalNodePreservesThatNodesAreaAndTrack() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
@@ -500,6 +615,55 @@ class LearningRepositoryPolicyTest {
                 prompt = "Updated prompt",
                 answer = "Updated answer",
                 explanation = "Updated explanation",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.quizzes.getValue(original.id))
+        assertEquals(reviewState, dao.reviewStates.getValue(reviewState.quizId))
+    }
+
+    @Test
+    fun savingTombstonedExplicitQuizFailsAndPreservesReviewStateAndQuiz() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = QuizItemEntity(
+            id = "quiz-1",
+            nodeId = "node-1",
+            prompt = "Deleted prompt",
+            answer = "Deleted answer",
+            explanation = "Deleted explanation",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1_000L,
+            updatedAt = 1_500L,
+            revision = 4L,
+            syncStatus = SyncStatus.deleted,
+            deletedAt = 1_500L,
+            area = "systems",
+            track = "memory"
+        )
+        val reviewState = ReviewStateEntity(
+            quizId = original.id,
+            ease = 2.6,
+            intervalDays = 3,
+            dueAt = 5_000L,
+            lastResult = ReviewResult.good,
+            attemptCount = 2,
+            updatedAt = 4_000L
+        )
+        dao.quizzes[original.id] = original
+        dao.reviewStates[reviewState.quizId] = reviewState
+
+        val failure = runCatching {
+            repository.saveManualQuiz(
+                id = original.id,
+                expectedRevision = original.revision,
+                nodeId = "node-1",
+                prompt = "Resurrected prompt",
+                answer = "Resurrected answer",
+                explanation = "Resurrected explanation",
                 now = 2_000L
             )
         }.exceptionOrNull()
