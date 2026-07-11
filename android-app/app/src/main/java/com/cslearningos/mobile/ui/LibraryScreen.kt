@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,10 +49,7 @@ private data class LibraryScreenState(
 )
 
 private object LibraryLayoutTokens {
-    val FolderMetricWidth = 58.dp
-    val FolderMetricHeight = 36.dp
-    const val FolderActionGroupWidthFraction = 0.76f
-    val FolderActionGap = 8.dp
+    val FolderMetricGap = 10.dp
 }
 
 @Composable
@@ -197,26 +192,38 @@ private fun LibraryRootScreen(
         WorkbenchCard(accent = false) {
             Column(
                 modifier = Modifier.fillMaxWidth().clickable { onToggleArea(folder.areaId) },
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    if (folder.trackPreview.isNotBlank()) {
-                        Text(
-                            text = folder.trackPreview,
-                            color = WorkbenchColors.Muted,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        if (folder.trackPreview.isNotBlank()) {
+                            Text(
+                                text = folder.trackPreview,
+                                color = WorkbenchColors.Muted,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
-                    MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
-                    if (folder.dueCount > 0) {
-                        MetaPill(stringResource(R.string.common_due), folder.dueCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(LibraryLayoutTokens.FolderMetricGap),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        FolderMetricText(stringResource(R.string.common_nodes), folder.nodeCount.toString())
+                        FolderMetricText(stringResource(R.string.library_checked_filter), folder.checkedCount.toString())
+                        if (folder.dueCount > 0) {
+                            FolderMetricText(stringResource(R.string.common_due), folder.dueCount.toString())
+                        }
                     }
                 }
             }
@@ -281,6 +288,17 @@ private fun LibraryRootScreen(
         ConfirmDestructiveDialog(stringResource(R.string.more_delete_forever_confirm_title), stringResource(R.string.more_delete_forever_confirm_body, node.title), stringResource(R.string.common_delete_forever), { deleteForeverNodeId = null }, { deleteForeverNodeId = null; onDeleteForever(node) })
     }
 
+}
+
+@Composable
+private fun FolderMetricText(label: String, value: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = WorkbenchColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(value, color = WorkbenchColors.AccentStrong, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
 }
 
 @Composable
