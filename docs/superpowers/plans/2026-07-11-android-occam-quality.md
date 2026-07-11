@@ -108,16 +108,16 @@ Run: `./gradlew.bat :app:testDebugUnitTest --tests com.cslearningos.mobile.ui.Ap
 - `android-app/app/src/test/java/com/cslearningos/mobile/ui/ToolbarLayoutPolicyTest.kt`
 - `android-app/app/src/test/java/com/cslearningos/mobile/ui/WorkbenchComponentsModelTest.kt`
 
-- [ ] Add failing policy tests for the four motion classes and compact action layout.
+- [x] Add failing policy tests for the four motion classes and compact action layout.
 
 ```kotlin
 assertTrue(WorkbenchMotion.StateMillis < WorkbenchMotion.DisclosureMillis)
 assertTrue(WorkbenchMotion.DisclosureMillis < WorkbenchMotion.NavigationMillis)
 ```
-- [ ] Remove global/double content-size animations and per-delta animated scrolling.
-- [ ] Restrict More click handling to headers with expanded semantics.
-- [ ] Make Assistant header and Library metrics wrap safely at 320dp.
-- [ ] Run UI policy tests and commit.
+- [x] Remove global/double content-size animations and per-delta animated scrolling.
+- [x] Restrict More click handling to headers with expanded semantics.
+- [x] Make Assistant header and Library metrics wrap safely at 320dp.
+- [x] Run UI policy tests and commit.
 
 Run: `./gradlew.bat :app:testDebugUnitTest --tests com.cslearningos.mobile.ui.ToolbarLayoutPolicyTest --tests com.cslearningos.mobile.ui.WorkbenchComponentsModelTest`
 
@@ -131,10 +131,10 @@ Run: `./gradlew.bat :app:testDebugUnitTest --tests com.cslearningos.mobile.ui.To
 - `docs/superpowers/specs/2026-07-11-android-occam-quality-design.md`
 - `docs/superpowers/plans/2026-07-11-android-occam-quality.md`
 
-- [ ] Run full unit tests, architecture harness, and debug build.
-- [ ] Dispatch independent `gpt-5.5 medium` spec and code-quality reviewers.
-- [ ] Fix every P1/P2 finding and repeat both reviews until clear.
-- [ ] Bump Android Beta version and release notes.
-- [ ] Commit, tag, run `verify-android-beta.ps1`, push branch/tag, and report APK.
+- [x] Run full unit tests, architecture harness, and debug build.
+- [x] Dispatch independent `gpt-5.5 medium` spec and code-quality reviewers.
+- [x] Fix every P1/P2 finding and repeat both reviews until clear.
+- [x] Bump Android Beta version and release notes.
+- [x] Commit, tag, run `verify-android-beta.ps1`, push branch/tag, and report APK.
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-android-beta.ps1`

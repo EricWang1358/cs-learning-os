@@ -540,6 +540,13 @@ Future health rules:
 
 This state machine governs Android assistant edits for Nodes, Capture slips, and Review quizzes. It is the release contract for any feature that changes assistant behavior. A model response is never a persistence operation.
 
+### Motion And Narrow Layout Policy
+
+- Press feedback uses 110ms, visual state changes use 130ms, disclosures use 170ms, and route or drawer movement uses 210ms.
+- Streaming replies stay aligned with the latest message using an immediate position update; they never animate on every text delta.
+- More settings disclosures toggle only from their headers and publish localized expanded or collapsed semantics.
+- Assistant actions and Library metrics may wrap rather than truncate or overlap on a 320dp-wide screen.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Browse

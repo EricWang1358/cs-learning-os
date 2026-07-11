@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.31
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.31-beta`
+
+Android version:
+
+- `versionCode`: 32
+- `versionName`: `0.1.31`
+
+Status: implementation beta.
+
+Highlights:
+
+- Consolidated Android interaction timing into press, state, disclosure, and navigation durations; expanded surfaces no longer stack global size animations.
+- More sections now expose localized expanded/collapsed semantics and only their headers toggle the disclosure.
+- Assistant streaming stays pinned without animated per-token scrolling, while the Assistant header and Library metrics wrap safely on narrow phones.
+- Made the tracked x86 starter review answer self-contained so a clean checkout passes the starter-catalog quality gate.
+
 ## Android Beta 0.1.30
 
 Date: 2026-07-11
