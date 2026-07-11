@@ -46,10 +46,7 @@ class LibraryRepository(
     ): LearningNodeEntity {
         val existing = id?.let { nodeId ->
             dao.getNode(nodeId)
-                ?: run {
-                    require(expectedRevision == null) { "Node $nodeId does not exist." }
-                    null
-                }
+                ?: throw IllegalArgumentException("Node $nodeId does not exist.")
         }
         existing?.let { node ->
             check(node.deletedAt == null) { "Node ${node.id} has been deleted." }

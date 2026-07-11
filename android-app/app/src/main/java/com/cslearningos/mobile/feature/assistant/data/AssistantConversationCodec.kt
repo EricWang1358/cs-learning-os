@@ -65,23 +65,21 @@ object AssistantConversationCodec {
                     nodeId = draft.optString("node_id").takeIf { it.isNotBlank() },
                     placementReason = draft.optString("placement_reason").takeIf { it.isNotBlank() }
                 )
-                    legacy.nodeId?.let { nodeId ->
-                        AssistantEditTarget.Node(
-                            id = nodeId,
-                            revision = 0L,
-                            titleHint = legacy.titleHint,
-                            markdown = legacy.markdown,
-                            areaId = legacy.areaId
-                        )
-                    }
+                    AssistantEditTarget.Node(
+                        id = legacy.nodeId,
+                        revision = 0L,
+                        titleHint = legacy.titleHint,
+                        markdown = legacy.markdown,
+                        areaId = legacy.areaId
+                    )
                 }
         )
     }
 
     private fun AssistantEditTarget.toJson(): JSONObject = JSONObject()
-        .put("id", id)
         .put("revision", revision)
         .apply {
+            id?.let { put("id", it) }
             when (this@toJson) {
                 is AssistantEditTarget.Node -> put("kind", "node").put("title_hint", titleHint).put("markdown", markdown).put("area_id", areaId)
                 is AssistantEditTarget.Quiz -> put("kind", "quiz").put("node_id", nodeId).put("prompt", prompt).put("answer", answer).put("explanation", explanation)
@@ -90,12 +88,24 @@ object AssistantConversationCodec {
         }
 
     private fun JSONObject.toObjectTarget(): AssistantEditTarget? {
-        val id = optString("id").takeIf { it.isNotBlank() } ?: return null
-        val revision = optLong("revision", -1L).takeIf { it >= 0 } ?: return null
         return when (optString("kind")) {
-            "node" -> AssistantEditTarget.Node(id, revision, optString("title_hint"), optString("markdown"), optString("area_id").takeIf { it.isNotBlank() })
-            "quiz" -> AssistantEditTarget.Quiz(id, revision, optString("node_id").takeIf { it.isNotBlank() }, optString("prompt"), optString("answer"), optString("explanation"))
+            "node" -> AssistantEditTarget.Node(
+                id = optString("id").takeIf { it.isNotBlank() },
+                revision = optLong("revision", 0L).coerceAtLeast(0L),
+                titleHint = optString("title_hint"),
+                markdown = optString("markdown"),
+                areaId = optString("area_id").takeIf { it.isNotBlank() }
+            )
+
+            "quiz" -> {
+                val id = optString("id").takeIf { it.isNotBlank() } ?: return null
+                val revision = optLong("revision", -1L).takeIf { it >= 0 } ?: return null
+                AssistantEditTarget.Quiz(id, revision, optString("node_id").takeIf { it.isNotBlank() }, optString("prompt"), optString("answer"), optString("explanation"))
+            }
+
             "capture" -> CaptureSlipType.entries.firstOrNull { it.name == optString("type") }?.let { type ->
+                val id = optString("id").takeIf { it.isNotBlank() } ?: return null
+                val revision = optLong("revision", -1L).takeIf { it >= 0 } ?: return null
                 AssistantEditTarget.Capture(id, revision, optString("body"), optString("topic_hint"), optString("source_label"), type)
             }
             else -> null

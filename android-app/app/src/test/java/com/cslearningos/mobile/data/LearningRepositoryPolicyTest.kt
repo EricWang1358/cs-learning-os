@@ -50,6 +50,25 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingMissingExplicitNodeIdFailsWithoutCreatingNode() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+
+        val failure = runCatching {
+            repository.saveNode(
+                id = "missing-node",
+                expectedRevision = null,
+                title = "Must not create",
+                markdownBody = "# Must not create",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(dao.nodes.isEmpty())
+    }
+
+    @Test
     fun backupRoundTripPreservesReaderQuestions() {
         val backup = LearningBackup(
             schemaVersion = BackupCodec.SchemaVersion,
@@ -123,7 +142,7 @@ class LearningRepositoryPolicyTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
         val original = repository.saveNode(
-            id = "node-1",
+            id = null,
             title = "Binary search",
             markdownBody = """
                 # Binary search

@@ -10,6 +10,7 @@ import com.cslearningos.mobile.feature.assistant.ui.AssistantMessageRole
 import com.cslearningos.mobile.feature.assistant.ui.toStoredMessage
 import com.cslearningos.mobile.feature.assistant.ui.toUiMessage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AssistantConversationCodecTest {
@@ -87,5 +88,30 @@ class AssistantConversationCodecTest {
             .toUiMessage()
 
         assertEquals(message.action, restored.action)
+    }
+
+    @Test
+    fun legacyWorkingDraftWithoutNodeIdRestoresAsNewNodeEditTarget() {
+        val restored = AssistantConversationCodec.decode(
+            """
+            {
+              "id": "conversation-legacy",
+              "messages": [],
+              "working_draft": {
+                "title_hint": "Draft title",
+                "markdown": "# Draft title\n\nBody",
+                "area_id": "systems",
+                "placement_reason": "Fits Systems"
+              }
+            }
+            """.trimIndent()
+        )
+
+        val target = restored.editTarget as AssistantEditTarget.Node
+        assertNull(target.id)
+        assertEquals(0L, target.revision)
+        assertEquals("Draft title", target.titleHint)
+        assertEquals("# Draft title\n\nBody", target.markdown)
+        assertEquals("systems", target.areaId)
     }
 }

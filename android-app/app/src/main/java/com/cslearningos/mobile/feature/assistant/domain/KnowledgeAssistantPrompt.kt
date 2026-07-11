@@ -8,7 +8,8 @@ fun buildKnowledgeAssistantSystemPrompt(
     context: List<AssistantContextSource>,
     areas: List<AssistantAreaOption> = emptyList(),
     workingDraft: AssistantWorkingDraft? = null,
-    objectTarget: AssistantEditTarget? = null
+    objectTarget: AssistantEditTarget? = null,
+    linkedNodeContext: AssistantLinkedNodeContext? = null
 ): String {
     val contextBlock = context
         .joinToString(separator = "\n\n") { source ->
@@ -34,7 +35,7 @@ fun buildKnowledgeAssistantSystemPrompt(
         ${draft.markdown}
         """.trimIndent()
     } ?: "No working draft exists yet."
-    val objectTargetBlock = objectTarget?.promptBlock().orEmpty()
+    val objectTargetBlock = objectTarget?.promptBlock(linkedNodeContext).orEmpty()
     return """
         You are the CS Learning OS mobile knowledge assistant.
         You are connected through the student's configured AI service. Respond in the user's language.
@@ -54,28 +55,50 @@ fun buildKnowledgeAssistantSystemPrompt(
     """.trimIndent()
 }
 
+data class AssistantLinkedNodeContext(
+    val title: String,
+    val currentArea: String,
+    val markdown: String
+)
+
 private fun AssistantEditTarget.outputRule(): String = when (this) {
-    is AssistantEditTarget.Node -> "Return the complete revised Markdown for this existing node. Begin with a validated existing Area directive when you recommend moving it; do not create a second node."
+    is AssistantEditTarget.Node -> if (id == null) {
+        "Return the complete revised Markdown for this new node draft. Begin with a validated existing Area directive when you recommend an Area."
+    } else {
+        "Return the complete revised Markdown for this existing node. Begin with a validated existing Area directive when you recommend moving it; do not create a second node."
+    }
     is AssistantEditTarget.Quiz -> "Return exactly three complete directive blocks: <!-- cs-quiz-prompt -->...<!-- /cs-quiz-prompt -->, <!-- cs-quiz-answer -->...<!-- /cs-quiz-answer -->, and <!-- cs-quiz-explanation -->...<!-- /cs-quiz-explanation -->. Revise this existing quiz only; do not create a new review question."
     is AssistantEditTarget.Capture -> "Return exactly four complete directives: <!-- cs-capture-body -->...<!-- /cs-capture-body -->, <!-- cs-capture-topic -->...<!-- /cs-capture-topic -->, <!-- cs-capture-source -->...<!-- /cs-capture-source -->, and <!-- cs-capture-type: one_existing_type -->. Revise this existing capture slip only; do not convert it into a node. Existing types are unclear, mistake, video_note, concept_seed, and question."
 }
 
-private fun AssistantEditTarget.promptBlock(): String = when (this) {
+private fun AssistantEditTarget.promptBlock(linkedNodeContext: AssistantLinkedNodeContext?): String = when (this) {
     is AssistantEditTarget.Node -> """
-        Existing node id: $id
+        ${if (id == null) "New node draft" else "Existing node id: $id"}
         Expected revision: $revision
         Title: $titleHint
         Current Area id: ${areaId.orEmpty()}
         Markdown:
         $markdown
     """.trimIndent()
-    is AssistantEditTarget.Quiz -> """
+    is AssistantEditTarget.Quiz -> buildString {
+        appendLine(
+            """
         Existing quiz id: $id
         Expected revision: $revision
         Question: $prompt
         Answer: $answer
         Explanation: $explanation
-    """.trimIndent()
+            """.trimIndent()
+        )
+        linkedNodeContext?.let { node ->
+            appendLine()
+            appendLine("Linked active node context:")
+            appendLine("Title: ${node.title}")
+            appendLine("Current Area: ${node.currentArea}")
+            appendLine("Markdown:")
+            append(node.markdown)
+        }
+    }
     is AssistantEditTarget.Capture -> """
         Existing capture id: $id
         Expected revision: $revision

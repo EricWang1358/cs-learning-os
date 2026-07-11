@@ -46,13 +46,35 @@ class KnowledgeAssistantSession(
         val selectedContext = selectAssistantContext(
             context.map { citation -> AssistantContextSource(citation.title, citation.excerpt) }
         )
+        val linkedNodeContext = resolveLinkedNodeContext(objectTarget)
         service.streamReply(
             baseUrl = settings.baseUrl,
             apiKey = settings.apiKey,
             model = settings.model,
-            systemPrompt = buildKnowledgeAssistantSystemPrompt(mode, selectedContext, areas, workingDraft, objectTarget),
+            systemPrompt = buildKnowledgeAssistantSystemPrompt(
+                mode = mode,
+                context = selectedContext,
+                areas = areas,
+                workingDraft = workingDraft,
+                objectTarget = objectTarget,
+                linkedNodeContext = linkedNodeContext
+            ),
             userPrompt = buildKnowledgeAssistantUserPrompt(history, message),
             onDelta = onDelta
+        )
+    }
+
+    private suspend fun resolveLinkedNodeContext(objectTarget: AssistantEditTarget?): AssistantLinkedNodeContext? {
+        val nodeId = (objectTarget as? AssistantEditTarget.Quiz)?.nodeId ?: return null
+        val node = repository.getNode(nodeId)?.takeIf { it.deletedAt == null && it.visibility != TrashVisibility } ?: return null
+        val areaName = repository.areas.first()
+            .firstOrNull { area -> area.id == node.areaId && area.deletedAt == null }
+            ?.name
+            ?.takeIf { it.isNotBlank() }
+        return AssistantLinkedNodeContext(
+            title = node.title,
+            currentArea = areaName ?: node.areaId.ifBlank { node.area },
+            markdown = node.markdownBody
         )
     }
 
@@ -83,5 +105,6 @@ class KnowledgeAssistantSession(
     private companion object {
         const val MaximumReviewTopicHints = 6
         const val MaximumAreaExamples = 3
+        const val TrashVisibility = "trash"
     }
 }

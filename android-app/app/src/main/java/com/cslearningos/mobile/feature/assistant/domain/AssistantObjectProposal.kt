@@ -3,11 +3,11 @@ package com.cslearningos.mobile.feature.assistant.domain
 import com.cslearningos.mobile.data.CaptureSlipType
 
 sealed interface AssistantEditTarget {
-    val id: String
+    val id: String?
     val revision: Long
 
     data class Node(
-        override val id: String,
+        override val id: String?,
         override val revision: Long,
         val titleHint: String,
         val markdown: String,
