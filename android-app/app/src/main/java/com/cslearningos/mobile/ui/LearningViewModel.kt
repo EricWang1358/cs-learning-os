@@ -750,12 +750,19 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 current.afterReviewAnswered(
                     quiz = quiz,
                     rating = rating,
-                    savedMessage = uiText(R.string.message_review_saved)
+                    savedMessage = reviewSavedMessage(rating)
                 )
             }
             refreshDueReviews()
         }
     }
+
+    private fun reviewSavedMessage(rating: ReviewRating): UiText =
+        when (rating) {
+            ReviewRating.Again -> uiText(R.string.message_review_saved_again)
+            ReviewRating.Hard -> uiText(R.string.message_review_saved_hard)
+            ReviewRating.Good -> uiText(R.string.message_review_saved_good)
+        }
 
     fun retryReviewedQuiz() {
         _state.update { it.retryReviewedQuiz() }

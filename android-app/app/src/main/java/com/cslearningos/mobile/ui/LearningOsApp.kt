@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -101,6 +102,9 @@ private val CardShape = RoundedCornerShape(16.dp)
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
     selectedBottomRouteFor(screen.toAppRoute()).toAppScreen()
 
+private fun hideGlobalStatusBanner(route: AppRoute, state: LearningUiState): Boolean =
+    route == AppRoute.Review && state.reviewedQuiz != null
+
 @Composable
 fun LearningOsApp(
     shellViewModel: AppShellViewModel = viewModel(),
@@ -142,8 +146,21 @@ private fun PortraitWorkbench(
         AssistantScreen(state = state, viewModel = viewModel)
         return
     }
+    val listState = rememberLazyListState()
+    LaunchedEffect(
+        shellState.route,
+        state.reviewSetupVisible,
+        state.selectedQuiz?.id,
+        state.reviewedQuiz?.id,
+        state.quizAnswerVisible
+    ) {
+        if (shellState.route == AppRoute.Review) {
+            listState.animateScrollToItem(0)
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -158,7 +175,9 @@ private fun PortraitWorkbench(
                     )
                 }
             }
-            item { StatusBanner(shellState.message) }
+            if (!hideGlobalStatusBanner(shellState.route, state)) {
+                item { StatusBanner(shellState.message) }
+            }
             item { NoticeTray(state = state, viewModel = viewModel) }
             item {
                 AnimatedContent(
@@ -211,7 +230,9 @@ private fun TwoPaneWorkbench(
                 .background(WorkbenchColors.Surface.copy(alpha = 0.88f))
                 .border(BorderStroke(1.dp, WorkbenchColors.Line))
         ) {
-            item { StatusBanner(shellState.message) }
+            if (!hideGlobalStatusBanner(shellState.route, state)) {
+                item { StatusBanner(shellState.message) }
+            }
             item { NoticeTray(state = state, viewModel = viewModel) }
             item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = true) }
         }
@@ -249,7 +270,9 @@ private fun LandscapeWorkbench(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                item { StatusBanner(shellState.message) }
+                if (!hideGlobalStatusBanner(shellState.route, state)) {
+                    item { StatusBanner(shellState.message) }
+                }
                 item { NoticeTray(state = state, viewModel = viewModel) }
                 item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = false) }
             }
@@ -804,13 +827,29 @@ private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewMode
 
 @Composable
 private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val context = LocalContext.current
     if (state.reviewSetupVisible) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionHeader(stringResource(R.string.review_eyebrow), stringResource(R.string.review_title), stringResource(R.string.review_select_area_body))
-            WorkbenchButton(stringResource(R.string.review_all_areas), { viewModel.startReviewForArea(null) }, primary = true, modifier = Modifier.fillMaxWidth())
-            state.areas.filter { it.deletedAt == null }.forEach { area ->
-                val due = state.dueQuizzes.count { it.area == area.id }
-                WorkbenchButton("${displayAreaName(LocalContext.current, area)} ($due)", { viewModel.startReviewForArea(area.id) }, modifier = Modifier.fillMaxWidth())
+        val summaries = buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.review_select_area_title), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    stringResource(R.string.review_select_area_summary, state.dueQuizzes.size, state.quizzes.size),
+                    color = WorkbenchColors.Muted,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+            }
+            summaries.forEach { summary ->
+                val label = summary.areaId?.let { areaId ->
+                    state.areas.firstOrNull { it.id == areaId }?.let { displayAreaName(context, it) }
+                } ?: stringResource(R.string.review_all_areas)
+                ReviewAreaChoiceRow(
+                    title = label,
+                    detail = stringResource(R.string.review_area_due_total, summary.dueCount, summary.totalCount),
+                    selected = summary.areaId == null,
+                    onClick = { viewModel.startReviewForArea(summary.areaId) }
+                )
             }
         }
         return
@@ -818,6 +857,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
     state.reviewedQuiz?.let { quiz ->
         ReviewDetailScreen(
             quiz = quiz,
+            feedbackMessage = state.message,
             onRetry = viewModel::retryReviewedQuiz,
             onPrevious = { viewModel.navigateReviewPrompt(-1) },
             onNext = { viewModel.navigateReviewPrompt(1) }
@@ -825,11 +865,21 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         return
     }
     val quiz = state.selectedQuiz
+    val reviewCards = reviewCardsForArea(state.quizzes, state.reviewAreaId)
+    val dueCardsForArea = state.dueQuizzes.filter { state.reviewAreaId == null || it.area == state.reviewAreaId }
+    val progress = reviewProgress(quiz?.id, reviewCards)
+    val areaLabel = state.reviewAreaId?.let { areaId ->
+        state.areas.firstOrNull { it.id == areaId }?.let { displayAreaName(context, it) }
+    } ?: stringResource(R.string.review_all_areas)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
-            eyebrow = stringResource(R.string.review_eyebrow),
+            eyebrow = stringResource(R.string.review_title),
             title = stringResource(R.string.review_title),
-            body = stringResource(R.string.review_body, state.dueQuizzes.size, state.quizzes.size)
+            body = if (quiz != null && progress.total > 0) {
+                stringResource(R.string.review_progress_body, progress.current, progress.total, areaLabel)
+            } else {
+                stringResource(R.string.review_body, dueCardsForArea.size, reviewCards.size)
+            }
         )
         if (quiz == null) {
             EmptyWorkbenchCard(
@@ -842,7 +892,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
             Eyebrow(quiz.source.name)
             Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 28.sp)
             if (!state.quizAnswerVisible) {
-                Text(stringResource(R.string.review_answer_hidden), color = WorkbenchColors.Muted, fontSize = 14.sp)
+                Text(stringResource(R.string.review_prompt_hint), color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 20.sp)
                 WorkbenchButton(stringResource(R.string.review_reveal_answer), viewModel::revealCurrentQuizAnswer, primary = true, modifier = Modifier.fillMaxWidth())
             }
             AnimatedVisibility(
@@ -879,6 +929,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @Composable
 private fun ReviewDetailScreen(
     quiz: QuizItemEntity,
+    feedbackMessage: UiText?,
     onRetry: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit
@@ -890,6 +941,7 @@ private fun ReviewDetailScreen(
             body = stringResource(R.string.review_detail_body)
         )
         WorkbenchCard(accent = true) {
+            ReviewFeedbackCard(feedbackMessage)
             Eyebrow(quiz.source.name)
             Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 28.sp)
             AnswerBlock(quiz)
@@ -903,20 +955,79 @@ private fun ReviewDetailScreen(
 }
 
 @Composable
+private fun ReviewAreaChoiceRow(
+    title: String,
+    detail: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val background = if (selected) WorkbenchColors.Accent else WorkbenchColors.SurfaceCard.copy(alpha = 0.78f)
+    val titleColor = if (selected) WorkbenchColors.SurfaceSoft else WorkbenchColors.InkStrong
+    val detailColor = if (selected) WorkbenchColors.SurfaceSoft.copy(alpha = 0.78f) else WorkbenchColors.Muted
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(background)
+            .border(
+                BorderStroke(1.dp, if (selected) WorkbenchColors.Accent else WorkbenchColors.Line.copy(alpha = 0.72f)),
+                RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = titleColor, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(detail, color = detailColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ReviewFeedbackCard(message: UiText?) {
+    val resolved = message.resolve() ?: stringResource(R.string.review_feedback_body)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(WorkbenchColors.Success.copy(alpha = 0.10f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Success.copy(alpha = 0.28f)), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(stringResource(R.string.review_feedback_title), color = WorkbenchColors.Success, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+        Text(resolved, color = WorkbenchColors.InkStrong, fontSize = 14.sp, lineHeight = 20.sp)
+    }
+}
+
+@Composable
 private fun AnswerBlock(quiz: QuizItemEntity) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
-            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), CardShape)
+            .background(WorkbenchColors.Surface.copy(alpha = 0.56f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line.copy(alpha = 0.78f)), CardShape)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Eyebrow(stringResource(R.string.review_answer_eyebrow))
-        Text(quiz.answer, color = WorkbenchColors.InkStrong, fontSize = 17.sp, lineHeight = 24.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Eyebrow(stringResource(R.string.review_answer_summary_eyebrow))
+            Text(quiz.answer, color = WorkbenchColors.InkStrong, fontSize = 18.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold)
+        }
         if (quiz.explanation.isNotBlank()) {
-            Text(quiz.explanation, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.64f))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Eyebrow(stringResource(R.string.review_explanation_eyebrow))
+                Text(quiz.explanation, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
+            }
         }
     }
 }
