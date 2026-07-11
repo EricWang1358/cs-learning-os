@@ -22,7 +22,11 @@ class CaptureRepository(
         status: CaptureSlipStatus = CaptureSlipStatus.inbox,
         now: Long = System.currentTimeMillis()
     ): CaptureSlipEntity {
-        val existing = if (id == null) null else dao.getCaptureSlip(id)
+        val existing = if (id == null) {
+            null
+        } else {
+            requireNotNull(dao.getCaptureSlip(id)) { "Capture slip $id does not exist." }
+        }
         val slip = existing?.copy(
             body = body.trim(),
             type = type,

@@ -317,6 +317,26 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingMissingExplicitCaptureSlipIdFailsWithoutCreatingASlip() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+
+        val failure = runCatching {
+            repository.saveCaptureSlip(
+                id = "missing-slip",
+                body = "Capture that cannot be updated",
+                type = CaptureSlipType.question,
+                topicHint = null,
+                sourceLabel = null,
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(dao.captureSlips.isEmpty())
+    }
+
+    @Test
     fun savingExistingQuizForItsOriginalNodePreservesThatNodesAreaAndTrack() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
