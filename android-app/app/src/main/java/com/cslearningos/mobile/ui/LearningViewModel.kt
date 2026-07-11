@@ -719,29 +719,19 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun showReview() {
         refreshDueReviews()
-        _state.update {
-            it.copy(
-                screen = AppScreen.Review,
-                selectedQuiz = it.dueQuizzes.firstOrNull(),
-                reviewedQuiz = null,
-                reviewAreaId = null,
-                reviewSetupVisible = true,
-                quizAnswerVisible = false,
-                message = null
-            )
-        }
+        _state.update { it.showReviewScreen() }
     }
 
     fun startReviewForArea(areaId: String?) {
-        _state.update { current ->
-            val due = current.dueQuizzes.filter { areaId == null || it.area == areaId }
-            current.copy(
-                selectedQuiz = due.firstOrNull(),
-                reviewAreaId = areaId,
-                reviewSetupVisible = false,
-                quizAnswerVisible = false
-            )
-        }
+        _state.update { it.startReviewSessionForArea(areaId) }
+    }
+
+    fun selectReviewArea(areaId: String?) {
+        _state.update { it.selectReviewSessionArea(areaId) }
+    }
+
+    fun startSelectedReview() {
+        startReviewForArea(state.value.reviewAreaId)
     }
 
     private fun refreshDueReviews(now: Long = System.currentTimeMillis()) {
@@ -749,7 +739,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun revealCurrentQuizAnswer() {
-        _state.update { it.copy(quizAnswerVisible = true, message = null) }
+        _state.update { it.revealReviewAnswer() }
     }
 
     fun answerCurrentQuiz(rating: ReviewRating) {
@@ -757,15 +747,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.answerQuiz(quiz.id, rating)
             _state.update { current ->
-                current.copy(
-                    reviewedQuiz = quiz,
-                    selectedQuiz = selectQuizAfterReview(
-                        currentQuiz = quiz,
-                        currentDueQuizzes = current.dueQuizzes,
-                        rating = rating
-                    ),
-                    quizAnswerVisible = false,
-                    message = uiText(R.string.message_review_saved)
+                current.afterReviewAnswered(
+                    quiz = quiz,
+                    rating = rating,
+                    savedMessage = uiText(R.string.message_review_saved)
                 )
             }
             refreshDueReviews()
@@ -773,21 +758,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun retryReviewedQuiz() {
-        _state.update { current ->
-            current.copy(selectedQuiz = current.reviewedQuiz, reviewedQuiz = null, quizAnswerVisible = false)
-        }
+        _state.update { it.retryReviewedQuiz() }
     }
 
     fun navigateReviewPrompt(step: Int) {
-        _state.update { current ->
-            val cards = current.quizzes.filter { current.reviewAreaId == null || it.area == current.reviewAreaId }
-            val index = cards.indexOfFirst { it.id == current.reviewedQuiz?.id }.coerceAtLeast(0)
-            current.copy(
-                selectedQuiz = if (cards.isEmpty()) null else cards[(index + step + cards.size) % cards.size],
-                reviewedQuiz = null,
-                quizAnswerVisible = false
-            )
-        }
+        _state.update { it.navigateReviewPrompt(step) }
     }
 
     suspend fun createBackupDocument(now: Long = System.currentTimeMillis()): BackupDocument =

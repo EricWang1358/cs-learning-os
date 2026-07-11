@@ -12,6 +12,7 @@ enum class DashboardAction {
 data class DashboardSummary(
     val primaryActions: List<DashboardAction>,
     val firstScreenActions: List<DashboardAction>,
+    val compactActions: List<DashboardAction>,
     val dueReviewCount: Int,
     val nodeCount: Int,
     val captureSlipCount: Int,
@@ -22,6 +23,7 @@ fun buildDashboardSummary(state: LearningUiState): DashboardSummary =
     DashboardSummary(
         primaryActions = listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Review, DashboardAction.Search),
         firstScreenActions = listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Review, DashboardAction.Search),
+        compactActions = listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Search),
         dueReviewCount = state.dueQuizzes.size,
         nodeCount = state.nodes.count { it.deletedAt == null && it.visibility != "trash" },
         captureSlipCount = state.captureSlips.size,

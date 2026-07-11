@@ -104,11 +104,11 @@ private fun MoreSectionRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(backgroundColor)
             .border(
                 BorderStroke(1.dp, borderColor),
-                RoundedCornerShape(14.dp)
+                RoundedCornerShape(16.dp)
             )
             .padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -130,12 +130,12 @@ private fun MoreSectionRow(
                 Text(section.body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(section.value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black)
+                Text(section.value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Text(
                     if (expanded) stringResource(R.string.common_close) else stringResource(R.string.common_expand),
                     color = WorkbenchColors.Accent,
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -302,7 +302,7 @@ private fun AiServiceStatusBlock(status: AiServiceStatus) {
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Eyebrow(stringResource(R.string.more_ai_status_eyebrow))
-        Text(status.title.resolve(context), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+        Text(status.title.resolve(context), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Text(status.body.resolve(context), color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
     }
 }
@@ -385,7 +385,7 @@ private fun GuideStepCard(step: Int, title: String, body: String, actionLabel: S
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Eyebrow(stringResource(R.string.more_guide_step_badge, step))
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
         WorkbenchButton(actionLabel, onAction, primary = true, modifier = Modifier.fillMaxWidth())
     }

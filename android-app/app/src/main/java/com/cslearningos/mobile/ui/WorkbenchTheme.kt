@@ -60,8 +60,8 @@ private val DayPalette = WorkbenchPalette(
     muted = Color(0xFF756F5D),
     line = Color(0xFFD8CDAF),
     lineStrong = Color(0xFFC3B48E),
-    accent = Color(0xFFD9A900),
-    accentStrong = Color(0xFFB98700),
+    accent = Color(0xFFB98700),
+    accentStrong = Color(0xFF996500),
     success = Color(0xFF087D54),
     danger = Color(0xFFC33145)
 )
@@ -91,14 +91,14 @@ object WorkbenchColors {
 private val WorkbenchTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 32.sp,
         lineHeight = 36.sp,
         letterSpacing = (-0.6).sp
     ),
     headlineSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
+        fontWeight = FontWeight.Bold,
         fontSize = 25.sp,
         lineHeight = 30.sp
     ),
@@ -128,7 +128,7 @@ private val WorkbenchTypography = Typography(
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
+        fontWeight = FontWeight.Bold,
         fontSize = 11.sp,
         lineHeight = 14.sp,
         letterSpacing = 1.2.sp

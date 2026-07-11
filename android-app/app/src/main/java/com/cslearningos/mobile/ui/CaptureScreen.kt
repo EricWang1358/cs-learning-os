@@ -55,7 +55,7 @@ private fun CaptureComposer(state: CaptureScreenState, viewModel: LearningViewMo
             text = stringResource(R.string.capture_composer_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 22.sp,
-            fontWeight = FontWeight.Black
+            fontWeight = FontWeight.ExtraBold
         )
         WorkbenchTextField(
             value = state.draft,
@@ -101,7 +101,7 @@ private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel
             text = stringResource(R.string.capture_inbox_title, state.captureSlips.size),
             color = WorkbenchColors.InkStrong,
             fontSize = 20.sp,
-            fontWeight = FontWeight.Black
+            fontWeight = FontWeight.ExtraBold
         )
         if (state.captureSlips.isEmpty()) {
             Text(

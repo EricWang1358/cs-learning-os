@@ -66,14 +66,14 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val PanelShape = RoundedCornerShape(14.dp)
-private val CardShape = RoundedCornerShape(10.dp)
+private val PanelShape = RoundedCornerShape(16.dp)
+private val CardShape = RoundedCornerShape(16.dp)
 
 private object WorkbenchActionTokens {
     val Gap = 8.dp
     val MinHeight = 44.dp
     val HorizontalPadding = 12.dp
-    val CornerRadius = 8.dp
+    val CornerRadius = 12.dp
     val FontSize = 13.sp
     const val MenuLabelMaxLines = 2
 }
@@ -106,7 +106,7 @@ fun SectionHeader(eyebrow: String, title: String, body: String) {
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black, lineHeight = 22.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp)
         Text(body, color = WorkbenchColors.Muted.copy(alpha = 0.92f), fontSize = 12.sp, lineHeight = 18.sp)
     }
 }
@@ -122,7 +122,7 @@ fun DetailHeading(eyebrow: String, title: String, body: String) {
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Eyebrow(eyebrow)
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black, lineHeight = 25.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 25.sp)
         Text(body, color = WorkbenchColors.Muted.copy(alpha = 0.92f), fontSize = 12.sp, lineHeight = 18.sp)
     }
 }
@@ -152,24 +152,14 @@ fun WorkbenchCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (accent) 14.dp else 8.dp,
+                elevation = if (accent) 6.dp else 2.dp,
                 shape = CardShape,
-                ambientColor = WorkbenchColors.Surface.copy(alpha = 0.36f),
-                spotColor = WorkbenchColors.Surface.copy(alpha = 0.42f)
-            )
-            .drawBehind {
-                if (accent) {
-                    drawLine(
-                        color = WorkbenchColors.Accent,
-                        start = Offset(0f, 10.dp.toPx()),
-                        end = Offset(0f, size.height - 10.dp.toPx()),
-                        strokeWidth = 3.dp.toPx()
-                    )
-                }
-            },
+                ambientColor = Color.Black.copy(alpha = 0.25f),
+                spotColor = Color.Black.copy(alpha = 0.35f)
+            ),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(1.dp, borderColor)
+        border = if (accent) BorderStroke(1.dp, borderColor) else null
     ) {
         Column(
             modifier = Modifier
@@ -201,7 +191,7 @@ fun InteractiveCard(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (pressed) 0.92f else 1f,
+        targetValue = if (pressed) 0.7f else 1f,
         animationSpec = tween(motionPolicy.pressMillis, easing = FastOutSlowInEasing),
         label = "interactive-card-press-alpha"
     )
@@ -224,7 +214,7 @@ fun InteractiveCard(
 fun EmptyWorkbenchCard(title: String, body: String) {
     WorkbenchCard {
         Eyebrow("empty state")
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
         Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
     }
 }
@@ -243,10 +233,10 @@ fun WorkbenchActionTile(
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Eyebrow(eyebrow)
             if (metric != null) {
-                Text(metric, color = WorkbenchColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Text(metric, color = WorkbenchColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
-        Text(title, color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.Black, lineHeight = 25.sp)
+        Text(title, color = WorkbenchColors.InkStrong, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 25.sp)
         Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
     }
 }
@@ -268,7 +258,7 @@ fun WorkbenchButton(
     val content = when {
         primary -> WorkbenchColors.SurfaceSoft
         danger -> WorkbenchColors.Danger
-        else -> WorkbenchColors.Accent
+        else -> WorkbenchColors.AccentStrong
     }
     Button(
         onClick = onClick,
@@ -347,7 +337,7 @@ fun WorkbenchTextField(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val pressed by interaction.collectIsPressedAsState()
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(12.dp)
     val minHeight = ((minLines.coerceAtLeast(1) * 24) + 32).dp
 
     BasicTextField(
@@ -386,7 +376,7 @@ fun WorkbenchTextField(
                     .padding(horizontal = 13.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.9.sp)
+                Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.9.sp)
                 Box(modifier = Modifier.fillMaxWidth()) {
                     if (value.isBlank()) {
                         Text(label, color = WorkbenchColors.Muted.copy(alpha = 0.58f), fontSize = 15.sp, lineHeight = 22.sp)
@@ -414,7 +404,7 @@ fun StatusBanner(message: UiText?) {
                 .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.32f)), CardShape)
                 .padding(12.dp)
         ) {
-            Text(resolved.orEmpty(), color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Black)
+            Text(resolved.orEmpty(), color = WorkbenchColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -425,7 +415,7 @@ fun Eyebrow(text: String) {
         text = text.uppercase(),
         color = WorkbenchColors.Muted,
         fontSize = 11.sp,
-        fontWeight = FontWeight.Black,
+        fontWeight = FontWeight.Bold,
         letterSpacing = eyebrowLetterSpacingValue(text).sp
     )
 }
@@ -445,13 +435,13 @@ fun InlineMetricBadge(label: String, value: String, modifier: Modifier = Modifie
             text = label,
             color = WorkbenchColors.Muted,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Black
+            fontWeight = FontWeight.Bold
         )
         Text(
             text = value,
             color = WorkbenchColors.InkStrong,
             fontSize = 15.sp,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.ExtraBold,
             fontFamily = FontFamily.Monospace
         )
     }
@@ -473,8 +463,8 @@ fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Text(value, color = WorkbenchColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(value, color = WorkbenchColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -482,14 +472,14 @@ fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
 fun MetaPill(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(WorkbenchColors.Surface.copy(alpha = 0.56f))
-            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(10.dp))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
     }
 }
@@ -599,7 +589,7 @@ fun CollapsibleWorkbenchSection(
                     text = title,
                     color = WorkbenchColors.InkStrong,
                     fontSize = 17.sp,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                     lineHeight = 21.sp
                 )
             }

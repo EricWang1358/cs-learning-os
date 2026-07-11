@@ -28,6 +28,16 @@ class DashboardModelsTest {
     }
 
     @Test
+    fun compactDashboardKeepsMetricsInBrandAndOnlyCommandsInContent() {
+        val summary = buildDashboardSummary(LearningUiState())
+
+        assertEquals(
+            listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Search),
+            summary.compactActions
+        )
+    }
+
+    @Test
     fun summaryOnlyFeedsContinueReadingAfterActionStrip() {
         val older = node(id = "older", title = "Older note", updatedAt = 100L, lastReadAt = 200L)
         val recent = node(id = "recent", title = "Recent read", updatedAt = 300L, lastReadAt = 900L)

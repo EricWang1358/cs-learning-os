@@ -46,8 +46,8 @@ import com.cslearningos.mobile.ui.markdown.MarkdownLinkAnnotationTag
 import com.cslearningos.mobile.ui.markdown.QuizAwareMarkdownDocument
 import com.cslearningos.mobile.ui.markdown.buildMarkdownAnnotatedText
 
-private val CardShape = RoundedCornerShape(10.dp)
-private val BlockShape = RoundedCornerShape(10.dp)
+private val CardShape = RoundedCornerShape(16.dp)
+private val BlockShape = RoundedCornerShape(16.dp)
 private val PillShape = RoundedCornerShape(999.dp)
 
 @Composable
@@ -347,7 +347,7 @@ private fun QuizBlock(block: MarkdownQuizBlock) {
                 text = "QUIZ",
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = WorkbenchColors.Surface,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 ),
                 modifier = Modifier
                     .clip(PillShape)

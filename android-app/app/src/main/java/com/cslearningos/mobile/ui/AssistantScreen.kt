@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -138,7 +139,7 @@ private fun AssistantTopBar(
     onHistory: () -> Unit,
     historyEnabled: Boolean
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(WorkbenchColors.Surface.copy(alpha = AssistantUiTokens.TopBarSurfaceAlpha))
@@ -147,27 +148,38 @@ private fun AssistantTopBar(
                 horizontal = AssistantUiTokens.HeaderHorizontalPadding,
                 vertical = AssistantUiTokens.HeaderVerticalPadding
             ),
-        verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AssistantHeaderAction(text = stringResource(R.string.common_back), onClick = onBack)
-            Text(
-                text = stringResource(R.string.assistant_title),
-                color = WorkbenchColors.InkStrong,
-                fontSize = AssistantUiTokens.HeaderTitleSize,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)) {
-            AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
-            AssistantHeaderAction(
-                text = stringResource(R.string.assistant_new_chat),
-                onClick = onNewChat,
-                accent = true
-            )
-        }
+        AssistantBackAction(onClick = onBack)
+        Text(
+            text = stringResource(R.string.assistant_title),
+            color = WorkbenchColors.InkStrong,
+            fontSize = AssistantUiTokens.HeaderTitleSize,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.weight(1f)
+        )
+        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
+        AssistantHeaderAction(
+            text = stringResource(R.string.assistant_new_chat),
+            onClick = onNewChat,
+            accent = true
+        )
     }
+}
+
+@Composable
+private fun AssistantBackAction(onClick: () -> Unit) {
+    Text(
+        text = "<",
+        color = WorkbenchColors.Muted,
+        fontSize = AssistantUiTokens.HeaderTitleSize,
+        fontWeight = FontWeight.ExtraBold,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp)
+    )
 }
 
 @Composable
@@ -323,7 +335,7 @@ private fun AssistantMessageBubble(
                     text = stringResource(R.string.assistant_sources),
                     color = WorkbenchColors.Muted,
                     fontSize = AssistantUiTokens.SourceLabelSize,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 )
                 message.citations.forEach { citation ->
                     Text(

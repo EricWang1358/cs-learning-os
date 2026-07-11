@@ -96,7 +96,7 @@ import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.launch
 
-private val CardShape = RoundedCornerShape(10.dp)
+private val CardShape = RoundedCornerShape(16.dp)
 
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
     selectedBottomRouteFor(screen.toAppRoute()).toAppScreen()
@@ -119,7 +119,7 @@ fun LearningOsApp(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .workbenchGrid()
+                    .background(WorkbenchColors.Surface)
                     .safeDrawingPadding()
             ) {
                 when {
@@ -332,7 +332,7 @@ private fun BrandBlock(state: LearningUiState, onAssistantClick: (() -> Unit)? =
                 color = WorkbenchColors.Accent,
                 fontSize = 30.sp,
                 lineHeight = 31.sp,
-                fontWeight = FontWeight.Black
+                fontWeight = FontWeight.ExtraBold
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -357,7 +357,7 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
                 color = WorkbenchColors.InkStrong,
                 fontSize = 19.sp,
                 lineHeight = 22.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -380,8 +380,8 @@ private fun CompactMetricBadge(label: String, value: String) {
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
-        Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(label, color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
     }
 }
 
@@ -396,9 +396,9 @@ private fun MobileBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.96f))
-            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(22.dp))
+            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(16.dp))
             .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -463,7 +463,7 @@ private fun BottomNavTab(
                     contentColor = WorkbenchColors.InkStrong,
                     modifier = Modifier.align(Alignment.TopEnd)
                 ) {
-                    Text(dueCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Text(dueCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -471,7 +471,7 @@ private fun BottomNavTab(
             text = stringResource(item.labelResId),
             color = labelColor,
             fontSize = 10.sp,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.Bold,
             maxLines = 1
         )
     }
@@ -546,7 +546,7 @@ private fun DetailEmptyState(state: LearningUiState) {
             text = selected?.title ?: stringResource(R.string.detail_empty_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 25.sp,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.ExtraBold,
             lineHeight = 29.sp
         )
         Text(
@@ -573,7 +573,7 @@ private fun NoticeTray(state: LearningUiState, viewModel: LearningViewModel) {
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Eyebrow(stringResource(R.string.notice_eyebrow))
-                Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Text(title, color = WorkbenchColors.InkStrong, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
             }
             WorkbenchButton(stringResource(R.string.common_dismiss), { viewModel.dismissNotice(latest.id) })
@@ -648,7 +648,7 @@ private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningVie
             text = stringResource(R.string.reader_questions_title),
             color = WorkbenchColors.InkStrong,
             fontSize = 20.sp,
-            fontWeight = FontWeight.Black
+            fontWeight = FontWeight.ExtraBold
         )
         Text(
             text = stringResource(R.string.reader_questions_body),
@@ -669,14 +669,14 @@ private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningVie
             modifier = Modifier.fillMaxWidth()
         )
         if (openQuestions.isEmpty()) {
-            Text(stringResource(R.string.reader_open_question_count, 0), color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Black)
+            Text(stringResource(R.string.reader_open_question_count, 0), color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     stringResource(R.string.reader_open_question_count, openQuestions.size),
                     color = WorkbenchColors.InkStrong,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 )
                 openQuestions.take(4).forEach { question ->
                     ReaderQuestionRow(question = question, onResolve = { viewModel.resolveReaderQuestion(question) })
@@ -776,7 +776,7 @@ private fun SearchScreen(state: LearningUiState, viewModel: LearningViewModel) {
 private fun SearchResultCard(result: SearchResultEntity, onOpen: () -> Unit) {
     InteractiveCard(onClick = onOpen, accent = result.type == "quiz") {
         Eyebrow(result.type)
-        Text(result.title, color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Black)
+        Text(result.title, color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(result.snippet, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 20.sp)
     }
 }
@@ -840,7 +840,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         }
         WorkbenchCard(accent = true) {
             Eyebrow(quiz.source.name)
-            Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 28.sp)
+            Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 28.sp)
             if (!state.quizAnswerVisible) {
                 Text(stringResource(R.string.review_answer_hidden), color = WorkbenchColors.Muted, fontSize = 14.sp)
                 WorkbenchButton(stringResource(R.string.review_reveal_answer), viewModel::revealCurrentQuizAnswer, primary = true, modifier = Modifier.fillMaxWidth())
@@ -891,7 +891,7 @@ private fun ReviewDetailScreen(
         )
         WorkbenchCard(accent = true) {
             Eyebrow(quiz.source.name)
-            Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 28.sp)
+            Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 28.sp)
             AnswerBlock(quiz)
             ToolbarRow {
                 WorkbenchButton(stringResource(R.string.review_retry), onRetry)

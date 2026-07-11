@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.ui
 
+import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
 import com.cslearningos.mobile.data.SyncStatus
@@ -8,6 +9,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReviewQueueModelsTest {
+    @Test
+    fun reviewStageShowsExactlyOneLayer() {
+        assertEquals(ReviewStage.Setup, reviewStage(setupVisible = true, answerVisible = false, reviewed = false))
+        assertEquals(ReviewStage.Prompt, reviewStage(setupVisible = false, answerVisible = false, reviewed = false))
+        assertEquals(ReviewStage.Rating, reviewStage(setupVisible = false, answerVisible = true, reviewed = false))
+        assertEquals(ReviewStage.Explanation, reviewStage(setupVisible = false, answerVisible = false, reviewed = true))
+    }
+
     @Test
     fun againKeepsCurrentQuizSelectedForSameSessionRetry() {
         val current = quiz("q1")
@@ -49,7 +58,79 @@ class ReviewQueueModelsTest {
         )
     }
 
-    private fun quiz(id: String) =
+    @Test
+    fun reviewAreaSummariesExposeAllAreasAndScopedCounts() {
+        val areas = listOf(
+            area(id = "os", name = "OS", order = 1),
+            area(id = "network", name = "Network", order = 2)
+        )
+        val due = listOf(
+            quiz("q1", area = "os"),
+            quiz("q2", area = "os"),
+            quiz("q3", area = "network")
+        )
+        val all = due + quiz("q4", area = "network")
+
+        assertEquals(
+            listOf(
+                ReviewAreaSummary(areaId = null, dueCount = 3, totalCount = 4),
+                ReviewAreaSummary(areaId = "os", dueCount = 2, totalCount = 2),
+                ReviewAreaSummary(areaId = "network", dueCount = 1, totalCount = 2)
+            ),
+            buildReviewAreaSummaries(areas = areas, dueQuizzes = due, quizzes = all)
+        )
+    }
+
+    @Test
+    fun reviewProgressUsesOnlyCardsFromSelectedArea() {
+        val cards = reviewCardsForArea(
+            quizzes = listOf(
+                quiz("q1", area = "os"),
+                quiz("q2", area = "os"),
+                quiz("q3", area = "network")
+            ),
+            areaId = "os"
+        )
+
+        assertEquals(
+            ReviewProgress(current = 2, total = 2),
+            reviewProgress(selectedQuizId = "q2", cards = cards)
+        )
+    }
+
+    @Test
+    fun answeredReviewAdvancesWithinSelectedAreaOnly() {
+        val current = quiz("q1", area = "os")
+        val state = LearningUiState(
+            dueQuizzes = listOf(
+                current,
+                quiz("q2", area = "network"),
+                quiz("q3", area = "os")
+            ),
+            reviewAreaId = "os"
+        )
+
+        val next = state.afterReviewAnswered(
+            quiz = current,
+            rating = ReviewRating.Good,
+            savedMessage = UiText.Dynamic("saved")
+        ).selectedQuiz
+
+        assertEquals("q3", next?.id)
+    }
+
+    private fun area(id: String, name: String, order: Int) =
+        AreaEntity(
+            id = id,
+            slug = id,
+            name = name,
+            order = order,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+
+    private fun quiz(id: String, area: String = "questions") =
         QuizItemEntity(
             id = id,
             nodeId = null,
@@ -62,6 +143,7 @@ class ReviewQueueModelsTest {
             updatedAt = 1_000L,
             revision = 1L,
             syncStatus = SyncStatus.clean,
-            deletedAt = null
+            deletedAt = null,
+            area = area
         )
 }

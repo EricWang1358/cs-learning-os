@@ -200,7 +200,7 @@ private fun LibraryRootScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                    Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     if (folder.trackPreview.isNotBlank()) {
                         Text(
                             text = folder.trackPreview,
@@ -240,7 +240,7 @@ private fun LibraryRootScreen(
                             .padding(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text("${item.trackLabel} · ${item.summary}", color = WorkbenchColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -254,7 +254,7 @@ private fun LibraryRootScreen(
             .fillMaxWidth()
             .background(
                 Brush.horizontalGradient(listOf(Color(0xFFB9F1DE), Color(0xFFD9F4C5))),
-                RoundedCornerShape(10.dp)
+                RoundedCornerShape(16.dp)
             )
     ) {
         Text(stringResource(R.string.library_create_area_button), color = WorkbenchColors.InkStrong)
@@ -264,12 +264,12 @@ private fun LibraryRootScreen(
     var deleteForeverNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     WorkbenchCard(accent = false) {
         Column(modifier = Modifier.fillMaxWidth().clickable { trashExpanded = !trashExpanded }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(stringResource(R.string.more_trashbin_count, trashNodes.size), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            Text(stringResource(R.string.more_trashbin_count, trashNodes.size), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             if (trashExpanded) {
                 if (trashNodes.isEmpty()) Text(stringResource(R.string.more_trashbin_empty), color = WorkbenchColors.Muted, fontSize = 13.sp)
                 trashNodes.forEach { node ->
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(node.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Black)
+                        Text(node.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Bold)
                         Text(areas.firstOrNull { it.id == node.areaId }?.let { displayAreaName(context, it) } ?: node.area, color = WorkbenchColors.Muted, fontSize = 13.sp)
                         Row { TextButton(onClick = { onRestoreNode(node) }) { Text(stringResource(R.string.common_restore)) }; TextButton(onClick = { deleteForeverNodeId = node.id }) { Text(stringResource(R.string.common_delete_forever), color = WorkbenchColors.Danger) } }
                     }
@@ -307,7 +307,7 @@ private fun LibraryAreaDetailScreen(
                     color = WorkbenchColors.InkStrong,
                     fontSize = 22.sp,
                     lineHeight = 26.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.ExtraBold
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetaPill(stringResource(R.string.common_nodes), detail.nodeCount.toString())
@@ -375,7 +375,7 @@ private fun LibraryAreaDetailScreen(
                             text = item.title,
                             color = WorkbenchColors.InkStrong,
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )

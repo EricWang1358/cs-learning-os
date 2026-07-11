@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,33 +24,39 @@ private data class DashboardScreenState(
 @Composable
 fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val screenState = state.toDashboardScreenState()
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        FirstScreenActionStrip(summary = screenState.summary, viewModel = viewModel)
-        ContinueReadingCard(summary = screenState.summary, viewModel = viewModel)
-    }
+    DashboardGrid(summary = screenState.summary, viewModel = viewModel)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: LearningViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.dashboard_workbench_title), modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.Black)
-            Column(modifier = Modifier.weight(0.48f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                WorkbenchButton("${stringResource(R.string.dashboard_nodes)} ${summary.nodeCount}", viewModel::showLibrary, modifier = Modifier.fillMaxWidth())
-                WorkbenchButton("${stringResource(R.string.dashboard_due)} ${summary.dueReviewCount}", viewModel::showReview, modifier = Modifier.fillMaxWidth(), primary = true)
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Search).forEach { action ->
-                WorkbenchButton(action.firstScreenLabel(summary), action.clickHandler(viewModel))
-            }
-        }
+private fun DashboardGrid(summary: DashboardSummary, viewModel: LearningViewModel) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ContinueReadingCard(summary = summary, viewModel = viewModel, modifier = Modifier.weight(0.5f))
+        DashboardActionCard(action = DashboardAction.Capture, summary = summary, onClick = viewModel::showCapture, modifier = Modifier.weight(0.5f))
+        DashboardActionCard(action = DashboardAction.Create, summary = summary, onClick = viewModel::startNewNode, modifier = Modifier.weight(0.5f))
+        DashboardActionCard(action = DashboardAction.Search, summary = summary, onClick = viewModel::showSearch, modifier = Modifier.weight(0.5f))
     }
 }
 
 @Composable
-private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningViewModel) {
+private fun DashboardActionCard(action: DashboardAction, summary: DashboardSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    WorkbenchCard(accent = action == DashboardAction.Capture) {
+        Eyebrow(action.eyebrow())
+        Text(action.firstScreenLabel(summary), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(
+            action.body(),
+            color = WorkbenchColors.Muted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        WorkbenchButton(action.firstScreenLabel(summary), onClick, primary = action == DashboardAction.Capture)
+    }
+}
+
+@Composable
+private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningViewModel, modifier: Modifier = Modifier) {
     val node = summary.recentNode
     if (node == null) {
         EmptyWorkbenchCard(
@@ -59,15 +66,15 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
         return
     }
 
-    WorkbenchCard(accent = true) {
+    WorkbenchCard(accent = true, modifier = modifier) {
         Eyebrow(stringResource(R.string.dashboard_continue_eyebrow))
-        Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 23.sp, fontWeight = FontWeight.Black)
+        Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(
             dashboardPreviewMarkdown(node.markdownBody, stringResource(R.string.library_no_body_yet)),
             color = WorkbenchColors.Muted,
-            fontSize = 14.sp,
-            lineHeight = 21.sp,
-            maxLines = 3,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         WorkbenchButton(stringResource(R.string.dashboard_continue_button), { viewModel.openNode(node) }, primary = true)
