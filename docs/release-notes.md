@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.29
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.29-beta`
+
+Android version:
+
+- `versionCode`: 30
+- `versionName`: `0.1.29`
+
+Status: implementation beta.
+
+Highlights:
+
+- Assistant revisions may now propose a different existing Area. The proposed field is reviewed in the editor and saved through the normal node transaction, preserving node identity and related study data.
+
 ## Android Beta 0.1.28
 
 Date: 2026-07-11

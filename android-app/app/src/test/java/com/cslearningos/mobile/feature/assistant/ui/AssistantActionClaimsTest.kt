@@ -117,7 +117,7 @@ class AssistantActionClaimsTest {
     }
 
     @Test
-    fun revisionOfAnExistingNodeKeepsItsCurrentAreaEvenWhenTheReplySuggestsAnother() {
+    fun revisionOfAnExistingNodeCanProposeAnotherExistingAreaForConfirmedSave() {
         val decision = assistantReplyDecision(
             mode = AssistantRequestMode.Draft,
             request = "Refine this node",
@@ -134,7 +134,7 @@ class AssistantActionClaimsTest {
             )
         )
 
-        assertEquals("algorithms", decision.workingDraft?.areaId)
+        assertEquals("systems", decision.workingDraft?.areaId)
         assertEquals("node-42", decision.workingDraft?.nodeId)
     }
 }
