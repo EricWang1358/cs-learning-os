@@ -144,6 +144,40 @@ class AssistantActionClaimsTest {
     }
 
     @Test
+    fun objectProposalNodeBranchCarriesCaptureSuggestionToFinalAssistantMessageData() {
+        val decision = assistantReplyDecision(
+            mode = AssistantRequestMode.Draft,
+            request = "Create a graph note",
+            reply = "<!-- cs-area: algorithms -->\n<!-- cs-capture: Compare BFS queue growth later. -->\n# Graph traversal",
+            areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms")),
+            editTarget = AssistantEditTarget.Node(
+                id = null,
+                revision = 0L,
+                titleHint = "Create a graph note",
+                markdown = "",
+                areaId = null
+            )
+        )
+
+        assertEquals("# Graph traversal", decision.editTarget?.markdown)
+        assertEquals("Compare BFS queue growth later.", decision.captureSuggestion)
+    }
+
+    @Test
+    fun newDraftWithNoAvailableAreaDoesNotExposeAnOpenDraftAction() {
+        val decision = assistantReplyDecision(
+            mode = AssistantRequestMode.Draft,
+            request = "Create my first note",
+            reply = "Please create an Area first, then I can draft this note.",
+            areas = emptyList()
+        )
+
+        assertNull(decision.action)
+        assertNull(decision.editTarget)
+        assertEquals("Please create an Area first, then I can draft this note.", decision.visibleReply)
+    }
+
+    @Test
     fun revisionOfAnExistingNodeCanProposeAnotherExistingAreaForConfirmedSave() {
         val decision = assistantReplyDecision(
             mode = AssistantRequestMode.Draft,

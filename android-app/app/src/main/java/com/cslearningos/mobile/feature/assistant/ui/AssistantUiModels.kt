@@ -296,7 +296,7 @@ fun assistantReplyDecision(
                 visibleReply = proposal?.markdown ?: reply,
                 action = proposal?.let(::assistantEditAction),
                 editTarget = nextTarget,
-                captureSuggestion = placement?.captureSuggestion
+                captureSuggestion = proposal?.captureSuggestion ?: placement?.captureSuggestion
             )
         }
 

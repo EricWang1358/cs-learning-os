@@ -46,6 +46,32 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun nodeProposalPreservesCaptureSuggestionSeparatelyFromMarkdown() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "Graph traversal",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            <!-- cs-area: algorithms -->
+            <!-- cs-capture: Compare BFS queue growth later. -->
+            # Graph traversal
+
+            BFS explores neighbors level by level.
+            """.trimIndent(),
+            listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+        ) as AssistantEditProposal.Node
+
+        assertEquals("# Graph traversal\n\nBFS explores neighbors level by level.", proposal.markdown)
+        assertEquals("Compare BFS queue growth later.", proposal.captureSuggestion)
+    }
+
+    @Test
     fun nodeProposalFailsClosedWhenPlacementDirectivesAppearMoreThanOnce() {
         val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
 
@@ -76,6 +102,25 @@ class AssistantObjectProposalTest {
                 )
             )
         }
+    }
+
+    @Test
+    fun newNodeProposalFailsClosedWhenNoAreaCanBeValidated() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "First note",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            "# First note\n\nStart here.",
+            emptyList()
+        )
+
+        assertNull(proposal)
     }
 
     @Test

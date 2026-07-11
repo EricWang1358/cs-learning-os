@@ -41,7 +41,8 @@ sealed interface AssistantEditProposal {
         val titleHint: String,
         val markdown: String,
         val areaId: String?,
-        val placementReason: String? = null
+        val placementReason: String? = null,
+        val captureSuggestion: String? = null
     ) : AssistantEditProposal
 
     data class Quiz(
@@ -103,6 +104,7 @@ private fun parseNodeProposal(
         areas.firstOrNull { it.id == requestedAreaId }?.id ?: return null
     } ?: target.areaId
     val placementReason = reasonDirectives.singleOrNull()?.takeIf { areaDirectives.isNotEmpty() }
+    val captureSuggestion = captureDirectives.singleOrNull()
     val markdown = reply
         .replace(NodeAreaDirectiveLine, "")
         .replace(NodeAreaReasonDirectiveLine, "")
@@ -115,7 +117,8 @@ private fun parseNodeProposal(
         titleHint = target.titleHint,
         markdown = markdown,
         areaId = areaId,
-        placementReason = placementReason
+        placementReason = placementReason,
+        captureSuggestion = captureSuggestion
     )
 }
 

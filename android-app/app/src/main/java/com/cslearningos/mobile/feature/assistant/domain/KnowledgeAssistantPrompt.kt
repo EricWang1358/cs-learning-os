@@ -15,7 +15,7 @@ fun buildKnowledgeAssistantSystemPrompt(
             "[Local source: ${source.title}]\n${source.excerpt}"
         }
         .ifBlank { "[No matching local sources were selected.]" }
-    val outputRule = objectTarget?.outputRule() ?: when (mode) {
+    val outputRule = objectTarget?.outputRule(areas) ?: when (mode) {
         AssistantRequestMode.Answer -> "Answer directly using your general knowledge and the optional local sources when relevant. Never refuse only because local search has no match, and do not claim you performed live web browsing."
         AssistantRequestMode.Draft -> "Return the complete revised Markdown working draft, not a summary or a patch. First classify the note against the existing Areas and their example titles. When one existing Area is a clear fit, begin with <!-- cs-area: AREA_ID --> followed by <!-- cs-area-reason: one concrete reason tied to the Area name or examples -->. When no Area is a clear fit, ask one concise clarifying question instead of drafting, emit no directives, and never invent an Area. Only if a short thought is genuinely unrelated to the draft and worth keeping, add <!-- cs-capture: text --> on its own line. Do not wrap the note in code fences."
         AssistantRequestMode.ReviewQuestion -> "Act as an interviewer. Ask exactly one focused question about the student's stated topic, grounded in the local sources when available. Do not answer the question or give a study plan."
@@ -51,9 +51,13 @@ data class AssistantLinkedNodeContext(
     val markdown: String
 )
 
-private fun AssistantEditTarget.outputRule(): String = when (this) {
+private fun AssistantEditTarget.outputRule(areas: List<AssistantAreaOption>): String = when (this) {
     is AssistantEditTarget.Node -> if (id == null) {
-        "Return the complete revised Markdown for this new node draft. Begin with a validated existing Area directive when you recommend an Area."
+        if (areaId == null && areas.isEmpty()) {
+            "For this new node draft, no existing Area is available; ask the user to create an Area first, emit no draft, emit no directives, and never invent an Area."
+        } else {
+            "Return the complete revised Markdown for this new node draft. Begin with a validated existing Area directive when you recommend an Area."
+        }
     } else {
         "Return the complete revised Markdown for this existing node. Begin with a validated existing Area directive when you recommend moving it; do not create a second node."
     }

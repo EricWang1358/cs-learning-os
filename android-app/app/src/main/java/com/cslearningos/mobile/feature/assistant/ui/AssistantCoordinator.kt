@@ -9,6 +9,7 @@ import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
@@ -307,6 +308,7 @@ class AssistantCoordinator(
                         }
                         if (objectProposal != null) {
                             action = assistantEditAction(objectProposal)
+                            captureSuggestion = (objectProposal as? AssistantEditProposal.Node)?.captureSuggestion
                             nextEditTarget = objectProposal.nextTarget()
                             visibleBody = string(R.string.assistant_draft_updated)
                         } else if (snapshot.editTarget != null) {

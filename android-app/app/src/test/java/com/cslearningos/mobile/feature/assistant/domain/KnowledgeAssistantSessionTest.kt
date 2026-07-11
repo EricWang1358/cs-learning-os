@@ -16,6 +16,26 @@ import org.junit.Test
 
 class KnowledgeAssistantSessionTest {
     @Test
+    fun newNodePromptWithNoAreasAsksUserToCreateAnAreaBeforeDrafting() {
+        val prompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            areas = emptyList(),
+            objectTarget = AssistantEditTarget.Node(
+                id = null,
+                revision = 0L,
+                titleHint = "First note",
+                markdown = "",
+                areaId = null
+            )
+        )
+
+        assertTrue(prompt.contains("ask the user to create an Area first"))
+        assertTrue(prompt.contains("emit no draft"))
+        assertTrue(prompt.contains("emit no directives"))
+    }
+
+    @Test
     fun quizPromptIncludesLinkedActiveNodeContextWithoutStoringItOnTheQuizTarget() = runTest {
         val node = LearningNodeEntity(
             id = "node-1",
