@@ -310,7 +310,6 @@ private fun AiServiceStatusBlock(status: AiServiceStatus) {
 @Composable
 private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewModel) {
     var showRemoveDemoConfirm by rememberSaveable { mutableStateOf(false) }
-    var deleteForeverNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     SettingsRow(label = stringResource(R.string.more_local_data_label)) {
         Text(
             text = stringResource(R.string.more_local_data_body),
@@ -322,45 +321,6 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
             WorkbenchButton(stringResource(R.string.more_backup_restore), viewModel::showBackup, primary = true)
             WorkbenchButton(stringResource(R.string.more_remove_demo), { showRemoveDemoConfirm = true }, danger = true)
         }
-        Text(
-            text = stringResource(R.string.more_delete_forever_warning),
-            color = WorkbenchColors.Danger,
-            fontSize = 13.sp,
-            lineHeight = 19.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = stringResource(R.string.more_trashbin_count, state.trashNodes.size),
-            color = WorkbenchColors.InkStrong,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Black
-        )
-        if (state.trashNodes.isEmpty()) {
-            Text(
-                text = stringResource(R.string.more_trashbin_empty),
-                color = WorkbenchColors.Muted,
-                fontSize = 13.sp,
-                lineHeight = 19.sp
-            )
-        }
-        state.trashNodes.take(6).forEach { node ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
-                    .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Eyebrow(node.area)
-                Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                ToolbarRow {
-                    WorkbenchButton(stringResource(R.string.common_restore), { viewModel.restoreNode(node) }, primary = true)
-                    WorkbenchButton(stringResource(R.string.common_delete_forever), { deleteForeverNodeId = node.id }, danger = true)
-                }
-            }
-        }
     }
     if (showRemoveDemoConfirm) {
         ConfirmDestructiveDialog(
@@ -371,19 +331,6 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
             onConfirm = {
                 showRemoveDemoConfirm = false
                 viewModel.clearStarterContent()
-            }
-        )
-    }
-    val deleteNode = state.trashNodes.firstOrNull { it.id == deleteForeverNodeId }
-    if (deleteNode != null) {
-        ConfirmDestructiveDialog(
-            title = stringResource(R.string.more_delete_forever_confirm_title),
-            body = stringResource(R.string.more_delete_forever_confirm_body, deleteNode.title),
-            confirmLabel = stringResource(R.string.common_delete_forever),
-            onDismiss = { deleteForeverNodeId = null },
-            onConfirm = {
-                deleteForeverNodeId = null
-                viewModel.permanentlyDeleteNode(deleteNode)
             }
         )
     }
@@ -445,7 +392,7 @@ private fun GuideStepCard(step: Int, title: String, body: String, actionLabel: S
 }
 
 @Composable
-private fun ConfirmDestructiveDialog(
+fun ConfirmDestructiveDialog(
     title: String,
     body: String,
     confirmLabel: String,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ import java.util.Date
 private data class LibraryScreenState(
     val areas: List<AreaEntity>,
     val nodes: List<LearningNodeEntity>,
+    val trashNodes: List<LearningNodeEntity>,
     val dueQuizzes: List<QuizItemEntity>,
     val selectedAreaId: String?,
     val checkedFilter: LibraryCheckedFilter
@@ -53,11 +55,7 @@ private object LibraryLayoutTokens {
 fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val screenState = state.toLibraryScreenState()
     val context = LocalContext.current
-    val selectedArea = screenState.areas.firstOrNull { it.id == screenState.selectedAreaId }
     val root = buildLibraryRootModel(screenState.areas, screenState.nodes, screenState.dueQuizzes, context)
-    val detail = selectedArea?.let {
-        buildLibraryAreaDetail(it, screenState.nodes, screenState.dueQuizzes, screenState.checkedFilter, context)
-    }
 
     var showCreateAreaDialog by rememberSaveable { mutableStateOf(screenState.areas.isEmpty()) }
     var createAreaDraft by rememberSaveable { mutableStateOf("") }
@@ -66,10 +64,15 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     var moveNodeId by rememberSaveable { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (detail == null) {
             LibraryRootScreen(
                 folders = root.folders,
-                onOpenArea = viewModel::openLibraryArea,
+                selectedAreaId = screenState.selectedAreaId,
+                nodes = screenState.nodes,
+                trashNodes = screenState.trashNodes,
+                dueQuizzes = screenState.dueQuizzes,
+                checkedFilter = screenState.checkedFilter,
+                onToggleArea = viewModel::toggleLibraryArea,
+                onNewNode = viewModel::startNewNode,
                 onCreateArea = {
                     createAreaDraft = ""
                     showCreateAreaDialog = true
@@ -79,27 +82,12 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
                     renameAreaDraft = area.name
                 },
                 onDeleteArea = { area -> viewModel.deleteArea(area.id) },
+                onOpenNode = viewModel::openNode,
+                onSetFilter = viewModel::setLibraryCheckedFilter,
+                onRestoreNode = viewModel::restoreNode,
+                onDeleteForever = viewModel::permanentlyDeleteNode,
                 areas = screenState.areas
             )
-        } else {
-            LibraryAreaDetailScreen(
-                area = selectedArea,
-                detail = detail,
-                checkedFilter = screenState.checkedFilter,
-                onBack = viewModel::closeLibraryArea,
-                onNewNode = { viewModel.startNewNode(selectedArea.id) },
-                onRenameArea = {
-                    renameAreaId = selectedArea.id
-                    renameAreaDraft = selectedArea.name
-                },
-                onDeleteArea = { viewModel.deleteArea(selectedArea.id) },
-                onSetFilter = viewModel::setLibraryCheckedFilter,
-                onOpenNode = { viewModel.openNode(it) },
-                onEditNode = { viewModel.editNode(it) },
-                onToggleChecked = { viewModel.toggleNodeChecked(it.id) },
-                onMoveNode = { node -> moveNodeId = node.id }
-            )
-        }
     }
 
     if (showCreateAreaDialog) {
@@ -173,10 +161,20 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @Composable
 private fun LibraryRootScreen(
     folders: List<LibraryFolderRow>,
-    onOpenArea: (String) -> Unit,
+    selectedAreaId: String?,
+    nodes: List<LearningNodeEntity>,
+    trashNodes: List<LearningNodeEntity>,
+    dueQuizzes: List<QuizItemEntity>,
+    checkedFilter: LibraryCheckedFilter,
+    onToggleArea: (String) -> Unit,
+    onNewNode: (String) -> Unit,
     onCreateArea: () -> Unit,
     onRenameArea: (AreaEntity) -> Unit,
     onDeleteArea: (AreaEntity) -> Unit,
+    onOpenNode: (LearningNodeEntity) -> Unit,
+    onSetFilter: (LibraryCheckedFilter) -> Unit,
+    onRestoreNode: (LearningNodeEntity) -> Unit,
+    onDeleteForever: (LearningNodeEntity) -> Unit,
     areas: List<AreaEntity>
 ) {
     val context = LocalContext.current
@@ -198,11 +196,9 @@ private fun LibraryRootScreen(
 
     folders.forEach { folder ->
         val area = areas.firstOrNull { it.id == folder.areaId } ?: return@forEach
-        val actions = libraryFolderCardActions()
         WorkbenchCard(accent = false) {
-            Eyebrow(stringResource(R.string.library_folder_eyebrow))
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().clickable { onToggleArea(folder.areaId) },
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -226,24 +222,44 @@ private fun LibraryRootScreen(
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Row(
-                    modifier = Modifier.weight(LibraryLayoutTokens.FolderActionGroupWidthFraction),
-                    horizontalArrangement = Arrangement.spacedBy(LibraryLayoutTokens.FolderActionGap)
-                ) {
-                    actions.forEach { action ->
-                        when (action) {
-                            LibraryFolderCardAction.Open ->
-                                WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, Modifier.weight(1f), primary = true)
-                            LibraryFolderCardAction.Edit ->
-                                WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) }, Modifier.weight(1f))
-                            LibraryFolderCardAction.Delete ->
-                                WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, Modifier.weight(1f), danger = true)
-                        }
+            if (selectedAreaId == folder.areaId) {
+                val detail = buildLibraryAreaDetail(area, nodes, dueQuizzes, checkedFilter, context)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { onNewNode(folder.areaId) }) { Text(stringResource(R.string.library_create_in_area_button)) }
+                    TextButton(onClick = { onRenameArea(area) }) { Text(stringResource(R.string.common_edit)) }
+                    TextButton(onClick = { onDeleteArea(area) }) { Text(stringResource(R.string.common_delete)) }
+                    TextButton(onClick = { onSetFilter(LibraryCheckedFilter.All) }) { Text(stringResource(R.string.library_filter_all)) }
+                    TextButton(onClick = { onSetFilter(LibraryCheckedFilter.Checked) }) { Text(stringResource(R.string.library_filter_checked)) }
+                }
+                detail.items.forEach { item ->
+                    Column(modifier = Modifier.fillMaxWidth().clickable { onOpenNode(item.node) }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("${item.trackLabel} · ${item.summary}", color = WorkbenchColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
+    }
+
+    var trashExpanded by rememberSaveable { mutableStateOf(false) }
+    var deleteForeverNodeId by rememberSaveable { mutableStateOf<String?>(null) }
+    WorkbenchCard(accent = false) {
+        Column(modifier = Modifier.fillMaxWidth().clickable { trashExpanded = !trashExpanded }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.more_trashbin_count, trashNodes.size), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            if (trashExpanded) {
+                if (trashNodes.isEmpty()) Text(stringResource(R.string.more_trashbin_empty), color = WorkbenchColors.Muted, fontSize = 13.sp)
+                trashNodes.forEach { node ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(node.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Black)
+                        Text(areas.firstOrNull { it.id == node.areaId }?.let { displayAreaName(context, it) } ?: node.area, color = WorkbenchColors.Muted, fontSize = 13.sp)
+                        Row { TextButton(onClick = { onRestoreNode(node) }) { Text(stringResource(R.string.common_restore)) }; TextButton(onClick = { deleteForeverNodeId = node.id }) { Text(stringResource(R.string.common_delete_forever), color = WorkbenchColors.Danger) } }
+                    }
+                }
+            }
+        }
+    }
+    trashNodes.firstOrNull { it.id == deleteForeverNodeId }?.let { node ->
+        ConfirmDestructiveDialog(stringResource(R.string.more_delete_forever_confirm_title), stringResource(R.string.more_delete_forever_confirm_body, node.title), stringResource(R.string.common_delete_forever), { deleteForeverNodeId = null }, { deleteForeverNodeId = null; onDeleteForever(node) })
     }
 
 }
@@ -411,6 +427,7 @@ private fun LearningUiState.toLibraryScreenState(): LibraryScreenState =
     LibraryScreenState(
         areas = areas,
         nodes = nodes,
+        trashNodes = trashNodes,
         dueQuizzes = dueQuizzes,
         selectedAreaId = selectedLibraryAreaId,
         checkedFilter = libraryCheckedFilter

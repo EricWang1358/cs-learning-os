@@ -29,6 +29,10 @@ enum class LibraryAreaTreeAction {
     More
 }
 
+enum class LibraryNodeTreeAction {
+    OpenReader
+}
+
 data class LibraryFolderRow(
     val areaId: String,
     val title: String,
@@ -96,6 +100,8 @@ fun libraryNodeCardActions(): List<LibraryNodeCardAction> =
 
 fun libraryAreaTreeActions(): List<LibraryAreaTreeAction> =
     listOf(LibraryAreaTreeAction.NewNode, LibraryAreaTreeAction.Edit, LibraryAreaTreeAction.More)
+
+fun libraryNodeTreeActions(): List<LibraryNodeTreeAction> = listOf(LibraryNodeTreeAction.OpenReader)
 
 fun buildLibraryTreeRows(
     areas: List<AreaEntity>,

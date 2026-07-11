@@ -105,6 +105,11 @@ class LibraryModelsTest {
         )
     }
 
+    @Test
+    fun nodeTreeRowsHaveOnlyReaderNavigation() {
+        assertEquals(listOf(LibraryNodeTreeAction.OpenReader), libraryNodeTreeActions())
+    }
+
     private fun area(id: String, name: String, order: Int) =
         AreaEntity(
             id = id,
