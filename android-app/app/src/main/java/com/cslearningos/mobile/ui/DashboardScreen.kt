@@ -32,7 +32,7 @@ private data class DashboardScreenState(
 @Composable
 fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val screenState = state.toDashboardScreenState()
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FirstScreenActionStrip(summary = screenState.summary, viewModel = viewModel)
         DashboardHero(state = screenState, viewModel = viewModel)
         TodayStack(summary = screenState.summary)
@@ -44,7 +44,7 @@ fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: LearningViewModel) {
-    WorkbenchCard(accent = true) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Eyebrow(stringResource(R.string.dashboard_start_here_eyebrow))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

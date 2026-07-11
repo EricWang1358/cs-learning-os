@@ -161,12 +161,14 @@ class LearningRepository private constructor(
     }
 
     suspend fun saveManualQuiz(
+        id: String? = null,
         nodeId: String?,
         prompt: String,
         answer: String,
         explanation: String,
         now: Long = System.currentTimeMillis()
     ): QuizItemEntity = reviewRepository.saveManualQuiz(
+        id = id,
         nodeId = nodeId,
         prompt = prompt,
         answer = answer,

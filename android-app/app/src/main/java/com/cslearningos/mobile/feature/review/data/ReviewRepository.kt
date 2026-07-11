@@ -25,32 +25,35 @@ class ReviewRepository(
     suspend fun getQuiz(id: String): QuizItemEntity? = dao.getQuiz(id)
 
     suspend fun saveManualQuiz(
+        id: String? = null,
         nodeId: String?,
         prompt: String,
         answer: String,
         explanation: String,
         now: Long = System.currentTimeMillis()
     ): QuizItemEntity {
+        val existing = if (id != null) dao.getQuiz(id) else null
+        val resolvedNodeId = nodeId ?: existing?.nodeId
         val quiz = QuizItemEntity(
-            id = UUID.randomUUID().toString(),
-            nodeId = nodeId,
+            id = existing?.id ?: UUID.randomUUID().toString(),
+            nodeId = resolvedNodeId,
             prompt = prompt,
             answer = answer,
             explanation = explanation,
-            source = QuizSource.manual,
-            sourceAnchor = null,
-            createdAt = now,
+            source = existing?.source ?: QuizSource.manual,
+            sourceAnchor = existing?.sourceAnchor,
+            createdAt = existing?.createdAt ?: now,
             updatedAt = now,
-            revision = InitialRevision,
+            revision = (existing?.revision ?: 0L) + InitialRevision,
             syncStatus = SyncStatus.dirty,
             deletedAt = null,
-            area = snapshotAreaForNode(nodeId),
-            track = snapshotTrackForNode(nodeId),
-            visibility = PracticeVisibility,
-            isStarter = false
+            area = snapshotAreaForNode(resolvedNodeId),
+            track = snapshotTrackForNode(resolvedNodeId),
+            visibility = existing?.visibility ?: PracticeVisibility,
+            isStarter = existing?.isStarter ?: false
         )
         dao.upsertQuiz(quiz)
-        dao.upsertReviewState(defaultReviewState(quiz.id, now))
+        if (existing == null) dao.upsertReviewState(defaultReviewState(quiz.id, now))
         indexQuiz(quiz)
         return quiz
     }

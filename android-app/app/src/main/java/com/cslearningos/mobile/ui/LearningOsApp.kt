@@ -147,7 +147,7 @@ private fun PortraitWorkbench(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
                 if (useCompactPortraitBrand(shellState.route.toAppScreen())) {
@@ -325,8 +325,8 @@ private fun BrandBlock(state: LearningUiState, onAssistantClick: (() -> Unit)? =
             }
             .padding(6.dp)
     }
-    Column(modifier = brandModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = brandModifier) {
             Eyebrow(stringResource(R.string.brand_eyebrow))
             Text(
                 text = stringResource(R.string.brand_title_multiline),
@@ -836,6 +836,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     AnswerBlock(quiz)
                     ToolbarRow {
+                        WorkbenchButton(stringResource(R.string.common_edit), { viewModel.editQuiz(quiz) })
                         WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
                         WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
                         WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)

@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.30
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.30-beta`
+
+Android version:
+
+- `versionCode`: 31
+- `versionName`: `0.1.30`
+
+Status: implementation beta.
+
+Highlights:
+
+- Home statistics are now display-only: only the Learning OS title opens the assistant, while Nodes and Due no longer inherit that interaction.
+- Tightened the mobile Home rhythm and removed the oversized outer card around "Start here", eliminating the large break before the first actions.
+- Existing review questions can be edited without creating a new record or resetting their review schedule. Quiz-editor transitions now live in a focused state helper with regression coverage.
+- Standardized Kotlin files on LF endings so the Android architecture size gate is stable across Windows edits.
+
 ## Android Beta 0.1.29
 
 Date: 2026-07-11

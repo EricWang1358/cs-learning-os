@@ -402,15 +402,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startQuizForSelectedNode() {
-        _state.update {
-            it.copy(
-                screen = AppScreen.QuizEditor,
-                quizPrompt = "",
-                quizAnswer = "",
-                quizExplanation = "",
-                message = null
-            )
-        }
+        _state.update(LearningUiState::forNewQuizEditor)
     }
 
     fun setQuizPrompt(value: String) {
@@ -423,6 +415,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun setQuizExplanation(value: String) {
         _state.update { it.copy(quizExplanation = value) }
+    }
+
+    fun editQuiz(quiz: QuizItemEntity) {
+        _state.update { it.forExistingQuizEditor(quiz) }
     }
 
     fun setReaderQuestionDraft(value: String) {
@@ -719,13 +715,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             repository.saveManualQuiz(
-                nodeId = snapshot.selectedNode?.id,
+                id = snapshot.quizEditorId,
+                nodeId = snapshot.selectedNode?.id ?: snapshot.selectedQuiz?.nodeId,
                 prompt = snapshot.quizPrompt,
                 answer = snapshot.quizAnswer,
                 explanation = snapshot.quizExplanation
             )
             _state.update {
-                it.copy(screen = AppScreen.Home, message = uiText(R.string.message_quiz_saved))
+                it.copy(screen = AppScreen.Home, quizEditorId = null, message = uiText(R.string.message_quiz_saved))
             }
         }
     }
