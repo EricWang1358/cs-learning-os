@@ -3,6 +3,12 @@
 package com.cslearningos.mobile.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,7 +94,18 @@ fun AssistantScreen(
             }
             AssistantComposer(value = assistant.input, onValueChange = viewModel.assistantActions::setInput, onSend = viewModel.assistantActions::sendMessage, onStop = viewModel.assistantActions::cancelReply, enabled = !assistant.isBusy, modifier = Modifier.imePadding())
         }
-        if (assistant.historyVisible) {
+        AnimatedVisibility(
+            visible = assistant.historyVisible,
+            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis))
+        ) {
+            Box(modifier = Modifier.fillMaxSize().background(WorkbenchColors.Ink.copy(alpha = 0.24f)).clickable(onClick = viewModel.assistantActions::hideHistory))
+        }
+        AnimatedVisibility(
+            visible = assistant.historyVisible,
+            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it },
+            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it }
+        ) {
             AssistantHistoryDrawer(
                 history = assistant.conversationHistory,
                 onDismiss = viewModel.assistantActions::hideHistory,
@@ -139,12 +156,10 @@ private fun AssistantHistoryDrawer(
     onDelete: (String) -> Unit,
     onNewChat: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().background(WorkbenchColors.Ink.copy(alpha = 0.24f)).clickable(onClick = onDismiss))
-        Column(
-            modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 320.dp).background(WorkbenchColors.SurfaceSoft).padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    Column(
+        modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 320.dp).background(WorkbenchColors.SurfaceSoft).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
             Text(stringResource(R.string.assistant_title), color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             WorkbenchButton(stringResource(R.string.assistant_new_chat), { onNewChat(); onDismiss() }, primary = true, modifier = Modifier.fillMaxWidth())
             Text(stringResource(R.string.assistant_history), color = WorkbenchColors.Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -167,7 +182,6 @@ private fun AssistantHistoryDrawer(
                     }
                 }
             }
-        }
     }
 }
 

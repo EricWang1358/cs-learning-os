@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.28
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.28-beta`
+
+Android version:
+
+- `versionCode`: 29
+- `versionName`: `0.1.28`
+
+Status: implementation beta.
+
+Highlights:
+
+- Added coordinated motion for Assistant history: the scrim fades while the drawer slides, and portrait route changes use matching short fade-and-shift transitions.
+
 ## Android Beta 0.1.27
 
 Date: 2026-07-11

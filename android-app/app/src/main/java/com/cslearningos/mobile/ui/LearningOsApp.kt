@@ -6,11 +6,17 @@ import com.cslearningos.mobile.R
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -155,7 +161,16 @@ private fun PortraitWorkbench(
             }
             item { StatusBanner(shellState.message) }
             item { NoticeTray(state = state, viewModel = viewModel) }
-            item { ScreenContent(route = shellState.route, state = state, viewModel = viewModel, isDetailPane = true) }
+            item {
+                AnimatedContent(
+                    targetState = shellState.route,
+                    transitionSpec = {
+                        (fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { it / 12 }) togetherWith
+                            (fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it / 12 })
+                    },
+                    label = "portrait-route"
+                ) { route -> ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true) }
+            }
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
         MobileBottomNav(
