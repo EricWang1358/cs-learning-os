@@ -31,9 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -41,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -159,27 +166,29 @@ private fun AssistantTopBar(
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.weight(1f)
         )
-        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
-        AssistantHeaderAction(
-            text = stringResource(R.string.assistant_new_chat),
+        AssistantHeaderIconAction(
+            contentDescription = stringResource(R.string.assistant_history),
+            onClick = onHistory,
+            enabled = historyEnabled,
+            accent = false
+        ) {
+            Icon(Icons.Filled.Menu, contentDescription = null)
+        }
+        AssistantHeaderIconAction(
+            contentDescription = stringResource(R.string.assistant_new_chat),
             onClick = onNewChat,
             accent = true
-        )
+        ) {
+            Icon(Icons.Filled.AddCircle, contentDescription = null)
+        }
     }
 }
 
 @Composable
 private fun AssistantBackAction(onClick: () -> Unit) {
-    Text(
-        text = "<",
-        color = WorkbenchColors.Muted,
-        fontSize = AssistantUiTokens.HeaderTitleSize,
-        fontWeight = FontWeight.ExtraBold,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp)
-    )
+    AssistantHeaderIconAction(contentDescription = stringResource(R.string.common_back), onClick = onClick) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+    }
 }
 
 @Composable
@@ -244,6 +253,29 @@ private fun AssistantHeaderAction(text: String, onClick: () -> Unit, accent: Boo
                 vertical = AssistantUiTokens.HeaderActionVerticalPadding
             )
     )
+}
+
+@Composable
+private fun AssistantHeaderIconAction(
+    contentDescription: String,
+    onClick: () -> Unit,
+    accent: Boolean = false,
+    enabled: Boolean = true,
+    icon: @Composable () -> Unit
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides when {
+                !enabled -> WorkbenchColors.Muted.copy(alpha = 0.42f)
+                accent -> WorkbenchColors.AccentStrong
+                else -> WorkbenchColors.Muted
+            }
+        ) {
+            Box(modifier = Modifier.semantics { this.contentDescription = contentDescription }) {
+                icon()
+            }
+        }
+    }
 }
 
 @Composable

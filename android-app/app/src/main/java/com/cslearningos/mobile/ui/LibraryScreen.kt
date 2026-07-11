@@ -84,6 +84,7 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 },
                 onDeleteArea = { area -> viewModel.deleteArea(area.id) },
                 onOpenNode = viewModel::openNode,
+                onToggleChecked = { node -> viewModel.toggleNodeChecked(node.id) },
                 onSetFilter = viewModel::setLibraryCheckedFilter,
                 onRestoreNode = viewModel::restoreNode,
                 onDeleteForever = viewModel::permanentlyDeleteNode,
@@ -173,6 +174,7 @@ private fun LibraryRootScreen(
     onRenameArea: (AreaEntity) -> Unit,
     onDeleteArea: (AreaEntity) -> Unit,
     onOpenNode: (LearningNodeEntity) -> Unit,
+    onToggleChecked: (LearningNodeEntity) -> Unit,
     onSetFilter: (LibraryCheckedFilter) -> Unit,
     onRestoreNode: (LearningNodeEntity) -> Unit,
     onDeleteForever: (LearningNodeEntity) -> Unit,
@@ -240,15 +242,25 @@ private fun LibraryRootScreen(
                     if (index > 0) {
                         HorizontalDivider(color = WorkbenchColors.Line)
                     }
-                    Column(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onOpenNode(item.node) }
                             .padding(vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("${item.trackLabel} · ${item.summary}", color = WorkbenchColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("${item.trackLabel} · ${item.summary}", color = WorkbenchColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        Checkbox(
+                            checked = item.checked,
+                            onCheckedChange = { onToggleChecked(item.node) }
+                        )
                     }
                 }
             }

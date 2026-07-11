@@ -3,11 +3,11 @@ package com.cslearningos.mobile.ui
 import com.cslearningos.mobile.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -27,22 +27,37 @@ fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
     DashboardGrid(summary = screenState.summary, viewModel = viewModel)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DashboardGrid(summary: DashboardSummary, viewModel: LearningViewModel) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ContinueReadingCard(summary = summary, viewModel = viewModel, modifier = Modifier.weight(0.5f))
-        DashboardActionCard(action = DashboardAction.Capture, summary = summary, onClick = viewModel::showCapture, modifier = Modifier.weight(0.5f))
-        DashboardActionCard(action = DashboardAction.Create, summary = summary, onClick = viewModel::startNewNode, modifier = Modifier.weight(0.5f))
-        DashboardActionCard(action = DashboardAction.Search, summary = summary, onClick = viewModel::showSearch, modifier = Modifier.weight(0.5f))
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            ContinueReadingCard(summary = summary, viewModel = viewModel, modifier = Modifier.weight(1f))
+            DashboardActionCard(action = DashboardAction.Capture, summary = summary, onClick = viewModel::showCapture, modifier = Modifier.weight(1f))
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            DashboardActionCard(action = DashboardAction.Create, summary = summary, onClick = viewModel::startNewNode, modifier = Modifier.weight(1f))
+            DashboardActionCard(action = DashboardAction.Search, summary = summary, onClick = viewModel::showSearch, modifier = Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
 private fun DashboardActionCard(action: DashboardAction, summary: DashboardSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    WorkbenchCard(accent = action == DashboardAction.Capture) {
-        Eyebrow(action.eyebrow())
-        Text(action.firstScreenLabel(summary), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    WorkbenchCard(accent = action == DashboardAction.Capture, modifier = modifier.fillMaxHeight()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Text(action.firstScreenLabel(summary), modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(action.eyebrow(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
         Text(
             action.body(),
             color = WorkbenchColors.Muted,
@@ -61,14 +76,17 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
     if (node == null) {
         EmptyWorkbenchCard(
             title = stringResource(R.string.dashboard_continue_empty_title),
-            body = stringResource(R.string.dashboard_continue_empty_body)
+            body = stringResource(R.string.dashboard_continue_empty_body),
+            modifier = modifier.fillMaxHeight()
         )
         return
     }
 
-    WorkbenchCard(accent = true, modifier = modifier) {
-        Eyebrow(stringResource(R.string.dashboard_continue_eyebrow))
-        Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    WorkbenchCard(accent = true, modifier = modifier.fillMaxHeight()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Text(node.title, modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.dashboard_continue_eyebrow), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
         Text(
             dashboardPreviewMarkdown(node.markdownBody, stringResource(R.string.library_no_body_yet)),
             color = WorkbenchColors.Muted,

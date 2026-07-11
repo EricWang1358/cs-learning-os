@@ -211,8 +211,8 @@ fun InteractiveCard(
 }
 
 @Composable
-fun EmptyWorkbenchCard(title: String, body: String) {
-    WorkbenchCard {
+fun EmptyWorkbenchCard(title: String, body: String, modifier: Modifier = Modifier) {
+    WorkbenchCard(modifier = modifier) {
         Eyebrow("empty state")
         Text(title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
         Text(body, color = WorkbenchColors.Muted, fontSize = 14.sp, lineHeight = 21.sp)
