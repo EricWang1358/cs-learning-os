@@ -23,6 +23,12 @@ enum class LibraryNodeCardAction {
     Move
 }
 
+enum class LibraryAreaTreeAction {
+    NewNode,
+    Edit,
+    More
+}
+
 data class LibraryFolderRow(
     val areaId: String,
     val title: String,
@@ -41,6 +47,22 @@ data class LibraryNodeRow(
     val checked: Boolean,
     val node: LearningNodeEntity
 )
+
+data class LibraryTrashNodeRow(
+    val id: String,
+    val title: String,
+    val originalAreaId: String,
+    val deletedAt: Long?,
+    val node: LearningNodeEntity
+)
+
+sealed interface LibraryTreeRow {
+    data class Area(val folder: LibraryFolderRow) : LibraryTreeRow
+    data class Trash(
+        val nodeCount: Int,
+        val items: List<LibraryTrashNodeRow>
+    ) : LibraryTreeRow
+}
 
 data class LibraryAreaDetail(
     val areaId: String,
@@ -71,6 +93,35 @@ fun libraryFolderCardActions(): List<LibraryFolderCardAction> =
 
 fun libraryNodeCardActions(): List<LibraryNodeCardAction> =
     listOf(LibraryNodeCardAction.Read, LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move)
+
+fun libraryAreaTreeActions(): List<LibraryAreaTreeAction> =
+    listOf(LibraryAreaTreeAction.NewNode, LibraryAreaTreeAction.Edit, LibraryAreaTreeAction.More)
+
+fun buildLibraryTreeRows(
+    areas: List<AreaEntity>,
+    nodes: List<LearningNodeEntity>,
+    trashNodes: List<LearningNodeEntity>,
+    dueQuizzes: List<QuizItemEntity>,
+    context: Context? = null
+): List<LibraryTreeRow> =
+    buildLibraryRootFolders(areas, nodes, dueQuizzes, context)
+        .map(LibraryTreeRow::Area)
+        .plus(
+            LibraryTreeRow.Trash(
+                nodeCount = trashNodes.size,
+                items = trashNodes
+                    .sortedByDescending { it.deletedAt ?: it.updatedAt }
+                    .map { node ->
+                        LibraryTrashNodeRow(
+                            id = node.id,
+                            title = node.title,
+                            originalAreaId = node.areaId.ifBlank { node.area },
+                            deletedAt = node.deletedAt,
+                            node = node
+                        )
+                    }
+            )
+        )
 
 fun buildLibraryRootFolders(
     areas: List<AreaEntity>,
