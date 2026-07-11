@@ -61,7 +61,7 @@ private fun AssistantEditTarget.outputRule(areas: List<AssistantAreaOption>): St
     } else {
         "Return the complete revised Markdown for this existing node. Begin with a validated existing Area directive when you recommend moving it; do not create a second node."
     }
-    is AssistantEditTarget.Quiz -> "Return exactly three complete directive blocks: <!-- cs-quiz-prompt -->...<!-- /cs-quiz-prompt -->, <!-- cs-quiz-answer -->...<!-- /cs-quiz-answer -->, and <!-- cs-quiz-explanation -->...<!-- /cs-quiz-explanation -->. Revise this existing quiz only; do not create a new review question."
+    is AssistantEditTarget.Quiz -> "Return exactly three complete directive blocks: <!-- cs-quiz-prompt -->...<!-- /cs-quiz-prompt -->, <!-- cs-quiz-answer -->...<!-- /cs-quiz-answer -->, and <!-- cs-quiz-explanation -->...<!-- /cs-quiz-explanation -->. Keep the answer concise enough for a selective reveal; make the explanation a complete, self-contained derivation with assumptions and the reason the answer is correct. Revise this existing quiz only; do not create a new review question."
     is AssistantEditTarget.Capture -> "Return exactly four complete directives: <!-- cs-capture-body -->...<!-- /cs-capture-body -->, <!-- cs-capture-topic -->...<!-- /cs-capture-topic -->, <!-- cs-capture-source -->...<!-- /cs-capture-source -->, and <!-- cs-capture-type: one_existing_type -->. Revise this existing capture slip only; do not convert it into a node. Existing types are unclear, mistake, video_note, concept_seed, and question."
 }
 

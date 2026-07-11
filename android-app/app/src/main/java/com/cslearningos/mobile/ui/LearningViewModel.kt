@@ -723,6 +723,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.Review,
                 selectedQuiz = it.dueQuizzes.firstOrNull(),
+                reviewedQuiz = null,
                 quizAnswerVisible = false,
                 message = null
             )
@@ -743,6 +744,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             repository.answerQuiz(quiz.id, rating)
             _state.update { current ->
                 current.copy(
+                    reviewedQuiz = quiz,
                     selectedQuiz = selectQuizAfterReview(
                         currentQuiz = quiz,
                         currentDueQuizzes = current.dueQuizzes,
@@ -753,6 +755,24 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 )
             }
             refreshDueReviews()
+        }
+    }
+
+    fun retryReviewedQuiz() {
+        _state.update { current ->
+            current.copy(selectedQuiz = current.reviewedQuiz, reviewedQuiz = null, quizAnswerVisible = false)
+        }
+    }
+
+    fun navigateReviewPrompt(step: Int) {
+        _state.update { current ->
+            val cards = current.quizzes
+            val index = cards.indexOfFirst { it.id == current.reviewedQuiz?.id }.coerceAtLeast(0)
+            current.copy(
+                selectedQuiz = if (cards.isEmpty()) null else cards[(index + step + cards.size) % cards.size],
+                reviewedQuiz = null,
+                quizAnswerVisible = false
+            )
         }
     }
 

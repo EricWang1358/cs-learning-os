@@ -55,6 +55,7 @@ data class LearningUiState(
     val captureSlips: List<CaptureSlipEntity> = emptyList(),
     val selectedNode: LearningNodeEntity? = null,
     val selectedQuiz: QuizItemEntity? = null,
+    val reviewedQuiz: QuizItemEntity? = null,
     val selectedLibraryAreaId: String? = null,
     val libraryCheckedFilter: LibraryCheckedFilter = LibraryCheckedFilter.All,
     val editorNodeId: String? = null,

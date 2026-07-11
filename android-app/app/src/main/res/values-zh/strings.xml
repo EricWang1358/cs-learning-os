@@ -168,6 +168,11 @@
     <string name="review_hard">Hard</string>
     <string name="review_good">Good</string>
     <string name="review_answer_eyebrow">答案</string>
+    <string name="review_detail_title">详细解析</string>
+    <string name="review_detail_body">查看完整解析，再决定下一步复习内容。</string>
+    <string name="review_retry">再试一次</string>
+    <string name="review_previous">上一题</string>
+    <string name="review_next">下一题</string>
 
     <string name="backup_eyebrow">本地安全</string>
     <string name="backup_title">备份、导出、恢复</string>

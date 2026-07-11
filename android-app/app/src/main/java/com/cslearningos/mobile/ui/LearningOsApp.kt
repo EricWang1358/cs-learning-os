@@ -804,6 +804,15 @@ private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewMode
 
 @Composable
 private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    state.reviewedQuiz?.let { quiz ->
+        ReviewDetailScreen(
+            quiz = quiz,
+            onRetry = viewModel::retryReviewedQuiz,
+            onPrevious = { viewModel.navigateReviewPrompt(-1) },
+            onNext = { viewModel.navigateReviewPrompt(1) }
+        )
+        return
+    }
     val quiz = state.selectedQuiz
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
@@ -851,6 +860,32 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                         WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewDetailScreen(
+    quiz: QuizItemEntity,
+    onRetry: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionHeader(
+            eyebrow = stringResource(R.string.review_eyebrow),
+            title = stringResource(R.string.review_detail_title),
+            body = stringResource(R.string.review_detail_body)
+        )
+        WorkbenchCard(accent = true) {
+            Eyebrow(quiz.source.name)
+            Text(quiz.prompt, color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.Black, lineHeight = 28.sp)
+            AnswerBlock(quiz)
+            ToolbarRow {
+                WorkbenchButton(stringResource(R.string.review_retry), onRetry)
+                WorkbenchButton(stringResource(R.string.review_previous), onPrevious)
+                WorkbenchButton(stringResource(R.string.review_next), onNext, primary = true)
             }
         }
     }
