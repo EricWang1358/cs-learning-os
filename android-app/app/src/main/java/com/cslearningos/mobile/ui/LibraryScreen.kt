@@ -199,7 +199,7 @@ private fun LibraryRootScreen(
     folders.forEach { folder ->
         val area = areas.firstOrNull { it.id == folder.areaId } ?: return@forEach
         val actions = libraryFolderCardActions()
-        InteractiveCard(onClick = { onOpenArea(folder.areaId) }, accent = false) {
+        WorkbenchCard(accent = false) {
             Eyebrow(stringResource(R.string.library_folder_eyebrow))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -234,6 +234,8 @@ private fun LibraryRootScreen(
                 ) {
                     actions.forEach { action ->
                         when (action) {
+                            LibraryFolderCardAction.Open ->
+                                WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, Modifier.weight(1f), primary = true)
                             LibraryFolderCardAction.Edit ->
                                 WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) }, Modifier.weight(1f))
                             LibraryFolderCardAction.Delete ->
@@ -316,7 +318,7 @@ private fun LibraryAreaDetailScreen(
 
         detail.items.forEach { item ->
             val actions = libraryNodeCardActions()
-            InteractiveCard(onClick = { onOpenNode(item.node) }, accent = item.checked) {
+            WorkbenchCard(accent = item.checked) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -354,6 +356,8 @@ private fun LibraryAreaDetailScreen(
                         ToolbarRow {
                             actions.forEach { action ->
                                 when (action) {
+                                    LibraryNodeCardAction.Read ->
+                                        WorkbenchButton(stringResource(R.string.common_read), { onOpenNode(item.node) }, primary = true)
                                     LibraryNodeCardAction.Check -> Unit
                                     LibraryNodeCardAction.Edit ->
                                         WorkbenchButton(stringResource(R.string.common_edit), { onEditNode(item.node) })

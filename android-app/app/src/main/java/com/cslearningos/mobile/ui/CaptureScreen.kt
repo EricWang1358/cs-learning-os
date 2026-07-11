@@ -30,9 +30,7 @@ private data class CaptureScreenState(
     val topicHint: String,
     val sourceLabel: String,
     val type: CaptureSlipType,
-    val captureSlips: List<CaptureSlipEntity>,
-    val aiProviderSettings: AiProviderSettings,
-    val aiBusy: Boolean
+    val captureSlips: List<CaptureSlipEntity>
 )
 
 @Composable
@@ -117,10 +115,7 @@ private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel
         state.captureSlips.take(8).forEach { slip ->
             CaptureSlipCard(
                 slip = slip,
-                viewModel = viewModel,
-                aiConfigured = state.aiProviderSettings.isConfigured,
-                aiBusy = state.aiBusy,
-                pendingAiDraftSlipId = null
+                viewModel = viewModel
             )
         }
     }
@@ -129,18 +124,12 @@ private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel
 @Composable
 private fun CaptureSlipCard(
     slip: CaptureSlipEntity,
-    viewModel: LearningViewModel,
-    aiConfigured: Boolean,
-    aiBusy: Boolean,
-    pendingAiDraftSlipId: String?
+    viewModel: LearningViewModel
 ) {
     val context = LocalContext.current
     val workflow = buildCaptureSlipWorkflow(
         context = context,
-        slip = slip,
-        pendingAiDraftSlipId = pendingAiDraftSlipId,
-        aiBusy = aiBusy,
-        aiConfigured = aiConfigured
+        slip = slip
     )
     Column(
         modifier = Modifier
@@ -193,7 +182,5 @@ private fun LearningUiState.toCaptureScreenState(): CaptureScreenState =
         topicHint = captureTopicHint,
         sourceLabel = captureSourceLabel,
         type = captureType,
-        captureSlips = captureSlips,
-        aiProviderSettings = aiProviderSettings,
-        aiBusy = aiBusy
+        captureSlips = captureSlips
     )

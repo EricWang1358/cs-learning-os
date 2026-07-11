@@ -81,15 +81,20 @@ class LibraryModelsTest {
     }
 
     @Test
-    fun libraryCardActionsExcludeTapEquivalentOpenActions() {
+    fun libraryCardActionsExposeExactlyOneExplicitOpenOrReadControl() {
+        val folderActions = libraryFolderCardActions().map { it.name }
+        val nodeActions = libraryNodeCardActions().map { it.name }
+
         assertEquals(
-            listOf(LibraryFolderCardAction.Edit, LibraryFolderCardAction.Delete),
-            libraryFolderCardActions()
+            listOf("Open", "Edit", "Delete"),
+            folderActions
         )
         assertEquals(
-            listOf(LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move),
-            libraryNodeCardActions()
+            listOf("Read", "Check", "Edit", "Move"),
+            nodeActions
         )
+        assertEquals(1, folderActions.count { it == "Open" })
+        assertEquals(1, nodeActions.count { it == "Read" })
     }
 
     private fun area(id: String, name: String, order: Int) =

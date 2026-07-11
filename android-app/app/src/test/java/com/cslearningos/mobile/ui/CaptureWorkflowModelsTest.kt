@@ -5,6 +5,7 @@ import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.SyncStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CaptureWorkflowModelsTest {
@@ -22,18 +23,44 @@ class CaptureWorkflowModelsTest {
     }
 
     @Test
-    fun savedSlipWorkflowStaysLocalInboxWithoutVisibleAiDraftFlow() {
+    fun normalInboxWorkflowStaysSavedLocally() {
         val model = buildCaptureSlipWorkflow(
-            slip = slip(status = CaptureSlipStatus.ai_queued),
-            pendingAiDraftSlipId = "slip-1",
-            aiBusy = false,
-            aiConfigured = true
+            slip = slip(status = CaptureSlipStatus.inbox)
         )
 
         assertEquals(CaptureSlipWorkflowStage.Inbox, model.stage)
         assertEquals("Saved locally", model.statusLabel)
         assertEquals(false, model.actionsEnabled)
         assertEquals("", model.primaryActionLabel)
+    }
+
+    @Test
+    fun legacyAiQueuedWorkflowNeedsAttentionAndUsesSingleImproveAction() {
+        assertLegacyAiNeedsAttention(CaptureSlipStatus.ai_queued, "queued")
+    }
+
+    @Test
+    fun legacyAiDraftingWorkflowNeedsAttentionAndUsesSingleImproveAction() {
+        assertLegacyAiNeedsAttention(CaptureSlipStatus.ai_drafting, "drafting")
+    }
+
+    @Test
+    fun legacyAiDraftReadyWorkflowNeedsAttentionAndUsesSingleImproveAction() {
+        assertLegacyAiNeedsAttention(CaptureSlipStatus.ai_draft_ready, "draft ready")
+    }
+
+    private fun assertLegacyAiNeedsAttention(status: CaptureSlipStatus, priorStateLabel: String) {
+        val model = buildCaptureSlipWorkflow(
+            slip = slip(status = status)
+        )
+
+        assertEquals("LegacyAi", model.stage.name)
+        assertEquals("Needs attention", model.statusLabel)
+        assertEquals("Improve with AI", model.primaryActionLabel)
+        assertEquals(false, model.actionsEnabled)
+        assertTrue(model.detail.contains(priorStateLabel, ignoreCase = true))
+        assertTrue(model.detail.contains("prior AI", ignoreCase = true))
+        assertTrue(model.detail.contains("single Improve with AI action"))
     }
 
     private fun slip(status: CaptureSlipStatus) =

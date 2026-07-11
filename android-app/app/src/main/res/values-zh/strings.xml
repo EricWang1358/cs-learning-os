@@ -261,6 +261,8 @@
     <string name="capture_workflow_action_ai_draft">AI 草稿</string>
     <string name="capture_workflow_status_saved">已本地保存</string>
     <string name="capture_workflow_detail_saved">这条随手记已经保存在本地。你可以把它做成节点、用 AI 改进，或归档。</string>
+    <string name="capture_workflow_status_legacy_ai_needs_attention">需要处理</string>
+    <string name="capture_workflow_detail_legacy_ai">这条随手记仍带有旧流程留下的 AI %1$s 状态。请只使用唯一的“交给 AI 优化”操作继续；旧的预检路径不会再运行。</string>
 
     <string name="more_eyebrow">设置中心</string>
     <string name="more_title">更多</string>

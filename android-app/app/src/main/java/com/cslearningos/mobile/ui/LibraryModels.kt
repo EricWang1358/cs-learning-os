@@ -11,11 +11,13 @@ enum class LibraryCheckedFilter {
 }
 
 enum class LibraryFolderCardAction {
+    Open,
     Edit,
     Delete
 }
 
 enum class LibraryNodeCardAction {
+    Read,
     Check,
     Edit,
     Move
@@ -65,10 +67,10 @@ fun buildLibraryRootModel(
     )
 
 fun libraryFolderCardActions(): List<LibraryFolderCardAction> =
-    listOf(LibraryFolderCardAction.Edit, LibraryFolderCardAction.Delete)
+    listOf(LibraryFolderCardAction.Open, LibraryFolderCardAction.Edit, LibraryFolderCardAction.Delete)
 
 fun libraryNodeCardActions(): List<LibraryNodeCardAction> =
-    listOf(LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move)
+    listOf(LibraryNodeCardAction.Read, LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move)
 
 fun buildLibraryRootFolders(
     areas: List<AreaEntity>,

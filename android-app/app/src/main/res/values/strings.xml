@@ -296,6 +296,8 @@
     <string name="capture_workflow_action_ai_draft">AI draft</string>
     <string name="capture_workflow_status_saved">Saved locally</string>
     <string name="capture_workflow_detail_saved">This slip is saved locally. Turn it into a node, improve it with AI, or archive it.</string>
+    <string name="capture_workflow_status_legacy_ai_needs_attention">Needs attention</string>
+    <string name="capture_workflow_detail_legacy_ai">This slip still carries a prior AI %1$s state from an older workflow. Use the single Improve with AI action to continue; no old preflight path will run.</string>
 
     <string name="more_eyebrow">settings center</string>
     <string name="more_title">More</string>
