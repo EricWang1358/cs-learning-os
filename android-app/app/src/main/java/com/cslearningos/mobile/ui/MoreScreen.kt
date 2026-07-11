@@ -24,9 +24,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +71,7 @@ private fun MoreSettingsList(
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel)
-                    MoreSectionId.Guide -> GuideContent()
+                    MoreSectionId.Guide -> GuideContent(viewModel = viewModel)
                 }
             }
         }
@@ -295,6 +300,8 @@ private fun AiServiceStatusBlock(status: AiServiceStatus) {
 
 @Composable
 private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewModel) {
+    var showRemoveDemoConfirm by rememberSaveable { mutableStateOf(false) }
+    var deleteForeverNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     SettingsRow(label = stringResource(R.string.more_local_data_label)) {
         Text(
             text = stringResource(R.string.more_local_data_body),
@@ -304,8 +311,15 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
         )
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.more_backup_restore), viewModel::showBackup, primary = true)
-            WorkbenchButton(stringResource(R.string.more_remove_demo), viewModel::clearStarterContent, danger = true)
+            WorkbenchButton(stringResource(R.string.more_remove_demo), { showRemoveDemoConfirm = true }, danger = true)
         }
+        Text(
+            text = stringResource(R.string.more_delete_forever_warning),
+            color = WorkbenchColors.Danger,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.Bold
+        )
         Text(
             text = stringResource(R.string.more_trashbin_count, state.trashNodes.size),
             color = WorkbenchColors.InkStrong,
@@ -334,17 +348,48 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
                 Text(node.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
                 ToolbarRow {
                     WorkbenchButton(stringResource(R.string.common_restore), { viewModel.restoreNode(node) }, primary = true)
-                    WorkbenchButton(stringResource(R.string.common_delete_forever), { viewModel.permanentlyDeleteNode(node) }, danger = true)
+                    WorkbenchButton(stringResource(R.string.common_delete_forever), { deleteForeverNodeId = node.id }, danger = true)
                 }
             }
         }
     }
+    if (showRemoveDemoConfirm) {
+        ConfirmDestructiveDialog(
+            title = stringResource(R.string.more_remove_demo_confirm_title),
+            body = stringResource(R.string.more_remove_demo_confirm_body),
+            confirmLabel = stringResource(R.string.more_remove_demo),
+            onDismiss = { showRemoveDemoConfirm = false },
+            onConfirm = {
+                showRemoveDemoConfirm = false
+                viewModel.clearStarterContent()
+            }
+        )
+    }
+    val deleteNode = state.trashNodes.firstOrNull { it.id == deleteForeverNodeId }
+    if (deleteNode != null) {
+        ConfirmDestructiveDialog(
+            title = stringResource(R.string.more_delete_forever_confirm_title),
+            body = stringResource(R.string.more_delete_forever_confirm_body, deleteNode.title),
+            confirmLabel = stringResource(R.string.common_delete_forever),
+            onDismiss = { deleteForeverNodeId = null },
+            onConfirm = {
+                deleteForeverNodeId = null
+                viewModel.permanentlyDeleteNode(deleteNode)
+            }
+        )
+    }
 }
 
 @Composable
-private fun GuideContent() {
+private fun GuideContent(viewModel: LearningViewModel) {
     val stepTitles = stringArrayResource(R.array.more_guide_step_titles)
     val stepBodies = stringArrayResource(R.array.more_guide_step_bodies)
+    val actions = listOf(
+        stringResource(R.string.more_guide_open_capture) to viewModel::showCapture,
+        stringResource(R.string.more_guide_open_library) to viewModel::showLibrary,
+        stringResource(R.string.more_guide_open_review) to viewModel::showReview,
+        stringResource(R.string.more_guide_open_backup) to viewModel::showBackup
+    )
     SettingsRow(label = stringResource(R.string.more_guide_label)) {
         Text(
             text = stringResource(R.string.more_guide_intro),
@@ -356,7 +401,9 @@ private fun GuideContent() {
             GuideStepCard(
                 step = index + 1,
                 title = title,
-                body = body
+                body = body,
+                actionLabel = actions[index].first,
+                onAction = actions[index].second
             )
         }
         SettingsRow(label = stringResource(R.string.more_support_label)) {
@@ -371,7 +418,7 @@ private fun GuideContent() {
 }
 
 @Composable
-private fun GuideStepCard(step: Int, title: String, body: String) {
+private fun GuideStepCard(step: Int, title: String, body: String, actionLabel: String, onAction: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -384,7 +431,33 @@ private fun GuideStepCard(step: Int, title: String, body: String) {
         Eyebrow(stringResource(R.string.more_guide_step_badge, step))
         Text(title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
         Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
+        WorkbenchButton(actionLabel, onAction, primary = true, modifier = Modifier.fillMaxWidth())
     }
+}
+
+@Composable
+private fun ConfirmDestructiveDialog(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmLabel, color = WorkbenchColors.Danger)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 @Composable

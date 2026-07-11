@@ -204,7 +204,7 @@
 
     <string name="backup_eyebrow">local safety</string>
     <string name="backup_title">Backup, export, restore</string>
-    <string name="backup_body">Share a full backup, save it to this device, or import one back in.</string>
+    <string name="backup_body">Export first. Restore is a full replacement: it deletes current local data and replaces it with the selected backup.</string>
     <string name="backup_export_json">Export JSON</string>
     <string name="backup_restore_overwrite">Restore overwrite</string>
     <string name="backup_field_label">Backup JSON</string>
@@ -213,8 +213,10 @@
     <string name="backup_import_file">Import file</string>
     <string name="backup_actions_eyebrow">quick actions</string>
     <string name="backup_help_title">Full backup file flow</string>
-    <string name="backup_help_body">Exports use a .txt filename with JSON inside so QQ, WeChat, and file managers share it more reliably on Android. Import reads the JSON payload from either .txt or .json.</string>
+    <string name="backup_help_body">Exports use a .txt filename with JSON inside so QQ, WeChat, and file managers share it more reliably on Android. Import reads .txt or .json, then restore replaces current local data.</string>
     <string name="backup_share_chooser_title">Share backup file</string>
+    <string name="backup_restore_warning_title">Restore warning</string>
+    <string name="backup_restore_warning_body">A restore replaces current local data on this phone, so export first if there is anything here you may need later.</string>
 
     <string name="dashboard_start_here_eyebrow">start here</string>
     <string name="dashboard_hero_eyebrow">learning command center</string>
@@ -336,7 +338,7 @@
     <string name="more_thinking_off">Thinking off</string>
     <string name="more_ai_status_eyebrow">service status</string>
     <string name="more_local_data_label">Local data</string>
-    <string name="more_local_data_body">Full backups use JSON content in a share-friendly .txt file. Deleted nodes stay in Trashbin first, so cleanup stays reversible.</string>
+    <string name="more_local_data_body">Export first before restore or cleanup. Restore is a full replacement; Trash is reversible until you choose Delete forever.</string>
     <string name="more_backup_json">Backup JSON</string>
     <string name="more_backup_files">Backup files</string>
     <string name="more_backup_restore">Backup and restore</string>
@@ -345,24 +347,33 @@
     <string name="more_import_backup_file">Import backup</string>
     <string name="more_remove_demo">Remove demo</string>
     <string name="more_trashbin_count">Trashbin: %1$d node(s)</string>
-    <string name="more_trashbin_empty">No trashed nodes. Deleting from Reader moves a node here first.</string>
+    <string name="more_trashbin_empty">No trashed nodes. Deleting from Reader moves a node here first, so Trash stays reversible.</string>
+    <string name="more_delete_forever_warning">Trash is reversible. Delete forever is only recoverable from a backup.</string>
+    <string name="more_remove_demo_confirm_title">Remove starter demo?</string>
+    <string name="more_remove_demo_confirm_body">This removes the built-in starter demo nodes from this phone. Export first if you edited demo content and want to keep it.</string>
+    <string name="more_delete_forever_confirm_title">Delete forever?</string>
+    <string name="more_delete_forever_confirm_body">Delete “%1$s” forever? This cannot be undone in the app and is only recoverable from a backup.</string>
     <string name="more_guide_label">How to use this app</string>
-    <string name="more_guide_intro">Keep it lightweight on the phone: capture first, organize later, and back up before risky cleanup.</string>
+    <string name="more_guide_intro">A five-minute tour: capture one idea, find it in Library, review one card, then export a backup.</string>
     <string name="more_guide_step_badge">Step %1$d</string>
     <string name="more_support_label">Local-first contract</string>
-    <string name="more_support_body">The app is usable without an account, backend, or API key. AI and sync are adapters, not the source of truth.</string>
+    <string name="more_support_body">Works offline with no account, desktop, or API key. AI is optional; your notes, review cards, Trash, and backups stay local.</string>
+    <string name="more_guide_open_capture">Open Capture</string>
+    <string name="more_guide_open_library">Open Library</string>
+    <string name="more_guide_open_review">Open Review</string>
+    <string name="more_guide_open_backup">Open Backup</string>
 
     <string-array name="more_guide_step_titles">
-        <item>Start from Home</item>
-        <item>Capture before you forget</item>
-        <item>Use Library like folders</item>
-        <item>Back up before heavy cleanup</item>
+        <item>Capture one thing</item>
+        <item>Find it in Library</item>
+        <item>Review one card</item>
+        <item>Export a backup</item>
     </string-array>
     <string-array name="more_guide_step_bodies">
-        <item>Home is the command center: search, continue the last node, or jump straight into due review.</item>
-        <item>When a point is unclear, save a slip first. You can turn it into Markdown manually, or let AI draft it later.</item>
-        <item>Area is the top folder. Enter an Area to see its nodes, open one for reading, and use checked as a light progress marker.</item>
-        <item>Exports use a .txt filename with JSON inside, which is easier to share to QQ, WeChat, or file managers. Import accepts both .txt and .json.</item>
+        <item>Save a short slip before the idea disappears. You can organize it later.</item>
+        <item>Open Library, read a note, or create a new one.</item>
+        <item>Reveal the answer, rate it, and let the next date update itself.</item>
+        <item>Share or save a backup before restore, cleanup, or phone changes.</item>
     </string-array>
 
     <string name="message_add_title_or_markdown">Add a title or some Markdown before saving.</string>

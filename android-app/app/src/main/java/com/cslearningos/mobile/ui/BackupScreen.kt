@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.ui.backup.BackupDocument
@@ -63,6 +66,16 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             title = stringResource(R.string.backup_title),
             body = stringResource(R.string.backup_body)
         )
+        WorkbenchCard(accent = true) {
+            Eyebrow(stringResource(R.string.backup_restore_warning_title))
+            Text(
+                text = stringResource(R.string.backup_restore_warning_body),
+                color = WorkbenchColors.Danger,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
         ToolbarRow {
             WorkbenchButton(
                 text = stringResource(R.string.backup_share_full),

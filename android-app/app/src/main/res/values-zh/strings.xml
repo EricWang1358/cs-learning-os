@@ -169,7 +169,7 @@
 
     <string name="backup_eyebrow">本地安全</string>
     <string name="backup_title">备份、导出、恢复</string>
-    <string name="backup_body">导出并分享完整备份、保存到本地，或把备份文件重新导入。</string>
+    <string name="backup_body">请先导出。恢复会替换当前本地数据：先删除本机内容，再用所选备份覆盖。</string>
     <string name="backup_export_json">导出 JSON</string>
     <string name="backup_restore_overwrite">覆盖恢复</string>
     <string name="backup_field_label">备份 JSON</string>
@@ -178,8 +178,10 @@
     <string name="backup_import_file">从文件导入</string>
     <string name="backup_actions_eyebrow">快捷操作</string>
     <string name="backup_help_title">完整备份文件流</string>
-    <string name="backup_help_body">导出文件会使用 .txt 扩展名，但里面仍然是 JSON，这样在 QQ、微信和文件管理器里更容易分享和保存。导入时按内容解析，所以 .txt 和 .json 都能恢复。</string>
+    <string name="backup_help_body">导出文件名使用 .txt，但里面仍是 JSON，方便分享到 QQ、微信或文件管理器。导入支持 .txt 和 .json；恢复会替换当前本地数据。</string>
     <string name="backup_share_chooser_title">分享备份文件</string>
+    <string name="backup_restore_warning_title">恢复警告</string>
+    <string name="backup_restore_warning_body">恢复会替换当前本地数据。若本机内容以后可能还要用，请先导出备份。</string>
 
     <string name="dashboard_start_here_eyebrow">从这里开始</string>
     <string name="dashboard_hero_eyebrow">学习指挥台</string>
@@ -298,7 +300,7 @@
     <string name="more_thinking_off">关闭思考</string>
     <string name="more_ai_status_eyebrow">服务状态</string>
     <string name="more_local_data_label">本地数据</string>
-    <string name="more_local_data_body">完整备份会导出为带 .txt 后缀的 JSON 文件，更适合分享和保存。删除的节点会先进入回收站，避免直接丢失。</string>
+    <string name="more_local_data_body">恢复或清理前请先导出。恢复会替换当前本地数据；回收站可恢复，直到你选择永久删除。</string>
     <string name="more_backup_json">备份 JSON</string>
     <string name="more_backup_files">备份文件</string>
     <string name="more_backup_restore">备份和恢复</string>
@@ -307,9 +309,14 @@
     <string name="more_import_backup_file">导入备份</string>
     <string name="more_remove_demo">移除示例内容</string>
     <string name="more_trashbin_count">回收站：%1$d 个节点</string>
-    <string name="more_trashbin_empty">回收站还是空的。你在 Reader 中删除节点时，会先移动到这里。</string>
+    <string name="more_trashbin_empty">回收站为空。从阅读页删除节点会先移到这里，所以还可以恢复。</string>
+    <string name="more_delete_forever_warning">回收站可恢复。永久删除后，只能从备份恢复。</string>
+    <string name="more_remove_demo_confirm_title">移除示例内容？</string>
+    <string name="more_remove_demo_confirm_body">这会从本机移除内置示例节点。如果你改过示例内容并想保留，请先导出。</string>
+    <string name="more_delete_forever_confirm_title">永久删除？</string>
+    <string name="more_delete_forever_confirm_body">要永久删除“%1$s”吗？App 内无法撤销，只能从备份恢复。</string>
     <string name="more_support_label">本地优先契约</string>
-    <string name="more_support_body">无需账号、后端或 API key，应用也能完整使用。AI 和同步只是适配层，不是数据真相来源。</string>
+    <string name="more_support_body">无需账号、桌面端或 API key，也能离线使用。AI 可选；笔记、复习卡、回收站和备份都保存在本机。</string>
 
     <string name="message_add_title_or_markdown">保存前先补一个标题或一点 Markdown 内容。</string>
     <string name="message_choose_area_before_save">保存新节点前请选择 Area。</string>
@@ -410,20 +417,24 @@
     <string name="more_section_guide_body">把手机端最常用的流程直接放在这里。</string>
     <string name="more_value_start_here">先看这里</string>
     <string name="more_guide_label">怎么用这个 App</string>
-    <string name="more_guide_intro">手机端先求快和稳：先捕捉，再整理；要做较大清理前，先备份。</string>
+    <string name="more_guide_intro">五分钟走一遍：记录一个想法，在知识库里找到它，复习一张卡，再导出备份。</string>
     <string name="more_guide_step_badge">步骤 %1$d</string>
+    <string name="more_guide_open_capture">打开捕捉</string>
+    <string name="more_guide_open_library">打开知识库</string>
+    <string name="more_guide_open_review">打开复习</string>
+    <string name="more_guide_open_backup">打开备份</string>
 
     <string-array name="more_guide_step_titles">
-        <item>先从首页进入</item>
-        <item>有想法先随手记</item>
-        <item>把知识库当文件夹用</item>
-        <item>大改之前先备份</item>
+        <item>先捕捉一件事</item>
+        <item>在知识库找到它</item>
+        <item>复习一张卡</item>
+        <item>导出一个备份</item>
     </string-array>
     <string-array name="more_guide_step_bodies">
-        <item>首页就是总入口：可以直接搜索、继续上次阅读，或者跳进到期复习。</item>
-        <item>哪里没想清楚，先保存一条 Capture Slip。之后你可以手动整理成 Markdown，也可以稍后交给 AI 起草。</item>
-        <item>Area 是顶层文件夹。点进 Area 看节点列表，打开节点阅读；勾选只是轻量标记，不是复杂的批处理系统。</item>
-        <item>导出文件名会是 .txt，但里面仍然是 JSON，更方便分享到 QQ、微信或文件管理器；导入时 .txt 和 .json 都能识别。</item>
+        <item>想法快消失前，先保存一条短记录。之后再整理也可以。</item>
+        <item>打开知识库，阅读笔记，或新建一条笔记。</item>
+        <item>先显示答案，再评分；下次复习时间会自动更新。</item>
+        <item>恢复、清理或换手机前，先分享或保存一份备份。</item>
     </string-array>
     <string name="assistant_title">知识助理</string>
     <string name="assistant_open_description">打开知识助理</string>

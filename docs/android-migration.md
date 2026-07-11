@@ -1,85 +1,56 @@
 # Android Migration Plan
 
-CS Learning OS should become a local-first personal learning OS that can later support desktop sync, hosted sync, or SaaS deployment profiles. The Android project has moved from shell exploration to a native offline product slice.
+CS Learning OS is a local-first personal learning app that can later support desktop sync, hosted sync, or SaaS deployment profiles. Android now owns a native offline product slice rather than embedding the desktop app.
 
-## Non-Negotiables
+## Non-negotiables
 
-- Local-first: Markdown reading/editing, quiz review, search, and personal study state must not require a hosted account.
-- SaaS-compatible: storage and identity boundaries must not block future sync, web accounts, or hosted providers.
-- AI-optional: core study flows must work without AI. Provider keys should be user/device/account configuration.
-- Data separation: app code, demo content, private content, generated indexes, and backups stay separable.
-- Recoverability: Android writes need explicit export/restore or repair paths before destructive flows ship.
-- Offline default: no Android network permission until a concrete sync or provider feature needs it.
+- Local-first: Markdown editing, reading, search, review, and study state do not require an account.
+- SaaS-compatible: storage and identity boundaries leave room for optional sync and hosted providers.
+- AI-optional: core study flows work without AI; provider configuration belongs to the user and device.
+- Data separation: app code, demo content, private content, indexes, and backups remain separate.
+- Recoverability: export and restore paths exist before destructive data flows ship.
+- No blanket network permission: `INTERNET` is used only by the explicit, optional AI provider; all core study and recovery flows remain offline.
 
-## Target Architecture
+## Target architecture
 
 ```text
-Presentation
-  Native Android Compose screens
-  Future desktop/mobile surfaces
-
-Application services
-  Node editing and reading
-  Quiz authoring and Markdown quiz sync
-  Review session
-  Search
-  Backup and restore
-  Future AI draft orchestration
-
-Domain model
-  Node
-  Quiz
-  ReviewState
-  ReviewAttempt
-  BackupEnvelope
-  Future ReaderQuestion and AIJob
-
-Storage adapters
-  Room/SQLite local
-  Room FTS local search
-  Explicit JSON backup/restore
-  Future desktop sync transport
-  Future hosted API
+Native Compose UI
+  -> feature and application services
+  -> domain models and deterministic policies
+  -> Room/SQLite local storage
+  -> optional sync or provider adapters
 ```
 
-## Migration Strategy
+Current domain work covers nodes, quizzes, review state, attempts, search, Trash, and backup envelopes. Future sync requires stable ids, revision ids, tombstones, and an explicit conflict policy before any remote transport is added.
 
-Use a strangler pattern, but the phone product owns its local core now:
+## Migration sequence
 
-1. Keep native Android build green with doctor, unit tests, and debug APK build.
-2. Harden Markdown node CRUD, reading, search, quiz authoring, review, and backup UX.
-3. Stabilize entity ids, revisions, tombstones, and conflict metadata before sync.
+1. Keep Android doctor, unit tests, architecture checks, and debug builds green.
+2. Harden local Markdown, search, quiz, review, Trash, and backup behavior.
+3. Stabilize revisions, deletion records, and conflict rules.
 4. Add desktop sync as an optional repository adapter.
-5. Add hosted sync or account mode as another adapter, not as the domain source of truth.
-6. Add AI provider configuration only after offline study flows are reliable.
+5. Add hosted sync or account mode as another adapter.
+6. Keep AI providers optional and outside the core study contract.
 
-## Algorithm And Scale Track
+## Scale policy
 
-- Search: keep Room FTS/BM25 first; add semantic ranking only after stable content ids and query logs exist.
-- Ingest/sync: move from full restore to content-hash incremental sync, O(changed nodes) instead of O(all nodes).
-- Review scheduling: current deterministic scheduler is a seed; evaluate FSRS or SM-2 after attempts are durable and observable.
-- Graph: keep graph as optional derived view; avoid putting graph layout into the core edit/review path.
-- Sync: use stable ids, revision ids, tombstones, and explicit conflict policy before remote sync.
-- AI: store prompt version, policy version, validator version, and provider metadata for reproducible jobs.
+- Search stays on Room FTS/BM25 until stable content ids and measured needs justify semantic ranking.
+- Sync should eventually process changed content rather than replacing every item.
+- Review scheduling stays deterministic and observable before adopting a more complex scheduler.
+- Graph layout remains a derived view, outside editing and review paths.
+- AI jobs record enough provider and policy metadata to explain generated results.
 
-## Productization Gates
+## Productization gates
 
 - Android doctor passes.
-- Unit tests pass.
-- Debug APK builds.
-- Phone/emulator smoke covers create, edit, read, quiz, review, search, export, and restore.
-- Manifest has no network permission unless the feature branch explicitly adds sync/provider networking.
-- Automatic system backup of local learning data is disabled unless a user-facing policy exists.
-- Private content is never packaged by accident.
-- Explicit backup/export path exists before any destructive edit flow ships.
-- Release build, signing, privacy policy, and diagnostics are documented.
+- Full unit tests pass.
+- Architecture verification passes.
+- A debug APK assembles.
+- Phone smoke covers create, edit, read, search, quiz, review, export, and restore.
+- Manifest networking is limited to explicit provider functionality; analytics, automatic sync, and a mandatory backend are prohibited.
+- Automatic Android system backup stays disabled unless a user-facing policy explicitly changes it.
+- Private content is never packaged.
+- Destructive actions explain recovery limits and direct users to export first.
+- Signed releases include version, release-note, privacy, and diagnostics checks.
 
-## First Grill Decision
-
-The recommended current milestone is:
-
-```text
-Native offline MVP
-```
-
-The next hard question is not “can Android load the desktop app?” anymore. It is “which local data and UX contracts must stay stable when desktop sync or hosted sync arrives?”
+The open migration question is which local data and UX contracts must stay stable when desktop or hosted sync arrives, not whether Android can load the desktop app.
