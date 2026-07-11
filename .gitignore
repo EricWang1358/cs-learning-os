@@ -53,3 +53,4 @@ content-demo/quizzes/cs-fundamentals/gdb-disassemble-stepi-stack-examine.md
 Thumbs.db
 .idea/
 .vscode/
+.worktrees/
