@@ -63,6 +63,26 @@ class AssistantConversationCodecTest {
     }
 
     @Test
+    fun roundTripsPendingQuizEditTarget() {
+        val conversation = AssistantConversation(
+            id = "conversation-quiz-target",
+            messages = emptyList(),
+            editTarget = AssistantEditTarget.Quiz(
+                id = "quiz-1",
+                revision = 9L,
+                nodeId = "node-1",
+                prompt = "What does a page table map?",
+                answer = "Virtual pages to physical frames.",
+                explanation = "The page table translates virtual page numbers into physical frame numbers."
+            )
+        )
+
+        val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
+
+        assertEquals(conversation.editTarget, restored.editTarget)
+    }
+
+    @Test
     fun roundTripsAssistantConfirmationActionThroughStoredMessages() {
         val message = AssistantMessage(
             id = "reply",
