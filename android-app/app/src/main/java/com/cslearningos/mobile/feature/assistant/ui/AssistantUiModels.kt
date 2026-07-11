@@ -158,16 +158,14 @@ private fun AssistantConversationAction.toUiAction(): AssistantMessageAction? = 
 }
 
 private fun AssistantMessageAction.toStoredAction(): AssistantConversationAction? = when (this) {
-    is AssistantMessageAction.OpenEditableDraft -> nodeId?.let { id ->
-        AssistantConversationAction.OpenEditableNodeDraft(
-            nodeId = id,
-            expectedRevision = expectedRevision ?: 0L,
-            titleHint = titleHint,
-            markdown = markdown,
-            areaId = areaId,
-            placementReason = placementReason
-        )
-    }
+    is AssistantMessageAction.OpenEditableDraft -> AssistantConversationAction.OpenEditableNodeDraft(
+        nodeId = nodeId,
+        expectedRevision = expectedRevision ?: 0L,
+        titleHint = titleHint,
+        markdown = markdown,
+        areaId = areaId,
+        placementReason = placementReason
+    )
 
     is AssistantMessageAction.OpenEditableQuizDraft -> AssistantConversationAction.OpenEditableQuizDraft(
         quizId = quizId,

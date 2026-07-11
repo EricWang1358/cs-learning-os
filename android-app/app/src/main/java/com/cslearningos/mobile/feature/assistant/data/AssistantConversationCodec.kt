@@ -115,7 +115,7 @@ object AssistantConversationCodec {
     private fun AssistantConversationAction.toJson(): JSONObject = JSONObject().apply {
         when (this@toJson) {
             is AssistantConversationAction.OpenEditableNodeDraft -> put("kind", "open_node_draft")
-                .put("node_id", nodeId)
+                .put("node_id", nodeId ?: JSONObject.NULL)
                 .put("expected_revision", expectedRevision)
                 .put("title_hint", titleHint)
                 .put("markdown", markdown)
@@ -147,14 +147,17 @@ object AssistantConversationCodec {
 
     private fun JSONObject.toAction(): AssistantConversationAction? =
         when (optString("kind")) {
-            "open_node_draft" -> AssistantConversationAction.OpenEditableNodeDraft(
-                nodeId = optString("node_id"),
-                expectedRevision = optLong("expected_revision", -1L),
-                titleHint = optString("title_hint"),
-                markdown = optString("markdown"),
-                areaId = optString("area_id").takeIf { it.isNotBlank() },
-                placementReason = optString("placement_reason").takeIf { it.isNotBlank() }
-            ).takeIf { it.nodeId.isNotBlank() && it.expectedRevision >= 0 }
+            "open_node_draft" -> {
+                val nodeId = requiredNullableNonBlankString("node_id") ?: return null
+                AssistantConversationAction.OpenEditableNodeDraft(
+                    nodeId = nodeId.value,
+                    expectedRevision = optLong("expected_revision", -1L),
+                    titleHint = optString("title_hint"),
+                    markdown = optString("markdown"),
+                    areaId = optString("area_id").takeIf { it.isNotBlank() },
+                    placementReason = optString("placement_reason").takeIf { it.isNotBlank() }
+                ).takeIf { it.expectedRevision >= 0 }
+            }
 
             "open_quiz_draft" -> AssistantConversationAction.OpenEditableQuizDraft(
                 quizId = optString("quiz_id"),
@@ -180,6 +183,15 @@ object AssistantConversationCodec {
             "configure_ai" -> AssistantConversationAction.ConfigureAi
             else -> null
         }
+
+    private data class NullableStringField(val value: String?)
+
+    private fun JSONObject.requiredNullableNonBlankString(name: String): NullableStringField? {
+        if (!has(name)) return null
+        if (isNull(name)) return NullableStringField(null)
+        val value = opt(name) as? String ?: return null
+        return value.takeIf { it.isNotBlank() }?.let(::NullableStringField)
+    }
 
     private fun JSONArray.toMessages(): List<AssistantConversationMessage> =
         buildList {

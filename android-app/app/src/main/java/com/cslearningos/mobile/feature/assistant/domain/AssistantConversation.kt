@@ -23,7 +23,7 @@ data class AssistantConversationMessage(
 
 sealed interface AssistantConversationAction {
     data class OpenEditableNodeDraft(
-        val nodeId: String,
+        val nodeId: String?,
         val expectedRevision: Long,
         val titleHint: String,
         val markdown: String,

@@ -91,6 +91,62 @@ class AssistantConversationCodecTest {
     }
 
     @Test
+    fun roundTripsNewNodeDraftActionWithNullNodeIdThroughStoredMessages() {
+        val message = AssistantMessage(
+            id = "reply",
+            role = AssistantMessageRole.Assistant,
+            body = "Draft ready.",
+            action = AssistantMessageAction.OpenEditableDraft(
+                titleHint = "New node",
+                markdown = "# New node\n\nBody",
+                areaId = "systems",
+                nodeId = null,
+                expectedRevision = 0L,
+                placementReason = "Fits Systems"
+            )
+        )
+        val conversation = AssistantConversation(
+            id = "conversation-new-node",
+            messages = listOf(message.toStoredMessage())
+        )
+
+        val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
+            .messages
+            .single()
+            .toUiMessage()
+
+        assertEquals(message.action, restored.action)
+    }
+
+    @Test
+    fun rejectsMalformedNewNodeDraftNodeIdFields() {
+        listOf("\"\"", "42").forEach { malformedNodeId ->
+            val restored = AssistantConversationCodec.decode(
+                """
+                {
+                  "id": "conversation-malformed-action",
+                  "messages": [
+                    {
+                      "role": "Assistant",
+                      "body": "Draft ready.",
+                      "action": {
+                        "kind": "open_node_draft",
+                        "node_id": $malformedNodeId,
+                        "expected_revision": 0,
+                        "title_hint": "New node",
+                        "markdown": "# New node"
+                      }
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+
+            assertNull(restored.messages.single().action)
+        }
+    }
+
+    @Test
     fun legacyWorkingDraftWithoutNodeIdRestoresAsNewNodeEditTarget() {
         val restored = AssistantConversationCodec.decode(
             """
