@@ -69,6 +69,33 @@ class AssistantActionClaimsTest {
     }
 
     @Test
+    fun draftActionExposesTheAssistantsPlacementReasonForUserReview() {
+        val action = assistantReplyAction(
+            mode = AssistantRequestMode.Draft,
+            request = "Create a note about recursion",
+            reply = "<!-- cs-area: algorithms -->\n<!-- cs-area-reason: Recursion matches the existing algorithm problem-solving notes. -->\n# Recursion",
+            areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+        ) as AssistantMessageAction.OpenEditableDraft
+
+        assertEquals("algorithms", action.areaId)
+        assertEquals("Recursion matches the existing algorithm problem-solving notes.", action.placementReason)
+    }
+
+    @Test
+    fun ambiguousDraftReplyBecomesAClarifyingQuestionInsteadOfAnUntitledNode() {
+        val decision = assistantReplyDecision(
+            mode = AssistantRequestMode.Draft,
+            request = "Create a note about an interview topic",
+            reply = "Which Area should this interview topic belong to: Algorithms, Systems, or Projects?",
+            areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+        )
+
+        assertNull(decision.action)
+        assertNull(decision.workingDraft)
+        assertEquals("Which Area should this interview topic belong to: Algorithms, Systems, or Projects?", decision.visibleReply)
+    }
+
+    @Test
     fun draftRevisionReplacesTheWorkingDraftAndSeparatesCaptureOnlyContent() {
         val decision = assistantReplyDecision(
             mode = AssistantRequestMode.Draft,

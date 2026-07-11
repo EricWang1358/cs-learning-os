@@ -38,6 +38,8 @@
     <string name="assistant_quick_draft">Create a note</string>
     <string name="assistant_quick_review">Plan review</string>
     <string name="assistant_sources">Local sources</string>
+    <string name="assistant_placement">Suggested Area: %1$s</string>
+    <string name="assistant_placement_reason">Why: %1$s</string>
     <string name="assistant_open_draft">Open editable draft</string>
     <string name="assistant_save_capture">Save to Capture</string>
     <string name="assistant_configure_ai">Configure AI</string>
@@ -163,6 +165,7 @@
     <string name="editor_edit_title">Edit Markdown</string>
     <string name="editor_heading_body">Write or trim Markdown here. :::quiz blocks still work.</string>
     <string name="editor_title_field">Title</string>
+    <string name="editor_choose_area">Choose an Area before saving</string>
     <string name="editor_body_field">Markdown body</string>
     <string name="editor_save_markdown">Save Markdown</string>
 
@@ -353,6 +356,7 @@
     </string-array>
 
     <string name="message_add_title_or_markdown">Add a title or some Markdown before saving.</string>
+    <string name="message_choose_area_before_save">Choose an Area before saving this new node.</string>
     <string name="message_node_saved">Node saved</string>
     <string name="message_node_moved_to_trashbin">Node moved to Trashbin</string>
     <string name="message_node_restored">Node restored from Trashbin</string>

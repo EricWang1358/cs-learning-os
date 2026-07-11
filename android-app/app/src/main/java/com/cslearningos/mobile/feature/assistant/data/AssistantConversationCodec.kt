@@ -47,6 +47,7 @@ object AssistantConversationCodec {
                             .put("markdown", draft.markdown)
                             .put("area_id", draft.areaId)
                             .put("node_id", draft.nodeId)
+                            .put("placement_reason", draft.placementReason)
                     )
                 }
             }
@@ -62,7 +63,8 @@ object AssistantConversationCodec {
                     titleHint = draft.getString("title_hint"),
                     markdown = draft.getString("markdown"),
                     areaId = draft.optString("area_id").takeIf { it.isNotBlank() },
-                    nodeId = draft.optString("node_id").takeIf { it.isNotBlank() }
+                    nodeId = draft.optString("node_id").takeIf { it.isNotBlank() },
+                    placementReason = draft.optString("placement_reason").takeIf { it.isNotBlank() }
                 )
             }
         )

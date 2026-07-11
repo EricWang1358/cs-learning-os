@@ -2,6 +2,7 @@ package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
 import org.json.JSONObject
 
 enum class AiServiceStatusKind {
@@ -56,14 +57,24 @@ fun aiDraftContextNodeTitles(existingNodes: List<String>): List<String> =
         .filter { it.isNotBlank() }
         .take(12)
 
-fun buildCaptureAiDraftPrompt(slip: CaptureSlipEntity, existingNodes: List<String>): String {
+fun buildCaptureAiDraftPrompt(
+    slip: CaptureSlipEntity,
+    existingNodes: List<String>,
+    areas: List<AssistantAreaOption> = emptyList()
+): String {
     val knownNodes = aiDraftContextNodeTitles(existingNodes)
         .joinToString(separator = "\n") { "- $it" }
         .ifBlank { "- No existing nodes yet" }
+    val knownAreas = areas.joinToString(separator = "\n") { area ->
+        val examples = area.exampleTitles.joinToString().takeIf { it.isNotBlank() } ?: "no examples yet"
+        "- ${area.id}: ${area.name} (examples: $examples)"
+    }.ifBlank { "- No existing Areas available" }
     return """
         Convert this mobile capture slip into a useful CS Learning OS Markdown node draft.
 
         Return Markdown only. Do not wrap the answer in code fences.
+        If one existing Area below is a clear fit, begin with <!-- cs-area: AREA_ID --> and <!-- cs-area-reason: one concrete reason -->.
+        If no Area is a clear fit, omit both directives. Never invent an Area.
         Include these sections:
         # A concise learning-node title
         ## Captured Context
@@ -76,6 +87,9 @@ fun buildCaptureAiDraftPrompt(slip: CaptureSlipEntity, existingNodes: List<Strin
 
         Existing node titles that may be relevant:
         $knownNodes
+
+        Existing Areas that may be relevant:
+        $knownAreas
 
         Capture type: ${slip.type.name}
         Topic hint: ${slip.topicHint.orEmpty().ifBlank { "None" }}

@@ -63,6 +63,7 @@ class CaptureNodeDraftTest {
         val draft = CaptureNodeDraft.fromSlip(slip, existingNodes = listOf(node))
 
         assertEquals("node-vm", draft.suggestedNodeId)
+        assertEquals(node.areaId, draft.suggestedAreaId)
         assertTrue(draft.markdownBody.contains("Suggested existing node: Virtual Memory"))
     }
 }

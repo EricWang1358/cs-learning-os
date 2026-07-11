@@ -4,6 +4,7 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
 import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantDraftPlacement
 
 enum class AssistantMessageRole {
     User,
@@ -22,7 +23,8 @@ sealed interface AssistantMessageAction {
         val titleHint: String,
         val markdown: String,
         val areaId: String? = null,
-        val nodeId: String? = null
+        val nodeId: String? = null,
+        val placementReason: String? = null
     ) : AssistantMessageAction
 
     data class SaveCapture(
@@ -109,8 +111,13 @@ fun assistantReplyDecision(
         }
 
         AssistantRequestMode.Draft -> {
-            val placement = assistantDraftPlacement(reply, areas)
-            val markdown = placement.markdown.ifBlank { workingDraft?.markdown.orEmpty() }
+            val placement = parseAssistantDraftPlacement(reply, areas)
+            val updatesKnownDraft = workingDraft != null || placement.areaId != null
+            val markdown = if (updatesKnownDraft) {
+                placement.markdown.ifBlank { workingDraft?.markdown.orEmpty() }
+            } else {
+                ""
+            }
             val nextDraft = markdown.takeIf(String::isNotBlank)?.let {
                 AssistantWorkingDraft(
                     titleHint = workingDraft?.titleHint ?: request.take(MaximumDraftTitleHintCharacters),
@@ -120,7 +127,8 @@ fun assistantReplyDecision(
                     } else {
                         placement.areaId ?: workingDraft?.areaId
                     },
-                    nodeId = workingDraft?.nodeId
+                    nodeId = workingDraft?.nodeId,
+                    placementReason = placement.placementReason ?: workingDraft?.placementReason
                 )
             }
             AssistantReplyDecision(
@@ -130,7 +138,8 @@ fun assistantReplyDecision(
                         titleHint = draft.titleHint,
                         markdown = draft.markdown,
                         areaId = draft.areaId,
-                        nodeId = draft.nodeId
+                        nodeId = draft.nodeId,
+                        placementReason = draft.placementReason
                     )
                 },
                 workingDraft = nextDraft,

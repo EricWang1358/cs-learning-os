@@ -21,16 +21,20 @@ import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.backup.data.LearningRepositoryBackupRepository
 import com.cslearningos.mobile.feature.backup.domain.ExportBackupUseCase
 import com.cslearningos.mobile.feature.backup.domain.RestoreBackupUseCase
+import com.cslearningos.mobile.feature.backup.ui.resetTransientStateAfterRestore
 import com.cslearningos.mobile.feature.assistant.data.OpenAiCompatibleKnowledgeAssistantService
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantDraftPlacement
 import com.cslearningos.mobile.feature.assistant.ui.AssistantAppBridge
 import com.cslearningos.mobile.feature.assistant.ui.AssistantCoordinator
 import com.cslearningos.mobile.feature.capture.domain.GenerateCaptureDraftUseCase
+import com.cslearningos.mobile.feature.capture.domain.captureAssistantAreaOptions
 import com.cslearningos.mobile.feature.settings.data.OpenAiCompatibleDraftService
 import com.cslearningos.mobile.feature.settings.data.SettingsPreferencesStore
 import com.cslearningos.mobile.feature.settings.data.safeAiError
 import com.cslearningos.mobile.feature.settings.domain.ValidateAiSettingsUseCase
 import com.cslearningos.mobile.feature.settings.ui.SettingsUiState
 import com.cslearningos.mobile.feature.settings.ui.SettingsViewModel
+import com.cslearningos.mobile.feature.settings.ui.toAiProviderSettings
 import com.cslearningos.mobile.ui.backup.BackupDocument
 import com.cslearningos.mobile.ui.backup.BackupTransferCoordinator
 import com.cslearningos.mobile.ui.backup.backupImportErrorKey
@@ -290,10 +294,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(editorBody = value) }
     }
 
+    fun setEditorAreaId(value: String) {
+        _state.update { it.copy(editorAreaId = value) }
+    }
+
     fun saveNode() {
         val snapshot = state.value
         if (snapshot.editorTitle.isBlank() && snapshot.editorBody.isBlank()) {
             _state.update { it.copy(message = uiText(R.string.message_add_title_or_markdown)) }
+            return
+        }
+        if (snapshot.editorNodeId == null && snapshot.editorAreaId == null) {
+            _state.update { it.copy(message = uiText(R.string.message_choose_area_before_save)) }
             return
         }
         viewModelScope.launch {
@@ -592,6 +604,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.Editor,
                 editorNodeId = null,
+                editorAreaId = draft.suggestedAreaId,
                 editorSourceCaptureSlipId = slip.id,
                 selectedNode = draft.suggestedNodeId?.let { nodeId -> state.value.nodes.firstOrNull { node -> node.id == nodeId } },
                 editorTitle = draft.title,
@@ -642,19 +655,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 generateCaptureDraftUseCase(
                     settings = settings,
                     slip = slip,
-                    existingNodeTitles = snapshot.nodes.map { it.title }
+                    existingNodeTitles = snapshot.nodes.map { it.title },
+                    areas = captureAssistantAreaOptions(snapshot.areas, snapshot.nodes)
                 )
             }.onSuccess { markdown ->
                 repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_draft_ready)
                 val fallbackTitle = slip.topicHint?.takeIf { it.isNotBlank() } ?: "Capture Draft"
+                val placement = parseAssistantDraftPlacement(markdown, captureAssistantAreaOptions(snapshot.areas, snapshot.nodes))
                 _state.update {
                     it.copy(
                         screen = AppScreen.Editor,
                         editorNodeId = null,
+                        editorAreaId = placement.areaId,
                         editorSourceCaptureSlipId = slip.id,
                         selectedNode = null,
-                        editorTitle = titleFromAiMarkdown(markdown, fallbackTitle),
-                        editorBody = markdown,
+                        editorTitle = titleFromAiMarkdown(placement.markdown, fallbackTitle),
+                        editorBody = placement.markdown,
                         aiBusy = false,
                         pendingAiDraftSlipId = null,
                         aiServiceStatus = AiServiceStatus(
@@ -979,37 +995,3 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 }
-
-private fun SettingsUiState.toAiProviderSettings(): AiProviderSettings =
-    AiProviderSettings(
-        provider = provider,
-        apiKey = apiKey,
-        baseUrl = baseUrl,
-        model = model,
-        thinkingEnabled = thinkingEnabled,
-        apiKeyVisible = apiKeyVisible
-    )
-
-private fun LearningUiState.resetTransientStateAfterRestore(): LearningUiState =
-    copy(
-        selectedNode = null,
-        selectedQuiz = null,
-        selectedLibraryAreaId = null,
-        editorNodeId = null,
-        editorAreaId = null,
-        editorSourceCaptureSlipId = null,
-        editorTitle = "",
-        editorBody = "",
-        searchQuery = "",
-        searchResults = emptyList(),
-        quizPrompt = "",
-        quizAnswer = "",
-        quizExplanation = "",
-        readerQuestionDraft = "",
-        readerQuestionPanelExpanded = false,
-        captureDraft = "",
-        captureTopicHint = "",
-        captureSourceLabel = "",
-        pendingAiDraftSlipId = null,
-        quizAnswerVisible = false
-    )

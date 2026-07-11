@@ -5,6 +5,7 @@ import com.cslearningos.mobile.feature.settings.data.AppSettingsSnapshot
 import com.cslearningos.mobile.feature.settings.data.SettingsSnapshot
 import com.cslearningos.mobile.feature.settings.domain.AiSettingsValidationResult
 import com.cslearningos.mobile.ui.AiServiceStatus
+import com.cslearningos.mobile.ui.AiProviderSettings
 import com.cslearningos.mobile.ui.AppearanceMode
 import com.cslearningos.mobile.ui.SystemLanguage
 import com.cslearningos.mobile.ui.UiText
@@ -61,4 +62,14 @@ fun SettingsSnapshot.toUiState(
         systemLanguage = appSettings.systemLanguage,
         appearanceMode = appSettings.appearanceMode,
         validation = validation
+    )
+
+fun SettingsUiState.toAiProviderSettings(): AiProviderSettings =
+    AiProviderSettings(
+        provider = provider,
+        apiKey = apiKey,
+        baseUrl = baseUrl,
+        model = model,
+        thinkingEnabled = thinkingEnabled,
+        apiKeyVisible = apiKeyVisible
     )

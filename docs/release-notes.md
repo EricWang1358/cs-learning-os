@@ -1,5 +1,24 @@
 # Release Notes
 
+## Android Beta 0.1.23
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.23-beta`
+
+Android version:
+
+- `versionCode`: 24
+- `versionName`: `0.1.23`
+
+Status: implementation beta.
+
+Highlights:
+
+- Made Assistant note placement explainable: drafts carry a suggested existing Area, concrete placement reason, and local Area examples; ambiguous requests stay as a clarifying question instead of becoming an accidental node.
+- Applied the same Area protocol to AI-generated Capture drafts, while manual Capture promotion inherits an exact matching node's Area and otherwise requires an explicit Area choice before a new node can be saved.
+- Preserved placement reasons with the local working draft and moved backup-reset, settings mapping, and Capture Area-context construction out of `LearningViewModel`, restoring the Android architecture size harness.
+
 ## Android Beta 0.1.22
 
 Date: 2026-07-11

@@ -86,7 +86,8 @@ fun AssistantScreen(
                     onSaveCapture = { viewModel.assistantActions.saveReplyToCapture(message.id) },
                     onRetry = { viewModel.assistantActions.retryMessage(message.id) },
                     onOpenDailyReview = viewModel.assistantActions::openDailyReview,
-                    onConfigureAi = viewModel::showAiServiceSettings
+                    onConfigureAi = viewModel::showAiServiceSettings,
+                    areas = state.areas
                 )
             }
         }
@@ -187,7 +188,8 @@ private fun AssistantMessageBubble(
     onSaveCapture: () -> Unit,
     onRetry: () -> Unit,
     onOpenDailyReview: () -> Unit,
-    onConfigureAi: () -> Unit
+    onConfigureAi: () -> Unit,
+    areas: List<com.cslearningos.mobile.data.AreaEntity>
 ) {
     val isUser = message.role == AssistantMessageRole.User
     val shape = RoundedCornerShape(AssistantUiTokens.MessageCornerRadius)
@@ -248,6 +250,27 @@ private fun AssistantMessageBubble(
                             .heightIn(min = AssistantUiTokens.CitationMinHeight)
                             .clickable { onOpenCitation(citation.type, citation.id) }
                             .padding(vertical = AssistantUiTokens.CitationVerticalPadding)
+                    )
+                }
+            }
+            val draftAction = message.action as? AssistantMessageAction.OpenEditableDraft
+            if (draftAction != null && draftAction.nodeId == null) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val areaLabel = areas.firstOrNull { it.id == draftAction.areaId }
+                    ?.let { area -> displayAreaName(context, area) }
+                    ?: stringResource(R.string.editor_choose_area)
+                Text(
+                    text = stringResource(R.string.assistant_placement, areaLabel),
+                    color = WorkbenchColors.Muted,
+                    fontSize = AssistantUiTokens.SourceLabelSize,
+                    fontWeight = FontWeight.Bold
+                )
+                draftAction.placementReason?.let { reason ->
+                    Text(
+                        text = stringResource(R.string.assistant_placement_reason, reason),
+                        color = WorkbenchColors.Muted,
+                        fontSize = AssistantUiTokens.SourceLabelSize,
+                        lineHeight = 17.sp
                     )
                 }
             }

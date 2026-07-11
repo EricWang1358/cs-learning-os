@@ -134,6 +134,7 @@
     <string name="editor_edit_title">编辑 Markdown</string>
     <string name="editor_heading_body">在这里整理 Markdown；:::quiz 块仍然可用。</string>
     <string name="editor_title_field">标题</string>
+    <string name="editor_choose_area">保存前请选择 Area</string>
     <string name="editor_body_field">Markdown 正文</string>
     <string name="editor_save_markdown">保存 Markdown</string>
 
@@ -305,6 +306,7 @@
     <string name="more_support_body">无需账号、后端或 API key，应用也能完整使用。AI 和同步只是适配层，不是数据真相来源。</string>
 
     <string name="message_add_title_or_markdown">保存前先补一个标题或一点 Markdown 内容。</string>
+    <string name="message_choose_area_before_save">保存新节点前请选择 Area。</string>
     <string name="message_node_saved">节点已保存</string>
     <string name="message_node_moved_to_trashbin">节点已移入回收站</string>
     <string name="message_node_restored">节点已从回收站恢复</string>
@@ -428,6 +430,8 @@
     <string name="assistant_quick_draft">创建笔记</string>
     <string name="assistant_quick_review">规划复习</string>
     <string name="assistant_sources">本地资料</string>
+    <string name="assistant_placement">建议放入：%1$s</string>
+    <string name="assistant_placement_reason">依据：%1$s</string>
     <string name="assistant_open_draft">打开可编辑草稿</string>
     <string name="assistant_save_capture">保存到随手记</string>
     <string name="assistant_configure_ai">配置 AI</string>

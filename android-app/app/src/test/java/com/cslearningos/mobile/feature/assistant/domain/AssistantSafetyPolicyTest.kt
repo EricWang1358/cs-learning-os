@@ -47,4 +47,17 @@ class AssistantSafetyPolicyTest {
         assertTrue(prompt.contains("general knowledge"))
         assertFalse(prompt.contains("local library is insufficient"))
     }
+
+    @Test
+    fun draftPromptRequiresAnExplainableExistingAreaOrOneClarifyingQuestion() {
+        val prompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            areas = listOf(AssistantAreaOption(id = "systems", name = "Systems"))
+        )
+
+        assertTrue(prompt.contains("cs-area-reason"))
+        assertTrue(prompt.contains("one concise clarifying question"))
+        assertTrue(prompt.contains("never invent an Area"))
+    }
 }

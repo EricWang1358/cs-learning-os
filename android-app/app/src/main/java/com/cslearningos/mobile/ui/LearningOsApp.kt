@@ -697,6 +697,9 @@ private fun ReaderQuestionRow(question: ReaderQuestionEntity, onResolve: () -> U
 
 @Composable
 private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val context = LocalContext.current
+    val areas = state.areas.filter { it.deletedAt == null }
+    val selectedArea = areas.firstOrNull { it.id == state.editorAreaId }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailHeading(
             eyebrow = stringResource(if (state.editorNodeId == null) R.string.editor_new_node_eyebrow else R.string.editor_edit_mode_eyebrow),
@@ -708,6 +711,19 @@ private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
             onValueChange = viewModel::setEditorTitle,
             label = stringResource(R.string.editor_title_field)
         )
+        if (areas.isNotEmpty()) {
+            WorkbenchMenuButton(
+                text = selectedArea?.let { displayAreaName(context, it) }
+                    ?: stringResource(R.string.editor_choose_area),
+                options = areas.map { area ->
+                    WorkbenchMenuOption(displayAreaName(context, area)) {
+                        viewModel.setEditorAreaId(area.id)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                expandToContainer = true
+            )
+        }
         WorkbenchTextField(
             value = state.editorBody,
             onValueChange = viewModel::setEditorBody,

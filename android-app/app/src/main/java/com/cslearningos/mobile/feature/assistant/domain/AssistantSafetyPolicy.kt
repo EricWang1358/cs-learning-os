@@ -18,7 +18,8 @@ data class AssistantContextSource(
 
 data class AssistantAreaOption(
     val id: String,
-    val name: String
+    val name: String,
+    val exampleTitles: List<String> = emptyList()
 )
 
 enum class AssistantRequestMode {

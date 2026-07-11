@@ -3,6 +3,7 @@ package com.cslearningos.mobile.data
 data class CaptureNodeDraft(
     val title: String,
     val suggestedNodeId: String?,
+    val suggestedAreaId: String?,
     val markdownBody: String
 ) {
     companion object {
@@ -17,6 +18,7 @@ data class CaptureNodeDraft(
             return CaptureNodeDraft(
                 title = title,
                 suggestedNodeId = suggestedNode?.id,
+                suggestedAreaId = suggestedNode?.areaId,
                 markdownBody = buildString {
                     append("# ").append(title).append("\n\n")
                     suggestedNode?.let { append("> Suggested existing node: ").append(it.title).append("\n\n") }

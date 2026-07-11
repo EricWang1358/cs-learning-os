@@ -10,7 +10,8 @@ data class AssistantWorkingDraft(
     val titleHint: String,
     val markdown: String,
     val areaId: String?,
-    val nodeId: String? = null
+    val nodeId: String? = null,
+    val placementReason: String? = null
 )
 
 data class AssistantConversationMessage(
