@@ -280,6 +280,7 @@ private fun CaptureSlipCard(
         )
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.capture_make_node), { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
+            WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseCapture(slip) })
             WorkbenchButton(
                 text = if (aiConfigured) workflow.primaryActionLabel else stringResource(R.string.capture_set_up_ai),
                 onClick = if (aiConfigured) {

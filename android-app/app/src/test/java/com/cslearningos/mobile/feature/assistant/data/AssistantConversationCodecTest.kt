@@ -3,7 +3,12 @@ package com.cslearningos.mobile.feature.assistant.data
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
-import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
+import com.cslearningos.mobile.feature.assistant.ui.AssistantMessage
+import com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction
+import com.cslearningos.mobile.feature.assistant.ui.AssistantMessageRole
+import com.cslearningos.mobile.feature.assistant.ui.toStoredMessage
+import com.cslearningos.mobile.feature.assistant.ui.toUiMessage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -22,16 +27,65 @@ class AssistantConversationCodecTest {
                     body = "Virtual memory separates addresses from physical memory."
                 )
             ),
-            workingDraft = AssistantWorkingDraft(
+            editTarget = AssistantEditTarget.Node(
+                id = "node-42",
+                revision = 5L,
                 titleHint = "Virtual memory",
                 markdown = "# Virtual memory",
-                areaId = "systems",
-                nodeId = "node-42"
+                areaId = "systems"
             )
         )
 
         val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
 
         assertEquals(conversation, restored)
+    }
+
+    @Test
+    fun roundTripsPendingCaptureEditTarget() {
+        val conversation = AssistantConversation(
+            id = "conversation-2",
+            messages = emptyList(),
+            editTarget = AssistantEditTarget.Capture(
+                id = "capture-1",
+                revision = 3L,
+                body = "Explain the TLB miss.",
+                topicHint = "Virtual memory",
+                sourceLabel = "Lecture 5",
+                type = com.cslearningos.mobile.data.CaptureSlipType.question
+            )
+        )
+
+        val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
+
+        assertEquals(conversation.editTarget, restored.editTarget)
+    }
+
+    @Test
+    fun roundTripsAssistantConfirmationActionThroughStoredMessages() {
+        val message = AssistantMessage(
+            id = "reply",
+            role = AssistantMessageRole.Assistant,
+            body = "Draft ready.",
+            action = AssistantMessageAction.OpenEditableQuizDraft(
+                quizId = "quiz-1",
+                nodeId = "node-1",
+                prompt = "Prompt",
+                answer = "Answer",
+                explanation = "Explanation",
+                expectedRevision = 7L
+            )
+        )
+        val conversation = AssistantConversation(
+            id = "conversation-3",
+            messages = listOf(message.toStoredMessage())
+        )
+
+        val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
+            .messages
+            .single()
+            .toUiMessage()
+
+        assertEquals(message.action, restored.action)
     }
 }

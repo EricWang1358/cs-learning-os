@@ -26,13 +26,21 @@ class ReviewRepository(
 
     suspend fun saveManualQuiz(
         id: String? = null,
+        expectedRevision: Long? = null,
         nodeId: String?,
         prompt: String,
         answer: String,
         explanation: String,
         now: Long = System.currentTimeMillis()
     ): QuizItemEntity {
-        val existing = if (id != null) dao.getQuiz(id) else null
+        val existing = if (id == null) {
+            null
+        } else {
+            val quiz = requireNotNull(dao.getQuiz(id)) { "Quiz $id does not exist." }
+            check(quiz.deletedAt == null) { "Quiz $id has been deleted." }
+            check(expectedRevision == null || quiz.revision == expectedRevision) { "Quiz $id changed before save." }
+            quiz
+        }
         val resolvedNodeId = nodeId ?: existing?.nodeId
         val quiz = QuizItemEntity(
             id = existing?.id ?: UUID.randomUUID().toString(),

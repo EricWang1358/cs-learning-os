@@ -89,7 +89,18 @@ fun AssistantScreen(
                     }
                 }
                 items(assistant.messages, key = { it.id }) { message ->
-                    AssistantMessageBubble(message, viewModel.assistantActions::openCitation, { viewModel.assistantActions.openDraft(message.id) }, { viewModel.assistantActions.saveReplyToCapture(message.id) }, { viewModel.assistantActions.retryMessage(message.id) }, viewModel.assistantActions::openDailyReview, viewModel::showAiServiceSettings, state.areas)
+                    AssistantMessageBubble(
+                        message = message,
+                        onOpenCitation = viewModel.assistantActions::openCitation,
+                        onOpenDraft = { viewModel.assistantActions.openDraft(message.id) },
+                        onOpenQuizDraft = { viewModel.assistantActions.openQuizDraft(message.id) },
+                        onOpenCaptureDraft = { viewModel.assistantActions.openCaptureDraft(message.id) },
+                        onSaveCapture = { viewModel.assistantActions.saveReplyToCapture(message.id) },
+                        onRetry = { viewModel.assistantActions.retryMessage(message.id) },
+                        onOpenDailyReview = viewModel.assistantActions::openDailyReview,
+                        onConfigureAi = viewModel::showAiServiceSettings,
+                        areas = state.areas
+                    )
                 }
             }
             AssistantComposer(value = assistant.input, onValueChange = viewModel.assistantActions::setInput, onSend = viewModel.assistantActions::sendMessage, onStop = viewModel.assistantActions::cancelReply, enabled = !assistant.isBusy, modifier = Modifier.imePadding())
@@ -238,6 +249,8 @@ private fun AssistantMessageBubble(
     message: AssistantMessage,
     onOpenCitation: (String, String) -> Unit,
     onOpenDraft: () -> Unit,
+    onOpenQuizDraft: () -> Unit,
+    onOpenCaptureDraft: () -> Unit,
     onSaveCapture: () -> Unit,
     onRetry: () -> Unit,
     onOpenDailyReview: () -> Unit,
@@ -331,6 +344,18 @@ private fun AssistantMessageBubble(
                 is AssistantMessageAction.OpenEditableDraft -> WorkbenchButton(
                     text = stringResource(R.string.assistant_open_draft),
                     onClick = onOpenDraft,
+                    primary = true
+                )
+
+                is AssistantMessageAction.OpenEditableQuizDraft -> WorkbenchButton(
+                    text = stringResource(R.string.assistant_open_draft),
+                    onClick = onOpenQuizDraft,
+                    primary = true
+                )
+
+                is AssistantMessageAction.OpenEditableCaptureDraft -> WorkbenchButton(
+                    text = stringResource(R.string.assistant_open_draft),
+                    onClick = onOpenCaptureDraft,
                     primary = true
                 )
 

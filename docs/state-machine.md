@@ -536,6 +536,66 @@ Future health rules:
 - GitHub upload size defaults to local tracked-file estimates. Remote GitHub API checks are opt-in through `CS_LEARNING_GITHUB_REMOTE_SIZE=1` to avoid rate limits and network stalls.
 - `/api/system/metrics` returns real-time DB counts plus cached heavy metrics. If no snapshot exists, it returns a lightweight fallback immediately and records `cache.refreshing=true`.
 
+## Android Object-Aware Assistant Editing State
+
+This state machine governs Android assistant edits for Nodes, Capture slips, and Review quizzes. It is the release contract for any feature that changes assistant behavior. A model response is never a persistence operation.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Browse
+    Browse --> TargetPrepared: Improve with AI on Node / Capture / Quiz
+    Browse --> AssistantAnswer: Home logo or general assistant request
+    TargetPrepared --> Streaming: send target-aware request
+    AssistantAnswer --> Streaming: send general request
+    Streaming --> TargetPrepared: cancel or retryable transport failure
+    Streaming --> DraftReady: complete valid target directives
+    Streaming --> AssistantAnswer: complete explanatory response
+    DraftReady --> EditorOpen: review proposed revision
+    DraftReady --> TargetPrepared: ask for another revision
+    EditorOpen --> Persisting: explicit Save
+    EditorOpen --> Browse: Cancel
+    Persisting --> Browse: transaction succeeds
+    Persisting --> EditorOpen: validation, deletion, or storage failure
+    Browse --> HistoryOpen: open history
+    HistoryOpen --> AssistantAnswer: select saved conversation
+    HistoryOpen --> Browse: dismiss or delete conversation
+```
+
+### States and Ownership
+
+| State | Owner | Required data | Allowed mutation |
+| --- | --- | --- | --- |
+| `Browse` | screen ViewModel | selected object, if any | navigation only |
+| `TargetPrepared` | `AssistantCoordinator` | typed target with original object ID | input, cancel, request revision |
+| `Streaming` | `AssistantCoordinator` | response message ID and request snapshot | append matching response deltas only |
+| `DraftReady` | assistant message action | typed proposed fields and original ID | open matching editor or request revision |
+| `EditorOpen` | `LearningViewModel` | editor ID plus editable fields | local text edits only |
+| `Persisting` | repository transaction | object ID, validated fields | one upsert transaction |
+| `HistoryOpen` | `AssistantCoordinator` | persisted conversation ID | select or delete history entry |
+
+### Target Invariants
+
+- A Node target carries `nodeId`, Markdown, and a validated existing Area ID. A proposed Area change is visible in the Node editor before save.
+- A Quiz target carries `quizId`, optional `nodeId`, prompt, answer, and explanation. Saving retains the quiz ID and its `ReviewStateEntity`; it does not create a replacement question.
+- A Capture target carries `slipId`, body, type, topic hint, and source label. Saving retains the Capture ID and does not promote it to a Node unless the user separately chooses promotion.
+- Target directives must be complete and type-correct. Missing/invalid directives leave the previous target intact and display a clarifying assistant response; they never erase fields.
+- Every message action is single-claim. Repeated taps cannot create duplicate slips or duplicate writes.
+- Every streaming callback must verify its response message ID is still active. A cancelled request cannot clear `isBusy` or overwrite a newer conversation.
+- A target may disappear while the assistant is open. The final repository save must reject a missing/deleted object and return the user to `EditorOpen` with a visible error.
+- General Answer and interview-review modes must not inherit a typed edit target or offer an edit confirmation action.
+
+### Transition Acceptance Matrix
+
+| Transition | Preconditions | Result | Test evidence |
+| --- | --- | --- | --- |
+| `Browse -> TargetPrepared` | live Node/Capture/Quiz selected | target stores original ID and all editable fields | coordinator target tests |
+| `TargetPrepared -> DraftReady` | final reply has valid directives for its target type | message offers the matching editor action | action parser tests |
+| `DraftReady -> EditorOpen` | user taps review action | correct editor gets the same object ID | bridge/UI-state tests |
+| `EditorOpen -> Persisting -> Browse` | user saves valid fields | repository preserves identity; quiz review state remains | repository policy tests |
+| `Persisting -> EditorOpen` | missing parent/object or write failure | fields remain visible with error banner | repository and ViewModel tests |
+| `Streaming -> TargetPrepared` | user cancels or request fails | no stale response can mutate a newer request; retry has original prompt | coordinator lifecycle tests |
+| `HistoryOpen -> AssistantAnswer` | stored conversation selected | messages and typed target restore losslessly | conversation codec tests |
+
 ## Performance Plan
 
 Current performance profile:

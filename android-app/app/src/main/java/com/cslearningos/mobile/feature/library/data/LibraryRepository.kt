@@ -38,12 +38,23 @@ class LibraryRepository(
 
     suspend fun saveNode(
         id: String?,
+        expectedRevision: Long? = null,
         title: String,
         markdownBody: String,
         areaId: String? = null,
         now: Long = System.currentTimeMillis()
     ): LearningNodeEntity {
-        val existing = id?.let { dao.getNode(it) }
+        val existing = id?.let { nodeId ->
+            dao.getNode(nodeId)
+                ?: run {
+                    require(expectedRevision == null) { "Node $nodeId does not exist." }
+                    null
+                }
+        }
+        existing?.let { node ->
+            check(node.deletedAt == null) { "Node ${node.id} has been deleted." }
+            check(expectedRevision == null || node.revision == expectedRevision) { "Node ${node.id} changed before save." }
+        }
         val resolvedArea = if (areaId != null) {
             dao.getArea(areaId) ?: throw IllegalArgumentException("Selected Area is no longer available.")
         } else {

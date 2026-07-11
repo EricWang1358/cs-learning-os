@@ -2,9 +2,16 @@ package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationAction
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCitation
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantDraftPlacement
+import com.cslearningos.mobile.data.CaptureSlipType
 
 enum class AssistantMessageRole {
     User,
@@ -24,7 +31,26 @@ sealed interface AssistantMessageAction {
         val markdown: String,
         val areaId: String? = null,
         val nodeId: String? = null,
+        val expectedRevision: Long? = null,
         val placementReason: String? = null
+    ) : AssistantMessageAction
+
+    data class OpenEditableQuizDraft(
+        val quizId: String,
+        val expectedRevision: Long,
+        val nodeId: String?,
+        val prompt: String,
+        val answer: String,
+        val explanation: String
+    ) : AssistantMessageAction
+
+    data class OpenEditableCaptureDraft(
+        val slipId: String,
+        val expectedRevision: Long,
+        val body: String,
+        val topicHint: String,
+        val sourceLabel: String,
+        val type: CaptureSlipType
     ) : AssistantMessageAction
 
     data class SaveCapture(
@@ -55,6 +81,145 @@ data class AssistantConversationSummary(
     val title: String,
     val preview: String
 )
+
+fun AssistantConversationMessage.toUiMessage(): AssistantMessage =
+    AssistantMessage(
+        id = "history-${java.util.UUID.randomUUID()}",
+        role = when (role) {
+            AssistantConversationRole.User -> AssistantMessageRole.User
+            AssistantConversationRole.Assistant -> AssistantMessageRole.Assistant
+        },
+        body = body,
+        citations = citations.map { citation ->
+            AssistantCitation(
+                id = citation.id,
+                type = citation.type,
+                title = citation.title,
+                excerpt = citation.excerpt
+            )
+        },
+        action = action?.toUiAction()
+    )
+
+fun AssistantMessage.toStoredMessage(): AssistantConversationMessage =
+    AssistantConversationMessage(
+        role = when (role) {
+            AssistantMessageRole.User -> AssistantConversationRole.User
+            AssistantMessageRole.Assistant -> AssistantConversationRole.Assistant
+        },
+        body = body,
+        citations = citations.map { citation ->
+            AssistantConversationCitation(
+                id = citation.id,
+                type = citation.type,
+                title = citation.title,
+                excerpt = citation.excerpt
+            )
+        },
+        action = action?.toStoredAction()
+    )
+
+private fun AssistantConversationAction.toUiAction(): AssistantMessageAction? = when (this) {
+    is AssistantConversationAction.OpenEditableNodeDraft -> AssistantMessageAction.OpenEditableDraft(
+        titleHint = titleHint,
+        markdown = markdown,
+        areaId = areaId,
+        nodeId = nodeId,
+        expectedRevision = expectedRevision,
+        placementReason = placementReason
+    )
+
+    is AssistantConversationAction.OpenEditableQuizDraft -> AssistantMessageAction.OpenEditableQuizDraft(
+        quizId = quizId,
+        expectedRevision = expectedRevision,
+        nodeId = nodeId,
+        prompt = prompt,
+        answer = answer,
+        explanation = explanation
+    )
+
+    is AssistantConversationAction.OpenEditableCaptureDraft -> CaptureSlipType.entries
+        .firstOrNull { it.name == typeName }
+        ?.let { type ->
+            AssistantMessageAction.OpenEditableCaptureDraft(
+                slipId = slipId,
+                expectedRevision = expectedRevision,
+                body = body,
+                topicHint = topicHint,
+                sourceLabel = sourceLabel,
+                type = type
+            )
+        }
+
+    is AssistantConversationAction.SaveCapture -> AssistantMessageAction.SaveCapture(body)
+    is AssistantConversationAction.RetryRequest -> AssistantMessageAction.RetryRequest(prompt)
+    AssistantConversationAction.OpenDailyReview -> AssistantMessageAction.OpenDailyReview
+    AssistantConversationAction.ConfigureAi -> AssistantMessageAction.ConfigureAi
+}
+
+private fun AssistantMessageAction.toStoredAction(): AssistantConversationAction? = when (this) {
+    is AssistantMessageAction.OpenEditableDraft -> nodeId?.let { id ->
+        AssistantConversationAction.OpenEditableNodeDraft(
+            nodeId = id,
+            expectedRevision = expectedRevision ?: 0L,
+            titleHint = titleHint,
+            markdown = markdown,
+            areaId = areaId,
+            placementReason = placementReason
+        )
+    }
+
+    is AssistantMessageAction.OpenEditableQuizDraft -> AssistantConversationAction.OpenEditableQuizDraft(
+        quizId = quizId,
+        expectedRevision = expectedRevision,
+        nodeId = nodeId,
+        prompt = prompt,
+        answer = answer,
+        explanation = explanation
+    )
+
+    is AssistantMessageAction.OpenEditableCaptureDraft -> AssistantConversationAction.OpenEditableCaptureDraft(
+        slipId = slipId,
+        expectedRevision = expectedRevision,
+        body = body,
+        topicHint = topicHint,
+        sourceLabel = sourceLabel,
+        typeName = type.name
+    )
+
+    is AssistantMessageAction.SaveCapture -> AssistantConversationAction.SaveCapture(body)
+    is AssistantMessageAction.RetryRequest -> AssistantConversationAction.RetryRequest(prompt)
+    AssistantMessageAction.OpenDailyReview -> AssistantConversationAction.OpenDailyReview
+    AssistantMessageAction.ConfigureAi -> AssistantConversationAction.ConfigureAi
+}
+
+fun assistantEditAction(proposal: AssistantEditProposal): AssistantMessageAction = when (proposal) {
+    is AssistantEditProposal.Node -> AssistantMessageAction.OpenEditableDraft(
+        titleHint = proposal.titleHint,
+        markdown = proposal.markdown,
+        areaId = proposal.areaId,
+        nodeId = proposal.target.id,
+        expectedRevision = proposal.target.revision
+    )
+
+    is AssistantEditProposal.Quiz -> AssistantMessageAction.OpenEditableQuizDraft(
+        quizId = proposal.target.id,
+        expectedRevision = proposal.target.revision,
+        nodeId = proposal.target.nodeId,
+        prompt = proposal.prompt,
+        answer = proposal.answer,
+        explanation = proposal.explanation
+    )
+
+    is AssistantEditProposal.Capture -> AssistantMessageAction.OpenEditableCaptureDraft(
+        slipId = proposal.target.id,
+        expectedRevision = proposal.target.revision,
+        body = proposal.body,
+        topicHint = proposal.topicHint,
+        sourceLabel = proposal.sourceLabel,
+        type = proposal.type
+    )
+}
 
 data class CaptureSaveActionClaim(
     val action: AssistantMessageAction.SaveCapture,
@@ -194,7 +359,7 @@ data class AssistantUiState(
     val messages: List<AssistantMessage> = emptyList(),
     val isBusy: Boolean = false,
     val lastRequestMode: AssistantRequestMode = AssistantRequestMode.Answer,
-    val workingDraft: AssistantWorkingDraft? = null,
+    val editTarget: AssistantEditTarget? = null,
     val reviewSession: AssistantReviewSession? = null,
     val conversationHistory: List<AssistantConversationSummary> = emptyList(),
     val historyVisible: Boolean = false

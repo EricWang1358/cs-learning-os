@@ -337,6 +337,42 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingCaptureSlipWithStaleExpectedRevisionFailsWithoutChangingSlip() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = CaptureSlipEntity(
+            id = "slip-1",
+            body = "Original capture",
+            type = CaptureSlipType.question,
+            topicHint = null,
+            sourceLabel = null,
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 4L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        dao.captureSlips[original.id] = original
+
+        val failure = runCatching {
+            repository.saveCaptureSlip(
+                id = original.id,
+                expectedRevision = 3L,
+                body = "Updated capture",
+                type = CaptureSlipType.question,
+                topicHint = null,
+                sourceLabel = null,
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.captureSlips.getValue(original.id))
+    }
+
+    @Test
     fun savingExistingQuizForItsOriginalNodePreservesThatNodesAreaAndTrack() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
@@ -382,6 +418,76 @@ class LearningRepositoryPolicyTest {
         assertEquals("node-b", saved.nodeId)
         assertEquals("algorithms", saved.area)
         assertEquals("trees", saved.track)
+    }
+
+    @Test
+    fun savingMissingExplicitQuizIdFailsWithoutCreatingQuiz() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+
+        val failure = runCatching {
+            repository.saveManualQuiz(
+                id = "missing-quiz",
+                expectedRevision = 1L,
+                nodeId = null,
+                prompt = "Prompt",
+                answer = "Answer",
+                explanation = "",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(dao.quizzes.isEmpty())
+    }
+
+    @Test
+    fun savingQuizWithStaleExpectedRevisionPreservesReviewStateAndQuiz() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = QuizItemEntity(
+            id = "quiz-1",
+            nodeId = "node-1",
+            prompt = "Original prompt",
+            answer = "Original answer",
+            explanation = "Original explanation",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 4L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            track = "memory"
+        )
+        val reviewState = ReviewStateEntity(
+            quizId = original.id,
+            ease = 2.6,
+            intervalDays = 3,
+            dueAt = 5_000L,
+            lastResult = ReviewResult.good,
+            attemptCount = 2,
+            updatedAt = 4_000L
+        )
+        dao.quizzes[original.id] = original
+        dao.reviewStates[reviewState.quizId] = reviewState
+
+        val failure = runCatching {
+            repository.saveManualQuiz(
+                id = original.id,
+                expectedRevision = 3L,
+                nodeId = "node-1",
+                prompt = "Updated prompt",
+                answer = "Updated answer",
+                explanation = "Updated explanation",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(original, dao.quizzes.getValue(original.id))
+        assertEquals(reviewState, dao.reviewStates.getValue(reviewState.quizId))
     }
 
     @Test

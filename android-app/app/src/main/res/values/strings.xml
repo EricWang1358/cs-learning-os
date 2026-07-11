@@ -44,6 +44,7 @@
     <string name="assistant_placement">Suggested Area: %1$s</string>
     <string name="assistant_placement_reason">Why: %1$s</string>
     <string name="assistant_open_draft">Open editable draft</string>
+    <string name="assistant_improve_object">Improve with AI</string>
     <string name="assistant_save_capture">Save to Capture</string>
     <string name="assistant_configure_ai">Configure AI</string>
     <string name="assistant_retry">Retry</string>

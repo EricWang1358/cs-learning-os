@@ -7,14 +7,15 @@ fun buildKnowledgeAssistantSystemPrompt(
     mode: AssistantRequestMode,
     context: List<AssistantContextSource>,
     areas: List<AssistantAreaOption> = emptyList(),
-    workingDraft: AssistantWorkingDraft? = null
+    workingDraft: AssistantWorkingDraft? = null,
+    objectTarget: AssistantEditTarget? = null
 ): String {
     val contextBlock = context
         .joinToString(separator = "\n\n") { source ->
             "[Local source: ${source.title}]\n${source.excerpt}"
         }
         .ifBlank { "[No matching local sources were selected.]" }
-    val outputRule = when (mode) {
+    val outputRule = objectTarget?.outputRule() ?: when (mode) {
         AssistantRequestMode.Answer -> "Answer directly using your general knowledge and the optional local sources when relevant. Never refuse only because local search has no match, and do not claim you performed live web browsing."
         AssistantRequestMode.Draft -> "Return the complete revised Markdown working draft, not a summary or a patch. First classify the note against the existing Areas and their example titles. When one existing Area is a clear fit, begin with <!-- cs-area: AREA_ID --> followed by <!-- cs-area-reason: one concrete reason tied to the Area name or examples -->. When no Area is a clear fit, ask one concise clarifying question instead of drafting, emit no directives, and never invent an Area. Only if a short thought is genuinely unrelated to the draft and worth keeping, add <!-- cs-capture: text --> on its own line. Do not wrap the note in code fences."
         AssistantRequestMode.ReviewQuestion -> "Act as an interviewer. Ask exactly one focused question about the student's stated topic, grounded in the local sources when available. Do not answer the question or give a study plan."
@@ -33,6 +34,7 @@ fun buildKnowledgeAssistantSystemPrompt(
         ${draft.markdown}
         """.trimIndent()
     } ?: "No working draft exists yet."
+    val objectTargetBlock = objectTarget?.promptBlock().orEmpty()
     return """
         You are the CS Learning OS mobile knowledge assistant.
         You are connected through the student's configured AI service. Respond in the user's language.
@@ -45,8 +47,42 @@ fun buildKnowledgeAssistantSystemPrompt(
 
         $draftBlock
 
+        $objectTargetBlock
+
         Selected local context:
         $contextBlock
+    """.trimIndent()
+}
+
+private fun AssistantEditTarget.outputRule(): String = when (this) {
+    is AssistantEditTarget.Node -> "Return the complete revised Markdown for this existing node. Begin with a validated existing Area directive when you recommend moving it; do not create a second node."
+    is AssistantEditTarget.Quiz -> "Return exactly three complete directive blocks: <!-- cs-quiz-prompt -->...<!-- /cs-quiz-prompt -->, <!-- cs-quiz-answer -->...<!-- /cs-quiz-answer -->, and <!-- cs-quiz-explanation -->...<!-- /cs-quiz-explanation -->. Revise this existing quiz only; do not create a new review question."
+    is AssistantEditTarget.Capture -> "Return exactly four complete directives: <!-- cs-capture-body -->...<!-- /cs-capture-body -->, <!-- cs-capture-topic -->...<!-- /cs-capture-topic -->, <!-- cs-capture-source -->...<!-- /cs-capture-source -->, and <!-- cs-capture-type: one_existing_type -->. Revise this existing capture slip only; do not convert it into a node. Existing types are unclear, mistake, video_note, concept_seed, and question."
+}
+
+private fun AssistantEditTarget.promptBlock(): String = when (this) {
+    is AssistantEditTarget.Node -> """
+        Existing node id: $id
+        Expected revision: $revision
+        Title: $titleHint
+        Current Area id: ${areaId.orEmpty()}
+        Markdown:
+        $markdown
+    """.trimIndent()
+    is AssistantEditTarget.Quiz -> """
+        Existing quiz id: $id
+        Expected revision: $revision
+        Question: $prompt
+        Answer: $answer
+        Explanation: $explanation
+    """.trimIndent()
+    is AssistantEditTarget.Capture -> """
+        Existing capture id: $id
+        Expected revision: $revision
+        Body: $body
+        Topic hint: $topicHint
+        Source label: $sourceLabel
+        Type: ${type.name}
     """.trimIndent()
 }
 

@@ -612,6 +612,7 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.common_back), viewModel::showHome)
             WorkbenchButton(stringResource(R.string.reader_edit_mode_button), { viewModel.editNode(node) }, primary = true)
+            WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseNode(node) })
             WorkbenchButton(stringResource(R.string.common_delete), viewModel::deleteSelectedNode, danger = true)
             WorkbenchMenuButton(
                 text = stringResource(R.string.nav_more_label),
@@ -837,6 +838,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                     AnswerBlock(quiz)
                     ToolbarRow {
                         WorkbenchButton(stringResource(R.string.common_edit), { viewModel.editQuiz(quiz) })
+                        WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseQuiz(quiz) })
                         WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
                         WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
                         WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)

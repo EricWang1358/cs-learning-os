@@ -36,6 +36,16 @@ class AssistantAppBridge(
         onShowAssistant()
     }
 
+    fun reviseQuiz(quiz: com.cslearningos.mobile.data.QuizItemEntity) {
+        coordinator.reviseQuiz(quiz)
+        onShowAssistant()
+    }
+
+    fun reviseCapture(slip: com.cslearningos.mobile.data.CaptureSlipEntity) {
+        coordinator.reviseCapture(slip)
+        onShowAssistant()
+    }
+
     fun startInterviewReview() = coordinator.startInterviewReview()
 
     fun sendMessage() = coordinator.send(currentSettings())
@@ -47,18 +57,76 @@ class AssistantAppBridge(
     fun openDailyReview() = onOpenDailyReview()
 
     fun openDraft(messageId: String) {
-        val action = coordinator.draftAction(messageId) ?: return
-        updateState {
-            it.copy(
-                screen = AppScreen.Editor,
-                selectedNode = null,
-                editorNodeId = action.nodeId,
-                editorAreaId = action.areaId,
-                editorSourceCaptureSlipId = null,
-                editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),
-                editorBody = action.markdown,
-                message = uiText(R.string.message_assistant_draft_ready)
-            )
+        scope.launch {
+            val action = coordinator.draftAction(messageId) ?: return@launch
+            val nodeId = action.nodeId
+            if (nodeId != null) {
+                val node = (coordinator.resolveDestination("node", nodeId) as? AssistantDestination.Node)?.node
+                if (node == null || node.deletedAt != null || action.expectedRevision != null && node.revision != action.expectedRevision) {
+                    updateState { it.copy(message = uiText(R.string.message_assistant_source_unavailable)) }
+                    return@launch
+                }
+            }
+            updateState {
+                it.copy(
+                    screen = AppScreen.Editor,
+                    selectedNode = null,
+                    editorNodeId = action.nodeId,
+                    editorExpectedRevision = action.expectedRevision,
+                    editorAreaId = action.areaId,
+                    editorSourceCaptureSlipId = null,
+                    editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),
+                    editorBody = action.markdown,
+                    message = uiText(R.string.message_assistant_draft_ready)
+                )
+            }
+        }
+    }
+
+    fun openQuizDraft(messageId: String) {
+        scope.launch {
+            val action = coordinator.quizDraftAction(messageId) ?: return@launch
+            val quiz = (coordinator.resolveDestination("quiz", action.quizId) as? AssistantDestination.Quiz)?.quiz
+            if (quiz == null || quiz.deletedAt != null || quiz.revision != action.expectedRevision) {
+                updateState { it.copy(message = uiText(R.string.message_assistant_source_unavailable)) }
+                return@launch
+            }
+            updateState {
+                it.copy(
+                    screen = AppScreen.QuizEditor,
+                    selectedNode = null,
+                    selectedQuiz = quiz,
+                    quizEditorId = action.quizId,
+                    quizExpectedRevision = action.expectedRevision,
+                    quizPrompt = action.prompt,
+                    quizAnswer = action.answer,
+                    quizExplanation = action.explanation,
+                    message = uiText(R.string.message_assistant_draft_ready)
+                )
+            }
+        }
+    }
+
+    fun openCaptureDraft(messageId: String) {
+        scope.launch {
+            val action = coordinator.captureDraftAction(messageId) ?: return@launch
+            val slip = (coordinator.resolveDestination("capture", action.slipId) as? AssistantDestination.Capture)?.slip
+            if (slip == null || slip.deletedAt != null || slip.revision != action.expectedRevision) {
+                updateState { it.copy(message = uiText(R.string.message_assistant_source_unavailable)) }
+                return@launch
+            }
+            updateState {
+                it.copy(
+                    screen = AppScreen.Capture,
+                    captureEditorId = slip.id,
+                    captureExpectedRevision = action.expectedRevision,
+                    captureDraft = action.body,
+                    captureTopicHint = action.topicHint,
+                    captureSourceLabel = action.sourceLabel,
+                    captureType = action.type,
+                    message = uiText(R.string.message_assistant_draft_ready)
+                )
+            }
         }
     }
 
@@ -81,6 +149,19 @@ class AssistantAppBridge(
                         screen = AppScreen.Review,
                         selectedQuiz = destination.quiz,
                         quizAnswerVisible = false,
+                        message = null
+                    )
+                }
+
+                is AssistantDestination.Capture -> updateState {
+                    it.copy(
+                        screen = AppScreen.Capture,
+                        captureEditorId = destination.slip.id,
+                        captureExpectedRevision = destination.slip.revision,
+                        captureDraft = destination.slip.body,
+                        captureTopicHint = destination.slip.topicHint.orEmpty(),
+                        captureSourceLabel = destination.slip.sourceLabel.orEmpty(),
+                        captureType = destination.slip.type,
                         message = null
                     )
                 }

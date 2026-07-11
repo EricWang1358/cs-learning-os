@@ -2,13 +2,40 @@ package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
+import com.cslearningos.mobile.data.CaptureSlipType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AssistantActionClaimsTest {
+    @Test
+    fun typedObjectProposalMapsToItsMatchingConfirmationAction() {
+        val proposal = AssistantEditProposal.Capture(
+            target = AssistantEditTarget.Capture(
+                id = "capture-1",
+                revision = 2L,
+                body = "Original",
+                topicHint = "Paging",
+                sourceLabel = "Lecture",
+                type = CaptureSlipType.unclear
+            ),
+            body = "Clarify page faults.",
+            topicHint = "Virtual memory",
+            sourceLabel = "Lecture 5",
+            type = CaptureSlipType.question
+        )
+
+        val action = assistantEditAction(proposal) as AssistantMessageAction.OpenEditableCaptureDraft
+
+        assertEquals("capture-1", action.slipId)
+        assertEquals(CaptureSlipType.question, action.type)
+        assertEquals("Clarify page faults.", action.body)
+    }
+
     @Test
     fun captureSaveActionCanOnlyBeClaimedOnce() {
         val messages = listOf(

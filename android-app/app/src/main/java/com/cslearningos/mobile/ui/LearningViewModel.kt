@@ -238,6 +238,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 screen = AppScreen.Editor,
                 editorAreaId = areaId,
                 editorNodeId = null,
+                editorExpectedRevision = null,
                 editorSourceCaptureSlipId = null,
                 editorTitle = "",
                 editorBody = "",
@@ -253,6 +254,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 selectedNode = node,
                 editorAreaId = node.areaId,
                 editorNodeId = node.id,
+                editorExpectedRevision = node.revision,
                 editorSourceCaptureSlipId = null,
                 editorTitle = node.title,
                 editorBody = node.markdownBody,
@@ -309,23 +311,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
         viewModelScope.launch {
-            val node = repository.saveNode(
-                id = snapshot.editorNodeId,
-                title = snapshot.editorTitle,
-                markdownBody = snapshot.editorBody,
-                areaId = snapshot.editorAreaId
-            )
-            snapshot.editorSourceCaptureSlipId?.let { slipId ->
-                repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
-            }
-            _state.update {
-                it.copy(
-                    screen = AppScreen.Reader,
-                    selectedNode = node,
-                    editorAreaId = null,
-                    editorSourceCaptureSlipId = null,
-                    message = uiText(R.string.message_node_saved)
-                )
+            runCatching {
+                repository.saveNodeFromEditor(snapshot)
+            }.onSuccess { node ->
+                snapshot.editorSourceCaptureSlipId?.let { slipId ->
+                    repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
+                }
+                _state.update { it.afterNodeSaved(node) }
+            }.onFailure {
+                _state.update { it.withObjectSaveRejected() }
             }
         }
     }
@@ -350,6 +344,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     selectedNode = null,
                     editorAreaId = null,
                     editorNodeId = null,
+                    editorExpectedRevision = null,
                     editorSourceCaptureSlipId = null,
                     editorTitle = "",
                     editorBody = "",
@@ -477,17 +472,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
         viewModelScope.launch {
-            repository.saveCaptureSlip(
-                id = snapshot.captureEditorId,
-                body = snapshot.captureDraft,
-                type = snapshot.captureType,
-                topicHint = snapshot.captureTopicHint,
-                sourceLabel = snapshot.captureSourceLabel
-            )
-            _state.update {
-                it.clearedCaptureEditor().copy(
-                    message = uiText(R.string.message_capture_saved_to_inbox)
-                )
+            runCatching {
+                repository.saveCaptureFromEditor(snapshot)
+            }.onSuccess {
+                _state.update { it.afterCaptureSaved() }
+            }.onFailure {
+                _state.update { it.withObjectSaveRejected() }
             }
         }
     }
@@ -501,6 +491,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val slip = repository.saveCaptureSlip(
                 id = snapshot.captureEditorId,
+                expectedRevision = snapshot.captureExpectedRevision,
                 body = snapshot.captureDraft,
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
@@ -600,6 +591,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 screen = AppScreen.Editor,
                 editorNodeId = null,
+                editorExpectedRevision = null,
                 editorAreaId = draft.suggestedAreaId,
                 editorSourceCaptureSlipId = slip.id,
                 selectedNode = draft.suggestedNodeId?.let { nodeId -> state.value.nodes.firstOrNull { node -> node.id == nodeId } },
@@ -662,6 +654,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     it.copy(
                         screen = AppScreen.Editor,
                         editorNodeId = null,
+                        editorExpectedRevision = null,
                         editorAreaId = placement.areaId,
                         editorSourceCaptureSlipId = slip.id,
                         selectedNode = null,
@@ -714,15 +707,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             return
         }
         viewModelScope.launch {
-            repository.saveManualQuiz(
-                id = snapshot.quizEditorId,
-                nodeId = snapshot.quizNodeIdForSave(),
-                prompt = snapshot.quizPrompt,
-                answer = snapshot.quizAnswer,
-                explanation = snapshot.quizExplanation
-            )
-            _state.update {
-                it.copy(screen = AppScreen.Home, quizEditorId = null, message = uiText(R.string.message_quiz_saved))
+            runCatching {
+                repository.saveQuizFromEditor(snapshot)
+            }.onSuccess {
+                _state.update { it.afterQuizSaved() }
+            }.onFailure {
+                _state.update { it.withObjectSaveRejected() }
             }
         }
     }

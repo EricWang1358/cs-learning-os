@@ -13,8 +13,11 @@ class CaptureRepository(
 ) {
     val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeInboxCaptureSlips()
 
+    suspend fun getCaptureSlip(id: String): CaptureSlipEntity? = dao.getCaptureSlip(id)
+
     suspend fun saveCaptureSlip(
         id: String? = null,
+        expectedRevision: Long? = null,
         body: String,
         type: CaptureSlipType,
         topicHint: String?,
@@ -25,7 +28,10 @@ class CaptureRepository(
         val existing = if (id == null) {
             null
         } else {
-            requireNotNull(dao.getCaptureSlip(id)) { "Capture slip $id does not exist." }
+            val slip = requireNotNull(dao.getCaptureSlip(id)) { "Capture slip $id does not exist." }
+            check(slip.deletedAt == null) { "Capture slip $id has been deleted." }
+            check(expectedRevision == null || slip.revision == expectedRevision) { "Capture slip $id changed before save." }
+            slip
         }
         val slip = existing?.copy(
             body = body.trim(),

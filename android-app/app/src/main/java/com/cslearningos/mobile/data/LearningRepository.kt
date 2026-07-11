@@ -39,14 +39,18 @@ class LearningRepository private constructor(
 
     suspend fun getQuiz(id: String): QuizItemEntity? = reviewRepository.getQuiz(id)
 
+    suspend fun getCaptureSlip(id: String): CaptureSlipEntity? = captureRepository.getCaptureSlip(id)
+
     suspend fun saveNode(
         id: String?,
+        expectedRevision: Long? = null,
         title: String,
         markdownBody: String,
         areaId: String? = null,
         now: Long = System.currentTimeMillis()
     ): LearningNodeEntity = libraryRepository.saveNode(
         id = id,
+        expectedRevision = expectedRevision,
         title = title,
         markdownBody = markdownBody,
         areaId = areaId,
@@ -103,6 +107,7 @@ class LearningRepository private constructor(
 
     suspend fun saveCaptureSlip(
         id: String? = null,
+        expectedRevision: Long? = null,
         body: String,
         type: CaptureSlipType,
         topicHint: String?,
@@ -111,6 +116,7 @@ class LearningRepository private constructor(
         now: Long = System.currentTimeMillis()
     ): CaptureSlipEntity = captureRepository.saveCaptureSlip(
         id = id,
+        expectedRevision = expectedRevision,
         body = body,
         type = type,
         topicHint = topicHint,
@@ -164,6 +170,7 @@ class LearningRepository private constructor(
 
     suspend fun saveManualQuiz(
         id: String? = null,
+        expectedRevision: Long? = null,
         nodeId: String?,
         prompt: String,
         answer: String,
@@ -171,6 +178,7 @@ class LearningRepository private constructor(
         now: Long = System.currentTimeMillis()
     ): QuizItemEntity = reviewRepository.saveManualQuiz(
         id = id,
+        expectedRevision = expectedRevision,
         nodeId = nodeId,
         prompt = prompt,
         answer = answer,

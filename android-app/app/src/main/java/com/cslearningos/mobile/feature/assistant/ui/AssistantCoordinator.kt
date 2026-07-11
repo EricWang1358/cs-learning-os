@@ -7,13 +7,15 @@ import com.cslearningos.mobile.data.LearningRepository
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
-import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCitation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantSession
 import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
+import com.cslearningos.mobile.feature.assistant.domain.nextTarget
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantObjectProposal
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantReviewEvaluation
 import com.cslearningos.mobile.feature.settings.data.safeAiError
 import com.cslearningos.mobile.ui.AiProviderSettings
@@ -32,6 +34,7 @@ import java.util.UUID
 sealed interface AssistantDestination {
     data class Node(val node: LearningNodeEntity) : AssistantDestination
     data class Quiz(val quiz: QuizItemEntity) : AssistantDestination
+    data class Capture(val slip: com.cslearningos.mobile.data.CaptureSlipEntity) : AssistantDestination
 }
 
 class AssistantCoordinator(
@@ -56,7 +59,7 @@ class AssistantCoordinator(
                 conversationId = conversation.id
                 mutableState.value = AssistantUiState(
                     messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
-                    workingDraft = conversation.workingDraft
+                    editTarget = conversation.editTarget
                 )
             }
         }
@@ -86,7 +89,7 @@ class AssistantCoordinator(
             conversationId = conversation.id
             mutableState.value = AssistantUiState(
                 messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
-                workingDraft = conversation.workingDraft
+                editTarget = conversation.editTarget
             )
         }
     }
@@ -114,11 +117,46 @@ class AssistantCoordinator(
         mutableState.update {
             it.copy(
                 input = "Improve this knowledge node while preserving its useful content.",
-                workingDraft = com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft(
+                editTarget = AssistantEditTarget.Node(
+                    id = node.id,
+                    revision = node.revision,
                     titleHint = node.title,
                     markdown = node.markdownBody,
-                    areaId = node.areaId.ifBlank { node.area },
-                    nodeId = node.id
+                    areaId = node.areaId.ifBlank { node.area }
+                ),
+                reviewSession = null
+            )
+        }
+    }
+
+    fun reviseQuiz(quiz: QuizItemEntity) {
+        mutableState.update {
+            it.copy(
+                input = "Improve this review question while preserving what is already useful.",
+                editTarget = AssistantEditTarget.Quiz(
+                    id = quiz.id,
+                    revision = quiz.revision,
+                    nodeId = quiz.nodeId,
+                    prompt = quiz.prompt,
+                    answer = quiz.answer,
+                    explanation = quiz.explanation
+                ),
+                reviewSession = null
+            )
+        }
+    }
+
+    fun reviseCapture(slip: com.cslearningos.mobile.data.CaptureSlipEntity) {
+        mutableState.update {
+            it.copy(
+                input = "Improve this capture slip without turning it into a node.",
+                editTarget = AssistantEditTarget.Capture(
+                    id = slip.id,
+                    revision = slip.revision,
+                    body = slip.body,
+                    topicHint = slip.topicHint.orEmpty(),
+                    sourceLabel = slip.sourceLabel.orEmpty(),
+                    type = slip.type
                 ),
                 reviewSession = null
             )
@@ -135,6 +173,7 @@ class AssistantCoordinator(
                     role = AssistantMessageRole.Assistant,
                     body = string(R.string.assistant_review_topic_prompt)
                 ),
+                editTarget = null,
                 reviewSession = AssistantReviewSession.AwaitingTopic
             )
         }
@@ -160,7 +199,7 @@ class AssistantCoordinator(
             AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
             is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
             is AssistantReviewSession.Evaluated -> AssistantRequestMode.Answer
-            null -> if (snapshot.workingDraft != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
+            null -> if (snapshot.editTarget != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
         }
         val userMessage = AssistantMessage(
             id = messageId("user"),
@@ -205,7 +244,8 @@ class AssistantCoordinator(
                     message = input,
                     context = localContext,
                     areas = areas,
-                    workingDraft = snapshot.workingDraft,
+                    workingDraft = (snapshot.editTarget as? AssistantEditTarget.Node)?.toWorkingDraft(),
+                    objectTarget = snapshot.editTarget,
                     onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
                 )
                 val rawReply = mutableState.value.messages
@@ -216,7 +256,7 @@ class AssistantCoordinator(
                 var action: AssistantMessageAction? = null
                 var captureSuggestion: String? = null
                 var visibleBody = rawReply
-                var nextDraft = snapshot.workingDraft
+                var nextEditTarget = snapshot.editTarget
                 var nextReviewSession = snapshot.reviewSession
                 when (mode) {
                     AssistantRequestMode.ReviewQuestion -> {
@@ -252,20 +292,31 @@ class AssistantCoordinator(
 
                     AssistantRequestMode.Answer,
                     AssistantRequestMode.Draft -> {
-                        val decision = assistantReplyDecision(
-                            mode = mode,
-                            request = input,
-                            reply = rawReply,
-                            areas = areas,
-                            workingDraft = snapshot.workingDraft
-                        )
-                        action = decision.action
-                        captureSuggestion = decision.captureSuggestion
-                        nextDraft = decision.workingDraft ?: nextDraft
-                        visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
-                            string(R.string.assistant_draft_updated)
+                        val objectProposal = snapshot.editTarget?.let { target ->
+                            parseAssistantObjectProposal(target, rawReply, areas)
+                        }
+                        if (objectProposal != null) {
+                            action = assistantEditAction(objectProposal)
+                            nextEditTarget = objectProposal.nextTarget()
+                            visibleBody = string(R.string.assistant_draft_updated)
+                        } else if (snapshot.editTarget != null) {
+                            action = null
+                            visibleBody = rawReply
                         } else {
-                            decision.visibleReply
+                            val decision = assistantReplyDecision(
+                                mode = mode,
+                                request = input,
+                                reply = rawReply,
+                                areas = areas,
+                                workingDraft = null
+                            )
+                            action = decision.action
+                            captureSuggestion = decision.captureSuggestion
+                            visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
+                                string(R.string.assistant_draft_updated)
+                            } else {
+                                decision.visibleReply
+                            }
                         }
                     }
                 }
@@ -279,7 +330,7 @@ class AssistantCoordinator(
                 }
                 mutableState.update {
                     it.copy(
-                        workingDraft = nextDraft,
+                        editTarget = nextEditTarget,
                         reviewSession = nextReviewSession
                     )
                 }
@@ -329,6 +380,16 @@ class AssistantCoordinator(
             .firstOrNull { it.id == messageId }
             ?.action as? AssistantMessageAction.OpenEditableDraft
 
+    fun quizDraftAction(messageId: String): AssistantMessageAction.OpenEditableQuizDraft? =
+        mutableState.value.messages
+            .firstOrNull { it.id == messageId }
+            ?.action as? AssistantMessageAction.OpenEditableQuizDraft
+
+    fun captureDraftAction(messageId: String): AssistantMessageAction.OpenEditableCaptureDraft? =
+        mutableState.value.messages
+            .firstOrNull { it.id == messageId }
+            ?.action as? AssistantMessageAction.OpenEditableCaptureDraft
+
     suspend fun saveReplyToCapture(messageId: String): Boolean = captureSaveMutex.withLock {
         val claim = claimCaptureSaveAction(mutableState.value.messages, messageId) ?: return false
         mutableState.update { it.copy(messages = claim.messages) }
@@ -358,6 +419,7 @@ class AssistantCoordinator(
         when (type) {
             "node" -> repository.getNode(id)?.let(AssistantDestination::Node)
             "quiz" -> repository.getQuiz(id)?.let(AssistantDestination::Quiz)
+            "capture" -> repository.getCaptureSlip(id)?.let(AssistantDestination::Capture)
             else -> null
         }
 
@@ -383,7 +445,7 @@ class AssistantCoordinator(
                 AssistantConversation(
                     id = conversationId,
                     messages = messages,
-                    workingDraft = mutableState.value.workingDraft
+                    editTarget = mutableState.value.editTarget
                 )
             )
         }
@@ -406,37 +468,10 @@ private fun AssistantConversation.toSummary(): AssistantConversationSummary {
     )
 }
 
-private fun AssistantConversationMessage.toUiMessage(): AssistantMessage =
-    AssistantMessage(
-        id = "history-${UUID.randomUUID()}",
-        role = when (role) {
-            AssistantConversationRole.User -> AssistantMessageRole.User
-            AssistantConversationRole.Assistant -> AssistantMessageRole.Assistant
-        },
-        body = body,
-        citations = citations.map { citation ->
-            AssistantCitation(
-                id = citation.id,
-                type = citation.type,
-                title = citation.title,
-                excerpt = citation.excerpt
-            )
-        }
-    )
-
-private fun AssistantMessage.toStoredMessage(): AssistantConversationMessage =
-    AssistantConversationMessage(
-        role = when (role) {
-            AssistantMessageRole.User -> AssistantConversationRole.User
-            AssistantMessageRole.Assistant -> AssistantConversationRole.Assistant
-        },
-        body = body,
-        citations = citations.map { citation ->
-            AssistantConversationCitation(
-                id = citation.id,
-                type = citation.type,
-                title = citation.title,
-                excerpt = citation.excerpt
-            )
-        }
+private fun AssistantEditTarget.Node.toWorkingDraft(): com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft =
+    com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft(
+        titleHint = titleHint,
+        markdown = markdown,
+        areaId = areaId,
+        nodeId = id
     )
