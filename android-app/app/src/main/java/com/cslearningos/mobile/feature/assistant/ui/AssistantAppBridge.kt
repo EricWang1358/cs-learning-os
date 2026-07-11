@@ -25,6 +25,8 @@ class AssistantAppBridge(
 
     fun openHistoryConversation(id: String) = coordinator.openHistoryConversation(id)
 
+    fun deleteHistoryConversation(id: String) = coordinator.deleteHistoryConversation(id)
+
     fun setInput(value: String) = coordinator.setInput(value)
 
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)

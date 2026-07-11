@@ -91,6 +91,19 @@ class AssistantCoordinator(
         }
     }
 
+    fun deleteHistoryConversation(id: String) {
+        scope.launch {
+            repository.deleteAssistantConversation(id)
+            if (conversationId == id) {
+                conversationId = newConversationId()
+                mutableState.value = AssistantUiState()
+            } else {
+                val history = repository.recentAssistantConversations(HistoryLimit).map { it.toSummary() }
+                mutableState.update { it.copy(conversationHistory = history, historyVisible = true) }
+            }
+        }
+    }
+
     fun setInput(value: String) {
         mutableState.update { it.copy(input = value) }
     }

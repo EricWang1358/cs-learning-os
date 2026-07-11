@@ -32,6 +32,7 @@
     <string name="assistant_new_chat">New chat</string>
     <string name="assistant_history">History</string>
     <string name="assistant_history_empty">No saved conversations yet.</string>
+    <string name="assistant_history_delete">Delete conversation</string>
     <string name="assistant_send">Send</string>
     <string name="assistant_stop">Stop</string>
     <string name="assistant_input_label">Ask about your learning library</string>

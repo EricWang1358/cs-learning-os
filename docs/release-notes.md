@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.25
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.25-beta`
+
+Android version:
+
+- `versionCode`: 26
+- `versionName`: `0.1.25`
+
+Status: implementation beta.
+
+Highlights:
+
+- Completed Assistant history management: conversations can now be deleted from the visible history list, deletion is persisted locally, and deleting the active conversation starts a clean session without affecting the remaining history.
+
 ## Android Beta 0.1.24
 
 Date: 2026-07-11

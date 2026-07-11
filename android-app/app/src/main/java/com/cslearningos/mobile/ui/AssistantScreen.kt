@@ -106,7 +106,8 @@ fun AssistantScreen(
             AssistantHistoryDialog(
                 history = assistant.conversationHistory,
                 onDismiss = viewModel.assistantActions::hideHistory,
-                onOpen = viewModel.assistantActions::openHistoryConversation
+                onOpen = viewModel.assistantActions::openHistoryConversation,
+                onDelete = viewModel.assistantActions::deleteHistoryConversation
             )
         }
     }
@@ -147,7 +148,8 @@ private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit, onHistory
 private fun AssistantHistoryDialog(
     history: List<com.cslearningos.mobile.feature.assistant.ui.AssistantConversationSummary>,
     onDismiss: () -> Unit,
-    onOpen: (String) -> Unit
+    onOpen: (String) -> Unit,
+    onDelete: (String) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -158,13 +160,16 @@ private fun AssistantHistoryDialog(
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     history.forEach { conversation ->
-                        TextButton(onClick = { onOpen(conversation.id) }, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { onOpen(conversation.id) }, modifier = Modifier.weight(1f)) {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(conversation.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Bold)
                                 if (conversation.preview.isNotBlank()) {
                                     Text(conversation.preview, color = WorkbenchColors.Muted, fontSize = 12.sp, maxLines = 2)
                                 }
                             }
+                        }
+                        TextButton(onClick = { onDelete(conversation.id) }) { Text(stringResource(R.string.common_delete)) }
                         }
                     }
                 }

@@ -21,6 +21,10 @@ class AssistantConversationRepository(
             runCatching { AssistantConversationCodec.decode(entity.messagesJson) }.getOrNull()
         }
 
+    suspend fun delete(id: String) {
+        dao.deleteAssistantConversation(id)
+    }
+
     suspend fun save(conversation: AssistantConversation, now: Long = System.currentTimeMillis()) {
         dao.upsertAssistantConversation(
             AssistantConversationEntity(

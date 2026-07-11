@@ -92,6 +92,7 @@ private class FakeReviewLearningDao(
     override suspend fun latestAssistantConversation(): AssistantConversationEntity? = unsupported()
     override suspend fun recentAssistantConversations(limit: Int): List<AssistantConversationEntity> = unsupported()
     override suspend fun getAssistantConversation(id: String): AssistantConversationEntity? = unsupported()
+    override suspend fun deleteAssistantConversation(id: String) = unsupported()
     override suspend fun countActiveNodesInArea(areaId: String): Int = unsupported()
     override suspend fun upsertArea(area: AreaEntity) = unsupported()
     override suspend fun upsertNode(node: LearningNodeEntity) = unsupported()

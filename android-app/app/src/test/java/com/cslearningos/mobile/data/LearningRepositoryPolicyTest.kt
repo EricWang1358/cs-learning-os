@@ -684,6 +684,7 @@ private class FakeLearningDao : LearningDao {
     override suspend fun latestAssistantConversation(): AssistantConversationEntity? = null
     override suspend fun recentAssistantConversations(limit: Int): List<AssistantConversationEntity> = emptyList()
     override suspend fun getAssistantConversation(id: String): AssistantConversationEntity? = null
+    override suspend fun deleteAssistantConversation(id: String) = Unit
     override suspend fun countActiveNodesInArea(areaId: String): Int =
         nodes.values.count { it.areaId == areaId && it.deletedAt == null }
     override suspend fun upsertArea(area: AreaEntity) {

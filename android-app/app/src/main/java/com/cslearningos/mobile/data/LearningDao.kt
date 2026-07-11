@@ -108,6 +108,9 @@ interface LearningDao {
     @Query("SELECT * FROM assistant_conversations WHERE id = :id LIMIT 1")
     suspend fun getAssistantConversation(id: String): AssistantConversationEntity?
 
+    @Query("DELETE FROM assistant_conversations WHERE id = :id")
+    suspend fun deleteAssistantConversation(id: String)
+
     @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
     suspend fun countActiveNodesInArea(areaId: String): Int
 

@@ -126,6 +126,10 @@ class LearningRepository private constructor(
     suspend fun getAssistantConversation(id: String): AssistantConversation? =
         assistantConversationRepository.get(id)
 
+    suspend fun deleteAssistantConversation(id: String) {
+        assistantConversationRepository.delete(id)
+    }
+
     suspend fun saveAssistantConversation(conversation: AssistantConversation) {
         assistantConversationRepository.save(conversation)
     }
