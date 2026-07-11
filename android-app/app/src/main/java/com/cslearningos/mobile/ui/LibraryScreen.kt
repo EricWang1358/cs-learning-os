@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.cslearningos.mobile.R
@@ -179,14 +185,6 @@ private fun LibraryRootScreen(
 ) {
     val context = LocalContext.current
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        WorkbenchButton(
-            text = stringResource(R.string.library_create_area_button),
-            onClick = onCreateArea,
-            primary = true
-        )
-    }
-
     if (folders.isEmpty()) {
         EmptyWorkbenchCard(
             title = stringResource(R.string.library_root_empty_title),
@@ -201,7 +199,7 @@ private fun LibraryRootScreen(
                 modifier = Modifier.fillMaxWidth().clickable { onToggleArea(folder.areaId) },
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black)
                     if (folder.trackPreview.isNotBlank()) {
                         Text(
@@ -231,14 +229,35 @@ private fun LibraryRootScreen(
                     TextButton(onClick = { onSetFilter(LibraryCheckedFilter.All) }) { Text(stringResource(R.string.library_filter_all)) }
                     TextButton(onClick = { onSetFilter(LibraryCheckedFilter.Checked) }) { Text(stringResource(R.string.library_filter_checked)) }
                 }
-                detail.items.forEach { item ->
-                    Column(modifier = Modifier.fillMaxWidth().clickable { onOpenNode(item.node) }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                detail.items.forEachIndexed { index, item ->
+                    if (index > 0) {
+                        HorizontalDivider(color = WorkbenchColors.Line)
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenNode(item.node) }
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
                         Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text("${item.trackLabel} · ${item.summary}", color = WorkbenchColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
+    }
+
+    TextButton(
+        onClick = onCreateArea,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(listOf(Color(0xFFB9F1DE), Color(0xFFD9F4C5))),
+                RoundedCornerShape(10.dp)
+            )
+    ) {
+        Text(stringResource(R.string.library_create_area_button), color = WorkbenchColors.InkStrong)
     }
 
     var trashExpanded by rememberSaveable { mutableStateOf(false) }
