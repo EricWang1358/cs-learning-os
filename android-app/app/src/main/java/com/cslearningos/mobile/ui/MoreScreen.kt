@@ -65,10 +65,8 @@ private fun MoreSettingsList(
                 when (section.id) {
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel)
-                    MoreSectionId.Notifications -> NotificationsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Guide -> GuideContent()
-                    MoreSectionId.Support -> SupportContent()
                 }
             }
         }
@@ -134,37 +132,6 @@ private fun MoreSectionRow(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 content()
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationsContent(state: LearningUiState, viewModel: LearningViewModel) {
-    val context = LocalContext.current
-    SettingsRow(label = stringResource(R.string.more_notifications_label)) {
-        if (state.notices.isEmpty()) {
-            Text(
-                text = stringResource(R.string.more_notifications_empty),
-                color = WorkbenchColors.Muted,
-                fontSize = 14.sp,
-                lineHeight = 21.sp
-            )
-        }
-        state.notices.forEach { notice ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(WorkbenchColors.Surface.copy(alpha = 0.58f))
-                    .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Eyebrow(stringResource(R.string.more_notice_eyebrow))
-                Text(notice.title.resolve(context), color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                Text(notice.body.resolve(context), color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
-                WorkbenchButton(stringResource(R.string.common_dismiss), { viewModel.dismissNotice(notice.id) })
             }
         }
     }
@@ -336,8 +303,7 @@ private fun DataToolsContent(state: LearningUiState, viewModel: LearningViewMode
             lineHeight = 21.sp
         )
         ToolbarRow {
-            WorkbenchButton(stringResource(R.string.more_backup_files), viewModel::showBackup, primary = true)
-            WorkbenchButton(stringResource(R.string.more_import_backup_file), viewModel::showBackup)
+            WorkbenchButton(stringResource(R.string.more_backup_restore), viewModel::showBackup, primary = true)
             WorkbenchButton(stringResource(R.string.more_remove_demo), viewModel::clearStarterContent, danger = true)
         }
         Text(
@@ -393,6 +359,14 @@ private fun GuideContent() {
                 body = body
             )
         }
+        SettingsRow(label = stringResource(R.string.more_support_label)) {
+            Text(
+                text = stringResource(R.string.more_support_body),
+                color = WorkbenchColors.Muted,
+                fontSize = 14.sp,
+                lineHeight = 21.sp
+            )
+        }
     }
 }
 
@@ -410,18 +384,6 @@ private fun GuideStepCard(step: Int, title: String, body: String) {
         Eyebrow(stringResource(R.string.more_guide_step_badge, step))
         Text(title, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
         Text(body, color = WorkbenchColors.Muted, fontSize = 13.sp, lineHeight = 19.sp)
-    }
-}
-
-@Composable
-private fun SupportContent() {
-    SettingsRow(label = stringResource(R.string.more_support_label)) {
-        Text(
-            text = stringResource(R.string.more_support_body),
-            color = WorkbenchColors.Muted,
-            fontSize = 14.sp,
-            lineHeight = 21.sp
-        )
     }
 }
 

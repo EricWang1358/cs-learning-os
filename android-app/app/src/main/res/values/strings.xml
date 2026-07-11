@@ -196,6 +196,7 @@
     <string name="review_empty_body">Add quiz cards from a note or Markdown :::quiz block. Due cards will appear here.</string>
     <string name="review_answer_hidden">Answer is hidden until you reveal it.</string>
     <string name="review_reveal_answer">Reveal answer</string>
+    <string name="review_manual_edit">Manual edit</string>
     <string name="review_again">Again</string>
     <string name="review_hard">Hard</string>
     <string name="review_good">Good</string>
@@ -293,6 +294,8 @@
     <string name="capture_workflow_status_inbox">Inbox</string>
     <string name="capture_workflow_detail_inbox">Promote this slip manually into a Markdown node, or queue it for AI drafting.</string>
     <string name="capture_workflow_action_ai_draft">AI draft</string>
+    <string name="capture_workflow_status_saved">Saved locally</string>
+    <string name="capture_workflow_detail_saved">This slip is saved locally. Turn it into a node, improve it with AI, or archive it.</string>
 
     <string name="more_eyebrow">settings center</string>
     <string name="more_title">More</string>
@@ -304,7 +307,7 @@
     <string name="more_section_notifications_title">Notifications</string>
     <string name="more_section_notifications_body">Capture and AI task status.</string>
     <string name="more_section_data_title">Data</string>
-    <string name="more_section_data_body">Backup, import, and local cleanup.</string>
+    <string name="more_section_data_body">Backup, restore, and local cleanup.</string>
     <string name="more_section_guide_title">Guide</string>
     <string name="more_section_guide_body">A built-in quickstart for the phone workflow.</string>
     <string name="more_section_support_title">Support</string>
@@ -334,6 +337,7 @@
     <string name="more_local_data_body">Full backups use JSON content in a share-friendly .txt file. Deleted nodes stay in Trashbin first, so cleanup stays reversible.</string>
     <string name="more_backup_json">Backup JSON</string>
     <string name="more_backup_files">Backup files</string>
+    <string name="more_backup_restore">Backup and restore</string>
     <string name="more_export_readable">Export MD and TXT</string>
     <string name="more_restore_json">Restore JSON</string>
     <string name="more_import_backup_file">Import backup</string>

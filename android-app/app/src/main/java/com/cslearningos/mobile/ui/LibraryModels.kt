@@ -37,24 +37,21 @@ data class LibraryAreaDetail(
     val items: List<LibraryNodeRow>
 )
 
-data class LibraryOverview(
-    val areaCount: Int,
-    val nodeCount: Int,
-    val checkedCount: Int,
-    val featuredAreaLabel: String
+data class LibraryRootModel(
+    val folders: List<LibraryFolderRow>,
+    val hasOverviewPanel: Boolean = false,
+    val hasAreaMapPanel: Boolean = false
 )
 
-data class LibraryMap(
-    val areas: List<LibraryMapArea>
-)
-
-data class LibraryMapArea(
-    val areaId: String,
-    val label: String,
-    val nodeCount: Int,
-    val checkedCount: Int,
-    val trackPreview: String
-)
+fun buildLibraryRootModel(
+    areas: List<AreaEntity>,
+    nodes: List<LearningNodeEntity>,
+    dueQuizzes: List<QuizItemEntity>,
+    context: Context? = null
+): LibraryRootModel =
+    LibraryRootModel(
+        folders = buildLibraryRootFolders(areas, nodes, dueQuizzes, context)
+    )
 
 fun buildLibraryRootFolders(
     areas: List<AreaEntity>,
@@ -119,60 +116,6 @@ fun buildLibraryAreaDetail(
                     dueCount = dueByNode[node.id].orEmpty().size,
                     checked = node.isChecked,
                     node = node
-                )
-            }
-    )
-}
-
-fun buildLibraryOverview(
-    areas: List<AreaEntity>,
-    nodes: List<LearningNodeEntity>,
-    context: Context? = null
-): LibraryOverview {
-    val activeNodes = nodes.activeLibraryNodes()
-    val featuredAreaId = activeNodes
-        .groupBy { it.areaId }
-        .entries
-        .maxWithOrNull(
-            compareBy<Map.Entry<String, List<LearningNodeEntity>>> { entry -> entry.value.count { it.isChecked } }
-                .thenBy { entry -> entry.value.size }
-                .thenBy { entry -> entry.key }
-        )
-        ?.key
-    val featuredArea = areas.firstOrNull { it.id == featuredAreaId }
-
-    return LibraryOverview(
-        areaCount = areas.count { it.deletedAt == null },
-        nodeCount = activeNodes.size,
-        checkedCount = activeNodes.count { it.isChecked },
-        featuredAreaLabel = featuredArea?.let { displayAreaName(context, it) }
-            ?: (context?.getString(com.cslearningos.mobile.R.string.library_no_active_area) ?: "No active area")
-    )
-}
-
-fun buildLibraryMap(
-    areas: List<AreaEntity>,
-    nodes: List<LearningNodeEntity>,
-    context: Context? = null
-): LibraryMap {
-    val activeNodes = nodes.activeLibraryNodes()
-    return LibraryMap(
-        areas = areas
-            .filter { it.deletedAt == null }
-            .sortedWith(compareBy<AreaEntity> { it.order }.thenBy { displayAreaName(context, it) })
-            .map { area ->
-                val areaNodes = activeNodes.filter { it.areaId == area.id }
-                LibraryMapArea(
-                    areaId = area.id,
-                    label = displayAreaName(context, area),
-                    nodeCount = areaNodes.size,
-                    checkedCount = areaNodes.count { it.isChecked },
-                    trackPreview = areaNodes
-                        .map { readableTrackLabel(context, it.track) }
-                        .distinct()
-                        .sorted()
-                        .take(3)
-                        .joinToString(", ")
                 )
             }
     )

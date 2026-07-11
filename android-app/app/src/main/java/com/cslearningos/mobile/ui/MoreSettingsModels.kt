@@ -15,21 +15,24 @@ enum class AppearanceMode(val label: String) {
 enum class MoreSectionId {
     System,
     Service,
-    Notifications,
     Data,
-    Guide,
-    Support
+    Guide
+}
+
+enum class MoreDataAction {
+    BackupAndRestore
 }
 
 fun orderedMoreSectionIds(): List<MoreSectionId> =
     listOf(
         MoreSectionId.System,
         MoreSectionId.Service,
-        MoreSectionId.Notifications,
         MoreSectionId.Data,
-        MoreSectionId.Guide,
-        MoreSectionId.Support
+        MoreSectionId.Guide
     )
+
+fun moreDataActions(): List<MoreDataAction> =
+    listOf(MoreDataAction.BackupAndRestore)
 
 fun resolveSystemLanguage(language: SystemLanguage, systemLanguageTag: String): SystemLanguage =
     when (language) {

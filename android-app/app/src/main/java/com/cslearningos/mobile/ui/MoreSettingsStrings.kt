@@ -29,13 +29,6 @@ fun moreSectionSummaries(state: LearningUiState): List<MoreSectionSummary> =
                 value = stringResource(if (state.aiProviderSettings.isConfigured) R.string.common_configured else R.string.common_not_configured)
             )
 
-            MoreSectionId.Notifications -> MoreSectionSummary(
-                id = sectionId,
-                title = stringResource(R.string.more_section_notifications_title),
-                body = stringResource(R.string.more_section_notifications_body),
-                value = stringResource(R.string.more_value_inbox)
-            )
-
             MoreSectionId.Data -> MoreSectionSummary(
                 id = sectionId,
                 title = stringResource(R.string.more_section_data_title),
@@ -48,13 +41,6 @@ fun moreSectionSummaries(state: LearningUiState): List<MoreSectionSummary> =
                 title = stringResource(R.string.more_section_guide_title),
                 body = stringResource(R.string.more_section_guide_body),
                 value = stringResource(R.string.more_value_start_here)
-            )
-
-            MoreSectionId.Support -> MoreSectionSummary(
-                id = sectionId,
-                title = stringResource(R.string.more_section_support_title),
-                body = stringResource(R.string.more_section_support_body),
-                value = stringResource(R.string.more_value_offline_safe)
             )
         }
     }

@@ -613,13 +613,12 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
             WorkbenchButton(stringResource(R.string.common_back), viewModel::showHome)
             WorkbenchButton(stringResource(R.string.reader_edit_mode_button), { viewModel.editNode(node) }, primary = true)
             WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseNode(node) })
-            WorkbenchButton(stringResource(R.string.common_delete), viewModel::deleteSelectedNode, danger = true)
             WorkbenchMenuButton(
                 text = stringResource(R.string.nav_more_label),
                 options = listOf(
                     WorkbenchMenuOption(
-                        text = stringResource(R.string.assistant_quick_draft),
-                        onClick = { viewModel.assistantActions.reviseNode(node) }
+                        text = stringResource(R.string.common_delete),
+                        onClick = viewModel::deleteSelectedNode
                     ),
                     WorkbenchMenuOption(
                         text = stringResource(R.string.reader_add_quiz_button),
@@ -837,8 +836,19 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     AnswerBlock(quiz)
                     ToolbarRow {
-                        WorkbenchButton(stringResource(R.string.common_edit), { viewModel.editQuiz(quiz) })
-                        WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseQuiz(quiz) })
+                        WorkbenchMenuButton(
+                            text = stringResource(R.string.common_edit),
+                            options = listOf(
+                                WorkbenchMenuOption(
+                                    text = stringResource(R.string.review_manual_edit),
+                                    onClick = { viewModel.editQuiz(quiz) }
+                                ),
+                                WorkbenchMenuOption(
+                                    text = stringResource(R.string.assistant_improve_object),
+                                    onClick = { viewModel.assistantActions.reviseQuiz(quiz) }
+                                )
+                            )
+                        )
                         WorkbenchButton(stringResource(R.string.review_again), { viewModel.answerCurrentQuiz(ReviewRating.Again) }, danger = true)
                         WorkbenchButton(stringResource(R.string.review_hard), { viewModel.answerCurrentQuiz(ReviewRating.Hard) })
                         WorkbenchButton(stringResource(R.string.review_good), { viewModel.answerCurrentQuiz(ReviewRating.Good) }, primary = true)

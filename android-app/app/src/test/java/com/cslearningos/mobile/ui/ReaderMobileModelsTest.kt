@@ -19,4 +19,21 @@ class ReaderMobileModelsTest {
         assertEquals("Q (3)", readerQuestionButtonLabel(openQuestionCount = 3, expanded = false))
         assertEquals("Q open (3)", readerQuestionButtonLabel(openQuestionCount = 3, expanded = true))
     }
+
+    @Test
+    fun readerKeepsOneVisibleImproveWithAiActionAndNoDuplicateMenuAiAction() {
+        assertEquals(
+            listOf(
+                ReaderVisibleAction.Back,
+                ReaderVisibleAction.Edit,
+                ReaderVisibleAction.ImproveWithAi,
+                ReaderVisibleAction.More
+            ),
+            readerVisibleActions()
+        )
+        assertEquals(
+            listOf(ReaderMenuAction.Delete, ReaderMenuAction.AddQuiz, ReaderMenuAction.ToggleQuestions),
+            readerMenuActions()
+        )
+    }
 }

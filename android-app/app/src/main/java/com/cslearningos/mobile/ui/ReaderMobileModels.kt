@@ -6,6 +6,25 @@ import com.cslearningos.mobile.R
 fun useCompactPortraitBrand(screen: AppScreen): Boolean =
     screenChromePolicy(screen).style == ScreenChromeStyle.Compact
 
+enum class ReaderVisibleAction {
+    Back,
+    Edit,
+    ImproveWithAi,
+    More
+}
+
+enum class ReaderMenuAction {
+    Delete,
+    AddQuiz,
+    ToggleQuestions
+}
+
+fun readerVisibleActions(): List<ReaderVisibleAction> =
+    listOf(ReaderVisibleAction.Back, ReaderVisibleAction.Edit, ReaderVisibleAction.ImproveWithAi, ReaderVisibleAction.More)
+
+fun readerMenuActions(): List<ReaderMenuAction> =
+    listOf(ReaderMenuAction.Delete, ReaderMenuAction.AddQuiz, ReaderMenuAction.ToggleQuestions)
+
 fun readerQuestionButtonLabel(
     openQuestionCount: Int,
     expanded: Boolean,

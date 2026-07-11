@@ -62,8 +62,8 @@ class LibraryModelsTest {
     }
 
     @Test
-    fun libraryOverviewStillStaysSecondaryToFolders() {
-        val overview = buildLibraryOverview(
+    fun libraryRootModelContainsAreaFoldersOnly() {
+        val root = buildLibraryRootModel(
             areas = listOf(
                 area("algorithms", "Algorithms", 10),
                 area("systems", "Systems", 20)
@@ -71,13 +71,13 @@ class LibraryModelsTest {
             nodes = listOf(
                 node("binary", "Binary Search", "algorithms", "search-patterns", 10),
                 node("paging", "Paging", "systems", "virtual-memory", 20, isChecked = true)
-            )
+            ),
+            dueQuizzes = emptyList()
         )
 
-        assertEquals(2, overview.areaCount)
-        assertEquals(2, overview.nodeCount)
-        assertEquals(1, overview.checkedCount)
-        assertEquals("Systems", overview.featuredAreaLabel)
+        assertEquals(listOf("Algorithms", "Systems"), root.folders.map { it.title })
+        assertEquals(false, root.hasOverviewPanel)
+        assertEquals(false, root.hasAreaMapPanel)
     }
 
     private fun area(id: String, name: String, order: Int) =

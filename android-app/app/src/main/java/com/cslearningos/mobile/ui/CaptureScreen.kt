@@ -3,12 +3,6 @@
 package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.R
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,11 +30,8 @@ private data class CaptureScreenState(
     val topicHint: String,
     val sourceLabel: String,
     val type: CaptureSlipType,
-    val pendingAiDraftSlipId: String?,
     val captureSlips: List<CaptureSlipEntity>,
-    val nodeTitles: List<String>,
     val aiProviderSettings: AiProviderSettings,
-    val aiServiceStatus: AiServiceStatus,
     val aiBusy: Boolean
 )
 
@@ -54,22 +45,6 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
             body = stringResource(R.string.capture_body)
         )
         CaptureComposer(state = screenState, viewModel = viewModel)
-        CollapsibleWorkbenchSection(
-            eyebrow = stringResource(R.string.capture_composer_eyebrow),
-            title = stringResource(R.string.capture_chain_title),
-            body = stringResource(R.string.capture_chain_summary),
-            expandLabel = stringResource(R.string.common_open),
-            collapseLabel = stringResource(R.string.common_close),
-            initiallyExpanded = screenHelpInitiallyExpanded(AppScreen.Capture)
-        ) {
-            Text(
-                text = stringResource(R.string.capture_ai_chain_body),
-                color = WorkbenchColors.Muted,
-                fontSize = 13.sp,
-                lineHeight = 19.sp
-            )
-        }
-        AiDraftPreflightHost(state = screenState, viewModel = viewModel)
         CaptureInbox(state = screenState, viewModel = viewModel)
     }
 }
@@ -103,90 +78,6 @@ private fun CaptureComposer(state: CaptureScreenState, viewModel: LearningViewMo
         CaptureTypeRow(selected = state.type, onSelect = viewModel::setCaptureType)
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.capture_save_slip), viewModel::saveCaptureSlip, primary = true)
-            WorkbenchButton(
-                text = stringResource(if (state.aiProviderSettings.isConfigured) R.string.capture_ai_draft_later else R.string.capture_set_up_ai),
-                onClick = if (state.aiProviderSettings.isConfigured) viewModel::saveCaptureSlipForAiDraft else viewModel::showAiServiceSettings
-            )
-        }
-    }
-}
-
-@Composable
-private fun AiDraftPreflightHost(state: CaptureScreenState, viewModel: LearningViewModel) {
-    val slip = state.pendingAiDraftSlipId?.let { slipId -> state.captureSlips.firstOrNull { it.id == slipId } }
-    AnimatedVisibility(
-        visible = slip != null,
-        enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
-        exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
-    ) {
-        if (slip != null) {
-            AiDraftPreflight(slip = slip, state = state, viewModel = viewModel)
-        }
-    }
-}
-
-@Composable
-private fun AiDraftPreflight(
-    slip: CaptureSlipEntity,
-    state: CaptureScreenState,
-    viewModel: LearningViewModel
-) {
-    val settings = state.aiProviderSettings
-    val contextTitles = aiDraftContextNodeTitles(state.nodeTitles)
-    WorkbenchCard(accent = true) {
-        val context = LocalContext.current
-        Eyebrow(stringResource(R.string.capture_preflight_eyebrow))
-        Text(
-            text = stringResource(R.string.capture_preflight_title),
-            color = WorkbenchColors.InkStrong,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black
-        )
-        Text(
-            text = stringResource(
-                R.string.capture_preflight_body,
-                slip.topicHint ?: stringResource(R.string.capture_preflight_target_auto),
-                slip.sourceLabel ?: stringResource(R.string.capture_preflight_source_manual)
-            ),
-            color = WorkbenchColors.Muted,
-            fontSize = 14.sp,
-            lineHeight = 21.sp
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(WorkbenchColors.Surface.copy(alpha = 0.68f))
-                .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(12.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Eyebrow(stringResource(R.string.capture_preflight_send_eyebrow))
-            Text(stringResource(R.string.capture_preflight_type, slip.type.label()), color = WorkbenchColors.Muted, fontSize = 13.sp)
-            Text(slip.body, color = WorkbenchColors.InkStrong, fontSize = 15.sp, lineHeight = 22.sp)
-            Text(
-                stringResource(R.string.capture_preflight_provider_model, settings.provider, settings.model, settings.baseUrl),
-                color = WorkbenchColors.Muted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp
-            )
-            Text(
-                text = stringResource(R.string.capture_preflight_context, contextTitles.joinToString().ifBlank { stringResource(R.string.common_no_existing_nodes) }),
-                color = WorkbenchColors.Muted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp
-            )
-        }
-        Text(
-            text = state.aiServiceStatus.body.resolve(context),
-            color = WorkbenchColors.Muted,
-            fontSize = 13.sp,
-            lineHeight = 19.sp
-        )
-        ToolbarRow {
-            WorkbenchButton(stringResource(R.string.common_validate), viewModel::validateAiSettings, enabled = !state.aiBusy)
-            WorkbenchButton(stringResource(R.string.capture_generate_draft), viewModel::confirmAiDraftPreflight, primary = true, enabled = !state.aiBusy)
-            WorkbenchButton(stringResource(R.string.common_cancel), viewModel::cancelAiDraftPreflight)
         }
     }
 }
@@ -229,7 +120,7 @@ private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel
                 viewModel = viewModel,
                 aiConfigured = state.aiProviderSettings.isConfigured,
                 aiBusy = state.aiBusy,
-                pendingAiDraftSlipId = state.pendingAiDraftSlipId
+                pendingAiDraftSlipId = null
             )
         }
     }
@@ -281,15 +172,6 @@ private fun CaptureSlipCard(
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.capture_make_node), { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
             WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseCapture(slip) })
-            WorkbenchButton(
-                text = if (aiConfigured) workflow.primaryActionLabel else stringResource(R.string.capture_set_up_ai),
-                onClick = if (aiConfigured) {
-                    { viewModel.prepareAiDraftForSlip(slip) }
-                } else {
-                    viewModel::showAiServiceSettings
-                },
-                enabled = workflow.actionsEnabled
-            )
             WorkbenchButton(stringResource(R.string.capture_archive), { viewModel.archiveCaptureSlip(slip) })
         }
     }
@@ -311,10 +193,7 @@ private fun LearningUiState.toCaptureScreenState(): CaptureScreenState =
         topicHint = captureTopicHint,
         sourceLabel = captureSourceLabel,
         type = captureType,
-        pendingAiDraftSlipId = pendingAiDraftSlipId,
         captureSlips = captureSlips,
-        nodeTitles = nodes.map { it.title },
         aiProviderSettings = aiProviderSettings,
-        aiServiceStatus = aiServiceStatus,
         aiBusy = aiBusy
     )

@@ -5,12 +5,24 @@ import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.SyncStatus
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CaptureWorkflowModelsTest {
     @Test
-    fun aiQueuedSlipShowsExplicitStatusAndGenerateAction() {
+    fun composerKeepsExactlyOneLocalSaveAction() {
+        assertEquals(listOf(CaptureComposerAction.SaveLocal), captureComposerActions())
+    }
+
+    @Test
+    fun savedSlipCardsKeepExactlyThreeActions() {
+        assertEquals(
+            listOf(CaptureSlipAction.MakeNode, CaptureSlipAction.ImproveWithAi, CaptureSlipAction.Archive),
+            captureSlipActions()
+        )
+    }
+
+    @Test
+    fun savedSlipWorkflowStaysLocalInboxWithoutVisibleAiDraftFlow() {
         val model = buildCaptureSlipWorkflow(
             slip = slip(status = CaptureSlipStatus.ai_queued),
             pendingAiDraftSlipId = "slip-1",
@@ -18,25 +30,10 @@ class CaptureWorkflowModelsTest {
             aiConfigured = true
         )
 
-        assertEquals(CaptureSlipWorkflowStage.QueuedForAi, model.stage)
-        assertEquals("Queued for AI", model.statusLabel)
-        assertTrue(model.primaryActionLabel.contains("Generate"))
-        assertTrue(model.detail.contains("editable Markdown draft"))
-    }
-
-    @Test
-    fun draftingSlipDisablesActionsAndExplainsCurrentWork() {
-        val model = buildCaptureSlipWorkflow(
-            slip = slip(status = CaptureSlipStatus.ai_drafting),
-            pendingAiDraftSlipId = "slip-1",
-            aiBusy = true,
-            aiConfigured = true
-        )
-
-        assertEquals(CaptureSlipWorkflowStage.Drafting, model.stage)
-        assertEquals("Drafting", model.statusLabel)
+        assertEquals(CaptureSlipWorkflowStage.Inbox, model.stage)
+        assertEquals("Saved locally", model.statusLabel)
         assertEquals(false, model.actionsEnabled)
-        assertTrue(model.detail.contains("model is working"))
+        assertEquals("", model.primaryActionLabel)
     }
 
     private fun slip(status: CaptureSlipStatus) =

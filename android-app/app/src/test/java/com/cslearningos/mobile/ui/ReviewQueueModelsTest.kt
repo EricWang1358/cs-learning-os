@@ -32,6 +32,23 @@ class ReviewQueueModelsTest {
         assertEquals("q2", next?.id)
     }
 
+    @Test
+    fun revealedReviewUsesOneEditMenuThenThreeRatings() {
+        assertEquals(
+            listOf(
+                ReviewRevealedControl.EditMenu,
+                ReviewRevealedControl.Again,
+                ReviewRevealedControl.Hard,
+                ReviewRevealedControl.Good
+            ),
+            revealedReviewControls()
+        )
+        assertEquals(
+            listOf(ReviewEditMenuAction.ManualEdit, ReviewEditMenuAction.ImproveWithAi),
+            reviewEditMenuActions()
+        )
+    }
+
     private fun quiz(id: String) =
         QuizItemEntity(
             id = id,

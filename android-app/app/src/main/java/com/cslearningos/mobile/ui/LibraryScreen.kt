@@ -54,9 +54,7 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val screenState = state.toLibraryScreenState()
     val context = LocalContext.current
     val selectedArea = screenState.areas.firstOrNull { it.id == screenState.selectedAreaId }
-    val folders = buildLibraryRootFolders(screenState.areas, screenState.nodes, screenState.dueQuizzes, context)
-    val overview = buildLibraryOverview(screenState.areas, screenState.nodes, context)
-    val map = buildLibraryMap(screenState.areas, screenState.nodes, context)
+    val root = buildLibraryRootModel(screenState.areas, screenState.nodes, screenState.dueQuizzes, context)
     val detail = selectedArea?.let {
         buildLibraryAreaDetail(it, screenState.nodes, screenState.dueQuizzes, screenState.checkedFilter, context)
     }
@@ -70,9 +68,7 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (detail == null) {
             LibraryRootScreen(
-                folders = folders,
-                overview = overview,
-                map = map,
+                folders = root.folders,
                 onOpenArea = viewModel::openLibraryArea,
                 onCreateArea = {
                     createAreaDraft = ""
@@ -177,8 +173,6 @@ fun LibraryScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @Composable
 private fun LibraryRootScreen(
     folders: List<LibraryFolderRow>,
-    overview: LibraryOverview,
-    map: LibraryMap,
     onOpenArea: (String) -> Unit,
     onCreateArea: () -> Unit,
     onRenameArea: (AreaEntity) -> Unit,
@@ -245,51 +239,6 @@ private fun LibraryRootScreen(
         }
     }
 
-    CollapsibleWorkbenchSection(
-        eyebrow = stringResource(R.string.library_overview_eyebrow),
-        title = stringResource(R.string.library_overview_title),
-        body = stringResource(R.string.library_overview_body_folder),
-        expandLabel = stringResource(R.string.common_open),
-        collapseLabel = stringResource(R.string.common_close),
-        initiallyExpanded = false
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            MetaPill(stringResource(R.string.library_areas_label), overview.areaCount.toString(), Modifier.weight(1f))
-            MetaPill(stringResource(R.string.common_nodes), overview.nodeCount.toString(), Modifier.weight(1f))
-            MetaPill(stringResource(R.string.library_checked_filter), overview.checkedCount.toString(), Modifier.weight(1f))
-        }
-        MetaPill(stringResource(R.string.library_featured_label), overview.featuredAreaLabel)
-    }
-
-    CollapsibleWorkbenchSection(
-        eyebrow = stringResource(R.string.library_map_eyebrow),
-        title = stringResource(R.string.library_map_title),
-        body = stringResource(R.string.library_map_body_folder),
-        expandLabel = stringResource(R.string.common_open),
-        collapseLabel = stringResource(R.string.common_close),
-        initiallyExpanded = false
-    ) {
-        map.areas.forEach { area ->
-            InteractiveCard(onClick = { onOpenArea(area.areaId) }, accent = false) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(area.label, color = WorkbenchColors.InkStrong, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                        if (area.trackPreview.isNotBlank()) {
-                            Text(area.trackPreview, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 17.sp)
-                        }
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MetaPill(stringResource(R.string.common_nodes), area.nodeCount.toString())
-                        MetaPill(stringResource(R.string.library_checked_filter), area.checkedCount.toString())
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

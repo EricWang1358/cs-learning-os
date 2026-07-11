@@ -161,6 +161,7 @@
     <string name="review_empty_body">可以从笔记或 Markdown 的 :::quiz 块生成测验卡片。到期后会在这里出现。</string>
     <string name="review_answer_hidden">答案默认隐藏，点开后再看。</string>
     <string name="review_reveal_answer">显示答案</string>
+    <string name="review_manual_edit">手动编辑</string>
     <string name="review_again">Again</string>
     <string name="review_hard">Hard</string>
     <string name="review_good">Good</string>
@@ -258,6 +259,8 @@
     <string name="capture_workflow_status_inbox">收件箱</string>
     <string name="capture_workflow_detail_inbox">你可以手动把这条随手记整理成 Markdown 节点，也可以把它排进 AI 生成流程。</string>
     <string name="capture_workflow_action_ai_draft">AI 草稿</string>
+    <string name="capture_workflow_status_saved">已本地保存</string>
+    <string name="capture_workflow_detail_saved">这条随手记已经保存在本地。你可以把它做成节点、用 AI 改进，或归档。</string>
 
     <string name="more_eyebrow">设置中心</string>
     <string name="more_title">更多</string>
@@ -269,7 +272,7 @@
     <string name="more_section_notifications_title">通知</string>
     <string name="more_section_notifications_body">捕捉流程与 AI 任务状态。</string>
     <string name="more_section_data_title">数据</string>
-    <string name="more_section_data_body">备份、导入和本地清理。</string>
+    <string name="more_section_data_body">备份、恢复和本地清理。</string>
     <string name="more_section_support_title">支持</string>
     <string name="more_section_support_body">诊断信息与产品契约。</string>
     <string name="more_value_local_first">本地优先</string>
@@ -296,6 +299,7 @@
     <string name="more_local_data_body">完整备份会导出为带 .txt 后缀的 JSON 文件，更适合分享和保存。删除的节点会先进入回收站，避免直接丢失。</string>
     <string name="more_backup_json">备份 JSON</string>
     <string name="more_backup_files">备份文件</string>
+    <string name="more_backup_restore">备份和恢复</string>
     <string name="more_export_readable">导出 MD 与 TXT</string>
     <string name="more_restore_json">恢复 JSON</string>
     <string name="more_import_backup_file">导入备份</string>
