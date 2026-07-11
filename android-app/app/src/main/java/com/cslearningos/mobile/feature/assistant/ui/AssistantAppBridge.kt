@@ -19,6 +19,12 @@ class AssistantAppBridge(
 ) {
     fun newChat() = coordinator.newChat()
 
+    fun showHistory() = coordinator.showHistory()
+
+    fun hideHistory() = coordinator.hideHistory()
+
+    fun openHistoryConversation(id: String) = coordinator.openHistoryConversation(id)
+
     fun setInput(value: String) = coordinator.setInput(value)
 
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)

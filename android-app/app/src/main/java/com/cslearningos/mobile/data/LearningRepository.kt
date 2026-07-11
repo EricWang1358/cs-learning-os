@@ -120,6 +120,12 @@ class LearningRepository private constructor(
     suspend fun latestAssistantConversation(): AssistantConversation? =
         assistantConversationRepository.latest()
 
+    suspend fun recentAssistantConversations(limit: Int): List<AssistantConversation> =
+        assistantConversationRepository.recent(limit)
+
+    suspend fun getAssistantConversation(id: String): AssistantConversation? =
+        assistantConversationRepository.get(id)
+
     suspend fun saveAssistantConversation(conversation: AssistantConversation) {
         assistantConversationRepository.save(conversation)
     }

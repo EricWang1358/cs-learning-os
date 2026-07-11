@@ -422,6 +422,8 @@
     <string name="assistant_title">知识助理</string>
     <string name="assistant_open_description">打开知识助理</string>
     <string name="assistant_new_chat">新对话</string>
+    <string name="assistant_history">历史记录</string>
+    <string name="assistant_history_empty">还没有已保存的对话。</string>
     <string name="assistant_send">发送</string>
     <string name="assistant_stop">停止</string>
     <string name="assistant_input_label">问问你的学习资料</string>

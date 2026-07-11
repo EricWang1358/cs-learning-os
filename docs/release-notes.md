@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.24
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.24-beta`
+
+Android version:
+
+- `versionCode`: 25
+- `versionName`: `0.1.24`
+
+Status: implementation beta.
+
+Highlights:
+
+- Completed the visible Assistant history workflow: conversations persist locally, the assistant has a History entry point, and a selected session restores its messages and working draft instead of leaving past conversations inaccessible.
+
 ## Android Beta 0.1.23
 
 Date: 2026-07-11

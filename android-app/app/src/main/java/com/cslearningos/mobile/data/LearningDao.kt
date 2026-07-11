@@ -102,6 +102,12 @@ interface LearningDao {
     @Query("SELECT * FROM assistant_conversations ORDER BY updated_at DESC LIMIT 1")
     suspend fun latestAssistantConversation(): AssistantConversationEntity?
 
+    @Query("SELECT * FROM assistant_conversations ORDER BY updated_at DESC LIMIT :limit")
+    suspend fun recentAssistantConversations(limit: Int): List<AssistantConversationEntity>
+
+    @Query("SELECT * FROM assistant_conversations WHERE id = :id LIMIT 1")
+    suspend fun getAssistantConversation(id: String): AssistantConversationEntity?
+
     @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
     suspend fun countActiveNodesInArea(areaId: String): Int
 

@@ -50,6 +50,12 @@ data class AssistantMessage(
     val isStreaming: Boolean = false
 )
 
+data class AssistantConversationSummary(
+    val id: String,
+    val title: String,
+    val preview: String
+)
+
 data class CaptureSaveActionClaim(
     val action: AssistantMessageAction.SaveCapture,
     val messages: List<AssistantMessage>
@@ -193,5 +199,7 @@ data class AssistantUiState(
     val isBusy: Boolean = false,
     val lastRequestMode: AssistantRequestMode = AssistantRequestMode.Answer,
     val workingDraft: AssistantWorkingDraft? = null,
-    val reviewSession: AssistantReviewSession? = null
+    val reviewSession: AssistantReviewSession? = null,
+    val conversationHistory: List<AssistantConversationSummary> = emptyList(),
+    val historyVisible: Boolean = false
 )

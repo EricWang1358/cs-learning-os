@@ -24,6 +24,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -61,7 +63,8 @@ fun AssistantScreen(
     ) {
         AssistantTopBar(
             onBack = viewModel::showHome,
-            onNewChat = viewModel.assistantActions::newChat
+            onNewChat = viewModel.assistantActions::newChat,
+            onHistory = viewModel.assistantActions::showHistory
         )
         StatusBanner(state.message)
         LazyColumn(
@@ -99,11 +102,18 @@ fun AssistantScreen(
             enabled = !assistant.isBusy,
             modifier = Modifier.imePadding()
         )
+        if (assistant.historyVisible) {
+            AssistantHistoryDialog(
+                history = assistant.conversationHistory,
+                onDismiss = viewModel.assistantActions::hideHistory,
+                onOpen = viewModel.assistantActions::openHistoryConversation
+            )
+        }
     }
 }
 
 @Composable
-private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit) {
+private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit, onHistory: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,12 +134,44 @@ private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit) {
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.weight(1f)
         )
+        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory)
         AssistantHeaderAction(
             text = stringResource(R.string.assistant_new_chat),
             onClick = onNewChat,
             accent = true
         )
     }
+}
+
+@Composable
+private fun AssistantHistoryDialog(
+    history: List<com.cslearningos.mobile.feature.assistant.ui.AssistantConversationSummary>,
+    onDismiss: () -> Unit,
+    onOpen: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.assistant_history)) },
+        text = {
+            if (history.isEmpty()) {
+                Text(stringResource(R.string.assistant_history_empty))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    history.forEach { conversation ->
+                        TextButton(onClick = { onOpen(conversation.id) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(conversation.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Bold)
+                                if (conversation.preview.isNotBlank()) {
+                                    Text(conversation.preview, color = WorkbenchColors.Muted, fontSize = 12.sp, maxLines = 2)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } }
+    )
 }
 
 @Composable

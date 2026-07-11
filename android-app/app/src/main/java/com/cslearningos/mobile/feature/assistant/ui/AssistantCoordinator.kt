@@ -69,6 +69,28 @@ class AssistantCoordinator(
         mutableState.value = AssistantUiState()
     }
 
+    fun showHistory() {
+        scope.launch {
+            val history = repository.recentAssistantConversations(HistoryLimit).map { it.toSummary() }
+            mutableState.update { it.copy(conversationHistory = history, historyVisible = true) }
+        }
+    }
+
+    fun hideHistory() {
+        mutableState.update { it.copy(historyVisible = false) }
+    }
+
+    fun openHistoryConversation(id: String) {
+        scope.launch {
+            val conversation = repository.getAssistantConversation(id) ?: return@launch
+            conversationId = conversation.id
+            mutableState.value = AssistantUiState(
+                messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
+                workingDraft = conversation.workingDraft
+            )
+        }
+    }
+
     fun setInput(value: String) {
         mutableState.update { it.copy(input = value) }
     }
@@ -355,6 +377,20 @@ class AssistantCoordinator(
     }
 
     private fun newConversationId(): String = UUID.randomUUID().toString()
+
+    private companion object {
+        const val HistoryLimit = 30
+    }
+}
+
+private fun AssistantConversation.toSummary(): AssistantConversationSummary {
+    val firstUserMessage = messages.firstOrNull { it.role == AssistantConversationRole.User }?.body.orEmpty()
+    val latestMessage = messages.lastOrNull()?.body.orEmpty()
+    return AssistantConversationSummary(
+        id = id,
+        title = firstUserMessage.lineSequence().firstOrNull()?.trim()?.take(36).orEmpty().ifBlank { "New conversation" },
+        preview = latestMessage.lineSequence().firstOrNull()?.trim()?.take(72).orEmpty()
+    )
 }
 
 private fun AssistantConversationMessage.toUiMessage(): AssistantMessage =
