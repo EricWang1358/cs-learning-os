@@ -4,7 +4,6 @@ package com.cslearningos.mobile.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -152,12 +151,6 @@ fun WorkbenchCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = tween(
-                    durationMillis = motionPolicy.expandMillis,
-                    easing = FastOutSlowInEasing
-                )
-            )
             .shadow(
                 elevation = if (accent) 14.dp else 8.dp,
                 shape = CardShape,
@@ -617,8 +610,8 @@ fun CollapsibleWorkbenchSection(
         }
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(motionPolicy.fadeMillis)) + expandVertically(tween(motionPolicy.expandMillis)),
-            exit = fadeOut(tween(motionPolicy.fadeMillis)) + shrinkVertically(tween(motionPolicy.expandMillis))
+            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.DetailExpandMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.DetailExpandMillis))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text(body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 18.sp)

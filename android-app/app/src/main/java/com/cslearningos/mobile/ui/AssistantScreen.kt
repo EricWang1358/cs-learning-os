@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,9 +58,9 @@ fun AssistantScreen(
 ) {
     val assistant = state.assistant
     val listState = rememberLazyListState()
-    LaunchedEffect(assistant.messages.lastOrNull()?.id, assistant.messages.lastOrNull()?.body?.length) {
+    LaunchedEffect(assistant.messages.lastOrNull()?.id) {
         if (assistant.messages.isNotEmpty()) {
-            listState.animateScrollToItem(assistant.messages.lastIndex)
+            listState.scrollToItem(assistant.messages.lastIndex)
         }
     }
     Box(
@@ -115,8 +116,8 @@ fun AssistantScreen(
         }
         AnimatedVisibility(
             visible = assistant.historyVisible,
-            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it },
-            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it }
+            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it },
+            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it }
         ) {
             AssistantHistoryDrawer(
                 history = assistant.conversationHistory,
@@ -137,7 +138,7 @@ private fun AssistantTopBar(
     onHistory: () -> Unit,
     historyEnabled: Boolean
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(WorkbenchColors.Surface.copy(alpha = AssistantUiTokens.TopBarSurfaceAlpha))
@@ -146,23 +147,26 @@ private fun AssistantTopBar(
                 horizontal = AssistantUiTokens.HeaderHorizontalPadding,
                 vertical = AssistantUiTokens.HeaderVerticalPadding
             ),
-        horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
     ) {
-        AssistantHeaderAction(text = stringResource(R.string.common_back), onClick = onBack)
-        Text(
-            text = stringResource(R.string.assistant_title),
-            color = WorkbenchColors.InkStrong,
-            fontSize = AssistantUiTokens.HeaderTitleSize,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.weight(1f)
-        )
-        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
-        AssistantHeaderAction(
-            text = stringResource(R.string.assistant_new_chat),
-            onClick = onNewChat,
-            accent = true
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AssistantHeaderAction(text = stringResource(R.string.common_back), onClick = onBack)
+            Text(
+                text = stringResource(R.string.assistant_title),
+                color = WorkbenchColors.InkStrong,
+                fontSize = AssistantUiTokens.HeaderTitleSize,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)) {
+            AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
+            AssistantHeaderAction(
+                text = stringResource(R.string.assistant_new_chat),
+                onClick = onNewChat,
+                accent = true
+            )
+        }
     }
 }
 

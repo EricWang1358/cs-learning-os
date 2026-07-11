@@ -6,6 +6,17 @@ import org.junit.Test
 
 class ToolbarLayoutPolicyTest {
     @Test
+    fun usesTheFourMotionDurationsInAscendingOrder() {
+        assertEquals(110, WorkbenchMotion.PressMillis)
+        assertEquals(130, WorkbenchMotion.CompactFadeMillis)
+        assertEquals(170, WorkbenchMotion.DetailExpandMillis)
+        assertEquals(210, WorkbenchMotion.HomeExpandMillis)
+        assertTrue(WorkbenchMotion.PressMillis < WorkbenchMotion.CompactFadeMillis)
+        assertTrue(WorkbenchMotion.CompactFadeMillis < WorkbenchMotion.DetailExpandMillis)
+        assertTrue(WorkbenchMotion.DetailExpandMillis < WorkbenchMotion.HomeExpandMillis)
+    }
+
+    @Test
     fun keepsActionsOnOneRowWhenTheirReadableWidthsFit() {
         assertEquals(
             listOf(listOf(0, 1, 2)),

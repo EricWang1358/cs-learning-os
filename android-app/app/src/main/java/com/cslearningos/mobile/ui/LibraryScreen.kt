@@ -201,10 +201,9 @@ private fun LibraryRootScreen(
         val actions = libraryFolderCardActions()
         WorkbenchCard(accent = false) {
             Eyebrow(stringResource(R.string.library_folder_eyebrow))
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(folder.title, color = WorkbenchColors.InkStrong, fontSize = 20.sp, fontWeight = FontWeight.Black)
@@ -219,7 +218,7 @@ private fun LibraryRootScreen(
                         )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
                     MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
                     if (folder.dueCount > 0) {

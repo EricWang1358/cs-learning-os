@@ -5,7 +5,6 @@ package com.cslearningos.mobile.ui
 import com.cslearningos.mobile.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -38,6 +37,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,21 +101,24 @@ private fun MoreSectionRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
             .clip(RoundedCornerShape(14.dp))
             .background(backgroundColor)
             .border(
                 BorderStroke(1.dp, borderColor),
                 RoundedCornerShape(14.dp)
             )
-            .clickable(onClick = onToggle)
             .padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp),
+                .heightIn(min = 48.dp)
+                .clickable(onClick = onToggle)
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    stateDescription = if (expanded) "expanded" else "collapsed"
+                },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

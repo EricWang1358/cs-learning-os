@@ -15,12 +15,12 @@ data class ScreenMotionPolicy(
 )
 
 object WorkbenchMotion {
-    const val HomeExpandMillis = 260
-    const val HomeFadeMillis = 180
-    const val CompactExpandMillis = 190
-    const val CompactFadeMillis = 140
+    const val HomeExpandMillis = 210
+    const val HomeFadeMillis = 130
+    const val CompactExpandMillis = 170
+    const val CompactFadeMillis = 130
     const val DetailExpandMillis = 170
-    const val DetailFadeMillis = 120
+    const val DetailFadeMillis = 130
     const val PressMillis = 110
     const val HomeRevealStaggerMillis = 70
     const val CompactRevealStaggerMillis = 45

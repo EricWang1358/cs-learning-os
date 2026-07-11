@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -165,8 +164,8 @@ private fun PortraitWorkbench(
                 AnimatedContent(
                     targetState = shellState.route,
                     transitionSpec = {
-                        (fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { it / 12 }) togetherWith
-                            (fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.CompactExpandMillis)) { -it / 12 })
+                        (fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { it / 12 }) togetherWith
+                            (fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it / 12 })
                     },
                     label = "portrait-route"
                 ) { route -> ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true) }
@@ -348,7 +347,6 @@ private fun CompactBrandBlock(route: AppRoute, state: LearningUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
             .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -446,7 +444,6 @@ private fun BottomNavTab(
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(backgroundColor)
-            .animateContentSize(tween(WorkbenchMotion.CompactExpandMillis, easing = FastOutSlowInEasing))
             .clickable(role = Role.Tab, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 4.dp, vertical = 7.dp),
