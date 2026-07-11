@@ -102,6 +102,7 @@ class LearningRepository private constructor(
     }
 
     suspend fun saveCaptureSlip(
+        id: String? = null,
         body: String,
         type: CaptureSlipType,
         topicHint: String?,
@@ -109,6 +110,7 @@ class LearningRepository private constructor(
         status: CaptureSlipStatus = CaptureSlipStatus.inbox,
         now: Long = System.currentTimeMillis()
     ): CaptureSlipEntity = captureRepository.saveCaptureSlip(
+        id = id,
         body = body,
         type = type,
         topicHint = topicHint,

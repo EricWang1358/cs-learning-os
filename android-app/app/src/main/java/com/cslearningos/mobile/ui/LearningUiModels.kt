@@ -70,6 +70,7 @@ data class LearningUiState(
     val quizEditorId: String? = null,
     val readerQuestionDraft: String = "",
     val readerQuestionPanelExpanded: Boolean = false,
+    val captureEditorId: String? = null,
     val captureDraft: String = "",
     val captureTopicHint: String = "",
     val captureSourceLabel: String = "",

@@ -14,6 +14,7 @@ class CaptureRepository(
     val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeInboxCaptureSlips()
 
     suspend fun saveCaptureSlip(
+        id: String? = null,
         body: String,
         type: CaptureSlipType,
         topicHint: String?,
@@ -21,7 +22,16 @@ class CaptureRepository(
         status: CaptureSlipStatus = CaptureSlipStatus.inbox,
         now: Long = System.currentTimeMillis()
     ): CaptureSlipEntity {
-        val slip = CaptureSlipEntity(
+        val existing = if (id == null) null else dao.getCaptureSlip(id)
+        val slip = existing?.copy(
+            body = body.trim(),
+            type = type,
+            topicHint = topicHint?.trim()?.ifBlank { null },
+            sourceLabel = sourceLabel?.trim()?.ifBlank { null },
+            updatedAt = now,
+            revision = existing.revision + RevisionStep,
+            syncStatus = SyncStatus.dirty
+        ) ?: CaptureSlipEntity(
             id = UUID.randomUUID().toString(),
             body = body.trim(),
             type = type,

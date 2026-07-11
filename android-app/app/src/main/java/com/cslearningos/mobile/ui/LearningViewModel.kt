@@ -418,7 +418,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun editQuiz(quiz: QuizItemEntity) {
-        _state.update { it.forExistingQuizEditor(quiz) }
+        _state.update { it.forExistingQuizEditorWithoutSelectedNode(quiz) }
     }
 
     fun setReaderQuestionDraft(value: String) {
@@ -466,6 +466,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(captureType = value, message = null) }
     }
 
+    fun editCaptureSlip(slip: CaptureSlipEntity) {
+        _state.update { it.forExistingCaptureEditor(slip) }
+    }
+
     fun saveCaptureSlip() {
         val snapshot = state.value
         if (snapshot.captureDraft.isBlank()) {
@@ -474,16 +478,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             repository.saveCaptureSlip(
+                id = snapshot.captureEditorId,
                 body = snapshot.captureDraft,
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
                 sourceLabel = snapshot.captureSourceLabel
             )
             _state.update {
-                it.copy(
-                    captureDraft = "",
-                    captureTopicHint = "",
-                    captureSourceLabel = "",
+                it.clearedCaptureEditor().copy(
                     message = uiText(R.string.message_capture_saved_to_inbox)
                 )
             }
@@ -498,6 +500,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             val slip = repository.saveCaptureSlip(
+                id = snapshot.captureEditorId,
                 body = snapshot.captureDraft,
                 type = snapshot.captureType,
                 topicHint = snapshot.captureTopicHint,
@@ -505,10 +508,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 status = CaptureSlipStatus.inbox
             )
             _state.update {
-                it.copy(
-                    captureDraft = "",
-                    captureTopicHint = "",
-                    captureSourceLabel = "",
+                it.clearedCaptureEditor().copy(
                     pendingAiDraftSlipId = if (snapshot.aiProviderSettings.isConfigured) slip.id else null,
                     aiServiceStatus = if (snapshot.aiProviderSettings.isConfigured) {
                         AiServiceStatus(
@@ -716,7 +716,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.saveManualQuiz(
                 id = snapshot.quizEditorId,
-                nodeId = snapshot.selectedNode?.id ?: snapshot.selectedQuiz?.nodeId,
+                nodeId = snapshot.quizNodeIdForSave(),
                 prompt = snapshot.quizPrompt,
                 answer = snapshot.quizAnswer,
                 explanation = snapshot.quizExplanation

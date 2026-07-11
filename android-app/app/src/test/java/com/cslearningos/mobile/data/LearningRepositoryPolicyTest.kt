@@ -274,6 +274,97 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingExistingCaptureSlipPreservesWorkflowMetadataAndAdvancesRevision() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val original = CaptureSlipEntity(
+            id = "slip-1",
+            body = "Original capture",
+            type = CaptureSlipType.question,
+            topicHint = "Virtual memory",
+            sourceLabel = "lecture",
+            linkedNodeId = "node-1",
+            status = CaptureSlipStatus.ai_draft_ready,
+            createdAt = 1_000L,
+            updatedAt = 1_500L,
+            revision = 4L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        dao.captureSlips[original.id] = original
+
+        val saved = repository.saveCaptureSlip(
+            id = original.id,
+            body = "  Updated capture  ",
+            type = CaptureSlipType.concept_seed,
+            topicHint = "  Memory management  ",
+            sourceLabel = "  notes  ",
+            now = 2_000L
+        )
+
+        assertEquals(1, dao.captureSlips.size)
+        assertEquals(original.id, saved.id)
+        assertEquals("Updated capture", saved.body)
+        assertEquals(CaptureSlipType.concept_seed, saved.type)
+        assertEquals("Memory management", saved.topicHint)
+        assertEquals("notes", saved.sourceLabel)
+        assertEquals(original.linkedNodeId, saved.linkedNodeId)
+        assertEquals(original.status, saved.status)
+        assertEquals(original.createdAt, saved.createdAt)
+        assertEquals(2_000L, saved.updatedAt)
+        assertEquals(5L, saved.revision)
+        assertEquals(SyncStatus.dirty, saved.syncStatus)
+    }
+
+    @Test
+    fun savingExistingQuizForItsOriginalNodePreservesThatNodesAreaAndTrack() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.nodes["node-b"] = LearningNodeEntity(
+            id = "node-b",
+            title = "Node B",
+            markdownBody = "# Node B",
+            createdAt = 1L,
+            updatedAt = 1L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "algorithms",
+            track = "trees"
+        )
+        dao.quizzes["quiz-b"] = QuizItemEntity(
+            id = "quiz-b",
+            nodeId = "node-b",
+            prompt = "Original prompt",
+            answer = "Original answer",
+            explanation = "",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1L,
+            updatedAt = 1L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "algorithms",
+            track = "trees"
+        )
+
+        val saved = repository.saveManualQuiz(
+            id = "quiz-b",
+            nodeId = "node-b",
+            prompt = "Updated prompt",
+            answer = "Updated answer",
+            explanation = "Updated explanation",
+            now = 2L
+        )
+
+        assertEquals("node-b", saved.nodeId)
+        assertEquals("algorithms", saved.area)
+        assertEquals("trees", saved.track)
+    }
+
+    @Test
     fun compatibilityFacadeAnswerQuizStillSchedulesReviewProgress() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)

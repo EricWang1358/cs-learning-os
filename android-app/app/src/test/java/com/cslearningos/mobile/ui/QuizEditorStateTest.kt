@@ -2,6 +2,7 @@ package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
+import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.SyncStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -36,6 +37,28 @@ class QuizEditorStateTest {
         assertEquals(quiz.prompt, editor.quizPrompt)
         assertEquals(quiz.answer, editor.quizAnswer)
         assertEquals(quiz.explanation, editor.quizExplanation)
+    }
+
+    @Test
+    fun existingQuizEditorUsesQuizNodeWhenANodeWasPreviouslySelected() {
+        val nodeA = LearningNodeEntity(
+            id = "node-a",
+            title = "Node A",
+            markdownBody = "# Node A",
+            createdAt = 1L,
+            updatedAt = 1L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        val quizB = quiz(id = "quiz-b", nodeId = "node-b")
+
+        val editor = LearningUiState(selectedNode = nodeA)
+            .forExistingQuizEditorWithoutSelectedNode(quizB)
+
+        assertNull(editor.selectedNode)
+        assertEquals("node-b", editor.quizNodeIdForSave())
     }
 
     private fun quiz(id: String, nodeId: String) = QuizItemEntity(
