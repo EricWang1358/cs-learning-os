@@ -804,6 +804,17 @@ private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewMode
 
 @Composable
 private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    if (state.reviewSetupVisible) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionHeader(stringResource(R.string.review_eyebrow), stringResource(R.string.review_title), stringResource(R.string.review_select_area_body))
+            WorkbenchButton(stringResource(R.string.review_all_areas), { viewModel.startReviewForArea(null) }, primary = true, modifier = Modifier.fillMaxWidth())
+            state.areas.filter { it.deletedAt == null }.forEach { area ->
+                val due = state.dueQuizzes.count { it.area == area.id }
+                WorkbenchButton("${displayAreaName(LocalContext.current, area)} ($due)", { viewModel.startReviewForArea(area.id) }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        return
+    }
     state.reviewedQuiz?.let { quiz ->
         ReviewDetailScreen(
             quiz = quiz,

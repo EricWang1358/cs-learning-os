@@ -173,6 +173,11 @@
     <string name="review_retry">再试一次</string>
     <string name="review_previous">上一题</string>
     <string name="review_next">下一题</string>
+    <string name="review_select_area_body">选择一个 Area，再开始该 Area 的到期复习。</string>
+    <string name="review_all_areas">全部 Area</string>
+    <string name="dashboard_workbench_title">学习工作台</string>
+    <string name="dashboard_nodes">节点</string>
+    <string name="dashboard_due">到期</string>
 
     <string name="backup_eyebrow">本地安全</string>
     <string name="backup_title">备份、导出、恢复</string>

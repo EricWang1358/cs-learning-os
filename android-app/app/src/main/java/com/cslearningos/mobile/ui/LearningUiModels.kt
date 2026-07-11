@@ -56,6 +56,8 @@ data class LearningUiState(
     val selectedNode: LearningNodeEntity? = null,
     val selectedQuiz: QuizItemEntity? = null,
     val reviewedQuiz: QuizItemEntity? = null,
+    val reviewAreaId: String? = null,
+    val reviewSetupVisible: Boolean = true,
     val selectedLibraryAreaId: String? = null,
     val libraryCheckedFilter: LibraryCheckedFilter = LibraryCheckedFilter.All,
     val editorNodeId: String? = null,

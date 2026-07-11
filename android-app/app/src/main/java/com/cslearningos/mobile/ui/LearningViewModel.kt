@@ -724,8 +724,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 screen = AppScreen.Review,
                 selectedQuiz = it.dueQuizzes.firstOrNull(),
                 reviewedQuiz = null,
+                reviewAreaId = null,
+                reviewSetupVisible = true,
                 quizAnswerVisible = false,
                 message = null
+            )
+        }
+    }
+
+    fun startReviewForArea(areaId: String?) {
+        _state.update { current ->
+            val due = current.dueQuizzes.filter { areaId == null || it.area == areaId }
+            current.copy(
+                selectedQuiz = due.firstOrNull(),
+                reviewAreaId = areaId,
+                reviewSetupVisible = false,
+                quizAnswerVisible = false
             )
         }
     }
@@ -766,7 +780,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun navigateReviewPrompt(step: Int) {
         _state.update { current ->
-            val cards = current.quizzes
+            val cards = current.quizzes.filter { current.reviewAreaId == null || it.area == current.reviewAreaId }
             val index = cards.indexOfFirst { it.id == current.reviewedQuiz?.id }.coerceAtLeast(0)
             current.copy(
                 selectedQuiz = if (cards.isEmpty()) null else cards[(index + step + cards.size) % cards.size],

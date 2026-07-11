@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,22 +33,16 @@ fun DashboardScreen(state: LearningUiState, viewModel: LearningViewModel) {
 @Composable
 private fun FirstScreenActionStrip(summary: DashboardSummary, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Eyebrow(stringResource(R.string.dashboard_start_here_eyebrow))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            summary.firstScreenActions.forEach { action ->
-                WorkbenchActionTile(
-                    eyebrow = action.eyebrow(),
-                    title = action.firstScreenLabel(summary),
-                    body = action.body(),
-                    metric = action.metric(summary),
-                    onClick = action.clickHandler(viewModel),
-                    accent = action == DashboardAction.Capture || action == DashboardAction.Review,
-                    modifier = Modifier.weight(1f)
-                )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.dashboard_workbench_title), modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.Black)
+            Column(modifier = Modifier.weight(0.48f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkbenchButton("${stringResource(R.string.dashboard_nodes)} ${summary.nodeCount}", viewModel::showLibrary, modifier = Modifier.fillMaxWidth())
+                WorkbenchButton("${stringResource(R.string.dashboard_due)} ${summary.dueReviewCount}", viewModel::showReview, modifier = Modifier.fillMaxWidth(), primary = true)
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(DashboardAction.Capture, DashboardAction.Create, DashboardAction.Search).forEach { action ->
+                WorkbenchButton(action.firstScreenLabel(summary), action.clickHandler(viewModel))
             }
         }
     }

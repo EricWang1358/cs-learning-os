@@ -208,6 +208,11 @@
     <string name="review_retry">Try again</string>
     <string name="review_previous">Previous</string>
     <string name="review_next">Next</string>
+    <string name="review_select_area_body">Choose an Area, then start its due review queue.</string>
+    <string name="review_all_areas">All Areas</string>
+    <string name="dashboard_workbench_title">Learning workbench</string>
+    <string name="dashboard_nodes">Nodes</string>
+    <string name="dashboard_due">Due</string>
 
     <string name="backup_eyebrow">local safety</string>
     <string name="backup_title">Backup, export, restore</string>
