@@ -44,7 +44,6 @@ class KnowledgeAssistantSessionTest {
             message = "Improve this quiz.",
             context = emptyList(),
             areas = emptyList(),
-            workingDraft = null,
             objectTarget = AssistantEditTarget.Quiz(
                 id = "quiz-1",
                 revision = 5L,

@@ -225,6 +225,17 @@ class AssistantCoordinator(
             try {
                 val localContext = session.findLocalContext(input)
                 val areas = session.availableAreas()
+                val requestEditTarget = snapshot.editTarget ?: if (mode == AssistantRequestMode.Draft) {
+                    AssistantEditTarget.Node(
+                        id = null,
+                        revision = 0L,
+                        titleHint = input.take(MaximumNodeDraftTitleHintCharacters),
+                        markdown = "",
+                        areaId = null
+                    )
+                } else {
+                    null
+                }
                 updateMessage(responseMessageId) { it.copy(citations = localContext) }
                 if (!settings.isConfigured) {
                     updateMessage(responseMessageId) {
@@ -244,8 +255,7 @@ class AssistantCoordinator(
                     message = input,
                     context = localContext,
                     areas = areas,
-                    workingDraft = (snapshot.editTarget as? AssistantEditTarget.Node)?.toWorkingDraft(),
-                    objectTarget = snapshot.editTarget,
+                    objectTarget = requestEditTarget,
                     onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
                 )
                 val rawReply = mutableState.value.messages
@@ -292,7 +302,7 @@ class AssistantCoordinator(
 
                     AssistantRequestMode.Answer,
                     AssistantRequestMode.Draft -> {
-                        val objectProposal = snapshot.editTarget?.let { target ->
+                        val objectProposal = requestEditTarget?.let { target ->
                             parseAssistantObjectProposal(target, rawReply, areas)
                         }
                         if (objectProposal != null) {
@@ -307,12 +317,11 @@ class AssistantCoordinator(
                                 mode = mode,
                                 request = input,
                                 reply = rawReply,
-                                areas = areas,
-                                workingDraft = null
+                                areas = areas
                             )
                             action = decision.action
                             captureSuggestion = decision.captureSuggestion
-                            visibleBody = if (mode == AssistantRequestMode.Draft && decision.workingDraft != null) {
+                            visibleBody = if (mode == AssistantRequestMode.Draft && decision.editTarget != null) {
                                 string(R.string.assistant_draft_updated)
                             } else {
                                 decision.visibleReply
@@ -455,6 +464,7 @@ class AssistantCoordinator(
 
     private companion object {
         const val HistoryLimit = 30
+        const val MaximumNodeDraftTitleHintCharacters = 72
     }
 }
 
@@ -467,11 +477,3 @@ private fun AssistantConversation.toSummary(): AssistantConversationSummary {
         preview = latestMessage.lineSequence().firstOrNull()?.trim()?.take(72).orEmpty()
     )
 }
-
-private fun AssistantEditTarget.Node.toWorkingDraft(): com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft =
-    com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft(
-        titleHint = titleHint,
-        markdown = markdown,
-        areaId = areaId,
-        nodeId = id
-    )

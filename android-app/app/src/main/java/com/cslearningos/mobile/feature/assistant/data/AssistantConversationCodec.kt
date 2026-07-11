@@ -5,7 +5,6 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationAct
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCitation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
-import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.data.CaptureSlipType
 import org.json.JSONArray
@@ -57,20 +56,12 @@ object AssistantConversationCodec {
             editTarget = root.optJSONObject("edit_target")?.toObjectTarget()
                 ?: root.optJSONObject("object_target")?.toObjectTarget()
                 ?: root.optJSONObject("working_draft")?.let { draft ->
-                    @Suppress("DEPRECATION")
-                    val legacy = AssistantWorkingDraft(
-                    titleHint = draft.getString("title_hint"),
-                    markdown = draft.getString("markdown"),
-                    areaId = draft.optString("area_id").takeIf { it.isNotBlank() },
-                    nodeId = draft.optString("node_id").takeIf { it.isNotBlank() },
-                    placementReason = draft.optString("placement_reason").takeIf { it.isNotBlank() }
-                )
                     AssistantEditTarget.Node(
-                        id = legacy.nodeId,
+                        id = draft.optString("node_id").takeIf { it.isNotBlank() },
                         revision = 0L,
-                        titleHint = legacy.titleHint,
-                        markdown = legacy.markdown,
-                        areaId = legacy.areaId
+                        titleHint = draft.getString("title_hint"),
+                        markdown = draft.getString("markdown"),
+                        areaId = draft.optString("area_id").takeIf { it.isNotBlank() }
                     )
                 }
         )

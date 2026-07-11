@@ -7,6 +7,97 @@ import org.junit.Test
 
 class AssistantObjectProposalTest {
     @Test
+    fun nodeProposalAcceptsMarkdownPayloadAndKnownPlacementDirectives() {
+        val target = AssistantEditTarget.Node(
+            id = "node-1",
+            revision = 3L,
+            titleHint = "Graph traversal",
+            markdown = "# Graph traversal\n\nOld body",
+            areaId = "algorithms"
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            <!-- cs-area: systems -->
+            <!-- cs-area-reason: The revised note focuses on runtime memory behavior. -->
+            # Graph traversal
+
+            A `<!-- cs-not-a-directive -->` marker inside prose stays in the Markdown body.
+
+            <!-- cs-capture: Remember to compare BFS queue growth. -->
+            """.trimIndent(),
+            listOf(
+                AssistantAreaOption(id = "algorithms", name = "Algorithms"),
+                AssistantAreaOption(id = "systems", name = "Systems")
+            )
+        ) as AssistantEditProposal.Node
+
+        assertEquals("node-1", proposal.target.id)
+        assertEquals("systems", proposal.areaId)
+        assertEquals(
+            """
+            # Graph traversal
+
+            A `<!-- cs-not-a-directive -->` marker inside prose stays in the Markdown body.
+            """.trimIndent(),
+            proposal.markdown
+        )
+    }
+
+    @Test
+    fun nodeProposalFailsClosedWhenPlacementDirectivesAppearMoreThanOnce() {
+        val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
+
+        listOf(
+            """
+            <!-- cs-area: algorithms -->
+            <!-- cs-area: systems -->
+            # Graph traversal
+            """.trimIndent(),
+            """
+            <!-- cs-area: algorithms -->
+            <!-- cs-area-reason: First reason. -->
+            <!-- cs-area-reason: Second reason. -->
+            # Graph traversal
+            """.trimIndent(),
+            """
+            <!-- cs-area: algorithms -->
+            <!-- cs-capture: First capture. -->
+            <!-- cs-capture: Second capture. -->
+            # Graph traversal
+            """.trimIndent()
+        ).forEach { reply ->
+            assertNull(
+                parseAssistantObjectProposal(
+                    target,
+                    reply,
+                    listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+                )
+            )
+        }
+    }
+
+    @Test
+    fun nodeProposalFailsClosedForUnknownOrAmbiguousCsDirectives() {
+        val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
+
+        listOf(
+            "<!-- cs-topic: graphs -->\n# Graph traversal",
+            "<!-- cs-area -->\n# Graph traversal",
+            "<!-- cs-capture -->\n# Graph traversal"
+        ).forEach { reply ->
+            assertNull(
+                parseAssistantObjectProposal(
+                    target,
+                    reply,
+                    listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
+                )
+            )
+        }
+    }
+
+    @Test
     fun quizProposalRequiresAllEditableFieldsAndKeepsTheOriginalIdentity() {
         val target = AssistantEditTarget.Quiz(
             id = "quiz-1",

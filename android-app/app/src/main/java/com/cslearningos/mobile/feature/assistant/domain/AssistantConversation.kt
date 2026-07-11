@@ -6,14 +6,6 @@ data class AssistantConversation(
     val editTarget: AssistantEditTarget? = null
 )
 
-data class AssistantWorkingDraft(
-    val titleHint: String,
-    val markdown: String,
-    val areaId: String?,
-    val nodeId: String? = null,
-    val placementReason: String? = null
-)
-
 data class AssistantConversationMessage(
     val role: AssistantConversationRole,
     val body: String,

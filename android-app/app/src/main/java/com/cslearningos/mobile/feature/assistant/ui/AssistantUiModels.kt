@@ -8,8 +8,9 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMes
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
-import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
+import com.cslearningos.mobile.feature.assistant.domain.nextTarget
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantObjectProposal
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantDraftPlacement
 import com.cslearningos.mobile.data.CaptureSlipType
 
@@ -197,7 +198,8 @@ fun assistantEditAction(proposal: AssistantEditProposal): AssistantMessageAction
         markdown = proposal.markdown,
         areaId = proposal.areaId,
         nodeId = proposal.target.id,
-        expectedRevision = proposal.target.revision
+        expectedRevision = proposal.target.revision,
+        placementReason = proposal.placementReason
     )
 
     is AssistantEditProposal.Quiz -> AssistantMessageAction.OpenEditableQuizDraft(
@@ -260,7 +262,7 @@ fun assistantReplyAction(
 data class AssistantReplyDecision(
     val visibleReply: String,
     val action: AssistantMessageAction?,
-    val workingDraft: AssistantWorkingDraft? = null,
+    val editTarget: AssistantEditTarget.Node? = null,
     val captureSuggestion: String? = null
 )
 
@@ -269,7 +271,7 @@ fun assistantReplyDecision(
     request: String,
     reply: String,
     areas: List<AssistantAreaOption>,
-    workingDraft: AssistantWorkingDraft? = null
+    editTarget: AssistantEditTarget.Node? = null
 ): AssistantReplyDecision =
     when (mode) {
         AssistantRequestMode.Answer -> {
@@ -280,35 +282,21 @@ fun assistantReplyDecision(
         }
 
         AssistantRequestMode.Draft -> {
-            val placement = parseAssistantDraftPlacement(reply, areas)
-            val updatesKnownDraft = workingDraft != null || placement.areaId != null
-            val markdown = if (updatesKnownDraft) {
-                placement.markdown.ifBlank { workingDraft?.markdown.orEmpty() }
-            } else {
-                ""
-            }
-            val nextDraft = markdown.takeIf(String::isNotBlank)?.let {
-                AssistantWorkingDraft(
-                    titleHint = workingDraft?.titleHint ?: request.take(MaximumDraftTitleHintCharacters),
-                    markdown = it,
-                    areaId = placement.areaId ?: workingDraft?.areaId,
-                    nodeId = workingDraft?.nodeId,
-                    placementReason = placement.placementReason ?: workingDraft?.placementReason
-                )
-            }
+            val target = editTarget ?: AssistantEditTarget.Node(
+                id = null,
+                revision = 0L,
+                titleHint = request.take(MaximumDraftTitleHintCharacters),
+                markdown = "",
+                areaId = null
+            )
+            val proposal = parseAssistantObjectProposal(target, reply, areas) as? AssistantEditProposal.Node
+            val placement = proposal?.let { parseAssistantDraftPlacement(reply, areas) }
+            val nextTarget = proposal?.nextTarget() as? AssistantEditTarget.Node
             AssistantReplyDecision(
-                visibleReply = placement.markdown,
-                action = nextDraft?.let { draft ->
-                    AssistantMessageAction.OpenEditableDraft(
-                        titleHint = draft.titleHint,
-                        markdown = draft.markdown,
-                        areaId = draft.areaId,
-                        nodeId = draft.nodeId,
-                        placementReason = draft.placementReason
-                    )
-                },
-                workingDraft = nextDraft,
-                captureSuggestion = placement.captureSuggestion
+                visibleReply = proposal?.markdown ?: reply,
+                action = proposal?.let(::assistantEditAction),
+                editTarget = nextTarget,
+                captureSuggestion = placement?.captureSuggestion
             )
         }
 

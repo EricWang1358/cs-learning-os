@@ -39,7 +39,6 @@ class KnowledgeAssistantSession(
         message: String,
         context: List<AssistantCitation>,
         areas: List<AssistantAreaOption>,
-        workingDraft: AssistantWorkingDraft?,
         objectTarget: AssistantEditTarget?,
         onDelta: suspend (String) -> Unit
     ) {
@@ -55,7 +54,6 @@ class KnowledgeAssistantSession(
                 mode = mode,
                 context = selectedContext,
                 areas = areas,
-                workingDraft = workingDraft,
                 objectTarget = objectTarget,
                 linkedNodeContext = linkedNodeContext
             ),

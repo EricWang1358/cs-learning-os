@@ -4,7 +4,6 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
-import com.cslearningos.mobile.feature.assistant.domain.AssistantWorkingDraft
 import com.cslearningos.mobile.data.CaptureSlipType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -118,7 +117,7 @@ class AssistantActionClaimsTest {
         )
 
         assertNull(decision.action)
-        assertNull(decision.workingDraft)
+        assertNull(decision.editTarget)
         assertEquals("Which Area should this interview topic belong to: Algorithms, Systems, or Projects?", decision.visibleReply)
     }
 
@@ -129,17 +128,18 @@ class AssistantActionClaimsTest {
             request = "补一段每周计划",
             reply = "<!-- cs-capture: 找朋友一起刷题 -->\n<!-- cs-area: algorithms -->\n# LeetCode plan\n\n## Weekly plan",
             areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms")),
-            workingDraft = AssistantWorkingDraft(
+            editTarget = AssistantEditTarget.Node(
+                id = "node-42",
+                revision = 3L,
                 titleHint = "LeetCode plan",
                 markdown = "# LeetCode plan",
-                areaId = "algorithms",
-                nodeId = "node-42"
+                areaId = "algorithms"
             )
         )
 
-        assertEquals("# LeetCode plan\n\n## Weekly plan", decision.workingDraft?.markdown)
-        assertEquals("algorithms", decision.workingDraft?.areaId)
-        assertEquals("node-42", decision.workingDraft?.nodeId)
+        assertEquals("# LeetCode plan\n\n## Weekly plan", decision.editTarget?.markdown)
+        assertEquals("algorithms", decision.editTarget?.areaId)
+        assertEquals("node-42", decision.editTarget?.id)
         assertEquals("找朋友一起刷题", decision.captureSuggestion)
     }
 
@@ -153,15 +153,16 @@ class AssistantActionClaimsTest {
                 AssistantAreaOption(id = "algorithms", name = "Algorithms"),
                 AssistantAreaOption(id = "systems", name = "Systems")
             ),
-            workingDraft = AssistantWorkingDraft(
+            editTarget = AssistantEditTarget.Node(
+                id = "node-42",
+                revision = 3L,
                 titleHint = "Graph traversal",
                 markdown = "# Graph traversal",
-                areaId = "algorithms",
-                nodeId = "node-42"
+                areaId = "algorithms"
             )
         )
 
-        assertEquals("systems", decision.workingDraft?.areaId)
-        assertEquals("node-42", decision.workingDraft?.nodeId)
+        assertEquals("systems", decision.editTarget?.areaId)
+        assertEquals("node-42", decision.editTarget?.id)
     }
 }

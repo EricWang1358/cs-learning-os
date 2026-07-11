@@ -7,7 +7,6 @@ fun buildKnowledgeAssistantSystemPrompt(
     mode: AssistantRequestMode,
     context: List<AssistantContextSource>,
     areas: List<AssistantAreaOption> = emptyList(),
-    workingDraft: AssistantWorkingDraft? = null,
     objectTarget: AssistantEditTarget? = null,
     linkedNodeContext: AssistantLinkedNodeContext? = null
 ): String {
@@ -28,13 +27,6 @@ fun buildKnowledgeAssistantSystemPrompt(
             "- ${area.id}: ${area.name} (examples: $examples)"
         }
         .ifBlank { "- No existing Area is available; omit the cs-area directive." }
-    val draftBlock = workingDraft?.let { draft ->
-        """
-        Current working draft. Revise this same draft in full:
-        Area id: ${draft.areaId.orEmpty()}
-        ${draft.markdown}
-        """.trimIndent()
-    } ?: "No working draft exists yet."
     val objectTargetBlock = objectTarget?.promptBlock(linkedNodeContext).orEmpty()
     return """
         You are the CS Learning OS mobile knowledge assistant.
@@ -45,8 +37,6 @@ fun buildKnowledgeAssistantSystemPrompt(
 
         Existing Areas:
         $areaBlock
-
-        $draftBlock
 
         $objectTargetBlock
 
