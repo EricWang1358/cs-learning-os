@@ -74,8 +74,10 @@ class AssistantCoordinator(
     }
 
     fun showHistory() {
+        if (mutableState.value.isBusy) return
         scope.launch {
             val history = repository.recentAssistantConversations(HistoryLimit).map { it.toSummary() }
+            if (mutableState.value.isBusy) return@launch
             mutableState.update { it.copy(conversationHistory = history, historyVisible = true) }
         }
     }
@@ -85,8 +87,10 @@ class AssistantCoordinator(
     }
 
     fun openHistoryConversation(id: String) {
+        if (mutableState.value.isBusy) return
         scope.launch {
             val conversation = repository.getAssistantConversation(id) ?: return@launch
+            if (mutableState.value.isBusy) return@launch
             conversationId = conversation.id
             mutableState.value = AssistantUiState(
                 messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
@@ -166,6 +170,7 @@ class AssistantCoordinator(
 
     fun startInterviewReview() {
         if (mutableState.value.isBusy) return
+        val requestConversationId = conversationId
         val messageId = messageId("assistant")
         mutableState.update { current ->
             current.copy(
@@ -187,7 +192,7 @@ class AssistantCoordinator(
                     it.copy(body = topicPrompt)
                 }
             }
-            persistConversation()
+            persistConversation(requestConversationId)
         }
     }
 
@@ -208,6 +213,7 @@ class AssistantCoordinator(
             body = input
         )
         val responseMessageId = messageId("assistant")
+        val requestConversationId = conversationId
         activeReplyMessageId = responseMessageId
         mutableState.update { current ->
             current.copy(
@@ -246,7 +252,7 @@ class AssistantCoordinator(
                             isStreaming = false
                         )
                     }
-                    persistConversation()
+                    persistConversation(requestConversationId)
                     return@launch
                 }
                 session.streamReply(
@@ -345,7 +351,7 @@ class AssistantCoordinator(
                         reviewSession = nextReviewSession
                     )
                 }
-                persistConversation()
+                persistConversation(requestConversationId)
             } catch (error: CancellationException) {
                 updateMessage(responseMessageId) { message ->
                     message.copy(
@@ -353,7 +359,7 @@ class AssistantCoordinator(
                         isStreaming = false
                     )
                 }
-                persistConversation()
+                persistConversation(requestConversationId)
                 throw error
             } catch (error: Throwable) {
                 updateMessage(responseMessageId) { message ->
@@ -365,7 +371,7 @@ class AssistantCoordinator(
                         isStreaming = false
                     )
                 }
-                persistConversation()
+                persistConversation(requestConversationId)
             } finally {
                 if (activeReplyMessageId == responseMessageId) {
                     activeReplyMessageId = null
@@ -447,16 +453,19 @@ class AssistantCoordinator(
     private fun messageId(role: String): String =
         "$role-${System.currentTimeMillis()}-${mutableState.value.messages.size}"
 
-    private suspend fun persistConversation() {
-        val messages = mutableState.value.messages
+    private suspend fun persistConversation(
+        id: String = conversationId,
+        snapshot: AssistantUiState = mutableState.value
+    ) {
+        val messages = snapshot.messages
             .filter { !it.isStreaming && it.body.isNotBlank() }
             .map(AssistantMessage::toStoredMessage)
         if (messages.isNotEmpty()) {
             repository.saveAssistantConversation(
                 AssistantConversation(
-                    id = conversationId,
+                    id = id,
                     messages = messages,
-                    editTarget = mutableState.value.editTarget
+                    editTarget = snapshot.editTarget
                 )
             )
         }

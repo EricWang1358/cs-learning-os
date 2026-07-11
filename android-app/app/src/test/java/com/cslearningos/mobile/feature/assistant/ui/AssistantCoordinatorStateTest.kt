@@ -7,9 +7,15 @@ import com.cslearningos.mobile.data.LearningRepository
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
 import com.cslearningos.mobile.data.SyncStatus
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationCodec
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
+import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.ui.AiProviderSettings
 import java.lang.reflect.Proxy
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -91,6 +97,50 @@ class AssistantCoordinatorStateTest {
         assertNull(coordinator.state.value.editTarget)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun openingHistoryWhileStreamIsBusyCannotReplaceStateOrPersistIntoHistoryConversation() = runTest {
+        val historyConversation = AssistantConversation(
+            id = "history-b",
+            messages = listOf(
+                AssistantConversationMessage(
+                    role = AssistantConversationRole.User,
+                    body = "Open B"
+                ),
+                AssistantConversationMessage(
+                    role = AssistantConversationRole.Assistant,
+                    body = "Existing B reply"
+                )
+            )
+        )
+        val savedConversations = linkedMapOf("history-b" to historyConversation.toEntity(updatedAt = 1L))
+        val service = HoldingAssistantService(reply = "Finished A")
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(conversationDao(savedConversations)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+        advanceUntilIdle()
+
+        coordinator.setInput("Stream A")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        service.started.await()
+        coordinator.openHistoryConversation("history-b")
+        advanceUntilIdle()
+
+        assertTrue(coordinator.state.value.isBusy)
+        assertEquals("Stream A", coordinator.state.value.messages.first().body)
+
+        service.release.complete(Unit)
+        advanceUntilIdle()
+
+        val finalState = coordinator.state.value
+        val persistedHistory = AssistantConversationCodec.decode(savedConversations.getValue("history-b").messagesJson)
+        assertEquals(listOf("Stream A", "Finished A"), finalState.messages.map { it.body })
+        assertEquals(listOf("Open B", "Existing B reply"), persistedHistory.messages.map { it.body })
+    }
+
     private fun noopDao(): LearningDao =
         assistantDao(node = null)
 
@@ -129,6 +179,46 @@ class AssistantCoordinatorStateTest {
             }
         } as LearningDao
 
+    private fun conversationDao(savedConversations: MutableMap<String, AssistantConversationEntity>): LearningDao =
+        Proxy.newProxyInstance(
+            LearningDao::class.java.classLoader,
+            arrayOf(LearningDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "observeAreas" -> flowOf(emptyList<AreaEntity>())
+                "observeNodes" -> flowOf(emptyList<LearningNodeEntity>())
+                "searchNodes", "searchQuizzes" -> emptyList<Any>()
+                "latestAssistantConversation" -> null
+                "recentAssistantConversations" -> savedConversations.values.toList()
+                "getAssistantConversation" -> savedConversations[args?.firstOrNull() as? String]
+                "deleteAssistantConversation" -> {
+                    savedConversations.remove(args?.firstOrNull() as? String)
+                    Unit
+                }
+
+                "upsertAssistantConversation" -> {
+                    val entity = args?.firstOrNull() as AssistantConversationEntity
+                    savedConversations[entity.id] = entity
+                    Unit
+                }
+
+                else -> when {
+                    Flow::class.java.isAssignableFrom(method.returnType) -> flowOf(emptyList<Any>())
+                    method.returnType == Boolean::class.javaPrimitiveType -> false
+                    method.returnType == Int::class.javaPrimitiveType -> 0
+                    method.returnType == Long::class.javaPrimitiveType -> 0L
+                    else -> null
+                }
+            }
+        } as LearningDao
+
+    private fun AssistantConversation.toEntity(updatedAt: Long): AssistantConversationEntity =
+        AssistantConversationEntity(
+            id = id,
+            messagesJson = AssistantConversationCodec.encode(this),
+            updatedAt = updatedAt
+        )
+
     private object NoopAssistantService : KnowledgeAssistantService {
         override suspend fun streamReply(
             baseUrl: String,
@@ -151,6 +241,26 @@ class AssistantCoordinatorStateTest {
             userPrompt: String,
             onDelta: suspend (String) -> Unit
         ) {
+            onDelta(reply)
+        }
+    }
+
+    private class HoldingAssistantService(
+        private val reply: String
+    ) : KnowledgeAssistantService {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+
+        override suspend fun streamReply(
+            baseUrl: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            userPrompt: String,
+            onDelta: suspend (String) -> Unit
+        ) {
+            started.complete(Unit)
+            release.await()
             onDelta(reply)
         }
     }

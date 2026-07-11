@@ -71,7 +71,8 @@ fun AssistantScreen(
             AssistantTopBar(
                 onBack = viewModel::showHome,
                 onNewChat = viewModel.assistantActions::newChat,
-                onHistory = viewModel.assistantActions::showHistory
+                onHistory = viewModel.assistantActions::showHistory,
+                historyEnabled = !assistant.isBusy
             )
             StatusBanner(state.message)
             LazyColumn(
@@ -122,14 +123,20 @@ fun AssistantScreen(
                 onDismiss = viewModel.assistantActions::hideHistory,
                 onOpen = viewModel.assistantActions::openHistoryConversation,
                 onDelete = viewModel.assistantActions::deleteHistoryConversation,
-                onNewChat = viewModel.assistantActions::newChat
+                onNewChat = viewModel.assistantActions::newChat,
+                canOpenHistory = !assistant.isBusy
             )
         }
     }
 }
 
 @Composable
-private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit, onHistory: () -> Unit) {
+private fun AssistantTopBar(
+    onBack: () -> Unit,
+    onNewChat: () -> Unit,
+    onHistory: () -> Unit,
+    historyEnabled: Boolean
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -150,7 +157,7 @@ private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit, onHistory
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.weight(1f)
         )
-        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory)
+        AssistantHeaderAction(text = stringResource(R.string.assistant_history), onClick = onHistory, enabled = historyEnabled)
         AssistantHeaderAction(
             text = stringResource(R.string.assistant_new_chat),
             onClick = onNewChat,
@@ -165,7 +172,8 @@ private fun AssistantHistoryDrawer(
     onDismiss: () -> Unit,
     onOpen: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onNewChat: () -> Unit
+    onNewChat: () -> Unit,
+    canOpenHistory: Boolean
 ) {
     Column(
         modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 320.dp).background(WorkbenchColors.SurfaceSoft).padding(18.dp),
@@ -180,7 +188,11 @@ private fun AssistantHistoryDrawer(
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
                     items(history, key = { it.id }) { conversation ->
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { onOpen(conversation.id) }, modifier = Modifier.weight(1f)) {
+                        TextButton(
+                            onClick = { onOpen(conversation.id) },
+                            enabled = canOpenHistory,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(conversation.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Bold)
                                 if (conversation.preview.isNotBlank()) {
@@ -197,16 +209,20 @@ private fun AssistantHistoryDrawer(
 }
 
 @Composable
-private fun AssistantHeaderAction(text: String, onClick: () -> Unit, accent: Boolean = false) {
+private fun AssistantHeaderAction(text: String, onClick: () -> Unit, accent: Boolean = false, enabled: Boolean = true) {
     Text(
         text = text,
-        color = if (accent) WorkbenchColors.AccentStrong else WorkbenchColors.Muted,
+        color = when {
+            !enabled -> WorkbenchColors.Muted.copy(alpha = 0.42f)
+            accent -> WorkbenchColors.AccentStrong
+            else -> WorkbenchColors.Muted
+        },
         fontSize = AssistantUiTokens.HeaderActionSize,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .heightIn(min = AssistantUiTokens.HeaderActionMinHeight)
             .clip(RoundedCornerShape(AssistantUiTokens.HeaderActionCornerRadius))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(
                 horizontal = AssistantUiTokens.HeaderActionHorizontalPadding,
                 vertical = AssistantUiTokens.HeaderActionVerticalPadding
