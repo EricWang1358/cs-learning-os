@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +43,8 @@ private data class LibraryScreenState(
 )
 
 private object LibraryLayoutTokens {
-    val FolderMetricSize = 52.dp
+    val FolderMetricWidth = 58.dp
+    val FolderMetricHeight = 36.dp
     const val FolderActionGroupWidthFraction = 0.76f
     val FolderActionGap = 8.dp
 }
@@ -223,10 +225,10 @@ private fun LibraryRootScreen(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
-                    MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
+                    MetaPill(stringResource(R.string.common_nodes), folder.nodeCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
+                    MetaPill(stringResource(R.string.library_checked_filter), folder.checkedCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
                     if (folder.dueCount > 0) {
-                        MetaPill(stringResource(R.string.common_due), folder.dueCount.toString(), Modifier.size(LibraryLayoutTokens.FolderMetricSize))
+                        MetaPill(stringResource(R.string.common_due), folder.dueCount.toString(), Modifier.width(LibraryLayoutTokens.FolderMetricWidth).height(LibraryLayoutTokens.FolderMetricHeight))
                     }
                 }
             }

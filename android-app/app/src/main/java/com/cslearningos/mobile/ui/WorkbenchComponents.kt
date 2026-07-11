@@ -468,7 +468,7 @@ fun InlineMetricBadge(label: String, value: String, modifier: Modifier = Modifie
 fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .heightIn(min = 48.dp)
+            .heightIn(min = 40.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(
                 Brush.horizontalGradient(
@@ -476,7 +476,7 @@ fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
                 )
             )
             .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.28f)), RoundedCornerShape(999.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -487,14 +487,16 @@ fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun MetaPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(WorkbenchColors.Surface.copy(alpha = 0.56f))
             .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(10.dp))
-            .padding(9.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black)
+        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
         Text(value, color = WorkbenchColors.InkStrong, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
     }
 }

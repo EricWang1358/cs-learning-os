@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.26
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.26-beta`
+
+Android version:
+
+- `versionCode`: 27
+- `versionName`: `0.1.26`
+
+Status: implementation beta.
+
+Highlights:
+
+- Unified phone statistics into compact fixed-height label/value rows across the secondary header, Library folders, overview cards, and Home metrics, removing the tall stacked data-box behavior.
+
 ## Android Beta 0.1.25
 
 Date: 2026-07-11

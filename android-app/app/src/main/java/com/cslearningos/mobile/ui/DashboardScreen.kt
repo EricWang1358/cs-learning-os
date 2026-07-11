@@ -165,15 +165,17 @@ private fun LibraryPreview(state: DashboardScreenState, viewModel: LearningViewM
 
 @Composable
 private fun DashboardMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(WorkbenchColors.Surface.copy(alpha = 0.62f))
             .border(BorderStroke(1.dp, WorkbenchColors.Line), RoundedCornerShape(12.dp))
-            .padding(10.dp)
+            .padding(horizontal = 9.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
     ) {
-        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Black)
-        Text(value, color = WorkbenchColors.Accent, fontSize = 18.sp, fontWeight = FontWeight.Black)
+        Text(label.uppercase(), color = WorkbenchColors.Muted, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(value, color = WorkbenchColors.Accent, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 1)
     }
 }
 
