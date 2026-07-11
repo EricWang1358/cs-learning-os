@@ -52,7 +52,7 @@ class CompactScreenChromeTest {
     }
 
     @Test
-    fun compactScreensUseQuickerMotionThanHome() {
+    fun screenChromeKeepsVisualEmphasisButSharesSemanticDurations() {
         val home = screenMotionPolicy(AppScreen.Home)
         val capture = screenMotionPolicy(AppScreen.Capture)
         val reader = screenMotionPolicy(AppScreen.Reader)
@@ -60,7 +60,11 @@ class CompactScreenChromeTest {
         assertEquals(MotionEmphasis.Expressive, home.emphasis)
         assertEquals(MotionEmphasis.Compact, capture.emphasis)
         assertEquals(MotionEmphasis.Detail, reader.emphasis)
-        assertTrue(capture.expandMillis < home.expandMillis)
-        assertTrue(reader.expandMillis <= capture.expandMillis)
+        assertEquals(WorkbenchMotion.PressMillis, home.pressMillis)
+        assertEquals(WorkbenchMotion.PressMillis, capture.pressMillis)
+        assertEquals(WorkbenchMotion.PressMillis, reader.pressMillis)
+        assertEquals(WorkbenchMotion.StateMillis, home.stateMillis)
+        assertEquals(WorkbenchMotion.StateMillis, capture.stateMillis)
+        assertEquals(WorkbenchMotion.StateMillis, reader.stateMillis)
     }
 }

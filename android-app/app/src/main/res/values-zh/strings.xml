@@ -10,6 +10,8 @@
     <string name="common_dismiss">忽略</string>
     <string name="common_edit">编辑</string>
     <string name="common_expand">展开</string>
+    <string name="more_section_expanded">&#23637;&#24320;</string>
+    <string name="more_section_collapsed">&#25910;&#36215;</string>
     <string name="common_generate_draft">生成草稿</string>
     <string name="common_hide">隐藏</string>
     <string name="common_manual">手动</string>

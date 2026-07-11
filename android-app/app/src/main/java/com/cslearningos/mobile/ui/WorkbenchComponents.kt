@@ -136,7 +136,7 @@ fun WorkbenchCard(
 ) {
     val borderColor by animateColorAsState(
         targetValue = if (accent) WorkbenchColors.Accent else WorkbenchColors.Line,
-        animationSpec = tween(motionPolicy.fadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(motionPolicy.stateMillis, easing = FastOutSlowInEasing),
         label = "workbench-card-border"
     )
     val containerColor by animateColorAsState(
@@ -145,7 +145,7 @@ fun WorkbenchCard(
         } else {
             WorkbenchColors.SurfaceCard
         },
-        animationSpec = tween(motionPolicy.fadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(motionPolicy.stateMillis, easing = FastOutSlowInEasing),
         label = "workbench-card-container"
     )
     Card(
@@ -403,8 +403,8 @@ fun StatusBanner(message: UiText?) {
     val resolved = message.resolve()
     AnimatedVisibility(
         visible = resolved != null,
-        enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
-        exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+        enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+        exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
     ) {
         Box(
             modifier = Modifier
@@ -610,8 +610,8 @@ fun CollapsibleWorkbenchSection(
         }
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.DetailExpandMillis)),
-            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.DetailExpandMillis))
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text(body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 18.sp)

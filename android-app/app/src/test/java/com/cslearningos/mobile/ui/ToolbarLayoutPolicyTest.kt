@@ -8,12 +8,12 @@ class ToolbarLayoutPolicyTest {
     @Test
     fun usesTheFourMotionDurationsInAscendingOrder() {
         assertEquals(110, WorkbenchMotion.PressMillis)
-        assertEquals(130, WorkbenchMotion.CompactFadeMillis)
-        assertEquals(170, WorkbenchMotion.DetailExpandMillis)
-        assertEquals(210, WorkbenchMotion.HomeExpandMillis)
-        assertTrue(WorkbenchMotion.PressMillis < WorkbenchMotion.CompactFadeMillis)
-        assertTrue(WorkbenchMotion.CompactFadeMillis < WorkbenchMotion.DetailExpandMillis)
-        assertTrue(WorkbenchMotion.DetailExpandMillis < WorkbenchMotion.HomeExpandMillis)
+        assertEquals(130, WorkbenchMotion.StateMillis)
+        assertEquals(170, WorkbenchMotion.DisclosureMillis)
+        assertEquals(210, WorkbenchMotion.NavigationMillis)
+        assertTrue(WorkbenchMotion.PressMillis < WorkbenchMotion.StateMillis)
+        assertTrue(WorkbenchMotion.StateMillis < WorkbenchMotion.DisclosureMillis)
+        assertTrue(WorkbenchMotion.DisclosureMillis < WorkbenchMotion.NavigationMillis)
     }
 
     @Test

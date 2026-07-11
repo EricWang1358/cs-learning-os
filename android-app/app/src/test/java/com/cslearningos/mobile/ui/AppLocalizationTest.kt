@@ -63,12 +63,14 @@ class AppLocalizationTest {
         assertTrue(defaultStrings.contains("only recoverable from a backup"))
         assertFalse(defaultStrings.contains("adapter"))
         assertFalse(defaultStrings.contains("source of truth"))
+        assertTrue(defaultStrings.contains("more_section_expanded"))
 
         assertTrue(chineseStrings.contains("在知识库里找到它"))
         assertTrue(chineseStrings.contains("恢复会替换当前本地数据"))
         assertTrue(chineseStrings.contains("请先导出"))
         assertTrue(chineseStrings.contains("永久删除"))
         assertTrue(chineseStrings.contains("只能从备份恢复"))
+        assertTrue(chineseStrings.contains("more_section_expanded"))
     }
 
     private fun resourceText(relativePath: String): String {

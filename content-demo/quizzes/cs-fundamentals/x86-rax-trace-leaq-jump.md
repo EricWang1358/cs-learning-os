@@ -33,7 +33,7 @@ ret
 
 ## Answer
 
-`%rax = 0x18`.
+`%rax = 0x18`. `leaq` computes the address expression without reading memory, so `%rdx` receives `0x10 + 0x8`; the signed comparison does not jump, and the fall-through move copies that value into `%rax`.
 
 ## Explanation
 

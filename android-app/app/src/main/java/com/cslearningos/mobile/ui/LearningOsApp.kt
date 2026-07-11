@@ -164,8 +164,8 @@ private fun PortraitWorkbench(
                 AnimatedContent(
                     targetState = shellState.route,
                     transitionSpec = {
-                        (fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { it / 12 }) togetherWith
-                            (fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it / 12 })
+                        (fadeIn(tween(WorkbenchMotion.StateMillis)) + slideInHorizontally(tween(WorkbenchMotion.NavigationMillis)) { it / 12 }) togetherWith
+                            (fadeOut(tween(WorkbenchMotion.StateMillis)) + slideOutHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it / 12 })
                     },
                     label = "portrait-route"
                 ) { route -> ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true) }
@@ -426,17 +426,17 @@ private fun BottomNavTab(
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = if (selected) WorkbenchColors.Accent.copy(alpha = 0.16f) else WorkbenchColors.Surface.copy(alpha = 0.18f),
-        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "bottom-nav-background"
     )
     val iconColor by animateColorAsState(
         targetValue = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
-        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "bottom-nav-icon"
     )
     val labelColor by animateColorAsState(
         targetValue = if (selected) WorkbenchColors.InkStrong else WorkbenchColors.Muted,
-        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "bottom-nav-label"
     )
     Column(
@@ -630,8 +630,8 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
         }
         AnimatedVisibility(
             visible = state.readerQuestionPanelExpanded,
-            enter = fadeIn(tween(WorkbenchMotion.DetailFadeMillis)) + expandVertically(tween(WorkbenchMotion.DetailExpandMillis)),
-            exit = fadeOut(tween(WorkbenchMotion.DetailFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.DetailExpandMillis))
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
         ) {
             ReaderQuestionCapture(state = state, viewModel = viewModel, nodeId = node.id)
         }
@@ -827,8 +827,8 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
             }
             AnimatedVisibility(
                 visible = state.quizAnswerVisible,
-                enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
-                exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+                enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+                exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     AnswerBlock(quiz)

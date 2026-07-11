@@ -58,7 +58,7 @@ fun AssistantScreen(
 ) {
     val assistant = state.assistant
     val listState = rememberLazyListState()
-    LaunchedEffect(assistant.messages.lastOrNull()?.id) {
+    LaunchedEffect(assistant.messages.lastOrNull()?.id, assistant.messages.lastOrNull()?.body?.length) {
         if (assistant.messages.isNotEmpty()) {
             listState.scrollToItem(assistant.messages.lastIndex)
         }
@@ -109,15 +109,15 @@ fun AssistantScreen(
         }
         AnimatedVisibility(
             visible = assistant.historyVisible,
-            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)),
-            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis))
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis))
         ) {
             Box(modifier = Modifier.fillMaxSize().background(WorkbenchColors.Ink.copy(alpha = 0.24f)).clickable(onClick = viewModel.assistantActions::hideHistory))
         }
         AnimatedVisibility(
             visible = assistant.historyVisible,
-            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + slideInHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it },
-            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + slideOutHorizontally(tween(WorkbenchMotion.HomeExpandMillis)) { -it }
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + slideInHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it },
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + slideOutHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it }
         ) {
             AssistantHistoryDrawer(
                 history = assistant.conversationHistory,

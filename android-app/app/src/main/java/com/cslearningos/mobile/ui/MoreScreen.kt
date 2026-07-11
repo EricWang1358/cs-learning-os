@@ -88,14 +88,17 @@ private fun MoreSectionRow(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val expansionState = stringResource(
+        if (expanded) R.string.more_section_expanded else R.string.more_section_collapsed
+    )
     val backgroundColor by animateColorAsState(
         targetValue = if (expanded) WorkbenchColors.Surface.copy(alpha = 0.62f) else WorkbenchColors.Surface.copy(alpha = 0.34f),
-        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "more-section-background"
     )
     val borderColor by animateColorAsState(
         targetValue = if (expanded) WorkbenchColors.Accent.copy(alpha = 0.56f) else WorkbenchColors.Line,
-        animationSpec = tween(WorkbenchMotion.CompactFadeMillis, easing = FastOutSlowInEasing),
+        animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "more-section-border"
     )
     Column(
@@ -117,7 +120,7 @@ private fun MoreSectionRow(
                 .clickable(onClick = onToggle)
                 .semantics(mergeDescendants = true) {
                     role = Role.Button
-                    stateDescription = if (expanded) "expanded" else "collapsed"
+                    stateDescription = expansionState
                 },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -138,8 +141,8 @@ private fun MoreSectionRow(
         }
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(WorkbenchMotion.CompactFadeMillis)) + expandVertically(tween(WorkbenchMotion.CompactExpandMillis)),
-            exit = fadeOut(tween(WorkbenchMotion.CompactFadeMillis)) + shrinkVertically(tween(WorkbenchMotion.CompactExpandMillis))
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 content()
