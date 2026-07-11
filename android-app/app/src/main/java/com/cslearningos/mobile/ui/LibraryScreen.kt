@@ -198,6 +198,7 @@ private fun LibraryRootScreen(
 
     folders.forEach { folder ->
         val area = areas.firstOrNull { it.id == folder.areaId } ?: return@forEach
+        val actions = libraryFolderCardActions()
         InteractiveCard(onClick = { onOpenArea(folder.areaId) }, accent = false) {
             Eyebrow(stringResource(R.string.library_folder_eyebrow))
             Row(
@@ -231,9 +232,14 @@ private fun LibraryRootScreen(
                     modifier = Modifier.weight(LibraryLayoutTokens.FolderActionGroupWidthFraction),
                     horizontalArrangement = Arrangement.spacedBy(LibraryLayoutTokens.FolderActionGap)
                 ) {
-                    WorkbenchButton(stringResource(R.string.common_open), { onOpenArea(folder.areaId) }, Modifier.weight(1f), primary = true)
-                    WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) }, Modifier.weight(1f))
-                    WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, Modifier.weight(1f), danger = true)
+                    actions.forEach { action ->
+                        when (action) {
+                            LibraryFolderCardAction.Edit ->
+                                WorkbenchButton(stringResource(R.string.common_edit), { onRenameArea(area) }, Modifier.weight(1f))
+                            LibraryFolderCardAction.Delete ->
+                                WorkbenchButton(stringResource(R.string.common_delete), { onDeleteArea(area) }, Modifier.weight(1f), danger = true)
+                        }
+                    }
                 }
             }
         }
@@ -309,16 +315,19 @@ private fun LibraryAreaDetailScreen(
         }
 
         detail.items.forEach { item ->
+            val actions = libraryNodeCardActions()
             InteractiveCard(onClick = { onOpenNode(item.node) }, accent = item.checked) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Checkbox(
-                        checked = item.checked,
-                        onCheckedChange = { onToggleChecked(item.node) }
-                    )
+                    if (LibraryNodeCardAction.Check in actions) {
+                        Checkbox(
+                            checked = item.checked,
+                            onCheckedChange = { onToggleChecked(item.node) }
+                        )
+                    }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             MetaPill(stringResource(R.string.library_track_badge), item.trackLabel)
@@ -343,9 +352,15 @@ private fun LibraryAreaDetailScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         ToolbarRow {
-                            WorkbenchButton(stringResource(R.string.common_read), { onOpenNode(item.node) }, primary = true)
-                            WorkbenchButton(stringResource(R.string.common_edit), { onEditNode(item.node) })
-                            WorkbenchButton(stringResource(R.string.library_move_node_button), { onMoveNode(item.node) })
+                            actions.forEach { action ->
+                                when (action) {
+                                    LibraryNodeCardAction.Check -> Unit
+                                    LibraryNodeCardAction.Edit ->
+                                        WorkbenchButton(stringResource(R.string.common_edit), { onEditNode(item.node) })
+                                    LibraryNodeCardAction.Move ->
+                                        WorkbenchButton(stringResource(R.string.library_move_node_button), { onMoveNode(item.node) })
+                                }
+                            }
                         }
                     }
                 }

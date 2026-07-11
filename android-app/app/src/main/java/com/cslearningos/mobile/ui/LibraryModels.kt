@@ -10,6 +10,17 @@ enum class LibraryCheckedFilter {
     Checked
 }
 
+enum class LibraryFolderCardAction {
+    Edit,
+    Delete
+}
+
+enum class LibraryNodeCardAction {
+    Check,
+    Edit,
+    Move
+}
+
 data class LibraryFolderRow(
     val areaId: String,
     val title: String,
@@ -52,6 +63,12 @@ fun buildLibraryRootModel(
     LibraryRootModel(
         folders = buildLibraryRootFolders(areas, nodes, dueQuizzes, context)
     )
+
+fun libraryFolderCardActions(): List<LibraryFolderCardAction> =
+    listOf(LibraryFolderCardAction.Edit, LibraryFolderCardAction.Delete)
+
+fun libraryNodeCardActions(): List<LibraryNodeCardAction> =
+    listOf(LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move)
 
 fun buildLibraryRootFolders(
     areas: List<AreaEntity>,

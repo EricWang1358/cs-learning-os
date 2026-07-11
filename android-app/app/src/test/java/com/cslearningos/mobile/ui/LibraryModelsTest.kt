@@ -80,6 +80,18 @@ class LibraryModelsTest {
         assertEquals(false, root.hasAreaMapPanel)
     }
 
+    @Test
+    fun libraryCardActionsExcludeTapEquivalentOpenActions() {
+        assertEquals(
+            listOf(LibraryFolderCardAction.Edit, LibraryFolderCardAction.Delete),
+            libraryFolderCardActions()
+        )
+        assertEquals(
+            listOf(LibraryNodeCardAction.Check, LibraryNodeCardAction.Edit, LibraryNodeCardAction.Move),
+            libraryNodeCardActions()
+        )
+    }
+
     private fun area(id: String, name: String, order: Int) =
         AreaEntity(
             id = id,
