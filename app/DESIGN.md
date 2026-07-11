@@ -1,3 +1,5 @@
+> Historical reference only. This analysis is not current CS Learning OS product guidance or onboarding.
+
 ---
 version: alpha
 name: Binance-design-analysis
