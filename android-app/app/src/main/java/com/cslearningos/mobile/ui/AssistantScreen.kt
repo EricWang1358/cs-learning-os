@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
@@ -24,7 +25,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,58 +56,45 @@ fun AssistantScreen(
             listState.animateScrollToItem(assistant.messages.lastIndex)
         }
     }
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(WorkbenchColors.SurfaceSoft.copy(alpha = AssistantUiTokens.ScreenSurfaceAlpha))
     ) {
-        AssistantTopBar(
-            onBack = viewModel::showHome,
-            onNewChat = viewModel.assistantActions::newChat,
-            onHistory = viewModel.assistantActions::showHistory
-        )
-        StatusBanner(state.message)
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            state = listState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(AssistantUiTokens.ListPadding),
-            verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.ListItemSpacing)
-        ) {
-            if (assistant.messages.isEmpty()) {
-                item {
-                    AssistantEmptyState(
-                        onQuickMessage = viewModel.assistantActions::prefillQuickPrompt,
-                        onStartReview = viewModel.assistantActions::startInterviewReview
-                    )
+        Column(modifier = Modifier.fillMaxSize()) {
+            AssistantTopBar(
+                onBack = viewModel::showHome,
+                onNewChat = viewModel.assistantActions::newChat,
+                onHistory = viewModel.assistantActions::showHistory
+            )
+            StatusBanner(state.message)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                state = listState,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(AssistantUiTokens.ListPadding),
+                verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.ListItemSpacing)
+            ) {
+                if (assistant.messages.isEmpty()) {
+                    item {
+                        AssistantEmptyState(
+                            onQuickMessage = viewModel.assistantActions::prefillQuickPrompt,
+                            onStartReview = viewModel.assistantActions::startInterviewReview
+                        )
+                    }
+                }
+                items(assistant.messages, key = { it.id }) { message ->
+                    AssistantMessageBubble(message, viewModel.assistantActions::openCitation, { viewModel.assistantActions.openDraft(message.id) }, { viewModel.assistantActions.saveReplyToCapture(message.id) }, { viewModel.assistantActions.retryMessage(message.id) }, viewModel.assistantActions::openDailyReview, viewModel::showAiServiceSettings, state.areas)
                 }
             }
-            items(assistant.messages, key = { it.id }) { message ->
-                AssistantMessageBubble(
-                    message = message,
-                    onOpenCitation = viewModel.assistantActions::openCitation,
-                    onOpenDraft = { viewModel.assistantActions.openDraft(message.id) },
-                    onSaveCapture = { viewModel.assistantActions.saveReplyToCapture(message.id) },
-                    onRetry = { viewModel.assistantActions.retryMessage(message.id) },
-                    onOpenDailyReview = viewModel.assistantActions::openDailyReview,
-                    onConfigureAi = viewModel::showAiServiceSettings,
-                    areas = state.areas
-                )
-            }
+            AssistantComposer(value = assistant.input, onValueChange = viewModel.assistantActions::setInput, onSend = viewModel.assistantActions::sendMessage, onStop = viewModel.assistantActions::cancelReply, enabled = !assistant.isBusy, modifier = Modifier.imePadding())
         }
-        AssistantComposer(
-            value = assistant.input,
-            onValueChange = viewModel.assistantActions::setInput,
-            onSend = viewModel.assistantActions::sendMessage,
-            onStop = viewModel.assistantActions::cancelReply,
-            enabled = !assistant.isBusy,
-            modifier = Modifier.imePadding()
-        )
         if (assistant.historyVisible) {
-            AssistantHistoryDialog(
+            AssistantHistoryDrawer(
                 history = assistant.conversationHistory,
                 onDismiss = viewModel.assistantActions::hideHistory,
                 onOpen = viewModel.assistantActions::openHistoryConversation,
-                onDelete = viewModel.assistantActions::deleteHistoryConversation
+                onDelete = viewModel.assistantActions::deleteHistoryConversation,
+                onNewChat = viewModel.assistantActions::newChat
             )
         }
     }
@@ -145,21 +132,27 @@ private fun AssistantTopBar(onBack: () -> Unit, onNewChat: () -> Unit, onHistory
 }
 
 @Composable
-private fun AssistantHistoryDialog(
+private fun AssistantHistoryDrawer(
     history: List<com.cslearningos.mobile.feature.assistant.ui.AssistantConversationSummary>,
     onDismiss: () -> Unit,
     onOpen: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onNewChat: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.assistant_history)) },
-        text = {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().background(WorkbenchColors.Ink.copy(alpha = 0.24f)).clickable(onClick = onDismiss))
+        Column(
+            modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 320.dp).background(WorkbenchColors.SurfaceSoft).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(stringResource(R.string.assistant_title), color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            WorkbenchButton(stringResource(R.string.assistant_new_chat), { onNewChat(); onDismiss() }, primary = true, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.assistant_history), color = WorkbenchColors.Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             if (history.isEmpty()) {
                 Text(stringResource(R.string.assistant_history_empty))
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    history.forEach { conversation ->
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                    items(history, key = { it.id }) { conversation ->
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { onOpen(conversation.id) }, modifier = Modifier.weight(1f)) {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -174,9 +167,8 @@ private fun AssistantHistoryDialog(
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } }
-    )
+        }
+    }
 }
 
 @Composable

@@ -1,5 +1,22 @@
 # Release Notes
 
+## Android Beta 0.1.27
+
+Date: 2026-07-11
+
+Git tag: `android-v0.1.27-beta`
+
+Android version:
+
+- `versionCode`: 28
+- `versionName`: `0.1.27`
+
+Status: implementation beta.
+
+Highlights:
+
+- Replaced the Assistant history dialog with a normally hidden left navigation drawer. It provides a direct jump list, new-chat action, per-conversation deletion, and a scrim-dismissable return to the active conversation.
+
 ## Android Beta 0.1.26
 
 Date: 2026-07-11
