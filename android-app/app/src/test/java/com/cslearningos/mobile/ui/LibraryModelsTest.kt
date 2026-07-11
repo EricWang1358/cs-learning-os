@@ -81,20 +81,33 @@ class LibraryModelsTest {
     }
 
     @Test
-    fun libraryCardActionsExposeExactlyOneExplicitOpenOrReadControl() {
-        val folderActions = libraryFolderCardActions().map { it.name }
-        val nodeActions = libraryNodeCardActions().map { it.name }
+    fun libraryTreeAppendsRecoverableTrashAfterAreas() {
+        val rows = buildLibraryTreeRows(
+            areas = listOf(area("systems", "Systems", 20), area("algorithms", "Algorithms", 10)),
+            nodes = listOf(node("paging", "Paging", "systems", "virtual-memory", 20)),
+            trashNodes = listOf(node("old-cache", "Old Cache", "algorithms", "cache", 30)),
+            dueQuizzes = emptyList()
+        )
 
+        assertEquals(3, rows.size)
+        assertEquals("Algorithms", (rows[0] as LibraryTreeRow.Area).folder.title)
+        assertEquals("Systems", (rows[1] as LibraryTreeRow.Area).folder.title)
+        val trash = rows[2] as LibraryTreeRow.Trash
+        assertEquals(1, trash.nodeCount)
+        assertEquals("algorithms", trash.items.single().originalAreaId)
+    }
+
+    @Test
+    fun areaTreeActionsKeepDeletionInSecondaryMenu() {
         assertEquals(
-            listOf("Open", "Edit", "Delete"),
-            folderActions
+            listOf(LibraryAreaTreeAction.NewNode, LibraryAreaTreeAction.Edit, LibraryAreaTreeAction.More),
+            libraryAreaTreeActions()
         )
-        assertEquals(
-            listOf("Read", "Check", "Edit", "Move"),
-            nodeActions
-        )
-        assertEquals(1, folderActions.count { it == "Open" })
-        assertEquals(1, nodeActions.count { it == "Read" })
+    }
+
+    @Test
+    fun nodeTreeRowsHaveOnlyReaderNavigation() {
+        assertEquals(listOf(LibraryNodeTreeAction.OpenReader), libraryNodeTreeActions())
     }
 
     private fun area(id: String, name: String, order: Int) =

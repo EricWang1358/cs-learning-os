@@ -853,12 +853,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleLibraryArea(area: String) {
         _state.update { current ->
-            val nextCollapsed = if (area in current.collapsedLibraryAreas) {
-                current.collapsedLibraryAreas - area
-            } else {
-                current.collapsedLibraryAreas + area
-            }
-            current.copy(collapsedLibraryAreas = nextCollapsed, message = null)
+            current.copy(
+                selectedLibraryAreaId = if (current.selectedLibraryAreaId == area) null else area,
+                libraryCheckedFilter = LibraryCheckedFilter.All,
+                message = null
+            )
         }
     }
 
