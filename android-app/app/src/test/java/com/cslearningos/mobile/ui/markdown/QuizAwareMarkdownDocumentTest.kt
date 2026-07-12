@@ -113,4 +113,28 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals(1, (blocks[1] as MarkdownHeadingBlock).level)
         assertEquals(1, (blocks[2] as MarkdownHeadingBlock).level)
     }
+
+    @Test
+    fun parseSplitsInlineOpeningFenceAfterTextInsteadOfLeavingEmptyTrailingCodeBlock() {
+        val blocks = QuizAwareMarkdownDocument.parse(
+            """
+            ## Examples or cases
+
+            定义接口```kotlin
+            interface MyInterface {
+            fun bar() // abstract method
+            }
+            ```
+            """.trimIndent()
+        )
+
+        assertEquals(3, blocks.size)
+        assertEquals(MarkdownHeadingBlock::class.java, blocks[0]::class.java)
+        assertEquals(MarkdownParagraphBlock::class.java, blocks[1]::class.java)
+        assertEquals(MarkdownCodeBlock::class.java, blocks[2]::class.java)
+        val code = blocks[2] as MarkdownCodeBlock
+        assertEquals("kotlin", code.info)
+        assertTrue(code.code.contains("interface MyInterface"))
+        assertTrue(code.code.contains("fun bar()"))
+    }
 }

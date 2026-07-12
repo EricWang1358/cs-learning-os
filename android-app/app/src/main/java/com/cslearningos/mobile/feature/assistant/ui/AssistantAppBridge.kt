@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.R
+import com.cslearningos.mobile.domain.MarkdownQuizParser
 import com.cslearningos.mobile.ui.AppScreen
 import com.cslearningos.mobile.ui.LearningUiState
 import com.cslearningos.mobile.ui.assistantMarkdownDraft
@@ -101,7 +102,7 @@ class AssistantAppBridge(
                     editorSourceCaptureSlipId = null,
                     editorTitle = draft.title,
                     editorBody = draft.body,
-                    message = uiText(R.string.message_assistant_draft_ready)
+                    message = uiText(assistantDraftReadyMessageResId(action.markdown, action.areaId))
                 )
             }
         }
@@ -195,3 +196,10 @@ class AssistantAppBridge(
         }
     }
 }
+
+internal fun assistantDraftReadyMessageResId(markdown: String, areaId: String?): Int =
+    if (areaId == null && MarkdownQuizParser.parse(markdown).isNotEmpty()) {
+        R.string.message_assistant_draft_choose_area_for_review
+    } else {
+        R.string.message_assistant_draft_ready
+    }

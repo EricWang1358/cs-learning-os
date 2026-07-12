@@ -9,7 +9,11 @@ package com.cslearningos.mobile.markdown
 object AssistantMarkdownNormalizer {
     fun normalize(markdown: String): String {
         if (markdown.isBlank()) return markdown.trim()
-        val lines = markdown.replace("\r\n", "\n").replace('\r', '\n').lines()
+        val lines = markdown
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .replace(InlineFenceStart, "\n$1")
+            .lines()
         val normalized = mutableListOf<String>()
         var index = 0
         var openFence: String? = null
@@ -157,6 +161,7 @@ object AssistantMarkdownNormalizer {
     private val TightHeading = Regex("^(#{1,6})([^#\\s].*)$")
     private val TextPrefixedHeading = Regex("(?i)^text(#{1,6})([^#\\s].*)$")
     private val TightBullet = Regex("^([-*])([^\\s].*)$")
+    private val InlineFenceStart = Regex("(?<=\\S)(```|~~~)(?=[A-Za-z0-9]|$)")
     private val InlineHeading = Regex("(?<=\\S)(#{2,6})(?=[^#\\s])")
     private val FenceLine = Regex("^(```|~~~)\\s*([^\\s].*)?$")
     private val MalformedFenceHeader = Regex("^(```|~~~)(kotlin|java|json|text|markdown|md|xml|yaml|yml|bash|sh|python|js|ts)([^\\s].+)$", RegexOption.IGNORE_CASE)

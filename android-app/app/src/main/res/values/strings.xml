@@ -90,6 +90,7 @@
     <string name="assistant_guide_rollback_title">How to recover from mistakes</string>
     <string name="message_assistant_input_required">Write a question before sending.</string>
     <string name="message_assistant_draft_ready">Draft ready. Review and save it when you agree.</string>
+    <string name="message_assistant_draft_choose_area_for_review">Draft ready. Choose an Area before saving so its review cards appear in Review.</string>
     <string name="message_assistant_capture_saved">Assistant reply saved to Capture.</string>
     <string name="message_assistant_capture_save_failed">Could not save this reply. Try again.</string>
     <string name="message_assistant_source_unavailable">That local source is no longer available.</string>

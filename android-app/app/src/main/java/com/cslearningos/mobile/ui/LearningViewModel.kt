@@ -341,6 +341,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
                 }
                 _state.update { it.afterNodeSaved(node) }
+                refreshDueReviews(node.updatedAt)
             }.onFailure {
                 _state.update { it.withObjectSaveRejected() }
             }
@@ -745,8 +746,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             runCatching {
                 repository.saveQuizFromEditor(snapshot)
-            }.onSuccess {
+            }.onSuccess { quiz ->
                 _state.update { it.afterQuizSaved() }
+                refreshDueReviews(quiz.updatedAt)
             }.onFailure {
                 _state.update { it.withObjectSaveRejected() }
             }
