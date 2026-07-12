@@ -32,18 +32,18 @@ class AssistantAppBridge(
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)
 
     fun reviseNode(node: com.cslearningos.mobile.data.LearningNodeEntity) {
-        coordinator.reviseNode(node)
         onShowAssistant()
+        coordinator.reviseNode(node)
     }
 
     fun reviseQuiz(quiz: com.cslearningos.mobile.data.QuizItemEntity) {
-        coordinator.reviseQuiz(quiz)
         onShowAssistant()
+        coordinator.reviseQuiz(quiz)
     }
 
     fun reviseCapture(slip: com.cslearningos.mobile.data.CaptureSlipEntity) {
-        coordinator.reviseCapture(slip)
         onShowAssistant()
+        coordinator.reviseCapture(slip)
     }
 
     fun startInterviewReview() = coordinator.startInterviewReview()

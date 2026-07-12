@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -51,6 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cslearningos.mobile.R
@@ -146,40 +148,51 @@ private fun AssistantTopBar(
     onHistory: () -> Unit,
     historyEnabled: Boolean
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(WorkbenchColors.Surface.copy(alpha = AssistantUiTokens.TopBarSurfaceAlpha))
-            .border(BorderStroke(1.dp, WorkbenchColors.Line))
             .padding(
                 horizontal = AssistantUiTokens.HeaderHorizontalPadding,
                 vertical = AssistantUiTokens.HeaderVerticalPadding
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
+            )
     ) {
-        AssistantBackAction(onClick = onBack)
+        Row(
+            modifier = Modifier.align(Alignment.CenterStart),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AssistantBackAction(onClick = onBack)
+        }
         Text(
             text = stringResource(R.string.assistant_title),
             color = WorkbenchColors.InkStrong,
             fontSize = AssistantUiTokens.HeaderTitleSize,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.weight(1f)
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 88.dp)
         )
-        AssistantHeaderIconAction(
-            contentDescription = stringResource(R.string.assistant_history),
-            onClick = onHistory,
-            enabled = historyEnabled,
-            accent = false
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
         ) {
-            Icon(Icons.Filled.Menu, contentDescription = null)
-        }
-        AssistantHeaderIconAction(
-            contentDescription = stringResource(R.string.assistant_new_chat),
-            onClick = onNewChat,
-            accent = true
-        ) {
-            Icon(Icons.Filled.AddCircle, contentDescription = null)
+            AssistantHeaderIconAction(
+                contentDescription = stringResource(R.string.assistant_history),
+                onClick = onHistory,
+                enabled = historyEnabled,
+                accent = false
+            ) {
+                Icon(Icons.Filled.Menu, contentDescription = null)
+            }
+            AssistantHeaderIconAction(
+                contentDescription = stringResource(R.string.assistant_new_chat),
+                onClick = onNewChat,
+                accent = true
+            ) {
+                Icon(Icons.Filled.AddCircle, contentDescription = null)
+            }
         }
     }
 }
@@ -287,24 +300,89 @@ private fun AssistantEmptyState(
     val draftLabel = stringResource(R.string.assistant_quick_draft)
     val reviewLabel = stringResource(R.string.assistant_quick_review)
     Column(
-        modifier = Modifier.padding(top = AssistantUiTokens.EmptyStateTopPadding),
-        verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.EmptyStateSpacing)
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = AssistantUiTokens.EmptyStateMinHeight)
+            .padding(top = AssistantUiTokens.EmptyStateTopPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.EmptyStateSpacing, Alignment.CenterVertically)
     ) {
         Text(
             text = stringResource(R.string.assistant_empty_title),
             color = WorkbenchColors.InkStrong,
             fontSize = AssistantUiTokens.EmptyStateTitleSize,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.Medium,
+            lineHeight = AssistantUiTokens.EmptyStateTitleLineHeight,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
-        ToolbarRow {
-            WorkbenchButton(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.QuickActionGap)
+        ) {
+            AssistantQuickActionCard(
+                icon = "⌁",
                 text = explainLabel,
-                onClick = { onQuickMessage("$explainLabel: ") },
-                primary = true
+                accent = true,
+                modifier = Modifier.weight(1f),
+                onClick = { onQuickMessage("$explainLabel: ") }
             )
-            WorkbenchButton(text = draftLabel, onClick = { onQuickMessage(draftLabel) })
-            WorkbenchButton(text = reviewLabel, onClick = onStartReview)
+            AssistantQuickActionCard(
+                icon = "+",
+                text = draftLabel,
+                modifier = Modifier.weight(1f),
+                onClick = { onQuickMessage(draftLabel) }
+            )
+            AssistantQuickActionCard(
+                icon = "↻",
+                text = reviewLabel,
+                modifier = Modifier.weight(1f),
+                onClick = onStartReview
+            )
         }
+    }
+}
+
+@Composable
+private fun AssistantQuickActionCard(
+    icon: String,
+    text: String,
+    modifier: Modifier = Modifier,
+    accent: Boolean = false,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(AssistantUiTokens.QuickActionCornerRadius)
+    Column(
+        modifier = modifier
+            .height(AssistantUiTokens.QuickActionHeight)
+            .clip(shape)
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = if (accent) 0.98f else 0.74f))
+            .border(
+                BorderStroke(
+                    1.dp,
+                    if (accent) WorkbenchColors.Accent.copy(alpha = 0.52f) else WorkbenchColors.Line.copy(alpha = 0.82f)
+                ),
+                shape
+            )
+            .clickable(onClick = onClick)
+            .padding(AssistantUiTokens.QuickActionPadding),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(
+            text = icon,
+            color = if (accent) WorkbenchColors.AccentStrong else WorkbenchColors.Muted,
+            fontSize = AssistantUiTokens.QuickActionIconSize,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = text,
+            color = WorkbenchColors.InkStrong,
+            fontSize = AssistantUiTokens.QuickActionTextSize,
+            lineHeight = AssistantUiTokens.QuickActionLineHeight,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2
+        )
     }
 }
 
@@ -558,12 +636,21 @@ private object AssistantUiTokens {
     val HeaderActionCornerRadius = 8.dp
     val HeaderActionHorizontalPadding = 8.dp
     val HeaderActionVerticalPadding = 12.dp
-    val HeaderTitleSize = 18.sp
+    val HeaderTitleSize = 17.sp
     val HeaderActionSize = 13.sp
 
-    val EmptyStateTopPadding = 32.dp
-    val EmptyStateSpacing = 12.dp
-    val EmptyStateTitleSize = 23.sp
+    val EmptyStateMinHeight = 480.dp
+    val EmptyStateTopPadding = 20.dp
+    val EmptyStateSpacing = 28.dp
+    val EmptyStateTitleSize = 27.sp
+    val EmptyStateTitleLineHeight = 34.sp
+    val QuickActionGap = 10.dp
+    val QuickActionHeight = 112.dp
+    val QuickActionCornerRadius = 18.dp
+    val QuickActionPadding = 14.dp
+    val QuickActionIconSize = 18.sp
+    val QuickActionTextSize = 13.sp
+    val QuickActionLineHeight = 18.sp
 
     val MessageCornerRadius = 16.dp
     val MessagePadding = 14.dp

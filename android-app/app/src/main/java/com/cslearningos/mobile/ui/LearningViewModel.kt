@@ -181,6 +181,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun showAssistant() {
+        assistantActions.newChat()
         _state.update { it.copy(screen = AppScreen.Assistant, message = null) }
     }
 
