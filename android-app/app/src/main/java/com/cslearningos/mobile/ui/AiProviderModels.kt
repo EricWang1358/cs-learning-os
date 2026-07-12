@@ -3,6 +3,7 @@ package com.cslearningos.mobile.ui
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAreaOption
+import com.cslearningos.mobile.markdown.AssistantMarkdownNormalizer
 import org.json.JSONObject
 
 enum class AiServiceStatusKind {
@@ -80,10 +81,11 @@ fun buildCaptureAiDraftPrompt(
         ## Captured Context
         ## Explanation
         ## Common Mistake
-        ## Quiz Seeds
+        ## Review Cards
         ## Next Step
 
         The draft should be clear enough for a student to review later, but it must stay editable and should not pretend to be final truth if the capture is ambiguous.
+        In the Review Cards section, write one or more :::quiz blocks using exactly question:, answer:, and explanation: fields so the app can sync them into Review.
 
         Existing node titles that may be relevant:
         $knownNodes
@@ -100,14 +102,42 @@ fun buildCaptureAiDraftPrompt(
 }
 
 fun titleFromAiMarkdown(markdown: String, fallback: String): String =
-    markdown
-        .lineSequence()
-        .map { it.trim() }
-        .firstOrNull { it.startsWith("# ") }
-        ?.trimStart('#')
-        ?.trim()
-        ?.takeIf { it.isNotBlank() }
-        ?: fallback
+    assistantMarkdownDraft(markdown, fallback).title
+
+data class AssistantMarkdownDraft(
+    val title: String,
+    val body: String
+)
+
+fun assistantMarkdownDraft(markdown: String, fallback: String): AssistantMarkdownDraft {
+    val normalized = AssistantMarkdownNormalizer.normalize(markdown).trim()
+    if (normalized.isBlank()) {
+        return AssistantMarkdownDraft(title = fallback, body = "")
+    }
+
+    val lines = normalized.lines()
+    val titleIndex = lines.indexOfFirst { line -> line.trim().startsWith("# ") }
+    if (titleIndex < 0) {
+        return AssistantMarkdownDraft(title = fallback, body = normalized)
+    }
+
+    val extractedTitle = lines[titleIndex]
+        .trim()
+        .removePrefix("# ")
+        .trim()
+        .ifBlank { fallback }
+
+    val remainingLines = buildList {
+        lines.forEachIndexed { index, line ->
+            if (index != titleIndex) add(line)
+        }
+    }.dropWhile { it.isBlank() }
+
+    return AssistantMarkdownDraft(
+        title = extractedTitle,
+        body = remainingLines.joinToString("\n").trim()
+    )
+}
 
 data class AssistantComposerTextAttachment(
     val fileName: String,

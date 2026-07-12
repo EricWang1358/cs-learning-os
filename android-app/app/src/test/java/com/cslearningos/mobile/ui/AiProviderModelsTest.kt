@@ -49,7 +49,8 @@ class AiProviderModelsTest {
 
         assertTrue(prompt.contains("Return Markdown only"))
         assertTrue(prompt.contains("## Explanation"))
-        assertTrue(prompt.contains("## Quiz Seeds"))
+        assertTrue(prompt.contains("## Review Cards"))
+        assertTrue(prompt.contains(":::quiz"))
         assertTrue(prompt.contains("Virtual Memory"))
         assertTrue(prompt.contains("TLB Basics"))
     }
@@ -72,12 +73,42 @@ class AiProviderModelsTest {
     }
 
     @Test
+    fun markdownTitleIgnoresCollapsedSecondHeadingInSameLine() {
+        assertEquals(
+            "我的第一个 Kotlin程序",
+            titleFromAiMarkdown("# 我的第一个 Kotlin程序##核心概念-Kotlin源文件", fallback = "Capture Draft")
+        )
+    }
+
+    @Test
     fun assistantComposerSummarizesLongInputAsTextAttachment() {
         val attachment = assistantComposerTextAttachment("a".repeat(900))
 
         assertEquals("material.txt", attachment?.fileName)
         assertEquals(900, attachment?.characterCount)
         assertTrue(attachment?.preview?.length ?: 0 <= 96)
+    }
+
+    @Test
+    fun assistantMarkdownDraftSplitsFirstTitleHeadingOutOfBody() {
+        val draft = assistantMarkdownDraft(
+            """
+            # My first Kotlin program
+
+            ## Core concepts
+            - Kotlin files often end with `.kt`.
+            """.trimIndent(),
+            fallback = "Capture Draft"
+        )
+
+        assertEquals("My first Kotlin program", draft.title)
+        assertEquals(
+            """
+            ## Core concepts
+            - Kotlin files often end with `.kt`.
+            """.trimIndent(),
+            draft.body
+        )
     }
 
     private fun captureSlip(): CaptureSlipEntity =

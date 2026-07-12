@@ -15,11 +15,11 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantSession
-import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
 import com.cslearningos.mobile.feature.assistant.domain.nextTarget
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantObjectProposal
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantAgentInteraction
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantReviewEvaluation
+import com.cslearningos.mobile.feature.assistant.domain.SelectContextItem
 import com.cslearningos.mobile.feature.settings.data.safeAiError
 import com.cslearningos.mobile.ui.AiProviderSettings
 import kotlinx.coroutines.CancellationException
@@ -60,7 +60,7 @@ class AssistantCoordinator(
             val conversation = repository.latestAssistantConversation() ?: return@launch
             if (mutableState.value.messages.isEmpty()) {
                 conversationId = conversation.id
-                mutableState.value = AssistantUiState(
+                mutableState.value = AssistantUiState().restoreConversation(
                     messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
                     editTarget = conversation.editTarget
                 )
@@ -94,7 +94,7 @@ class AssistantCoordinator(
             val conversation = repository.getAssistantConversation(id) ?: return@launch
             if (mutableState.value.isBusy) return@launch
             conversationId = conversation.id
-            mutableState.value = AssistantUiState(
+            mutableState.value = AssistantUiState().restoreConversation(
                 messages = conversation.messages.map(AssistantConversationMessage::toUiMessage),
                 editTarget = conversation.editTarget
             )
@@ -170,6 +170,28 @@ class AssistantCoordinator(
         }
     }
 
+    fun reviseNodeDraft(
+        nodeId: String?,
+        expectedRevision: Long?,
+        titleHint: String,
+        markdown: String,
+        areaId: String?
+    ) {
+        mutableState.update {
+            it.copy(
+                input = "Improve this knowledge node while preserving its useful content.",
+                editTarget = AssistantEditTarget.Node(
+                    id = nodeId,
+                    revision = expectedRevision ?: 0L,
+                    titleHint = titleHint,
+                    markdown = markdown,
+                    areaId = areaId
+                ),
+                reviewSession = null
+            )
+        }
+    }
+
     fun startInterviewReview() {
         if (mutableState.value.isBusy) return
         val requestConversationId = conversationId
@@ -203,47 +225,39 @@ class AssistantCoordinator(
         val input = snapshot.input.trim()
         if (input.isBlank() || snapshot.isBusy) return false
 
-        val mode = when (snapshot.reviewSession) {
-            AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
-            is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
-            is AssistantReviewSession.Evaluated -> AssistantRequestMode.Answer
-            null -> if (snapshot.editTarget != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
-        }
-        val userMessage = AssistantMessage(
-            id = messageId("user"),
-            role = AssistantMessageRole.User,
-            body = input
-        )
+        val mode = snapshot.requestModeFor(input)
+        val userMessageId = messageId("user")
         val responseMessageId = messageId("assistant")
         val requestConversationId = conversationId
         activeReplyMessageId = responseMessageId
         mutableState.update { current ->
-            current.copy(
-                input = "",
-                messages = current.messages + userMessage + AssistantMessage(
-                    id = responseMessageId,
-                    role = AssistantMessageRole.Assistant,
-                    body = "",
-                    isStreaming = true
-                ),
-                isBusy = true,
-                lastRequestMode = mode
+            current.queueAssistantTurn(
+                input = input,
+                mode = mode,
+                userMessageId = userMessageId,
+                responseMessageId = responseMessageId
             )
         }
-        if (mode == AssistantRequestMode.Draft && snapshot.editTarget == null && !input.isApprovedDraftRequest()) {
-            updateMessage(responseMessageId) { message ->
-                message.copy(
-                    body = string(R.string.assistant_draft_confirm_body),
-                    action = AssistantMessageAction.AgentInteraction(input.toDraftConfirmationInteraction(string)),
-                    isStreaming = false
+        if (snapshot.shouldShowDraftChecklist(input, mode)) {
+            mutableState.update {
+                it.showDraftChecklist(
+                    responseMessageId = responseMessageId,
+                    request = input,
+                    interaction = input.toDraftChecklistInteraction(string),
+                    body = string(R.string.assistant_draft_confirm_body)
                 )
             }
-            mutableState.update { it.copy(isBusy = false) }
             scope.launch { persistConversation(requestConversationId) }
             return true
         }
         replyJob = scope.launch {
             try {
+                val userMessage = mutableState.value.messages.firstOrNull { it.id == userMessageId }
+                    ?: AssistantMessage(
+                        id = userMessageId,
+                        role = AssistantMessageRole.User,
+                        body = input
+                    )
                 val localContext = session.findLocalContext(input)
                 val areas = session.availableAreas()
                 val requestEditTarget = snapshot.editTarget ?: if (mode == AssistantRequestMode.Draft) {
@@ -258,6 +272,7 @@ class AssistantCoordinator(
                     null
                 }
                 updateMessage(responseMessageId) { it.copy(citations = localContext) }
+                mutableState.update { it.copy(pendingDraftRequest = null) }
                 if (!settings.isConfigured) {
                     updateMessage(responseMessageId) {
                         it.copy(
@@ -384,18 +399,14 @@ class AssistantCoordinator(
                     captureSuggestion = null
                     nextEditTarget = snapshot.editTarget
                 }
-                updateMessage(responseMessageId) { message ->
-                    message.copy(
-                        body = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
+                mutableState.update {
+                    it.completeAssistantTurn(
+                        responseMessageId = responseMessageId,
+                        visibleBody = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
                         action = action,
                         captureSuggestion = captureSuggestion,
-                        isStreaming = false
-                    )
-                }
-                mutableState.update {
-                    it.copy(
-                        editTarget = nextEditTarget,
-                        reviewSession = nextReviewSession
+                        nextEditTarget = nextEditTarget,
+                        nextReviewSession = nextReviewSession
                     )
                 }
                 persistConversation(requestConversationId)
@@ -453,6 +464,10 @@ class AssistantCoordinator(
         mutableState.value.messages
             .firstOrNull { it.id == messageId }
             ?.action as? AssistantMessageAction.OpenEditableCaptureDraft
+
+    fun consumePendingAutoOpen(messageId: String) {
+        mutableState.update { current -> current.consumePendingAutoOpenMessage(messageId) }
+    }
 
     suspend fun saveReplyToCapture(messageId: String): Boolean = captureSaveMutex.withLock {
         val claim = claimCaptureSaveAction(mutableState.value.messages, messageId) ?: return false
@@ -533,21 +548,34 @@ private fun shouldHideStructuredStreaming(
 ): Boolean =
     mode == AssistantRequestMode.Draft || editTarget != null
 
-private fun String.isApprovedDraftRequest(): Boolean =
-    trim().startsWith(ApprovedDraftPrefix, ignoreCase = true)
-
-private fun String.toDraftConfirmationInteraction(string: (Int) -> String): AssistantAgentInteraction.Confirm {
+private fun String.toDraftChecklistInteraction(string: (Int) -> String): AssistantAgentInteraction.SelectContext {
     val request = trim()
-    return AssistantAgentInteraction.Confirm(
+    return AssistantAgentInteraction.SelectContext(
         title = string(R.string.assistant_draft_confirm_title),
         body = string(R.string.assistant_draft_confirm_body),
-        acceptReply = "$ApprovedDraftPrefix $request",
-        rejectReply = string(R.string.assistant_draft_confirm_reject_reply),
-        customPlaceholder = string(R.string.assistant_agent_custom_placeholder)
+        items = listOf(
+            SelectContextItem(
+                id = "create_node",
+                title = string(R.string.assistant_draft_task_node),
+                body = string(R.string.assistant_draft_task_node_body),
+                selected = true
+            ),
+            SelectContextItem(
+                id = "create_review_cards",
+                title = string(R.string.assistant_draft_task_review),
+                body = string(R.string.assistant_draft_task_review_body),
+                selected = true
+            ),
+            SelectContextItem(
+                id = "keep_capture_followups",
+                title = string(R.string.assistant_draft_task_capture),
+                body = string(R.string.assistant_draft_task_capture_body),
+                selected = false
+            )
+        ),
+        confirmReplyPrefix = "$ApprovedDraftPrefix $request\nSelected outputs:"
     )
 }
-
-private const val ApprovedDraftPrefix = "Generate the editable draft for:"
 
 private fun AssistantConversation.toSummary(): AssistantConversationSummary {
     val firstUserMessage = messages.firstOrNull { it.role == AssistantConversationRole.User }?.body.orEmpty()

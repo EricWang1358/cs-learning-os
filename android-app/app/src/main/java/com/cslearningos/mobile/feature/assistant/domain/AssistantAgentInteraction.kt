@@ -33,17 +33,29 @@ data class ParsedAssistantAgentInteraction(
 )
 
 fun parseAssistantAgentInteraction(reply: String): ParsedAssistantAgentInteraction {
-    val matches = AgentActionBlock.findAll(reply).toList()
-    if (matches.size != 1) {
-        return ParsedAssistantAgentInteraction(reply.trim(), null)
+    val commentMatches = AgentActionBlock.findAll(reply).toList()
+    if (commentMatches.size == 1) {
+        val interaction = runCatching {
+            commentMatches.single().groupValues[1].trim().takeIf { it.isNotBlank() }?.let(::JSONObject)?.toAgentInteraction()
+        }.getOrNull()
+        return ParsedAssistantAgentInteraction(
+            visibleReply = reply.replace(AgentActionBlock, "").trim(),
+            interaction = interaction
+        )
     }
-    val interaction = runCatching {
-        matches.single().groupValues[1].trim().takeIf { it.isNotBlank() }?.let(::JSONObject)?.toAgentInteraction()
-    }.getOrNull()
-    return ParsedAssistantAgentInteraction(
-        visibleReply = reply.replace(AgentActionBlock, "").trim(),
-        interaction = interaction
-    )
+
+    val codeBlockMatches = CodeBlockJsonAction.findAll(reply).toList()
+    if (codeBlockMatches.size == 1) {
+        val interaction = runCatching {
+            codeBlockMatches.single().groupValues[1].trim().takeIf { it.isNotBlank() }?.let(::JSONObject)?.toAgentInteraction()
+        }.getOrNull()
+        return ParsedAssistantAgentInteraction(
+            visibleReply = reply.replace(CodeBlockJsonAction, "").trim(),
+            interaction = interaction
+        )
+    }
+
+    return ParsedAssistantAgentInteraction(reply.trim(), null)
 }
 
 fun AssistantAgentInteraction.toJson(): JSONObject =
@@ -119,5 +131,10 @@ fun JSONObject.toAgentInteraction(): AssistantAgentInteraction? =
 
 private val AgentActionBlock = Regex(
     "<!--\\s*cs-agent-action\\s*-->(.*?)<!--\\s*/cs-agent-action\\s*-->",
+    setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+)
+
+private val CodeBlockJsonAction = Regex(
+    "```\\s*json\\s*(\\{.*?\\})\\s*```",
     setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
 )

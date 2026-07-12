@@ -69,6 +69,82 @@ class AssistantCoordinatorStateTest {
         assertEquals("Compare BFS queue growth later.", reply.captureSuggestion)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun objectNodeProposalMarksReplyForAutomaticDraftOpening() = runTest {
+        val node = LearningNodeEntity(
+            id = "node-1",
+            title = "Graph traversal",
+            markdownBody = "# Graph traversal\n\nOld body",
+            createdAt = 1L,
+            updatedAt = 2L,
+            lastReadAt = null,
+            revision = 3L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "algorithms",
+            areaId = "algorithms",
+            track = "graphs"
+        )
+        val service = ReplyingAssistantService(
+            """
+            I revised the note and preserved the useful parts.
+
+            ```markdown
+            <!-- cs-area: algorithms -->
+            # Graph traversal
+
+            Better body.
+            ```
+            """.trimIndent()
+        )
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+        coordinator.reviseNode(node)
+
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+
+        val reply = coordinator.state.value.messages.last()
+        assertTrue(reply.action is AssistantMessageAction.OpenEditableDraft)
+        assertEquals(reply.id, coordinator.state.value.pendingAutoOpenMessageId)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun reviseNodeDraftPreservesExistingConversationMessages() = runTest {
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = ReplyingAssistantService("Initial answer"),
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.setInput("Explain paging")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+        val messageCountBefore = coordinator.state.value.messages.size
+
+        coordinator.reviseNodeDraft(
+            nodeId = null,
+            expectedRevision = null,
+            titleHint = "Paging",
+            markdown = "## Core idea\nPaging maps virtual memory to physical frames.",
+            areaId = "algorithms"
+        )
+
+        assertEquals(messageCountBefore, coordinator.state.value.messages.size)
+        assertTrue(coordinator.state.value.editTarget is com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget.Node)
+        assertEquals(
+            "Improve this knowledge node while preserving its useful content.",
+            coordinator.state.value.input
+        )
+    }
+
     @Test
     fun startingInterviewReviewClearsTypedEditTarget() = runTest {
         val coordinator = AssistantCoordinator(
@@ -217,7 +293,7 @@ class AssistantCoordinatorStateTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun newNodeDraftRequestShowsLocalConfirmationBeforeCallingModel() = runTest {
+    fun newNodeDraftRequestShowsLocalChecklistBeforeCallingModel() = runTest {
         val service = CountingAssistantService()
         val coordinator = AssistantCoordinator(
             repository = LearningRepository(assistantDao(node = null)),
@@ -234,7 +310,15 @@ class AssistantCoordinatorStateTest {
         assertEquals(0, service.calls)
         assertTrue(reply.action is AssistantMessageAction.AgentInteraction)
         val interaction = (reply.action as AssistantMessageAction.AgentInteraction).interaction
-        assertTrue(interaction is AssistantAgentInteraction.Confirm)
+        assertTrue(interaction is AssistantAgentInteraction.SelectContext)
+        val checklist = interaction as AssistantAgentInteraction.SelectContext
+        assertEquals(
+            listOf("create_node", "create_review_cards", "keep_capture_followups"),
+            checklist.items.map { it.id }
+        )
+        assertTrue(checklist.items.take(2).all { it.selected })
+        assertTrue(!checklist.items.last().selected)
+        assertTrue(checklist.confirmReplyPrefix.startsWith("Generate the editable draft for:"))
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -1,12 +1,15 @@
 package com.cslearningos.mobile.ui.markdown
 
+import com.cslearningos.mobile.markdown.AssistantMarkdownNormalizer
+
 object QuizAwareMarkdownDocument {
     fun parse(markdown: String): List<MarkdownBlock> {
-        if (markdown.isBlank()) return emptyList()
+        val normalizedMarkdown = AssistantMarkdownNormalizer.normalize(markdown)
+        if (normalizedMarkdown.isBlank()) return emptyList()
 
         val blocks = mutableListOf<MarkdownBlock>()
         val buffer = mutableListOf<String>()
-        val lines = markdown.lines()
+        val lines = normalizedMarkdown.lines()
         var index = 0
         var openFence: String? = null
 

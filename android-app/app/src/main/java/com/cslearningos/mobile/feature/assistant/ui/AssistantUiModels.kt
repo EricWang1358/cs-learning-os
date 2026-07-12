@@ -355,5 +355,7 @@ data class AssistantUiState(
     val editTarget: AssistantEditTarget? = null,
     val reviewSession: AssistantReviewSession? = null,
     val conversationHistory: List<AssistantConversationSummary> = emptyList(),
-    val historyVisible: Boolean = false
+    val historyVisible: Boolean = false,
+    val pendingDraftRequest: String? = null,
+    val pendingAutoOpenMessageId: String? = null
 )

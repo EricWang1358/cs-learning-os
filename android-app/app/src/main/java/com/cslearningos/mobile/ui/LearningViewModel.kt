@@ -85,7 +85,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         scope = viewModelScope,
         onOpenNode = ::openNode,
         onOpenDailyReview = ::showReview,
-        onShowAssistant = ::showAssistant
+        onShowAssistant = ::showAssistantFresh,
+        onShowAssistantPreservingConversation = ::showAssistantPreservingConversation
     )
 
     init {
@@ -111,6 +112,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             assistantCoordinator.state.collect { assistant ->
                 _state.update { current -> current.copy(assistant = assistant) }
+                assistant.pendingAutoOpenMessageId?.let { messageId ->
+                    assistantActions.consumePendingAutoOpen(messageId)
+                    when (assistant.messages.firstOrNull { it.id == messageId }?.action) {
+                        is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableDraft -> assistantActions.openDraft(messageId)
+                        is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableQuizDraft -> assistantActions.openQuizDraft(messageId)
+                        is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableCaptureDraft -> assistantActions.openCaptureDraft(messageId)
+                        else -> Unit
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -181,7 +191,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun showAssistant() {
+        showAssistantPreservingConversation()
+    }
+
+    fun showAssistantFresh() {
         assistantActions.newChat()
+        showAssistantPreservingConversation()
+    }
+
+    fun showAssistantPreservingConversation() {
         _state.update { it.copy(screen = AppScreen.Assistant, message = null) }
     }
 
@@ -337,6 +355,18 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 message = null
             )
         }
+    }
+
+    fun reviseEditorDraftWithAssistant() {
+        val snapshot = state.value
+        val fallbackTitle = snapshot.editorTitle.ifBlank { "Working Draft" }
+        assistantActions.reviseNodeDraft(
+            nodeId = snapshot.editorNodeId,
+            expectedRevision = snapshot.editorExpectedRevision,
+            titleHint = fallbackTitle,
+            markdown = snapshot.editorBody,
+            areaId = snapshot.editorAreaId
+        )
     }
 
     fun deleteSelectedNode() {
@@ -655,6 +685,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 repository.updateCaptureSlipStatus(slip.id, CaptureSlipStatus.ai_draft_ready)
                 val fallbackTitle = slip.topicHint?.takeIf { it.isNotBlank() } ?: "Capture Draft"
                 val placement = parseAssistantDraftPlacement(markdown, captureAssistantAreaOptions(snapshot.areas, snapshot.nodes))
+                val draft = assistantMarkdownDraft(placement.markdown, fallbackTitle)
                 _state.update {
                     it.copy(
                         screen = AppScreen.Editor,
@@ -663,8 +694,8 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                         editorAreaId = placement.areaId,
                         editorSourceCaptureSlipId = slip.id,
                         selectedNode = null,
-                        editorTitle = titleFromAiMarkdown(placement.markdown, fallbackTitle),
-                        editorBody = placement.markdown,
+                        editorTitle = draft.title,
+                        editorBody = draft.body,
                         aiBusy = false,
                         pendingAiDraftSlipId = null,
                         aiServiceStatus = AiServiceStatus(

@@ -62,6 +62,30 @@ class AssistantAgentInteractionTest {
     }
 
     @Test
+    fun parsesJsonCodeFenceActionWithoutCrashingOnAndroidRegex() {
+        val parsed = parseAssistantAgentInteraction(
+            """
+            先确认生成范围。
+            ```json
+            {
+              "kind": "confirm",
+              "title": "确认下一步",
+              "body": "只生成一个节点草稿。",
+              "acceptReply": "继续生成。",
+              "rejectReply": "先别生成。",
+              "customPlaceholder": "输入你的修改意见。"
+            }
+            ```
+            """.trimIndent()
+        )
+
+        val action = parsed.interaction as AssistantAgentInteraction.Confirm
+        assertEquals("先确认生成范围。", parsed.visibleReply)
+        assertEquals("确认下一步", action.title)
+        assertEquals("继续生成。", action.acceptReply)
+    }
+
+    @Test
     fun ignoresInvalidOrUnknownActionDirectives() {
         assertNull(parseAssistantAgentInteraction("No action").interaction)
         assertNull(

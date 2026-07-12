@@ -3,6 +3,7 @@ package com.cslearningos.mobile.feature.assistant.ui
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.ui.AppScreen
 import com.cslearningos.mobile.ui.LearningUiState
+import com.cslearningos.mobile.ui.assistantMarkdownDraft
 import com.cslearningos.mobile.ui.titleFromAiMarkdown
 import com.cslearningos.mobile.ui.uiText
 import kotlinx.coroutines.CoroutineScope
@@ -15,7 +16,8 @@ class AssistantAppBridge(
     private val scope: CoroutineScope,
     private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit,
     private val onOpenDailyReview: () -> Unit,
-    private val onShowAssistant: () -> Unit
+    private val onShowAssistant: () -> Unit,
+    private val onShowAssistantPreservingConversation: () -> Unit
 ) {
     fun newChat() = coordinator.newChat()
 
@@ -46,6 +48,23 @@ class AssistantAppBridge(
         coordinator.reviseCapture(slip)
     }
 
+    fun reviseNodeDraft(
+        nodeId: String?,
+        expectedRevision: Long?,
+        titleHint: String,
+        markdown: String,
+        areaId: String?
+    ) {
+        onShowAssistantPreservingConversation()
+        coordinator.reviseNodeDraft(
+            nodeId = nodeId,
+            expectedRevision = expectedRevision,
+            titleHint = titleHint,
+            markdown = markdown,
+            areaId = areaId
+        )
+    }
+
     fun startInterviewReview() = coordinator.startInterviewReview()
 
     fun sendMessage() = coordinator.send(currentSettings())
@@ -61,6 +80,8 @@ class AssistantAppBridge(
 
     fun openDailyReview() = onOpenDailyReview()
 
+    fun consumePendingAutoOpen(messageId: String) = coordinator.consumePendingAutoOpen(messageId)
+
     fun openDraft(messageId: String) {
         scope.launch {
             val action = coordinator.draftAction(messageId) ?: return@launch
@@ -72,6 +93,7 @@ class AssistantAppBridge(
                     return@launch
                 }
             }
+            val draft = assistantMarkdownDraft(action.markdown, action.titleHint)
             updateState {
                 it.copy(
                     screen = AppScreen.Editor,
@@ -80,8 +102,8 @@ class AssistantAppBridge(
                     editorExpectedRevision = action.expectedRevision,
                     editorAreaId = action.areaId,
                     editorSourceCaptureSlipId = null,
-                    editorTitle = titleFromAiMarkdown(action.markdown, action.titleHint),
-                    editorBody = action.markdown,
+                    editorTitle = draft.title,
+                    editorBody = draft.body,
                     message = uiText(R.string.message_assistant_draft_ready)
                 )
             }

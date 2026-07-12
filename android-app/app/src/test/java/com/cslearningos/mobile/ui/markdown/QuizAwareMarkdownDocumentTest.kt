@@ -89,4 +89,28 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals("id=cache-hit", quiz.info)
         assertEquals("question: What does a cache hit avoid?", quiz.lines.first())
     }
+
+    @Test
+    fun parseNormalizesCommonAiMarkdownHeadingMistakes() {
+        val blocks = QuizAwareMarkdownDocument.parse(
+            """
+            ##Prompt basics
+
+            text#Task description
+
+            ```text#Output format
+            - Use Markdown.
+            ```
+            """.trimIndent()
+        )
+
+        assertEquals(4, blocks.size)
+        assertEquals(MarkdownHeadingBlock::class.java, blocks[0]::class.java)
+        assertEquals(MarkdownHeadingBlock::class.java, blocks[1]::class.java)
+        assertEquals(MarkdownHeadingBlock::class.java, blocks[2]::class.java)
+        assertEquals(MarkdownListBlock::class.java, blocks[3]::class.java)
+        assertEquals(2, (blocks[0] as MarkdownHeadingBlock).level)
+        assertEquals(1, (blocks[1] as MarkdownHeadingBlock).level)
+        assertEquals(1, (blocks[2] as MarkdownHeadingBlock).level)
+    }
 }

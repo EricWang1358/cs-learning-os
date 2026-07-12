@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.feature.assistant.domain
 
 import com.cslearningos.mobile.data.CaptureSlipType
+import com.cslearningos.mobile.markdown.AssistantMarkdownNormalizer
 
 sealed interface AssistantEditTarget {
     val id: String?
@@ -91,24 +92,38 @@ private fun parseNodeProposal(
     reply: String,
     areas: List<AssistantAreaOption>
 ): AssistantEditProposal.Node? {
-    val directives = NodeDirectiveLine.findAll(reply).toList()
+    val rawNormalizedReply = AssistantMarkdownNormalizer.normalize(reply)
+    val rawDirectives = NodeDirectiveLine.findAll(rawNormalizedReply).toList()
+    val rawKnownDirectiveCount =
+        rawDirectives.count { match -> match.nodeDirectiveValue("cs-area") != null } +
+            rawDirectives.count { match -> match.nodeDirectiveValue("cs-area-reason") != null } +
+            rawDirectives.count { match -> match.nodeDirectiveValue("cs-capture") != null }
+    if (rawKnownDirectiveCount != rawDirectives.size) return null
+
+    val normalizedReply = AssistantMarkdownNormalizer.normalize(reply.extractNodeDraftPayload())
+    val directives = NodeDirectiveLine.findAll(normalizedReply).toList()
     val areaDirectives = directives.mapNotNull { match -> match.nodeDirectiveValue("cs-area") }
     val reasonDirectives = directives.mapNotNull { match -> match.nodeDirectiveValue("cs-area-reason") }
     val captureDirectives = directives.mapNotNull { match -> match.nodeDirectiveValue("cs-capture") }
+    val looseAreaMatches = LooseAreaCommentLine.findAll(normalizedReply).toList()
+    val looseAreaDirectives = looseAreaMatches
+        .mapNotNull { match -> match.groupValues[1].matchAreaId(areas) }
     val knownDirectiveCount = areaDirectives.size + reasonDirectives.size + captureDirectives.size
     if (knownDirectiveCount != directives.size) return null
-    if (areaDirectives.size > 1 || reasonDirectives.size > 1 || captureDirectives.size > 1) return null
+    if (looseAreaMatches.size != looseAreaDirectives.size) return null
+    if (areaDirectives.size + looseAreaDirectives.size > 1 || reasonDirectives.size > 1 || captureDirectives.size > 1) return null
     if (target.id == null && target.areaId == null && areaDirectives.isEmpty() && areas.isEmpty()) return null
 
-    val areaId = areaDirectives.singleOrNull()?.let { requestedAreaId ->
+    val areaId = (areaDirectives.singleOrNull() ?: looseAreaDirectives.singleOrNull())?.let { requestedAreaId ->
         areas.firstOrNull { it.id == requestedAreaId }?.id ?: return null
-    } ?: target.areaId ?: reply.looseAreaId(areas) ?: areas.firstOrNull()?.id
+    } ?: target.areaId ?: normalizedReply.looseAreaId(areas) ?: areas.firstOrNull()?.id
     val placementReason = reasonDirectives.singleOrNull()?.takeIf { areaDirectives.isNotEmpty() }
     val captureSuggestion = captureDirectives.singleOrNull()
-    val markdown = reply
+    val markdown = normalizedReply
         .replace(NodeAreaDirectiveLine, "")
         .replace(NodeAreaReasonDirectiveLine, "")
         .replace(NodeCaptureDirectiveLine, "")
+        .replace(LooseAreaCommentLine, "")
         .replace(LooseAreaLine, "")
         .trim()
         .takeIf(String::isNotBlank)
@@ -137,6 +152,38 @@ private fun parseCaptureProposal(target: AssistantEditTarget.Capture, reply: Str
             .isNotBlank()
     ) return null
     return AssistantEditProposal.Capture(target, body, topicHint, sourceLabel, type)
+}
+
+private fun String.extractNodeDraftPayload(): String {
+    val normalizedOriginal = AssistantMarkdownNormalizer.normalize(this)
+    if (normalizedOriginal.hasMarkdownTitleHeadingAfterOptionalDirectives()) {
+        return this
+    }
+
+    MarkdownFenceBlock.findAll(this)
+        .map { match -> match.groupValues[2].trim() }
+        .firstOrNull { payload ->
+            AssistantMarkdownNormalizer.normalize(payload).hasMarkdownTitleHeadingAfterOptionalDirectives()
+        }
+        ?.let { return it }
+
+    val lines = lines()
+    val firstHeadingIndex = lines.indexOfFirst { line -> line.trim().matches(TitleHeadingLine) }
+    if (firstHeadingIndex >= 0) {
+        val directivePrefix = lines.take(firstHeadingIndex)
+            .filter { line ->
+                val trimmed = line.trim()
+                trimmed.isBlank() ||
+                    NodeAreaDirectiveLine.matches(trimmed) ||
+                    NodeAreaReasonDirectiveLine.matches(trimmed) ||
+                    NodeCaptureDirectiveLine.matches(trimmed) ||
+                    LooseAreaCommentLine.matches(trimmed) ||
+                    LooseAreaLine.matches(trimmed)
+            }
+        return (directivePrefix + lines.drop(firstHeadingIndex)).joinToString("\n").trim()
+    }
+
+    return this
 }
 
 private fun String.singleDirectiveBlock(name: String): String? {
@@ -179,15 +226,42 @@ private fun String.looseAreaId(areas: List<AssistantAreaOption>): String? {
     }?.id
 }
 
+private fun String.matchAreaId(areas: List<AssistantAreaOption>): String? {
+    val rawArea = trim()
+    val normalized = rawArea.lowercase()
+    return areas.firstOrNull { area ->
+        area.id.equals(rawArea, ignoreCase = true) ||
+            area.name.equals(rawArea, ignoreCase = true) ||
+            normalized.startsWith("${area.id.lowercase()} ") ||
+            normalized.startsWith("${area.name.lowercase()} ")
+    }?.id
+}
+
 private fun String.hasMarkdownTitleHeading(): Boolean =
     lineSequence()
         .map { it.trim() }
         .firstOrNull { it.isNotBlank() }
-        ?.matches(Regex("#\\s+\\S.*")) == true
+        ?.matches(TitleHeadingLine) == true
+
+private fun String.hasMarkdownTitleHeadingAfterOptionalDirectives(): Boolean =
+    lineSequence()
+        .map { it.trim() }
+        .firstOrNull { line ->
+            line.isNotBlank() &&
+                !NodeAreaDirectiveLine.matches(line) &&
+                !NodeAreaReasonDirectiveLine.matches(line) &&
+                !NodeCaptureDirectiveLine.matches(line) &&
+                !LooseAreaCommentLine.matches(line) &&
+                !LooseAreaLine.matches(line)
+        }
+        ?.matches(TitleHeadingLine) == true
 
 private val NodeDirectiveLine = Regex("^\\s*<!--\\s*(cs-[^>]*?)\\s*-->\\s*(?:\\r?\\n|$)", RegexOption.MULTILINE)
 private val NodeAreaDirectiveLine = Regex("^\\s*<!--\\s*cs-area\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val NodeAreaReasonDirectiveLine = Regex("^\\s*<!--\\s*cs-area-reason\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val NodeCaptureDirectiveLine = Regex("^\\s*<!--\\s*cs-capture\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val LooseAreaLine = Regex("^\\s*(?:Area|区域|分类)\\s*[:：]\\s*(.+?)\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
+private val LooseAreaCommentLine = Regex("^\\s*<!--\\s*area\\s*:\\s*([^>]+?)\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val CaptureTypeDirective = Regex("<!--\\s*cs-capture-type:\\s*([^>]+?)\\s*-->", RegexOption.IGNORE_CASE)
+private val MarkdownFenceBlock = Regex("```\\s*([A-Za-z0-9_-]*)\\s*\\n(.*?)\\n```", setOf(RegexOption.DOT_MATCHES_ALL))
+private val TitleHeadingLine = Regex("#\\s+\\S.*")

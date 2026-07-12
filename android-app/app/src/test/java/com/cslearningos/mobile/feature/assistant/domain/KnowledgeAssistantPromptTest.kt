@@ -43,4 +43,48 @@ class KnowledgeAssistantPromptTest {
         assertTrue(messages.any { it.content.contains("older user 10") })
         assertTrue(messages.none { it.content.contains(longBody) })
     }
+
+    @Test
+    fun newNodeDraftPromptRequiresDetailedAuditableMarkdownInsteadOfSummary() {
+        val prompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            areas = listOf(AssistantAreaOption(id = "abilities", name = "Abilities")),
+            objectTarget = AssistantEditTarget.Node(
+                id = null,
+                revision = 0L,
+                titleHint = "Prompt engineering",
+                markdown = "",
+                areaId = null
+            )
+        )
+
+        assertTrue(prompt.contains("Do not collapse the source into a short summary"))
+        assertTrue(prompt.contains("at least these sections"))
+        assertTrue(prompt.contains("Core concepts"))
+        assertTrue(prompt.contains("Review cards"))
+        assertTrue(prompt.contains(":::quiz"))
+    }
+
+    @Test
+    fun existingNodeRevisionPromptAlsoRequiresMarkdownOnlyWithoutPrefaceOrCodeFences() {
+        val prompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            areas = listOf(AssistantAreaOption(id = "abilities", name = "Abilities")),
+            objectTarget = AssistantEditTarget.Node(
+                id = "node-1",
+                revision = 3L,
+                titleHint = "Prompt engineering",
+                markdown = "# Prompt engineering",
+                areaId = "abilities"
+            )
+        )
+
+        assertTrue(prompt.contains("Return Markdown only"))
+        assertTrue(prompt.contains("no preface"))
+        assertTrue(prompt.contains("no code fences"))
+        assertTrue(prompt.contains("complete revised Markdown"))
+        assertTrue(prompt.contains(":::quiz"))
+    }
 }

@@ -260,13 +260,19 @@ private fun SelectContextRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        Text(if (selected) "[x]" else "[ ]", color = WorkbenchColors.AccentStrong, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
             Text(item.title, color = WorkbenchColors.InkStrong, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             if (item.body.isNotBlank()) {
                 Text(item.body, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
             }
         }
+        Text(
+            text = if (selected) "\u2713" else "\u25CB",
+            color = if (selected) WorkbenchColors.AccentStrong else WorkbenchColors.Muted,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.widthIn(min = 24.dp),
+        )
     }
 }
 
@@ -328,4 +334,3 @@ private fun AgentArrowButton(
         Text("\u2191", color = WorkbenchColors.Surface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
-

@@ -66,6 +66,12 @@
     <string name="assistant_agent_reject_selection_reply">No. Recheck the topics and propose a better selection.</string>
     <string name="assistant_draft_confirm_title">Create editable draft?</string>
     <string name="assistant_draft_confirm_body">I can turn this into an editable node draft first. You can review it before saving.</string>
+    <string name="assistant_draft_task_node">Create note</string>
+    <string name="assistant_draft_task_node_body">Build one editable Markdown note first.</string>
+    <string name="assistant_draft_task_review">Add review</string>
+    <string name="assistant_draft_task_review_body">Include app-readable :::quiz review cards in the note.</string>
+    <string name="assistant_draft_task_capture">Keep capture</string>
+    <string name="assistant_draft_task_capture_body">Preserve unrelated leftovers as follow-up capture suggestions.</string>
     <string name="assistant_draft_confirm_reject_reply">No. Ask me clarifying questions or propose a safer split first.</string>
     <string name="assistant_guide_title">Knowledge assistant guide</string>
     <string name="assistant_guide_eyebrow">assistant tutorial</string>

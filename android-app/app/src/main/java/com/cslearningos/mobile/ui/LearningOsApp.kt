@@ -802,6 +802,7 @@ private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
         )
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.editor_save_markdown), viewModel::saveNode, primary = true)
+            WorkbenchButton(stringResource(R.string.assistant_improve_object), viewModel::reviseEditorDraftWithAssistant)
             WorkbenchButton(stringResource(R.string.common_cancel), viewModel::cancelEditor)
         }
     }

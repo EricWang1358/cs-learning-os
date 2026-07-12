@@ -488,6 +488,9 @@ Rules:
 - Graph and health are standalone cockpit routes; they should not inherit stale node hashes or focus-mode state.
 - Area and track query params should filter visible cards but should not hide a newly created node immediately after create; create navigation must use the new node's area and track.
 - `Network Programming`-style user input should be normalized before persistence, while UI labels should remain human-readable.
+- Android Assistant top-level entry preserves the active conversation by default.
+- Android Assistant fresh-entry callers must opt in explicitly; they may clear the conversation only before the Assistant screen is shown.
+- Returning from an editor or reader into Android Assistant should preserve the active conversation unless the caller is an explicit fresh-entry flow.
 
 ## Current Loop Cockpit State
 
@@ -550,15 +553,25 @@ This state machine governs Android assistant edits for Nodes, Capture slips, and
 ```mermaid
 stateDiagram-v2
     [*] --> Browse
-    Browse --> TargetPrepared: Improve with AI on Node / Capture / Quiz
+    Browse --> TargetPrepared: Improve with AI on Node / Capture / Quiz / Editor draft
+    Browse --> DraftSelectionPending: new draft request without explicit target
     Browse --> AssistantAnswer: Home logo or general assistant request
+    DraftSelectionPending --> DraftSelectionPending: toggle outputs or add custom instruction
+    DraftSelectionPending --> Streaming: confirm selected outputs
+    DraftSelectionPending --> Browse: dismiss, replace, or start fresh
     TargetPrepared --> Streaming: send target-aware request
     AssistantAnswer --> Streaming: send general request
+    Streaming --> InteractionPending: model returns structured confirm or select card
     Streaming --> TargetPrepared: cancel or retryable transport failure
     Streaming --> DraftReady: complete valid target directives
     Streaming --> AssistantAnswer: complete explanatory response
+    InteractionPending --> Streaming: reply through action card
+    InteractionPending --> Browse: dismiss or replace request
+    DraftReady --> AutoOpenPending: editable draft reply supports auto-open
     DraftReady --> EditorOpen: review proposed revision
     DraftReady --> TargetPrepared: ask for another revision
+    AutoOpenPending --> EditorOpen: bridge consumes pending auto-open message
+    EditorOpen --> TargetPrepared: improve current draft with assistant
     EditorOpen --> Persisting: explicit Save
     EditorOpen --> Browse: Cancel
     Persisting --> Browse: transaction succeeds
@@ -573,9 +586,13 @@ stateDiagram-v2
 | State | Owner | Required data | Allowed mutation |
 | --- | --- | --- | --- |
 | `Browse` | screen ViewModel | selected object, if any | navigation only |
+| `DraftSelectionPending` | `AssistantCoordinator` | `pendingDraftRequest`, action-card message ID | checklist toggles, custom reply, cancel |
 | `TargetPrepared` | `AssistantCoordinator` | typed target with original object ID | input, cancel, request revision |
+| `AssistantAnswer` | `AssistantCoordinator` | conversation messages and current input | general ask/reply only |
 | `Streaming` | `AssistantCoordinator` | response message ID and request snapshot | append matching response deltas only |
+| `InteractionPending` | assistant message action | structured confirm/select payload | reply via action card or replace request |
 | `DraftReady` | assistant message action | typed proposed fields and original ID | open matching editor or request revision |
+| `AutoOpenPending` | `AssistantCoordinator` + `LearningViewModel` bridge | `pendingAutoOpenMessageId` for one editable reply | consume once and open one editor |
 | `EditorOpen` | `LearningViewModel` | editor ID plus editable fields | local text edits only |
 | `Persisting` | repository transaction | object ID, validated fields | one upsert transaction |
 | `HistoryOpen` | `AssistantCoordinator` | persisted conversation ID | select or delete history entry |
@@ -587,17 +604,26 @@ stateDiagram-v2
 - A Capture target carries `slipId`, body, type, topic hint, and source label. Saving retains the Capture ID and does not promote it to a Node unless the user separately chooses promotion.
 - Target directives must be complete and type-correct. Missing/invalid directives leave the previous target intact and display a clarifying assistant response; they never erase fields.
 - Every message action is single-claim. Repeated taps cannot create duplicate slips or duplicate writes.
+- `pendingDraftRequest` exists only while a user-originated draft request is waiting for the local checklist/confirm path. It must clear when streaming starts, when history is restored, or when a fresh chat starts.
+- `pendingAutoOpenMessageId` may point only to one editable draft/quiz/capture reply and must clear immediately after the bridge consumes it.
 - Every streaming callback must verify its response message ID is still active. A cancelled request cannot clear `isBusy` or overwrite a newer conversation.
 - A target may disappear while the assistant is open. The final repository save must reject a missing/deleted object and return the user to `EditorOpen` with a visible error.
 - General Answer and interview-review modes must not inherit a typed edit target or offer an edit confirmation action.
+- Top-level Assistant navigation preserves the current conversation. Only explicit fresh-entry callers may reset conversation state before showing Assistant.
+- Restoring history must clear transient busy/selection/auto-open flags while preserving the stored messages and typed `editTarget`.
 
 ### Transition Acceptance Matrix
 
 | Transition | Preconditions | Result | Test evidence |
 | --- | --- | --- | --- |
+| `Browse -> DraftSelectionPending` | general draft request with no explicit target | local checklist card appears; model is not called yet | coordinator lifecycle tests |
 | `Browse -> TargetPrepared` | live Node/Capture/Quiz selected | target stores original ID and all editable fields | coordinator target tests |
+| `DraftSelectionPending -> Streaming` | user confirms selected outputs | request continues in Draft mode and clears `pendingDraftRequest` | coordinator and state-machine tests |
 | `TargetPrepared -> DraftReady` | final reply has valid directives for its target type | message offers the matching editor action | action parser tests |
+| `Streaming -> InteractionPending` | reply contains structured action payload | visible card replaces free-form action parsing | agent-interaction codec and coordinator tests |
+| `DraftReady -> AutoOpenPending -> EditorOpen` | reply action is editable and bridge is active | correct editor opens without a second tap | bridge/UI-state tests |
 | `DraftReady -> EditorOpen` | user taps review action | correct editor gets the same object ID | bridge/UI-state tests |
+| `EditorOpen -> TargetPrepared` | user asks Assistant to improve current draft | Assistant reopens with same draft body and preserved conversation | ViewModel navigation tests |
 | `EditorOpen -> Persisting -> Browse` | user saves valid fields | repository preserves identity; quiz review state remains | repository policy tests |
 | `Persisting -> EditorOpen` | missing parent/object or write failure | fields remain visible with error banner | repository and ViewModel tests |
 | `Streaming -> TargetPrepared` | user cancels or request fails | no stale response can mutate a newer request; retry has original prompt | coordinator lifecycle tests |

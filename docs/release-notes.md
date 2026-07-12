@@ -1,5 +1,25 @@
 # Release Notes
 
+## Android Beta 0.1.39
+
+Date: 2026-07-12
+
+Git tag: `android-v0.1.39-beta`
+
+Android version:
+
+- `versionCode`: 40
+- `versionName`: `0.1.39`
+
+Status: implementation beta.
+
+Highlights:
+
+- Changed new Assistant node-draft requests from a simple confirmation into a selectable preflight checklist for source material, node creation, concept extraction, and review-card generation before the model is called.
+- Hardened Assistant draft parsing so common malformed `<!-- area: ... -->` comments are validated against existing Areas and stripped from saved Markdown instead of leaking into the editor.
+- Added defensive Markdown normalization for common AI output mistakes such as `##Heading`, `text#Heading`, and accidental heading-shaped code fences, while preserving valid Markdown headings.
+- Tightened Assistant draft prompts to require detailed, auditable Markdown notes with core concepts, details, examples, mistakes, and review cards instead of shallow summaries.
+
 ## Android Beta 0.1.31
 
 Date: 2026-07-11

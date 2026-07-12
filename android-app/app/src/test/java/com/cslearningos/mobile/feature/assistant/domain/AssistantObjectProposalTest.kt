@@ -72,6 +72,87 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun nodeProposalNormalizesLooseAreaCommentAndDoesNotLeakItIntoMarkdown() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "Prompt structure",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            <!-- area: abilities -->
+            # Prompt structure
+
+            ##Task description
+
+            text#Output requirements
+
+            Keep every important source detail.
+            """.trimIndent(),
+            listOf(AssistantAreaOption(id = "abilities", name = "Abilities"))
+        ) as AssistantEditProposal.Node
+
+        assertEquals("abilities", proposal.areaId)
+        assertEquals(
+            """
+            # Prompt structure
+
+            ## Task description
+
+            # Output requirements
+
+            Keep every important source detail.
+            """.trimIndent(),
+            proposal.markdown
+        )
+    }
+
+    @Test
+    fun nodeProposalExtractsMarkdownFenceWhenAssistantWrapsDraftInExplanatoryText() {
+        val target = AssistantEditTarget.Node(
+            id = "node-1",
+            revision = 3L,
+            titleHint = "我的第一个 Kotlin 程序",
+            markdown = "# 我的第一个 Kotlin 程序\n\n旧内容",
+            areaId = "abilities"
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            我已对节点进行了整理和优化：
+
+            - 保留了原有有用内容。
+            - 修正了 Markdown 结构。
+
+            下面是完整的修订版 Markdown，你可以直接保存：
+
+            ```markdown
+            # 我的第一个 Kotlin 程序
+
+            ## 核心概念
+            - Kotlin 源文件通常以 `.kt` 结尾。
+            ```
+            """.trimIndent(),
+            listOf(AssistantAreaOption(id = "abilities", name = "Abilities"))
+        ) as AssistantEditProposal.Node
+
+        assertEquals(
+            """
+            # 我的第一个 Kotlin 程序
+
+            ## 核心概念
+            - Kotlin 源文件通常以 `.kt` 结尾。
+            """.trimIndent(),
+            proposal.markdown
+        )
+    }
+
+    @Test
     fun nodeProposalFailsClosedWhenPlacementDirectivesAppearMoreThanOnce() {
         val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
 

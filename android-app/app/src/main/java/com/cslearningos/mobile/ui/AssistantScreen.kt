@@ -1,4 +1,4 @@
-﻿@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.cslearningos.mobile.ui
 
