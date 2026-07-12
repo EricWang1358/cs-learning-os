@@ -70,6 +70,7 @@ private class FakeReviewLearningDao(
     override fun observeQuizzes(): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>> = flowOf(emptyList())
     override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
+    override fun observeArchivedCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override suspend fun getArea(id: String): AreaEntity? = unsupported()
     override suspend fun getAreaBySlug(slug: String): AreaEntity? = unsupported()

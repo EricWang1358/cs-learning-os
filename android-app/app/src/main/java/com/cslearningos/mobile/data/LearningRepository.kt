@@ -32,6 +32,7 @@ class LearningRepository private constructor(
     val quizzes: Flow<List<QuizItemEntity>> = reviewRepository.quizzes
     val openReaderQuestions: Flow<List<ReaderQuestionEntity>> = dao.observeOpenReaderQuestions()
     val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = captureRepository.inboxCaptureSlips
+    val archivedCaptureSlips: Flow<List<CaptureSlipEntity>> = captureRepository.archivedCaptureSlips
 
     fun dueQuizzes(now: Long): Flow<List<QuizItemEntity>> = reviewRepository.dueQuizzes(now)
 
@@ -152,9 +153,14 @@ class LearningRepository private constructor(
         now = now
     )
 
-    suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()) {
+    suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? =
         captureRepository.archiveCaptureSlip(slipId = slipId, now = now)
-    }
+
+    suspend fun restoreCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? =
+        captureRepository.restoreCaptureSlip(slipId = slipId, now = now)
+
+    suspend fun permanentlyDeleteCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? =
+        captureRepository.permanentlyDeleteCaptureSlip(slipId = slipId, now = now)
 
     suspend fun markCaptureSlipConverted(
         slipId: String,

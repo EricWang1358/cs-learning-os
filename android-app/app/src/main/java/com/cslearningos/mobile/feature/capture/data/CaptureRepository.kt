@@ -12,6 +12,7 @@ class CaptureRepository(
     private val dao: LearningDao
 ) {
     val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeInboxCaptureSlips()
+    val archivedCaptureSlips: Flow<List<CaptureSlipEntity>> = dao.observeArchivedCaptureSlips()
 
     suspend fun getCaptureSlip(id: String): CaptureSlipEntity? = dao.getCaptureSlip(id)
 
@@ -75,16 +76,57 @@ class CaptureRepository(
         return updated
     }
 
-    suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()) {
-        val slip = dao.getCaptureSlip(slipId) ?: return
-        dao.upsertCaptureSlip(
-            slip.copy(
-                status = CaptureSlipStatus.archived,
-                updatedAt = now,
-                revision = slip.revision + RevisionStep,
-                syncStatus = SyncStatus.dirty
-            )
+    suspend fun archiveCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? {
+        val slip = dao.getCaptureSlip(slipId) ?: return null
+        if (slip.deletedAt != null) return null
+        if (slip.status == CaptureSlipStatus.archived) return slip
+        if (slip.status !in ArchivableStatuses) return null
+        val updated = slip.copy(
+            status = CaptureSlipStatus.archived,
+            updatedAt = now,
+            revision = slip.revision + RevisionStep,
+            syncStatus = SyncStatus.dirty
         )
+        dao.upsertCaptureSlip(updated)
+        return updated
+    }
+
+    suspend fun restoreCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? {
+        val slip = dao.getCaptureSlip(slipId) ?: return null
+        if (slip.deletedAt != null) return null
+        if (slip.status != CaptureSlipStatus.archived) return null
+        val restored = slip.copy(
+            status = CaptureSlipStatus.inbox,
+            updatedAt = now,
+            revision = slip.revision + RevisionStep,
+            syncStatus = SyncStatus.dirty
+        )
+        dao.upsertCaptureSlip(restored)
+        return restored
+    }
+
+    suspend fun permanentlyDeleteCaptureSlip(slipId: String, now: Long = System.currentTimeMillis()): CaptureSlipEntity? {
+        val slip = dao.getCaptureSlip(slipId) ?: return null
+        if (slip.deletedAt != null || slip.status != CaptureSlipStatus.archived) return null
+        val deleted = slip.copy(
+            updatedAt = now,
+            revision = slip.revision + RevisionStep,
+            syncStatus = SyncStatus.deleted,
+            deletedAt = now
+        )
+        dao.upsertCaptureSlip(deleted)
+        return deleted
+    }
+
+    private companion object {
+        val ArchivableStatuses = setOf(
+            CaptureSlipStatus.inbox,
+            CaptureSlipStatus.ai_queued,
+            CaptureSlipStatus.ai_drafting,
+            CaptureSlipStatus.ai_draft_ready
+        )
+        const val InitialRevision = 1L
+        const val RevisionStep = 1L
     }
 
     suspend fun markCaptureSlipConverted(
@@ -102,10 +144,5 @@ class CaptureRepository(
                 syncStatus = SyncStatus.dirty
             )
         )
-    }
-
-    private companion object {
-        const val InitialRevision = 1L
-        const val RevisionStep = 1L
     }
 }

@@ -372,6 +372,77 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun archiveRestoreAndPermanentDeleteCaptureSlipFollowVisibleArchiveLifecycle() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val slip = CaptureSlipEntity(
+            id = "slip-1",
+            body = "What is a page fault?",
+            type = CaptureSlipType.question,
+            topicHint = "Virtual Memory",
+            sourceLabel = null,
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        dao.captureSlips[slip.id] = slip
+
+        val archived = repository.archiveCaptureSlip(slip.id, now = 2_000L)
+        assertEquals(CaptureSlipStatus.archived, archived?.status)
+        assertEquals(2_000L, archived?.updatedAt)
+        assertEquals(2L, archived?.revision)
+
+        val restored = repository.restoreCaptureSlip(slip.id, now = 3_000L)
+        assertEquals(CaptureSlipStatus.inbox, restored?.status)
+        assertEquals(3_000L, restored?.updatedAt)
+        assertEquals(3L, restored?.revision)
+
+        repository.archiveCaptureSlip(slip.id, now = 4_000L)
+        val deleted = repository.permanentlyDeleteCaptureSlip(slip.id, now = 5_000L)
+        assertEquals(5_000L, deleted?.deletedAt)
+        assertEquals(SyncStatus.deleted, deleted?.syncStatus)
+        assertEquals(CaptureSlipStatus.archived, deleted?.status)
+        assertEquals(5L, deleted?.revision)
+
+        val afterRestoreAttempt = repository.restoreCaptureSlip(slip.id, now = 6_000L)
+        assertEquals(null, afterRestoreAttempt)
+        assertEquals(5_000L, dao.captureSlips.getValue(slip.id).deletedAt)
+        assertEquals(SyncStatus.deleted, dao.captureSlips.getValue(slip.id).syncStatus)
+    }
+
+    @Test
+    fun permanentDeleteCaptureSlipRequiresArchivedStatus() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        val slip = CaptureSlipEntity(
+            id = "slip-1",
+            body = "Keep me visible until explicitly archived",
+            type = CaptureSlipType.concept_seed,
+            topicHint = null,
+            sourceLabel = null,
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        dao.captureSlips[slip.id] = slip
+
+        val deleted = repository.permanentlyDeleteCaptureSlip(slip.id, now = 2_000L)
+
+        assertEquals(null, deleted)
+        assertEquals(CaptureSlipStatus.inbox, dao.captureSlips.getValue(slip.id).status)
+        assertEquals(null, dao.captureSlips.getValue(slip.id).deletedAt)
+        assertEquals(1L, dao.captureSlips.getValue(slip.id).revision)
+    }
+
+    @Test
     fun savingExistingCaptureSlipPreservesWorkflowMetadataAndAdvancesRevision() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)
@@ -1057,7 +1128,19 @@ private class FakeLearningDao : LearningDao {
     override fun observeQuizzes(): Flow<List<QuizItemEntity>> = flowOf(quizzes.values.toList())
     override fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>> =
         flowOf(readerQuestions.values.filter { it.deletedAt == null && it.resolvedAt == null })
-    override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
+    override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> =
+        flowOf(
+            captureSlips.values.filter {
+                it.deletedAt == null && it.status in setOf(
+                    CaptureSlipStatus.inbox,
+                    CaptureSlipStatus.ai_queued,
+                    CaptureSlipStatus.ai_drafting,
+                    CaptureSlipStatus.ai_draft_ready
+                )
+            }
+        )
+    override fun observeArchivedCaptureSlips(): Flow<List<CaptureSlipEntity>> =
+        flowOf(captureSlips.values.filter { it.deletedAt == null && it.status == CaptureSlipStatus.archived })
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override suspend fun getArea(id: String): AreaEntity? = areas[id]?.takeIf { it.deletedAt == null }
     override suspend fun getAreaBySlug(slug: String): AreaEntity? = areas.values.firstOrNull { it.slug == slug && it.deletedAt == null }

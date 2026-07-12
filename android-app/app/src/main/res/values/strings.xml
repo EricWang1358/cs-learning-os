@@ -354,6 +354,9 @@
     <string name="capture_inbox_eyebrow">inbox</string>
     <string name="capture_inbox_title">%1$d open capture slips</string>
     <string name="capture_inbox_empty_body">No slips yet. The goal is not long writing; it is catching useful fragments before they vanish.</string>
+    <string name="capture_archived_eyebrow">archived</string>
+    <string name="capture_archived_title">%1$d archived capture slips</string>
+    <string name="capture_archived_empty_body">No archived slips yet. Archive from Inbox when you want to hide a slip without deleting it.</string>
     <string name="capture_source_label">Source</string>
     <string name="capture_make_node">Make node</string>
     <string name="capture_archive">Archive</string>
@@ -378,8 +381,12 @@
     <string name="capture_workflow_action_ai_draft">AI draft</string>
     <string name="capture_workflow_status_saved">Saved locally</string>
     <string name="capture_workflow_detail_saved">This slip is saved locally. Turn it into a node, improve it with AI, or archive it.</string>
+    <string name="capture_workflow_status_archived">Archived</string>
+    <string name="capture_workflow_detail_archived">This slip is archived locally. Restore it to bring it back to Inbox, or delete it forever.</string>
     <string name="capture_workflow_status_legacy_ai_needs_attention">Needs attention</string>
     <string name="capture_workflow_detail_legacy_ai">This slip still carries a prior AI %1$s state from an older workflow. Use the single Improve with AI action to continue; no old preflight path will run.</string>
+    <string name="capture_delete_forever_confirm_title">Delete archived slip forever?</string>
+    <string name="capture_delete_forever_confirm_body">Delete archived slip “%1$s” forever? This cannot be undone in the app and is only recoverable from a backup.</string>
 
     <string name="more_eyebrow">settings center</string>
     <string name="more_title">More</string>
@@ -474,6 +481,8 @@
     <string name="message_confirm_ai_draft">Confirm AI draft when ready.</string>
     <string name="message_ai_draft_canceled">AI draft canceled.</string>
     <string name="message_capture_archived">Capture slip archived</string>
+    <string name="message_capture_restored">Capture slip restored to inbox</string>
+    <string name="message_capture_deleted_forever">Capture slip deleted forever</string>
     <string name="message_review_capture_draft">Review this capture draft before saving it as Markdown.</string>
     <string name="message_generating_ai_draft">Generating AI draft...</string>
     <string name="message_ai_draft_ready">AI draft ready. Review before saving.</string>

@@ -37,6 +37,16 @@ interface LearningDao {
 
     @Query(
         """
+        SELECT * FROM capture_slips
+        WHERE deleted_at IS NULL
+          AND status = 'archived'
+        ORDER BY updated_at DESC
+        """
+    )
+    fun observeArchivedCaptureSlips(): Flow<List<CaptureSlipEntity>>
+
+    @Query(
+        """
         SELECT quiz_items.* FROM quiz_items
         INNER JOIN review_states ON quiz_items.id = review_states.quiz_id
         WHERE quiz_items.deleted_at IS NULL AND quiz_items.visibility != 'trash' AND review_states.due_at <= :now

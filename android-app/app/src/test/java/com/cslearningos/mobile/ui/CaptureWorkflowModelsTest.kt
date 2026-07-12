@@ -15,10 +15,18 @@ class CaptureWorkflowModelsTest {
     }
 
     @Test
-    fun savedSlipCardsKeepExactlyThreeActions() {
+    fun inboxSlipCardsKeepExactlyThreeActions() {
         assertEquals(
             listOf(CaptureSlipAction.MakeNode, CaptureSlipAction.ImproveWithAi, CaptureSlipAction.Archive),
-            captureSlipActions()
+            captureSlipActions(slip(status = CaptureSlipStatus.inbox))
+        )
+    }
+
+    @Test
+    fun archivedSlipCardsExposeRestoreAndDeleteForeverOnly() {
+        assertEquals(
+            listOf(CaptureSlipAction.Restore, CaptureSlipAction.DeleteForever),
+            captureSlipActions(slip(status = CaptureSlipStatus.archived))
         )
     }
 
@@ -32,6 +40,18 @@ class CaptureWorkflowModelsTest {
         assertEquals("Saved locally", model.statusLabel)
         assertEquals(false, model.actionsEnabled)
         assertEquals("", model.primaryActionLabel)
+    }
+
+    @Test
+    fun archivedWorkflowExplainsThatTheSlipCanBeRestoredOrDeleted() {
+        val model = buildCaptureSlipWorkflow(
+            slip = slip(status = CaptureSlipStatus.archived)
+        )
+
+        assertEquals(CaptureSlipWorkflowStage.Archived, model.stage)
+        assertEquals("Archived", model.statusLabel)
+        assertTrue(model.detail.contains("restore", ignoreCase = true))
+        assertTrue(model.detail.contains("delete", ignoreCase = true))
     }
 
     @Test
@@ -58,6 +78,10 @@ class CaptureWorkflowModelsTest {
         assertEquals("Needs attention", model.statusLabel)
         assertEquals("Improve with AI", model.primaryActionLabel)
         assertEquals(false, model.actionsEnabled)
+        assertEquals(
+            listOf(CaptureSlipAction.ImproveWithAi),
+            captureSlipActions(slip(status = status))
+        )
         assertTrue(model.detail.contains(priorStateLabel, ignoreCase = true))
         assertTrue(model.detail.contains("prior AI", ignoreCase = true))
         assertTrue(model.detail.contains("single Improve with AI action"))

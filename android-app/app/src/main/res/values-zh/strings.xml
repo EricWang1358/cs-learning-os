@@ -260,6 +260,9 @@
     <string name="capture_inbox_eyebrow">收件箱</string>
     <string name="capture_inbox_title">%1$d 条待处理随手记</string>
     <string name="capture_inbox_empty_body">还没有随手记。重点不是长篇大论，而是在灵感消失前先把有价值的碎片抓住。</string>
+    <string name="capture_archived_eyebrow">已归档</string>
+    <string name="capture_archived_title">%1$d 条已归档随手记</string>
+    <string name="capture_archived_empty_body">还没有已归档随手记。想先藏起来但不删除时，可以从收件箱归档。</string>
     <string name="capture_source_label">来源</string>
     <string name="capture_make_node">生成节点</string>
     <string name="capture_archive">归档</string>
@@ -284,8 +287,12 @@
     <string name="capture_workflow_action_ai_draft">AI 草稿</string>
     <string name="capture_workflow_status_saved">已本地保存</string>
     <string name="capture_workflow_detail_saved">这条随手记已经保存在本地。你可以把它做成节点、用 AI 改进，或归档。</string>
+    <string name="capture_workflow_status_archived">已归档</string>
+    <string name="capture_workflow_detail_archived">这条随手记已在本地归档。你可以恢复到收件箱，或永久删除。</string>
     <string name="capture_workflow_status_legacy_ai_needs_attention">需要处理</string>
     <string name="capture_workflow_detail_legacy_ai">这条随手记仍带有旧流程留下的 AI %1$s 状态。请只使用唯一的“交给 AI 优化”操作继续；旧的预检路径不会再运行。</string>
+    <string name="capture_delete_forever_confirm_title">永久删除这条已归档随手记？</string>
+    <string name="capture_delete_forever_confirm_body">要永久删除“%1$s”吗？App 内无法撤销，只能从备份恢复。</string>
 
     <string name="more_eyebrow">设置中心</string>
     <string name="more_title">更多</string>
@@ -357,6 +364,8 @@
     <string name="message_confirm_ai_draft">准备好后请确认生成 AI 草稿。</string>
     <string name="message_ai_draft_canceled">已取消 AI 草稿流程</string>
     <string name="message_capture_archived">随手记已归档</string>
+    <string name="message_capture_restored">随手记已恢复到收件箱</string>
+    <string name="message_capture_deleted_forever">随手记已永久删除</string>
     <string name="message_review_capture_draft">请先检查这份捕捉草稿，再保存成 Markdown。</string>
     <string name="message_generating_ai_draft">正在生成 AI 草稿……</string>
     <string name="message_ai_draft_ready">AI 草稿已生成，请检查后再保存。</string>

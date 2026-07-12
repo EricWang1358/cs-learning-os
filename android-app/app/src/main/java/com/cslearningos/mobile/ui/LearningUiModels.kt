@@ -54,6 +54,7 @@ data class LearningUiState(
     val dueQuizzes: List<QuizItemEntity> = emptyList(),
     val readerQuestions: List<ReaderQuestionEntity> = emptyList(),
     val captureSlips: List<CaptureSlipEntity> = emptyList(),
+    val archivedCaptureSlips: List<CaptureSlipEntity> = emptyList(),
     val selectedNode: LearningNodeEntity? = null,
     val selectedQuiz: QuizItemEntity? = null,
     val reviewedQuiz: QuizItemEntity? = null,

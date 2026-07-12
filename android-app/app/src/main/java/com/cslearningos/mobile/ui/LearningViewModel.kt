@@ -183,6 +183,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 _state.update { it.copy(captureSlips = slips) }
             }
         }
+        viewModelScope.launch {
+            repository.archivedCaptureSlips.collect { slips ->
+                _state.update { it.copy(archivedCaptureSlips = slips) }
+            }
+        }
     }
 
     fun showHome() {
@@ -616,8 +621,46 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun archiveCaptureSlip(slip: CaptureSlipEntity) {
         viewModelScope.launch {
-            repository.archiveCaptureSlip(slip.id)
-            _state.update { it.copy(message = uiText(R.string.message_capture_archived)) }
+            val archived = repository.archiveCaptureSlip(slip.id)
+            _state.update {
+                it.copy(
+                    message = if (archived != null) {
+                        uiText(R.string.message_capture_archived)
+                    } else {
+                        uiText(R.string.message_assistant_source_unavailable)
+                    }
+                )
+            }
+        }
+    }
+
+    fun restoreCaptureSlip(slip: CaptureSlipEntity) {
+        viewModelScope.launch {
+            val restored = repository.restoreCaptureSlip(slip.id)
+            _state.update {
+                it.copy(
+                    message = if (restored != null) {
+                        uiText(R.string.message_capture_restored)
+                    } else {
+                        uiText(R.string.message_assistant_source_unavailable)
+                    }
+                )
+            }
+        }
+    }
+
+    fun permanentlyDeleteCaptureSlip(slip: CaptureSlipEntity) {
+        viewModelScope.launch {
+            val deleted = repository.permanentlyDeleteCaptureSlip(slip.id)
+            _state.update {
+                it.copy(
+                    message = if (deleted != null) {
+                        uiText(R.string.message_capture_deleted_forever)
+                    } else {
+                        uiText(R.string.message_assistant_source_unavailable)
+                    }
+                )
+            }
         }
     }
 
