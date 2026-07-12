@@ -90,7 +90,7 @@ data class LearningUiState(
     val collapsedLibraryAreas: Set<String> = emptySet(),
     val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
-    val expandedMoreSection: MoreSectionId? = MoreSectionId.System,
+    val expandedMoreSection: MoreSectionId? = null,
     val quizAnswerVisible: Boolean = false,
     val message: UiText? = null
 )

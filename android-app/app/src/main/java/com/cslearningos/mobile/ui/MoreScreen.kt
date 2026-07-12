@@ -48,11 +48,20 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun MoreScreen(state: LearningUiState, viewModel: LearningViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionHeader(
-            eyebrow = stringResource(R.string.more_eyebrow),
-            title = stringResource(R.string.more_title),
-            body = stringResource(R.string.more_body)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Eyebrow(stringResource(R.string.more_eyebrow))
+            Text(
+                text = stringResource(R.string.more_body),
+                color = WorkbenchColors.Muted.copy(alpha = 0.92f),
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+        }
         MoreSettingsList(state = state, viewModel = viewModel)
     }
 }

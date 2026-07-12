@@ -20,6 +20,11 @@ class MoreSettingsModelsTest {
     }
 
     @Test
+    fun moreSettingsStartCollapsedByDefault() {
+        assertEquals(null, LearningUiState().expandedMoreSection)
+    }
+
+    @Test
     fun languageAndAppearanceExposeMobileFriendlyChoices() {
         assertEquals(listOf("Follow system", "English", "\u4e2d\u6587"), SystemLanguage.entries.map { it.label })
         assertEquals(listOf("Follow system", "Day", "Night"), AppearanceMode.entries.map { it.label })

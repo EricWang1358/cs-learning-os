@@ -102,6 +102,22 @@ private val CardShape = RoundedCornerShape(16.dp)
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
     selectedBottomRouteFor(screen.toAppRoute()).toAppScreen()
 
+private fun routeNavigationRank(route: AppRoute): Int {
+    val tabRank = when (selectedBottomRouteFor(route)) {
+        AppRoute.Home -> 0
+        AppRoute.Capture -> 1
+        AppRoute.Library -> 2
+        AppRoute.Review -> 3
+        AppRoute.More -> 4
+        else -> 0
+    }
+    val detailRank = when (route) {
+        selectedBottomRouteFor(route) -> 0
+        else -> 1
+    }
+    return tabRank * 10 + detailRank
+}
+
 private fun hideGlobalStatusBanner(route: AppRoute, state: LearningUiState): Boolean =
     route == AppRoute.Review && state.reviewedQuiz != null
 
@@ -159,37 +175,43 @@ private fun PortraitWorkbench(
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
+        AnimatedContent(
+            targetState = shellState.route,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            item {
-                if (useCompactPortraitBrand(shellState.route.toAppScreen())) {
-                    CompactBrandBlock(route = shellState.route, state = state)
-                } else {
-                    BrandBlock(
-                        state = state,
-                        onAssistantClick = viewModel::showAssistant
-                    )
+            transitionSpec = {
+                val direction = if (routeNavigationRank(targetState) >= routeNavigationRank(initialState)) 1 else -1
+                slideInHorizontally(tween(WorkbenchMotion.NavigationMillis)) { fullWidth -> fullWidth * direction } togetherWith
+                    slideOutHorizontally(tween(WorkbenchMotion.NavigationMillis)) { fullWidth -> -fullWidth * direction }
+            },
+            label = "portrait-page-route"
+        ) { route ->
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    if (useCompactPortraitBrand(route.toAppScreen())) {
+                        CompactBrandBlock(route = route, state = state)
+                    } else {
+                        BrandBlock(
+                            state = state,
+                            onAssistantClick = viewModel::showAssistant
+                        )
+                    }
                 }
+                if (!hideGlobalStatusBanner(route, state) && shellState.message != null) {
+                    item { StatusBanner(shellState.message) }
+                }
+                if (state.notices.isNotEmpty()) {
+                    item { NoticeTray(state = state, viewModel = viewModel) }
+                }
+                item {
+                    ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true)
+                }
+                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
-            if (!hideGlobalStatusBanner(shellState.route, state)) {
-                item { StatusBanner(shellState.message) }
-            }
-            item { NoticeTray(state = state, viewModel = viewModel) }
-            item {
-                AnimatedContent(
-                    targetState = shellState.route,
-                    transitionSpec = {
-                        (fadeIn(tween(WorkbenchMotion.StateMillis)) + slideInHorizontally(tween(WorkbenchMotion.NavigationMillis)) { it / 12 }) togetherWith
-                            (fadeOut(tween(WorkbenchMotion.StateMillis)) + slideOutHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it / 12 })
-                    },
-                    label = "portrait-route"
-                ) { route -> ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true) }
-            }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
         MobileBottomNav(
             currentRoute = shellState.route,

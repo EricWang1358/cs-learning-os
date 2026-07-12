@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.R
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -53,7 +55,13 @@ private fun DashboardGrid(summary: DashboardSummary, viewModel: LearningViewMode
 
 @Composable
 private fun DashboardActionCard(action: DashboardAction, summary: DashboardSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    WorkbenchCard(accent = action == DashboardAction.Capture, modifier = modifier.fillMaxHeight()) {
+    WorkbenchCard(
+        accent = action == DashboardAction.Capture,
+        modifier = modifier
+            .fillMaxHeight()
+            .heightIn(min = 164.dp)
+            .clickable(onClick = onClick)
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Text(action.firstScreenLabel(summary), modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(action.eyebrow(), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -66,7 +74,6 @@ private fun DashboardActionCard(action: DashboardAction, summary: DashboardSumma
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        WorkbenchButton(action.firstScreenLabel(summary), onClick, primary = action == DashboardAction.Capture)
     }
 }
 
@@ -82,7 +89,13 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
         return
     }
 
-    WorkbenchCard(accent = true, modifier = modifier.fillMaxHeight()) {
+    WorkbenchCard(
+        accent = true,
+        modifier = modifier
+            .fillMaxHeight()
+            .heightIn(min = 164.dp)
+            .clickable { viewModel.openNode(node) }
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Text(node.title, modifier = Modifier.weight(1f), color = WorkbenchColors.InkStrong, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(stringResource(R.string.dashboard_continue_eyebrow), color = WorkbenchColors.Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -95,7 +108,6 @@ private fun ContinueReadingCard(summary: DashboardSummary, viewModel: LearningVi
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        WorkbenchButton(stringResource(R.string.dashboard_continue_button), { viewModel.openNode(node) }, primary = true)
     }
 }
 
