@@ -117,7 +117,7 @@ class KnowledgeAssistantSessionTest {
             apiKey: String,
             model: String,
             systemPrompt: String,
-            userPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
             onDelta: suspend (String) -> Unit
         ) {
             this.systemPrompt = systemPrompt

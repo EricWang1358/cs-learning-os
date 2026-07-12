@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+﻿@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.cslearningos.mobile.ui
 
@@ -15,10 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -29,29 +27,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,7 +51,8 @@ fun AssistantScreen(
 ) {
     val assistant = state.assistant
     val listState = rememberLazyListState()
-    LaunchedEffect(assistant.messages.lastOrNull()?.id, assistant.messages.lastOrNull()?.body?.length) {
+    val lastMessage = assistant.messages.lastOrNull()
+    LaunchedEffect(lastMessage?.id, lastMessage?.isStreaming) {
         if (assistant.messages.isNotEmpty()) {
             listState.scrollToItem(assistant.messages.lastIndex)
         }
@@ -111,6 +95,7 @@ fun AssistantScreen(
                         onRetry = { viewModel.assistantActions.retryMessage(message.id) },
                         onOpenDailyReview = viewModel.assistantActions::openDailyReview,
                         onConfigureAi = viewModel::showAiServiceSettings,
+                        onAgentActionReply = viewModel.assistantActions::replyToAgentAction,
                         areas = state.areas
                     )
                 }
@@ -119,173 +104,24 @@ fun AssistantScreen(
         }
         AnimatedVisibility(
             visible = assistant.historyVisible,
-            enter = fadeIn(tween(WorkbenchMotion.StateMillis)),
-            exit = fadeOut(tween(WorkbenchMotion.StateMillis))
-        ) {
-            Box(modifier = Modifier.fillMaxSize().background(WorkbenchColors.Ink.copy(alpha = 0.24f)).clickable(onClick = viewModel.assistantActions::hideHistory))
-        }
-        AnimatedVisibility(
-            visible = assistant.historyVisible,
             enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + slideInHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it },
             exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + slideOutHorizontally(tween(WorkbenchMotion.NavigationMillis)) { -it }
         ) {
-            AssistantHistoryDrawer(
-                history = assistant.conversationHistory,
-                onDismiss = viewModel.assistantActions::hideHistory,
-                onOpen = viewModel.assistantActions::openHistoryConversation,
-                onDelete = viewModel.assistantActions::deleteHistoryConversation,
-                onNewChat = viewModel.assistantActions::newChat,
-                canOpenHistory = !assistant.isBusy
-            )
-        }
-    }
-}
-
-@Composable
-private fun AssistantTopBar(
-    onBack: () -> Unit,
-    onNewChat: () -> Unit,
-    onHistory: () -> Unit,
-    historyEnabled: Boolean
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(WorkbenchColors.Surface.copy(alpha = AssistantUiTokens.TopBarSurfaceAlpha))
-            .padding(
-                horizontal = AssistantUiTokens.HeaderHorizontalPadding,
-                vertical = AssistantUiTokens.HeaderVerticalPadding
-            )
-    ) {
-        Row(
-            modifier = Modifier.align(Alignment.CenterStart),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AssistantBackAction(onClick = onBack)
-        }
-        Text(
-            text = stringResource(R.string.assistant_title),
-            color = WorkbenchColors.InkStrong,
-            fontSize = AssistantUiTokens.HeaderTitleSize,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 88.dp)
-        )
-        Row(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.HeaderItemSpacing)
-        ) {
-            AssistantHeaderIconAction(
-                contentDescription = stringResource(R.string.assistant_history),
-                onClick = onHistory,
-                enabled = historyEnabled,
-                accent = false
-            ) {
-                Icon(Icons.Filled.Menu, contentDescription = null)
-            }
-            AssistantHeaderIconAction(
-                contentDescription = stringResource(R.string.assistant_new_chat),
-                onClick = onNewChat,
-                accent = true
-            ) {
-                Icon(Icons.Filled.AddCircle, contentDescription = null)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AssistantBackAction(onClick: () -> Unit) {
-    AssistantHeaderIconAction(contentDescription = stringResource(R.string.common_back), onClick = onClick) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-    }
-}
-
-@Composable
-private fun AssistantHistoryDrawer(
-    history: List<com.cslearningos.mobile.feature.assistant.ui.AssistantConversationSummary>,
-    onDismiss: () -> Unit,
-    onOpen: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onNewChat: () -> Unit,
-    canOpenHistory: Boolean
-) {
-    Column(
-        modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 320.dp).background(WorkbenchColors.SurfaceSoft).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-            Text(stringResource(R.string.assistant_title), color = WorkbenchColors.InkStrong, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            WorkbenchButton(stringResource(R.string.assistant_new_chat), { onNewChat(); onDismiss() }, primary = true, modifier = Modifier.fillMaxWidth())
-            Text(stringResource(R.string.assistant_history), color = WorkbenchColors.Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            if (history.isEmpty()) {
-                Text(stringResource(R.string.assistant_history_empty))
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
-                    items(history, key = { it.id }) { conversation ->
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(
-                            onClick = { onOpen(conversation.id) },
-                            enabled = canOpenHistory,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(conversation.title, color = WorkbenchColors.InkStrong, fontWeight = FontWeight.Bold)
-                                if (conversation.preview.isNotBlank()) {
-                                    Text(conversation.preview, color = WorkbenchColors.Muted, fontSize = 12.sp, maxLines = 2)
-                                }
-                            }
-                        }
-                        TextButton(onClick = { onDelete(conversation.id) }) { Text(stringResource(R.string.common_delete)) }
-                        }
-                    }
-                }
-            }
-    }
-}
-
-@Composable
-private fun AssistantHeaderAction(text: String, onClick: () -> Unit, accent: Boolean = false, enabled: Boolean = true) {
-    Text(
-        text = text,
-        color = when {
-            !enabled -> WorkbenchColors.Muted.copy(alpha = 0.42f)
-            accent -> WorkbenchColors.AccentStrong
-            else -> WorkbenchColors.Muted
-        },
-        fontSize = AssistantUiTokens.HeaderActionSize,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier
-            .heightIn(min = AssistantUiTokens.HeaderActionMinHeight)
-            .clip(RoundedCornerShape(AssistantUiTokens.HeaderActionCornerRadius))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(
-                horizontal = AssistantUiTokens.HeaderActionHorizontalPadding,
-                vertical = AssistantUiTokens.HeaderActionVerticalPadding
-            )
-    )
-}
-
-@Composable
-private fun AssistantHeaderIconAction(
-    contentDescription: String,
-    onClick: () -> Unit,
-    accent: Boolean = false,
-    enabled: Boolean = true,
-    icon: @Composable () -> Unit
-) {
-    IconButton(onClick = onClick, enabled = enabled) {
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.material3.LocalContentColor provides when {
-                !enabled -> WorkbenchColors.Muted.copy(alpha = 0.42f)
-                accent -> WorkbenchColors.AccentStrong
-                else -> WorkbenchColors.Muted
-            }
-        ) {
-            Box(modifier = Modifier.semantics { this.contentDescription = contentDescription }) {
-                icon()
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(WorkbenchColors.Ink.copy(alpha = 0.24f))
+                        .clickable(onClick = viewModel.assistantActions::hideHistory)
+                )
+                AssistantHistoryDrawer(
+                    history = assistant.conversationHistory,
+                    onDismiss = viewModel.assistantActions::hideHistory,
+                    onOpen = viewModel.assistantActions::openHistoryConversation,
+                    onDelete = viewModel.assistantActions::deleteHistoryConversation,
+                    onNewChat = viewModel.assistantActions::newChat,
+                    canOpenHistory = !assistant.isBusy
+                )
             }
         }
     }
@@ -321,7 +157,7 @@ private fun AssistantEmptyState(
             horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.QuickActionGap)
         ) {
             AssistantQuickActionCard(
-                icon = "⌁",
+                icon = "?",
                 text = explainLabel,
                 accent = true,
                 modifier = Modifier.weight(1f),
@@ -334,7 +170,7 @@ private fun AssistantEmptyState(
                 onClick = { onQuickMessage(draftLabel) }
             )
             AssistantQuickActionCard(
-                icon = "↻",
+                icon = "Q",
                 text = reviewLabel,
                 modifier = Modifier.weight(1f),
                 onClick = onStartReview
@@ -397,6 +233,7 @@ private fun AssistantMessageBubble(
     onRetry: () -> Unit,
     onOpenDailyReview: () -> Unit,
     onConfigureAi: () -> Unit,
+    onAgentActionReply: (String) -> Unit,
     areas: List<com.cslearningos.mobile.data.AreaEntity>
 ) {
     val isUser = message.role == AssistantMessageRole.User
@@ -483,6 +320,11 @@ private fun AssistantMessageBubble(
                 }
             }
             when (message.action) {
+                is AssistantMessageAction.AgentInteraction -> AssistantAgentInteractionCard(
+                    interaction = message.action.interaction,
+                    onReply = onAgentActionReply
+                )
+
                 is AssistantMessageAction.OpenEditableDraft -> WorkbenchButton(
                     text = stringResource(R.string.assistant_open_draft),
                     onClick = onOpenDraft,
@@ -536,93 +378,7 @@ private fun AssistantMessageBubble(
     }
 }
 
-@Composable
-private fun AssistantComposer(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onStop: () -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(WorkbenchColors.Surface.copy(alpha = AssistantUiTokens.ComposerSurfaceAlpha))
-            .border(BorderStroke(1.dp, WorkbenchColors.Line))
-            .padding(AssistantUiTokens.ComposerPadding),
-        horizontalArrangement = Arrangement.spacedBy(AssistantUiTokens.ComposerItemSpacing),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AssistantInputField(
-            value = value,
-            onValueChange = onValueChange,
-            onSubmit = onSend,
-            modifier = Modifier.weight(1f)
-        )
-        if (enabled) {
-            WorkbenchButton(
-                text = stringResource(R.string.assistant_send),
-                onClick = onSend,
-                primary = true,
-                enabled = value.isNotBlank()
-            )
-        } else {
-            WorkbenchButton(
-                text = stringResource(R.string.assistant_stop),
-                onClick = onStop,
-                danger = true
-            )
-        }
-    }
-}
-
-@Composable
-private fun AssistantInputField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(AssistantUiTokens.ComposerCornerRadius)
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        cursorBrush = SolidColor(WorkbenchColors.Accent),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(onSend = { onSubmit() }),
-        textStyle = TextStyle(
-            color = WorkbenchColors.Ink,
-            fontSize = AssistantUiTokens.InputTextSize,
-            lineHeight = AssistantUiTokens.InputLineHeight,
-            fontWeight = FontWeight.Medium
-        ),
-        modifier = modifier,
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .heightIn(min = AssistantUiTokens.ComposerMinHeight)
-                    .clip(shape)
-                    .background(WorkbenchColors.SurfaceCard)
-                    .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), shape)
-                    .padding(horizontal = AssistantUiTokens.InputHorizontalPadding),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (value.isBlank()) {
-                    Text(
-                        text = stringResource(R.string.assistant_input_label),
-                        color = WorkbenchColors.Muted.copy(alpha = AssistantUiTokens.InputHintAlpha),
-                        fontSize = AssistantUiTokens.InputTextSize
-                    )
-                }
-                innerTextField()
-            }
-        }
-    )
-}
-
-private object AssistantUiTokens {
+internal object AssistantUiTokens {
     const val ScreenSurfaceAlpha = 0.94f
     const val TopBarSurfaceAlpha = 0.94f
     const val ComposerSurfaceAlpha = 0.96f

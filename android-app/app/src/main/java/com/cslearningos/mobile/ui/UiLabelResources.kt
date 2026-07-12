@@ -33,6 +33,7 @@ fun appScreenLabelResId(screen: AppScreen): Int =
         AppScreen.Review -> R.string.nav_review_label
         AppScreen.Backup -> R.string.backup_title
         AppScreen.More -> R.string.nav_more_label
+        AppScreen.AssistantGuide -> R.string.assistant_guide_title
     }
 
 @StringRes

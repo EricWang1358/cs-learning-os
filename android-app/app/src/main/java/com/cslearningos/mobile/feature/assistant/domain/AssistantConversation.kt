@@ -14,6 +14,8 @@ data class AssistantConversationMessage(
 )
 
 sealed interface AssistantConversationAction {
+    data class AgentInteraction(val interaction: AssistantAgentInteraction) : AssistantConversationAction
+
     data class OpenEditableNodeDraft(
         val nodeId: String?,
         val expectedRevision: Long,

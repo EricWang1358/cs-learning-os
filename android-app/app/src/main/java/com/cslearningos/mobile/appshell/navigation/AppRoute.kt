@@ -19,7 +19,8 @@ enum class AppRoute {
     QuizEditor,
     Review,
     Backup,
-    More
+    More,
+    AssistantGuide
 }
 
 fun AppRoute.toAppScreen(): AppScreen =
@@ -35,6 +36,7 @@ fun AppRoute.toAppScreen(): AppScreen =
         AppRoute.Review -> AppScreen.Review
         AppRoute.Backup -> AppScreen.Backup
         AppRoute.More -> AppScreen.More
+        AppRoute.AssistantGuide -> AppScreen.AssistantGuide
     }
 
 fun AppScreen.toAppRoute(): AppRoute =
@@ -50,6 +52,7 @@ fun AppScreen.toAppRoute(): AppRoute =
         AppScreen.Review -> AppRoute.Review
         AppScreen.Backup -> AppRoute.Backup
         AppScreen.More -> AppRoute.More
+        AppScreen.AssistantGuide -> AppRoute.AssistantGuide
     }
 
 fun selectedBottomTabFor(route: AppRoute): AppRoute =
@@ -64,5 +67,6 @@ fun selectedBottomTabFor(route: AppRoute): AppRoute =
         AppRoute.QuizEditor -> AppRoute.Library
         AppRoute.Review -> AppRoute.Review
         AppRoute.Backup,
-        AppRoute.More -> AppRoute.More
+        AppRoute.More,
+        AppRoute.AssistantGuide -> AppRoute.More
     }

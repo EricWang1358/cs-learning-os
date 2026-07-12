@@ -33,6 +33,8 @@ class AssistantSafetyPolicyTest {
     @Test
     fun draftIntentIsLimitedToExplicitCreationLanguage() {
         assertEquals(AssistantRequestMode.Draft, assistantRequestModeFor("帮我新建一个虚拟内存笔记"))
+        assertEquals(AssistantRequestMode.Draft, assistantRequestModeFor("创建笔记：秦始皇的历史功绩"))
+        assertEquals(AssistantRequestMode.Draft, assistantRequestModeFor("构建笔记"))
         assertEquals(AssistantRequestMode.Draft, assistantRequestModeFor("create a note about cache locality"))
         assertEquals(AssistantRequestMode.Answer, assistantRequestModeFor("为什么 TLB miss 会变慢？"))
     }
@@ -49,7 +51,7 @@ class AssistantSafetyPolicyTest {
     }
 
     @Test
-    fun draftPromptRequiresAnExplainableExistingAreaOrOneClarifyingQuestion() {
+    fun draftPromptAllowsDraftingWithoutInventingAreas() {
         val prompt = buildKnowledgeAssistantSystemPrompt(
             mode = AssistantRequestMode.Draft,
             context = emptyList(),
@@ -57,7 +59,7 @@ class AssistantSafetyPolicyTest {
         )
 
         assertTrue(prompt.contains("cs-area-reason"))
-        assertTrue(prompt.contains("one concise clarifying question"))
-        assertTrue(prompt.contains("never invent an Area"))
+        assertTrue(prompt.contains("still draft the note"))
+        assertTrue(prompt.contains("Never invent an Area"))
     }
 }

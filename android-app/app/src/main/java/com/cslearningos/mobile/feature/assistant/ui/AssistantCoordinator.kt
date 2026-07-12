@@ -17,6 +17,7 @@ import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantSessio
 import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
 import com.cslearningos.mobile.feature.assistant.domain.nextTarget
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantObjectProposal
+import com.cslearningos.mobile.feature.assistant.domain.parseAssistantAgentInteraction
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantReviewEvaluation
 import com.cslearningos.mobile.feature.settings.data.safeAiError
 import com.cslearningos.mobile.ui.AiProviderSettings
@@ -154,7 +155,7 @@ class AssistantCoordinator(
     fun reviseCapture(slip: com.cslearningos.mobile.data.CaptureSlipEntity) {
         mutableState.update {
             it.copy(
-                input = "Improve this capture slip without turning it into a node.",
+                input = "Improve this capture slip.",
                 editTarget = AssistantEditTarget.Capture(
                     id = slip.id,
                     revision = slip.revision,
@@ -255,6 +256,10 @@ class AssistantCoordinator(
                     persistConversation(requestConversationId)
                     return@launch
                 }
+                val streamBuffer = StringBuilder()
+                val hideStructuredStreaming = shouldHideStructuredStreaming(mode, requestEditTarget)
+                var structuredPlaceholderShown = false
+                var lastStreamingUiFlushAt = 0L
                 session.streamReply(
                     settings = settings,
                     mode = mode,
@@ -263,29 +268,50 @@ class AssistantCoordinator(
                     context = localContext,
                     areas = areas,
                     objectTarget = requestEditTarget,
-                    onDelta = { delta -> updateMessage(responseMessageId) { message -> message.copy(body = message.body + delta) } }
+                    onDelta = { delta ->
+                        streamBuffer.append(delta)
+                        if (hideStructuredStreaming) {
+                            if (!structuredPlaceholderShown) {
+                                structuredPlaceholderShown = true
+                                updateMessage(responseMessageId) { message ->
+                                    message.copy(body = string(R.string.assistant_streaming))
+                                }
+                            }
+                        } else {
+                            val now = System.currentTimeMillis()
+                            if (now - lastStreamingUiFlushAt >= StreamingUiFlushIntervalMillis) {
+                                lastStreamingUiFlushAt = now
+                                updateMessage(responseMessageId) { message ->
+                                    message.copy(body = streamBuffer.toString())
+                                }
+                            }
+                        }
+                    }
                 )
-                val rawReply = mutableState.value.messages
-                    .firstOrNull { it.id == responseMessageId }
-                    ?.body
-                    ?.trim()
-                    .orEmpty()
+                if (!hideStructuredStreaming) {
+                    updateMessage(responseMessageId) { message ->
+                        message.copy(body = streamBuffer.toString())
+                    }
+                }
+                val rawReply = streamBuffer.toString().trim()
+                val agentInteraction = parseAssistantAgentInteraction(rawReply)
+                val replyForDecision = agentInteraction.visibleReply.ifBlank { rawReply }
                 var action: AssistantMessageAction? = null
                 var captureSuggestion: String? = null
-                var visibleBody = rawReply
+                var visibleBody = replyForDecision
                 var nextEditTarget = snapshot.editTarget
                 var nextReviewSession = snapshot.reviewSession
                 when (mode) {
                     AssistantRequestMode.ReviewQuestion -> {
                         nextReviewSession = AssistantReviewSession.AwaitingAnswer(
                             topic = input,
-                            question = rawReply
+                            question = replyForDecision
                         )
                     }
 
                     AssistantRequestMode.ReviewEvaluation -> {
                         val review = snapshot.reviewSession as? AssistantReviewSession.AwaitingAnswer
-                        val evaluation = parseAssistantReviewEvaluation(rawReply)
+                        val evaluation = parseAssistantReviewEvaluation(replyForDecision)
                         val quiz = review?.let { session ->
                             evaluation.dailyReviewAnswer?.let { answer ->
                                 repository.saveManualQuiz(
@@ -310,21 +336,24 @@ class AssistantCoordinator(
                     AssistantRequestMode.Answer,
                     AssistantRequestMode.Draft -> {
                         val objectProposal = requestEditTarget?.let { target ->
-                            parseAssistantObjectProposal(target, rawReply, areas)
+                            parseAssistantObjectProposal(target, replyForDecision, areas)
                         }
                         if (objectProposal != null) {
                             action = assistantEditAction(objectProposal)
                             captureSuggestion = (objectProposal as? AssistantEditProposal.Node)?.captureSuggestion
-                            nextEditTarget = objectProposal.nextTarget()
+                            nextEditTarget = when (objectProposal) {
+                                is AssistantEditProposal.Capture -> null
+                                else -> objectProposal.nextTarget()
+                            }
                             visibleBody = string(R.string.assistant_draft_updated)
                         } else if (snapshot.editTarget != null) {
                             action = null
-                            visibleBody = rawReply
+                            visibleBody = replyForDecision
                         } else {
                             val decision = assistantReplyDecision(
                                 mode = mode,
                                 request = input,
-                                reply = rawReply,
+                                reply = replyForDecision,
                                 areas = areas
                             )
                             action = decision.action
@@ -336,6 +365,11 @@ class AssistantCoordinator(
                             }
                         }
                     }
+                }
+                agentInteraction.interaction?.let { interaction ->
+                    action = AssistantMessageAction.AgentInteraction(interaction)
+                    captureSuggestion = null
+                    nextEditTarget = snapshot.editTarget
                 }
                 updateMessage(responseMessageId) { message ->
                     message.copy(
@@ -476,8 +510,15 @@ class AssistantCoordinator(
     private companion object {
         const val HistoryLimit = 30
         const val MaximumNodeDraftTitleHintCharacters = 72
+        const val StreamingUiFlushIntervalMillis = 64L
     }
 }
+
+private fun shouldHideStructuredStreaming(
+    mode: AssistantRequestMode,
+    editTarget: AssistantEditTarget?
+): Boolean =
+    mode == AssistantRequestMode.Draft || editTarget != null
 
 private fun AssistantConversation.toSummary(): AssistantConversationSummary {
     val firstUserMessage = messages.firstOrNull { it.role == AssistantConversationRole.User }?.body.orEmpty()

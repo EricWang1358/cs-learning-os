@@ -6,6 +6,8 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationCit
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
+import com.cslearningos.mobile.feature.assistant.domain.toAgentInteraction
+import com.cslearningos.mobile.feature.assistant.domain.toJson
 import com.cslearningos.mobile.data.CaptureSlipType
 import org.json.JSONArray
 import org.json.JSONObject
@@ -105,6 +107,9 @@ object AssistantConversationCodec {
 
     private fun AssistantConversationAction.toJson(): JSONObject = JSONObject().apply {
         when (this@toJson) {
+            is AssistantConversationAction.AgentInteraction -> put("kind", "agent_interaction")
+                .put("interaction", interaction.toJson())
+
             is AssistantConversationAction.OpenEditableNodeDraft -> put("kind", "open_node_draft")
                 .put("node_id", nodeId ?: JSONObject.NULL)
                 .put("expected_revision", expectedRevision)
@@ -138,6 +143,10 @@ object AssistantConversationCodec {
 
     private fun JSONObject.toAction(): AssistantConversationAction? =
         when (optString("kind")) {
+            "agent_interaction" -> optJSONObject("interaction")
+                ?.toAgentInteraction()
+                ?.let(AssistantConversationAction::AgentInteraction)
+
             "open_node_draft" -> {
                 val nodeId = requiredNullableNonBlankString("node_id") ?: return null
                 AssistantConversationAction.OpenEditableNodeDraft(

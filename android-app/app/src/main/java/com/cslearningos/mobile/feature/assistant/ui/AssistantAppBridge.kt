@@ -50,6 +50,11 @@ class AssistantAppBridge(
 
     fun sendMessage() = coordinator.send(currentSettings())
 
+    fun replyToAgentAction(reply: String) {
+        coordinator.setInput(reply)
+        coordinator.send(currentSettings())
+    }
+
     fun retryMessage(messageId: String) = coordinator.retry(messageId, currentSettings())
 
     fun cancelReply() = coordinator.cancelReply()

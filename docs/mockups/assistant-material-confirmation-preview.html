@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>知识助理材料处理确认框预览</title>
+  <style>
+    :root {
+      --bg: #f7f1e4;
+      --paper: rgba(255, 252, 244, .86);
+      --paper-strong: #fffdf7;
+      --ink: #181611;
+      --muted: #7f796a;
+      --line: #decfa6;
+      --gold: #c39100;
+      --gold-strong: #a87900;
+      --soft: #efe5c9;
+      --ok: #27764d;
+      --danger: #b14b3e;
+      --shadow: 0 18px 40px rgba(72, 58, 26, .12);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255, 246, 204, .85), transparent 34%),
+        linear-gradient(180deg, #f8f2e5, #f2ebdd);
+      color: var(--ink);
+      display: grid;
+      place-items: center;
+      padding: 22px;
+    }
+
+    .phone {
+      width: min(430px, 100%);
+      height: 860px;
+      border: 1px solid rgba(195, 145, 0, .22);
+      border-radius: 34px;
+      background: var(--bg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      position: relative;
+    }
+
+    .topbar {
+      padding: 22px 22px 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .title small {
+      display: block;
+      color: var(--muted);
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .title h1 {
+      font-size: 30px;
+      line-height: 1.05;
+      margin: 0;
+      letter-spacing: -.05em;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+      white-space: nowrap;
+      background: rgba(255,255,255,.35);
+    }
+
+    .chat {
+      padding: 8px 18px 14px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      border: 1px solid rgba(222, 207, 166, .9);
+      background: var(--paper);
+      border-radius: 22px;
+      padding: 14px;
+      box-shadow: 0 10px 24px rgba(70, 50, 10, .06);
+    }
+
+    .message.user {
+      margin-left: 42px;
+      border-color: rgba(195, 145, 0, .35);
+      background: rgba(255,255,255,.72);
+    }
+
+    .message.assistant {
+      margin-right: 22px;
+    }
+
+    .role {
+      color: var(--muted);
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      font-size: 11px;
+      margin-bottom: 8px;
+    }
+
+    .message p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+      font-weight: 650;
+    }
+
+    .message p:last-child { margin-bottom: 0; }
+
+    .material-card {
+      border: 1px dashed rgba(195, 145, 0, .55);
+      background: rgba(255, 248, 224, .64);
+      border-radius: 18px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .material-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .material-title {
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .material-meta {
+      font-size: 12px;
+      color: var(--gold-strong);
+      font-weight: 900;
+    }
+
+    .material-body {
+      margin-top: 10px;
+      display: none;
+    }
+
+    .material-card.open .material-body {
+      display: block;
+    }
+
+    textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 110px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      color: var(--ink);
+      background: rgba(255,255,255,.74);
+      font: inherit;
+      line-height: 1.5;
+      outline: none;
+    }
+
+    .task-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .task {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.55);
+      border-radius: 14px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .task input {
+      accent-color: var(--gold);
+    }
+
+    .plan-list {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .plan-item {
+      border-radius: 14px;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(222, 207, 166, .9);
+      padding: 10px;
+    }
+
+    .plan-item b {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+
+    .plan-item span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .confirm-box {
+      margin-top: 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(222, 207, 166, .9);
+      background: rgba(255, 253, 247, .72);
+      padding: 10px;
+    }
+
+    .confirm-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .confirm-title span:last-child {
+      color: var(--gold-strong);
+      letter-spacing: 0;
+      text-transform: none;
+      font-size: 11px;
+    }
+
+    .confirm-sub {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 700;
+      margin: -2px 0 10px;
+    }
+
+    .confirm-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 11px 10px;
+      font: inherit;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+
+    button:active {
+      transform: scale(.98);
+    }
+
+    .primary {
+      background: var(--gold);
+      color: white;
+      box-shadow: 0 8px 18px rgba(195, 145, 0, .22);
+    }
+
+    .secondary {
+      background: rgba(255,255,255,.72);
+      color: var(--gold-strong);
+      border: 1px solid var(--line);
+    }
+
+    .bad {
+      background: rgba(177, 75, 62, .1);
+      color: var(--danger);
+      border: 1px solid rgba(177, 75, 62, .24);
+    }
+
+    .choice {
+      min-height: 46px;
+      padding: 9px 8px;
+      background: rgba(255,255,255,.7);
+      color: var(--muted);
+      border: 1px solid rgba(222, 207, 166, .95);
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      column-gap: 7px;
+      text-align: left;
+      box-shadow: none;
+    }
+
+    .choice .icon {
+      width: 25px;
+      height: 25px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      background: rgba(239, 229, 201, .78);
+      color: var(--gold-strong);
+    }
+
+    .choice .copy {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .choice strong {
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.05;
+    }
+
+    .choice small {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .choice.ok {
+      border-color: rgba(39, 118, 77, .22);
+      background: rgba(39, 118, 77, .08);
+    }
+
+    .choice.no {
+      border-color: rgba(177, 75, 62, .22);
+      background: rgba(177, 75, 62, .08);
+    }
+
+    .choice.custom {
+      border-color: rgba(195, 145, 0, .3);
+      background: rgba(255, 248, 224, .72);
+    }
+
+    .custom-panel {
+      display: none;
+      margin-top: 9px;
+      gap: 7px;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+    }
+
+    .custom-panel.open {
+      display: grid;
+    }
+
+    .custom-panel textarea {
+      min-height: 48px;
+      max-height: 110px;
+      resize: vertical;
+      border-radius: 15px;
+      background: rgba(255,255,255,.84);
+    }
+
+    .custom-panel button {
+      min-width: 54px;
+      height: 48px;
+      padding: 0 14px;
+      border-radius: 15px;
+    }
+
+    .reply-pill {
+      margin-top: 9px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.45;
+    }
+
+    .reply-pill.show {
+      display: flex;
+    }
+
+    .reply-pill b {
+      color: var(--ink);
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(39, 118, 77, .1);
+      color: var(--ok);
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .status.show { display: block; }
+
+    .composer {
+      border-top: 1px solid rgba(222, 207, 166, .8);
+      padding: 12px;
+      background: rgba(255,255,255,.38);
+      backdrop-filter: blur(16px);
+    }
+
+    .composer-card {
+      border: 1px solid var(--line);
+      background: var(--paper-strong);
+      border-radius: 22px;
+      padding: 10px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .instruction {
+      flex: 1;
+      min-height: 44px;
+      max-height: 86px;
+      border: 0;
+      background: transparent;
+      resize: none;
+      padding: 8px;
+      font: inherit;
+      outline: none;
+    }
+
+    .send {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      padding: 0;
+      font-size: 18px;
+    }
+
+    .attachment {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-radius: 16px;
+      background: rgba(239, 229, 201, .7);
+      padding: 9px 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .attachment b {
+      font-size: 13px;
+    }
+
+    .attachment span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .drawer {
+      position: absolute;
+      inset: auto 14px 92px 14px;
+      border-radius: 22px;
+      background: var(--paper-strong);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      display: none;
+      z-index: 4;
+    }
+
+    .drawer.open {
+      display: block;
+    }
+
+    .drawer h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .drawer .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <header class="topbar">
+      <div class="title">
+        <small>CS Learning OS</small>
+        <h1>知识助理</h1>
+      </div>
+      <div class="pill">材料模式</div>
+    </header>
+
+    <section id="chat" class="chat">
+      <article class="message user">
+        <div class="role">Student</div>
+        <p>帮我把这份操作系统材料整理成适合复习的知识节点，但先不要直接保存。</p>
+        <div id="materialCard" class="material-card">
+          <div class="material-head" onclick="toggleMaterialCard()">
+            <div>
+              <div class="material-title">📄 中文长文本材料.txt</div>
+              <div class="material-meta">约 18,420 字 · 点击展开/修改</div>
+            </div>
+            <div class="material-meta" id="materialToggle">展开</div>
+          </div>
+          <div class="material-body">
+            <textarea id="sourceText">进程是操作系统资源分配和调度的基本单位。线程是 CPU 调度的基本单位。虚拟内存通过页表、TLB、缺页异常等机制，把有限的物理内存抽象成更大的地址空间……</textarea>
+          </div>
+        </div>
+        <div class="task-grid">
+          <label class="task"><input type="checkbox" checked> 生成节点</label>
+          <label class="task"><input type="checkbox" checked> 提取概念</label>
+          <label class="task"><input type="checkbox" checked> 生成复习题</label>
+          <label class="task"><input type="checkbox"> 生成学习路径</label>
+        </div>
+      </article>
+
+      <article class="message assistant">
+        <div class="role">Assistant</div>
+        <p>我不会直接保存到知识库。先把材料拆成一个可审核的处理计划，每次只推进一小批，避免你一次审核过多内容。</p>
+        <div class="plan-list">
+          <div class="plan-item">
+            <b>1. 进程、线程与调度</b>
+            <span>建议生成 1 个知识节点 + 3 张复习题。重点区分资源分配与 CPU 调度。</span>
+          </div>
+          <div class="plan-item">
+            <b>2. 虚拟内存、页表与 TLB</b>
+            <span>建议生成 1 个知识节点 + 4 张复习题。保留“缺页异常”的原文引用。</span>
+          </div>
+          <div class="plan-item">
+            <b>3. 文件系统与 I/O</b>
+            <span>暂不生成正文，只先列入后续批次。</span>
+          </div>
+        </div>
+
+        <div class="confirm-box">
+          <div class="confirm-title">
+      <span>需要你确认</span>
+          </div>
+          <div class="confirm-sub">确认后只生成第 1 批草稿；仍不会直接保存到知识库。</div>
+          <div class="confirm-actions">
+            <button class="choice ok" onclick="acceptPlan()">
+              <span class="icon">✓</span>
+              <span class="copy"><strong>可以</strong><small>继续这一批</small></span>
+            </button>
+            <button class="choice no" onclick="rejectPlan()">
+              <span class="icon">×</span>
+              <span class="copy"><strong>不好</strong><small>让 AI 重想</small></span>
+            </button>
+            <button class="choice custom" onclick="toggleCustom()">
+              <span class="icon">✎</span>
+              <span class="copy"><strong>自定义</strong><small>输入意见</small></span>
+            </button>
+          </div>
+          <div id="customPanel" class="custom-panel">
+            <textarea id="customText" placeholder="直接像聊天一样输入：先只做虚拟内存，复习题要偏追问。"></textarea>
+            <button class="primary send" onclick="sendCustom()">↑</button>
+          </div>
+          <div id="replyPill" class="reply-pill"></div>
+          <div id="status" class="status"></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="drawer" class="drawer">
+      <h3>材料正文</h3>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.55;">长文本在这里像一个可编辑 txt 附件，不撑爆主输入框；AI 请求时它会作为“素材”，不是指令。</p>
+      <textarea id="drawerText">进程是操作系统资源分配和调度的基本单位。线程是 CPU 调度的基本单位。虚拟内存通过页表、TLB、缺页异常等机制，把有限的物理内存抽象成更大的地址空间……</textarea>
+      <div class="row">
+        <button class="secondary" onclick="toggleDrawer()">取消</button>
+        <button class="primary" onclick="saveDrawer()">保存材料</button>
+      </div>
+    </section>
+
+    <footer class="composer">
+      <div class="composer-card">
+        <div class="attachment" onclick="toggleDrawer()">
+          <div>
+            <b>📄 中文长文本材料.txt</b>
+            <span>已附加 · 点击编辑</span>
+          </div>
+          <span>18k 字</span>
+        </div>
+        <div class="input-row">
+          <textarea class="instruction" placeholder="输入主指令，例如：先帮我整理成大一老师讲义"></textarea>
+          <button class="primary send" onclick="mockSend()">↑</button>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const status = document.getElementById('status');
+    const replyPill = document.getElementById('replyPill');
+    const customPanel = document.getElementById('customPanel');
+    const materialCard = document.getElementById('materialCard');
+    const materialToggle = document.getElementById('materialToggle');
+    const drawer = document.getElementById('drawer');
+
+    function showStatus(text) {
+      status.textContent = text;
+      status.classList.add('show');
+    }
+
+    function showReply(text) {
+      replyPill.innerHTML = `↳ <b>你回复：</b>${text}`;
+      replyPill.classList.add('show');
+      status.classList.remove('show');
+    }
+
+    function acceptPlan() {
+      customPanel.classList.remove('open');
+      showReply('可以，继续生成第一批草稿。');
+      window.setTimeout(() => showStatus('AI 将继续：生成 1 个节点草稿 + 2～3 张复习题，仍需你审核保存。'), 260);
+    }
+
+    function rejectPlan() {
+      customPanel.classList.remove('open');
+      showReply('不好，这个拆分不对。');
+      window.setTimeout(() => showStatus('AI 将重做计划：先说明问题，再给更小、更可审核的拆分。'), 260);
+    }
+
+    function toggleCustom() {
+      customPanel.classList.toggle('open');
+      status.classList.remove('show');
+      replyPill.classList.remove('show');
+    }
+
+    function sendCustom() {
+      const text = document.getElementById('customText').value.trim();
+      if (!text) {
+        showStatus('请先输入你的修改意见。');
+        return;
+      }
+      customPanel.classList.remove('open');
+      showReply(text);
+      window.setTimeout(() => showStatus('AI 将按这条自定义意见重做下一步计划。'), 260);
+    }
+
+    function toggleMaterialCard() {
+      materialCard.classList.toggle('open');
+      materialToggle.textContent = materialCard.classList.contains('open') ? '收起' : '展开';
+    }
+
+    function toggleDrawer() {
+      drawer.classList.toggle('open');
+    }
+
+    function saveDrawer() {
+      document.getElementById('sourceText').value = document.getElementById('drawerText').value;
+      drawer.classList.remove('open');
+    }
+
+    function mockSend() {
+      const article = document.createElement('article');
+      article.className = 'message assistant';
+      article.innerHTML = `
+        <div class="role">Assistant</div>
+        <p>收到。主指令和材料正文会分开处理：主指令决定目标，材料正文只作为素材。下一步我会先返回一个小批次计划，并在输出底部继续给你确认框。</p>
+        <div class="confirm-box">
+          <div class="confirm-title"><span>需要你确认</span><span>下一步</span></div>
+          <div class="confirm-sub">确认后只生成 1 个节点草稿 + 2 张复习题，仍不直接保存。</div>
+          <div class="confirm-actions">
+            <button class="choice ok"><span class="icon">✓</span><span class="copy"><strong>可以</strong><small>继续</small></span></button>
+            <button class="choice no"><span class="icon">×</span><span class="copy"><strong>不好</strong><small>重想</small></span></button>
+            <button class="choice custom"><span class="icon">✎</span><span class="copy"><strong>自定义</strong><small>输入</small></span></button>
+          </div>
+        </div>`;
+      chat.appendChild(article);
+      chat.scrollTop = chat.scrollHeight;
+    }
+  </script>
+</body>
+</html>

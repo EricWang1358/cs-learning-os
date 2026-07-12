@@ -17,8 +17,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -158,11 +156,10 @@ private fun PortraitWorkbench(
     state: LearningUiState,
     viewModel: LearningViewModel
 ) {
-    if (shellState.route == AppRoute.Assistant) {
-        AssistantScreen(state = state, viewModel = viewModel)
-        return
-    }
     val listState = rememberLazyListState()
+    LaunchedEffect(shellState.route) {
+        listState.scrollToItem(0)
+    }
     LaunchedEffect(
         shellState.route,
         state.reviewSetupVisible,
@@ -185,42 +182,51 @@ private fun PortraitWorkbench(
             },
             label = "portrait-page-route"
         ) { route ->
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                item {
-                    if (useCompactPortraitBrand(route.toAppScreen())) {
-                        CompactBrandBlock(route = route, state = state)
-                    } else {
-                        BrandBlock(
-                            state = state,
-                            onAssistantClick = viewModel::showAssistant
-                        )
+            if (route == AppRoute.Assistant) {
+                AssistantScreen(state = state, viewModel = viewModel)
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 116.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        if (useCompactPortraitBrand(route.toAppScreen())) {
+                            CompactBrandBlock(route = route, state = state)
+                        } else {
+                            BrandBlock(
+                                state = state,
+                                onAssistantClick = viewModel::showAssistant
+                            )
+                        }
                     }
+                    if (!hideGlobalStatusBanner(route, state) && shellState.message != null) {
+                        item { StatusBanner(shellState.message) }
+                    }
+                    if (state.notices.isNotEmpty()) {
+                        item { NoticeTray(state = state, viewModel = viewModel) }
+                    }
+                    item {
+                        ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true)
+                    }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
-                if (!hideGlobalStatusBanner(route, state) && shellState.message != null) {
-                    item { StatusBanner(shellState.message) }
-                }
-                if (state.notices.isNotEmpty()) {
-                    item { NoticeTray(state = state, viewModel = viewModel) }
-                }
-                item {
-                    ScreenContent(route = route, state = state, viewModel = viewModel, isDetailPane = true)
-                }
-                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
         }
-        MobileBottomNav(
-            currentRoute = shellState.route,
-            state = state,
-            viewModel = viewModel,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-        )
+        AnimatedVisibility(
+            visible = shellState.route != AppRoute.Assistant,
+            enter = fadeIn(tween(WorkbenchMotion.StateMillis)),
+            exit = fadeOut(tween(WorkbenchMotion.StateMillis)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            MobileBottomNav(
+                currentRoute = shellState.route,
+                state = state,
+                viewModel = viewModel,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            )
+        }
     }
 }
 
@@ -547,6 +553,7 @@ private fun ScreenContent(route: AppRoute, state: LearningUiState, viewModel: Le
         AppRoute.Review -> ReviewScreen(state, viewModel)
         AppRoute.Backup -> BackupScreen(state, viewModel)
         AppRoute.More -> MoreScreen(state, viewModel)
+        AppRoute.AssistantGuide -> AssistantGuideScreen(state, viewModel)
     }
 }
 
@@ -565,6 +572,7 @@ private fun DetailPane(route: AppRoute, state: LearningUiState, viewModel: Learn
             AppRoute.Reader -> ReaderScreen(state, viewModel)
             AppRoute.Editor -> EditorScreen(state, viewModel)
             AppRoute.QuizEditor -> QuizEditorScreen(state, viewModel)
+            AppRoute.AssistantGuide -> AssistantGuideScreen(state, viewModel)
             else -> DetailEmptyState(state)
         }
     }
@@ -646,8 +654,11 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 node.lastReadAt?.let(::formatTime) ?: stringResource(R.string.common_not_recorded)
             )
         )
+        val openQuestionCount = remember(state.readerQuestions, node.id) {
+            state.readerQuestions.count { it.nodeId == node.id }
+        }
         val readerQuestionLabel = readerQuestionButtonLabel(
-            openQuestionCount = state.readerQuestions.count { it.nodeId == node.id },
+            openQuestionCount = openQuestionCount,
             expanded = state.readerQuestionPanelExpanded,
             context = LocalContext.current
         )
@@ -686,7 +697,9 @@ private fun ReaderScreen(state: LearningUiState, viewModel: LearningViewModel) {
 
 @Composable
 private fun ReaderQuestionCapture(state: LearningUiState, viewModel: LearningViewModel, nodeId: String) {
-    val openQuestions = state.readerQuestions.filter { it.nodeId == nodeId }
+    val openQuestions = remember(state.readerQuestions, nodeId) {
+        state.readerQuestions.filter { it.nodeId == nodeId }
+    }
     WorkbenchCard(accent = openQuestions.isNotEmpty()) {
         Eyebrow(stringResource(R.string.reader_questions_eyebrow))
         Text(
@@ -755,8 +768,8 @@ private fun ReaderQuestionRow(question: ReaderQuestionEntity, onResolve: () -> U
 @Composable
 private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val context = LocalContext.current
-    val areas = state.areas.filter { it.deletedAt == null }
-    val selectedArea = areas.firstOrNull { it.id == state.editorAreaId }
+    val areas = remember(state.areas) { state.areas.filter { it.deletedAt == null } }
+    val selectedArea = remember(areas, state.editorAreaId) { areas.firstOrNull { it.id == state.editorAreaId } }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailHeading(
             eyebrow = stringResource(if (state.editorNodeId == null) R.string.editor_new_node_eyebrow else R.string.editor_edit_mode_eyebrow),
@@ -851,7 +864,9 @@ private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewMode
 private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
     val context = LocalContext.current
     if (state.reviewSetupVisible) {
-        val summaries = buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
+        val summaries = remember(state.areas, state.dueQuizzes, state.quizzes) {
+            buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.review_select_area_title), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
@@ -887,9 +902,13 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         return
     }
     val quiz = state.selectedQuiz
-    val reviewCards = reviewCardsForArea(state.quizzes, state.reviewAreaId)
-    val dueCardsForArea = state.dueQuizzes.filter { state.reviewAreaId == null || it.area == state.reviewAreaId }
-    val progress = reviewProgress(quiz?.id, reviewCards)
+    val reviewCards = remember(state.quizzes, state.reviewAreaId) {
+        reviewCardsForArea(state.quizzes, state.reviewAreaId)
+    }
+    val dueCardsForArea = remember(state.dueQuizzes, state.reviewAreaId) {
+        state.dueQuizzes.filter { state.reviewAreaId == null || it.area == state.reviewAreaId }
+    }
+    val progress = remember(quiz?.id, reviewCards) { reviewProgress(quiz?.id, reviewCards) }
     val areaLabel = state.reviewAreaId?.let { areaId ->
         state.areas.firstOrNull { it.id == areaId }?.let { displayAreaName(context, it) }
     } ?: stringResource(R.string.review_all_areas)

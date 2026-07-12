@@ -379,6 +379,20 @@ private fun GuideContent(viewModel: LearningViewModel) {
                 lineHeight = 21.sp
             )
         }
+        SettingsRow(label = stringResource(R.string.assistant_guide_entry_label)) {
+            Text(
+                text = stringResource(R.string.assistant_guide_entry_body),
+                color = WorkbenchColors.Muted,
+                fontSize = 14.sp,
+                lineHeight = 21.sp
+            )
+            WorkbenchButton(
+                text = stringResource(R.string.assistant_guide_open),
+                onClick = viewModel::showAssistantGuide,
+                primary = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

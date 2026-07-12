@@ -212,6 +212,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(screen = AppScreen.More, message = null) }
     }
 
+    fun showAssistantGuide() {
+        _state.update { it.copy(screen = AppScreen.AssistantGuide, message = null) }
+    }
+
     fun dismissNotice(noticeId: String) {
         _state.update { current ->
             current.copy(notices = current.notices.filterNot { it.id == noticeId })

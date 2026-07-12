@@ -1,6 +1,9 @@
 package com.cslearningos.mobile.feature.assistant.ui
 
 import com.cslearningos.mobile.data.AreaEntity
+import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.data.CaptureSlipStatus
+import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.LearningRepository
@@ -13,6 +16,7 @@ import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantChatMessage
 import com.cslearningos.mobile.ui.AiProviderSettings
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.CompletableDeferred
@@ -141,6 +145,119 @@ class AssistantCoordinatorStateTest {
         assertEquals(listOf("Open B", "Existing B reply"), persistedHistory.messages.map { it.body })
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun captureDraftReplyClearsForcedCaptureEditContextAfterCreatingAction() = runTest {
+        val slip = CaptureSlipEntity(
+            id = "capture-1",
+            body = "Forgot return statement",
+            type = CaptureSlipType.mistake,
+            topicHint = "Return statement",
+            sourceLabel = "code review",
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1L,
+            updatedAt = 2L,
+            revision = 3L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            linkedNodeId = null
+        )
+        val service = ReplyingAssistantService(
+            """
+            <!-- cs-capture-body -->Remember to return the computed value.<!-- /cs-capture-body -->
+            <!-- cs-capture-topic -->Return statement<!-- /cs-capture-topic -->
+            <!-- cs-capture-source -->code review<!-- /cs-capture-source -->
+            <!-- cs-capture-type: mistake -->
+            """.trimIndent()
+        )
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.reviseCapture(slip)
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+
+        val reply = coordinator.state.value.messages.last()
+        assertTrue(reply.action is AssistantMessageAction.OpenEditableCaptureDraft)
+        assertNull(coordinator.state.value.editTarget)
+    }
+
+    @Test
+    fun reviseCaptureUsesFriendlyVisibleRequestText() = runTest {
+        val slip = CaptureSlipEntity(
+            id = "capture-1",
+            body = "Forgot return statement",
+            type = CaptureSlipType.mistake,
+            topicHint = "Return statement",
+            sourceLabel = "code review",
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1L,
+            updatedAt = 2L,
+            revision = 3L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            linkedNodeId = null
+        )
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = NoopAssistantService,
+            string = { it.toString() },
+            scope = backgroundScope
+        )
+
+        coordinator.reviseCapture(slip)
+
+        assertEquals("Improve this capture slip.", coordinator.state.value.input)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun structuredCaptureProtocolIsHiddenWhileStreaming() = runTest {
+        val slip = CaptureSlipEntity(
+            id = "capture-1",
+            body = "Forgot return statement",
+            type = CaptureSlipType.mistake,
+            topicHint = "Return statement",
+            sourceLabel = "code review",
+            status = CaptureSlipStatus.inbox,
+            createdAt = 1L,
+            updatedAt = 2L,
+            revision = 3L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            linkedNodeId = null
+        )
+        val service = StreamingHoldingAssistantService(
+            """
+            <!-- cs-capture-body -->Remember to return the computed value.<!-- /cs-capture-body -->
+            <!-- cs-capture-topic -->Return statement<!-- /cs-capture-topic -->
+            <!-- cs-capture-source -->code review<!-- /cs-capture-source -->
+            <!-- cs-capture-type: mistake -->
+            """.trimIndent()
+        )
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.reviseCapture(slip)
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        service.started.await()
+
+        val streamingReply = coordinator.state.value.messages.last()
+        assertTrue(streamingReply.isStreaming)
+        assertTrue("structured protocol leaked into UI", "cs-capture-body" !in streamingReply.body)
+
+        service.release.complete(Unit)
+        advanceUntilIdle()
+    }
+
     private fun noopDao(): LearningDao =
         assistantDao(node = null)
 
@@ -225,7 +342,7 @@ class AssistantCoordinatorStateTest {
             apiKey: String,
             model: String,
             systemPrompt: String,
-            userPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
             onDelta: suspend (String) -> Unit
         ) = Unit
     }
@@ -238,7 +355,7 @@ class AssistantCoordinatorStateTest {
             apiKey: String,
             model: String,
             systemPrompt: String,
-            userPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
             onDelta: suspend (String) -> Unit
         ) {
             onDelta(reply)
@@ -256,12 +373,32 @@ class AssistantCoordinatorStateTest {
             apiKey: String,
             model: String,
             systemPrompt: String,
-            userPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
             onDelta: suspend (String) -> Unit
         ) {
             started.complete(Unit)
             release.await()
             onDelta(reply)
+        }
+    }
+
+    private class StreamingHoldingAssistantService(
+        private val reply: String
+    ) : KnowledgeAssistantService {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+
+        override suspend fun streamReply(
+            baseUrl: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
+            onDelta: suspend (String) -> Unit
+        ) {
+            onDelta(reply)
+            started.complete(Unit)
+            release.await()
         }
     }
 }

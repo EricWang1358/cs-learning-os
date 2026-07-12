@@ -21,7 +21,8 @@ enum class AppScreen {
     QuizEditor,
     Review,
     Backup,
-    More
+    More,
+    AssistantGuide
 }
 
 data class AiProviderSettings(

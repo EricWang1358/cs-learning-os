@@ -57,7 +57,7 @@ class KnowledgeAssistantSession(
                 objectTarget = objectTarget,
                 linkedNodeContext = linkedNodeContext
             ),
-            userPrompt = buildKnowledgeAssistantUserPrompt(history, message),
+            messages = buildKnowledgeAssistantChatMessages(history, currentMessage = message),
             onDelta = onDelta
         )
     }

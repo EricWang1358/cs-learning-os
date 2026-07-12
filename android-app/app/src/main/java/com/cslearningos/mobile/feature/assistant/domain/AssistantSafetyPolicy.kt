@@ -69,8 +69,12 @@ fun assistantRequestModeFor(message: String): AssistantRequestMode {
     val draftSignals = listOf(
         "新建",
         "创建",
-        "整理成笔记",
+        "建立",
         "生成笔记",
+        "创建笔记",
+        "新建笔记",
+        "整理成笔记",
+        "构建笔记",
         "create a note",
         "create note",
         "draft a note",

@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.feature.assistant.data
 
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
+import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantChatMessage
 import com.cslearningos.mobile.ui.aiChatCompletionsUrl
 import com.cslearningos.mobile.ui.parseOpenAiChatContent
 import java.net.HttpURLConnection
@@ -19,7 +20,7 @@ interface KnowledgeAssistantService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userPrompt: String,
+        messages: List<KnowledgeAssistantChatMessage>,
         onDelta: suspend (String) -> Unit
     )
 }
@@ -30,19 +31,25 @@ class OpenAiCompatibleKnowledgeAssistantService : KnowledgeAssistantService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userPrompt: String,
+        messages: List<KnowledgeAssistantChatMessage>,
         onDelta: suspend (String) -> Unit
     ) = withContext(Dispatchers.IO) {
+        val payloadMessages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", systemPrompt))
+        messages.forEach { message ->
+            if (message.content.isNotBlank()) {
+                payloadMessages.put(
+                    JSONObject()
+                        .put("role", message.role)
+                        .put("content", message.content)
+                )
+            }
+        }
         val payload = JSONObject()
             .put("model", model)
             .put("temperature", AssistantTemperature)
             .put("stream", true)
-            .put(
-                "messages",
-                JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", systemPrompt))
-                    .put(JSONObject().put("role", "user").put("content", userPrompt))
-            )
+            .put("messages", payloadMessages)
         val connection = (URL(aiChatCompletionsUrl(baseUrl)).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis

@@ -8,6 +8,7 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMes
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.nextTarget
 import com.cslearningos.mobile.feature.assistant.domain.parseAssistantObjectProposal
@@ -27,6 +28,8 @@ data class AssistantCitation(
 )
 
 sealed interface AssistantMessageAction {
+    data class AgentInteraction(val interaction: AssistantAgentInteraction) : AssistantMessageAction
+
     data class OpenEditableDraft(
         val titleHint: String,
         val markdown: String,
@@ -121,6 +124,8 @@ fun AssistantMessage.toStoredMessage(): AssistantConversationMessage =
     )
 
 private fun AssistantConversationAction.toUiAction(): AssistantMessageAction? = when (this) {
+    is AssistantConversationAction.AgentInteraction -> AssistantMessageAction.AgentInteraction(interaction)
+
     is AssistantConversationAction.OpenEditableNodeDraft -> AssistantMessageAction.OpenEditableDraft(
         titleHint = titleHint,
         markdown = markdown,
@@ -159,6 +164,8 @@ private fun AssistantConversationAction.toUiAction(): AssistantMessageAction? = 
 }
 
 private fun AssistantMessageAction.toStoredAction(): AssistantConversationAction? = when (this) {
+    is AssistantMessageAction.AgentInteraction -> AssistantConversationAction.AgentInteraction(interaction)
+
     is AssistantMessageAction.OpenEditableDraft -> AssistantConversationAction.OpenEditableNodeDraft(
         nodeId = nodeId,
         expectedRevision = expectedRevision ?: 0L,

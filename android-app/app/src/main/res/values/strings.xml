@@ -59,11 +59,60 @@
     <string name="assistant_review_materials">Your local material includes:</string>
     <string name="assistant_open_daily_review">Open daily review</string>
     <string name="assistant_reply_interrupted">Reply interrupted.</string>
+    <string name="assistant_agent_accept">Accept</string>
+    <string name="assistant_agent_reject">No</string>
+    <string name="assistant_agent_custom">Custom</string>
+    <string name="assistant_agent_custom_placeholder">Type your instruction.</string>
+    <string name="assistant_agent_reject_selection_reply">No. Recheck the topics and propose a better selection.</string>
+    <string name="assistant_guide_title">Knowledge assistant guide</string>
+    <string name="assistant_guide_eyebrow">assistant tutorial</string>
+    <string name="assistant_guide_intro">Use the assistant as a supervised drafting and study helper. It can prepare editable work, cite local matches, and help review, but final writes still go through local confirmation.</string>
+    <string name="assistant_guide_open_assistant">Open assistant</string>
+    <string name="assistant_guide_entry_label">Knowledge assistant</string>
+    <string name="assistant_guide_entry_body">Capabilities, safe workflow, and rollback rules for the AI assistant.</string>
+    <string name="assistant_guide_open">Open assistant guide</string>
+    <string name="assistant_guide_capabilities_eyebrow">current functions</string>
+    <string name="assistant_guide_capabilities_title">What it can do now</string>
+    <string name="assistant_guide_workflow_eyebrow">recommended flow</string>
+    <string name="assistant_guide_workflow_title">How to use it with fewer tokens</string>
+    <string name="assistant_guide_safety_eyebrow">risk control</string>
+    <string name="assistant_guide_safety_title">What the assistant cannot do silently</string>
+    <string name="assistant_guide_rollback_eyebrow">rollback</string>
+    <string name="assistant_guide_rollback_title">How to recover from mistakes</string>
     <string name="message_assistant_input_required">Write a question before sending.</string>
     <string name="message_assistant_draft_ready">Draft ready. Review and save it when you agree.</string>
     <string name="message_assistant_capture_saved">Assistant reply saved to Capture.</string>
     <string name="message_assistant_capture_save_failed">Could not save this reply. Try again.</string>
     <string name="message_assistant_source_unavailable">That local source is no longer available.</string>
+
+    <string-array name="assistant_guide_capabilities">
+        <item>Answer learning questions using the configured OpenAI-compatible service and optional local search results.</item>
+        <item>Create editable Markdown node drafts from requests like "create a note" or "创建笔记".</item>
+        <item>Improve an existing Node, Quiz, or Capture slip while preserving its local identity and revision check.</item>
+        <item>Suggest an existing Area for a draft; the user reviews the editor before anything becomes a saved node.</item>
+        <item>Run interview-style review: ask one question, evaluate the answer, and save a daily review card.</item>
+        <item>Keep same-window conversation context as role messages, with older turns compacted locally when needed.</item>
+        <item>Ask for lightweight confirmation or context selection when a generation step needs your decision.</item>
+    </string-array>
+    <string-array name="assistant_guide_workflow">
+        <item>Start with a concrete task: "创建笔记：主题", "improve this node", or "ask me one review question".</item>
+        <item>Use the generated draft as a proposal, then open the editable draft and save only after checking the content and Area.</item>
+        <item>Prefer focused follow-ups in the same assistant window; the app now sends prior user and assistant turns as conversation messages.</item>
+        <item>If a conversation mixes topics, let the assistant show a selectable context table before generating nodes or review cards.</item>
+        <item>Keep large source material in Nodes/Capture slips instead of pasting everything into chat; local search sends only short excerpts.</item>
+    </string-array>
+    <string-array name="assistant_guide_safety">
+        <item>The model never directly creates, renames, moves, or deletes Areas or Nodes in the database.</item>
+        <item>Draft, capture-save, and review-save actions require an explicit app action; local search is read-only.</item>
+        <item>Unknown Area names are not accepted as real Areas. If needed, choose or create the Area yourself before saving.</item>
+        <item>Existing object edits carry revision checks, so stale drafts do not overwrite changed local content silently.</item>
+    </string-array>
+    <string-array name="assistant_guide_rollback">
+        <item>If a draft is wrong, discard it by leaving the editor without saving, or ask the assistant to regenerate.</item>
+        <item>If a saved Node is wrong, edit it manually or move it to Trash; Trash can restore the Node before permanent deletion.</item>
+        <item>Before larger cleanup or restore operations, export a backup from More -> Data.</item>
+        <item>If AI settings fail, use Validate and Models under More -> Service before sending more assistant requests.</item>
+    </string-array>
 
     <string name="language_follow_system">Follow system</string>
     <string name="language_english">English</string>

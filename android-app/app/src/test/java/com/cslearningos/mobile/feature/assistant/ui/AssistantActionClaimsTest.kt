@@ -108,17 +108,18 @@ class AssistantActionClaimsTest {
     }
 
     @Test
-    fun ambiguousDraftReplyBecomesAClarifyingQuestionInsteadOfAnUntitledNode() {
+    fun draftReplyWithoutPlacementStillOpensEditableDraftForUserReview() {
         val decision = assistantReplyDecision(
             mode = AssistantRequestMode.Draft,
             request = "Create a note about an interview topic",
-            reply = "Which Area should this interview topic belong to: Algorithms, Systems, or Projects?",
+            reply = "# Interview topic\n\nPrepare examples and trade-offs.",
             areas = listOf(AssistantAreaOption(id = "algorithms", name = "Algorithms"))
         )
 
-        assertNull(decision.action)
-        assertNull(decision.editTarget)
-        assertEquals("Which Area should this interview topic belong to: Algorithms, Systems, or Projects?", decision.visibleReply)
+        val action = decision.action as AssistantMessageAction.OpenEditableDraft
+        assertEquals("algorithms", action.areaId)
+        assertEquals("# Interview topic\n\nPrepare examples and trade-offs.", action.markdown)
+        assertEquals(action.markdown, decision.editTarget?.markdown)
     }
 
     @Test

@@ -98,17 +98,18 @@ private fun parseNodeProposal(
     val knownDirectiveCount = areaDirectives.size + reasonDirectives.size + captureDirectives.size
     if (knownDirectiveCount != directives.size) return null
     if (areaDirectives.size > 1 || reasonDirectives.size > 1 || captureDirectives.size > 1) return null
-    if (target.id == null && target.areaId == null && areaDirectives.isEmpty()) return null
+    if (target.id == null && target.areaId == null && areaDirectives.isEmpty() && areas.isEmpty()) return null
 
     val areaId = areaDirectives.singleOrNull()?.let { requestedAreaId ->
         areas.firstOrNull { it.id == requestedAreaId }?.id ?: return null
-    } ?: target.areaId
+    } ?: target.areaId ?: reply.looseAreaId(areas) ?: areas.firstOrNull()?.id
     val placementReason = reasonDirectives.singleOrNull()?.takeIf { areaDirectives.isNotEmpty() }
     val captureSuggestion = captureDirectives.singleOrNull()
     val markdown = reply
         .replace(NodeAreaDirectiveLine, "")
         .replace(NodeAreaReasonDirectiveLine, "")
         .replace(NodeCaptureDirectiveLine, "")
+        .replace(LooseAreaLine, "")
         .trim()
         .takeIf(String::isNotBlank)
         ?: return null
@@ -161,8 +162,25 @@ private fun MatchResult.nodeDirectiveValue(name: String): String? =
         ?.trim()
         ?.takeIf(String::isNotBlank)
 
+private fun String.looseAreaId(areas: List<AssistantAreaOption>): String? {
+    val rawArea = LooseAreaLine.find(this)
+        ?.groupValues
+        ?.get(1)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?: return null
+    val normalized = rawArea.lowercase()
+    return areas.firstOrNull { area ->
+        area.id.equals(rawArea, ignoreCase = true) ||
+            area.name.equals(rawArea, ignoreCase = true) ||
+            normalized.startsWith("${area.id.lowercase()} ") ||
+            normalized.startsWith("${area.name.lowercase()} ")
+    }?.id
+}
+
 private val NodeDirectiveLine = Regex("^\\s*<!--\\s*(cs-[^>]*?)\\s*-->\\s*(?:\\r?\\n|$)", RegexOption.MULTILINE)
 private val NodeAreaDirectiveLine = Regex("^\\s*<!--\\s*cs-area\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val NodeAreaReasonDirectiveLine = Regex("^\\s*<!--\\s*cs-area-reason\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val NodeCaptureDirectiveLine = Regex("^\\s*<!--\\s*cs-capture\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
+private val LooseAreaLine = Regex("^\\s*(?:Area|区域|分类)\\s*[:：]\\s*(.+?)\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 private val CaptureTypeDirective = Regex("<!--\\s*cs-capture-type:\\s*([^>]+?)\\s*-->", RegexOption.IGNORE_CASE)

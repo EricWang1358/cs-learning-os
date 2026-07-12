@@ -124,6 +124,41 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun newNodeProposalCreatesEditableDraftFromPlainMarkdownWhenAreaExists() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "创建笔记：秦始皇的历史功绩",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            Area: history
+            # 秦始皇的历史功绩
+
+            秦始皇统一六国，建立中央集权制度，并推动书同文、车同轨。
+            """.trimIndent(),
+            listOf(
+                AssistantAreaOption(id = "history", name = "History"),
+                AssistantAreaOption(id = "systems", name = "Systems")
+            )
+        ) as AssistantEditProposal.Node
+
+        assertEquals("history", proposal.areaId)
+        assertEquals(
+            """
+            # 秦始皇的历史功绩
+
+            秦始皇统一六国，建立中央集权制度，并推动书同文、车同轨。
+            """.trimIndent(),
+            proposal.markdown
+        )
+    }
+
+    @Test
     fun nodeProposalFailsClosedForUnknownOrAmbiguousCsDirectives() {
         val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
 
