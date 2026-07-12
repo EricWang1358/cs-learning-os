@@ -17,6 +17,7 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
 import com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction
+import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantChatMessage
 import com.cslearningos.mobile.ui.AiProviderSettings
 import java.lang.reflect.Proxy
@@ -323,6 +324,61 @@ class AssistantCoordinatorStateTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun pendingDraftChecklistDoesNotForceUnrelatedNextMessageIntoDraftMode() = runTest {
+        val service = RecordingAssistantService(reply = "Paging maps virtual pages to frames.")
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.setInput("create note about Codex workflow")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+        assertEquals("create note about Codex workflow", coordinator.state.value.pendingDraftRequest)
+
+        coordinator.setInput("what is paging")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+
+        assertEquals(AssistantRequestMode.Answer, coordinator.state.value.lastRequestMode)
+        assertNull(coordinator.state.value.pendingDraftRequest)
+        assertEquals("Paging maps virtual pages to frames.", coordinator.state.value.messages.last().body)
+        assertNull(service.lastObjectTarget)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun pendingDraftChecklistAgentReplyStillUsesDraftMode() = runTest {
+        val service = RecordingAssistantService(reply = "I tightened the output selection and kept it ready for drafting.")
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.setInput("create note about Codex workflow")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+        assertEquals("create note about Codex workflow", coordinator.state.value.pendingDraftRequest)
+
+        assertTrue(
+            coordinator.sendAgentActionReply(
+                "No. Recheck the topics and propose a better selection.",
+                AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")
+            )
+        )
+        advanceUntilIdle()
+
+        assertEquals(AssistantRequestMode.Draft, coordinator.state.value.lastRequestMode)
+        assertNull(coordinator.state.value.pendingDraftRequest)
+        assertEquals("draft", service.lastObjectTarget)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun structuredCaptureProtocolIsHiddenWhileStreaming() = runTest {
         val slip = CaptureSlipEntity(
             id = "capture-1",
@@ -481,6 +537,27 @@ class AssistantCoordinatorStateTest {
             onDelta: suspend (String) -> Unit
         ) {
             calls += 1
+        }
+    }
+
+    private class RecordingAssistantService(
+        private val reply: String
+    ) : KnowledgeAssistantService {
+        var lastObjectTarget: String? = null
+
+        override suspend fun streamReply(
+            baseUrl: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
+            onDelta: suspend (String) -> Unit
+        ) {
+            lastObjectTarget = when {
+                "cs-area" in systemPrompt || ":::quiz" in systemPrompt -> "draft"
+                else -> null
+            }
+            onDelta(reply)
         }
     }
 

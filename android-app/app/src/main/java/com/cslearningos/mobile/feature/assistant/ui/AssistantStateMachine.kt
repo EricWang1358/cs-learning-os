@@ -6,14 +6,17 @@ import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
 import com.cslearningos.mobile.feature.assistant.domain.AssistantReviewSession
 import com.cslearningos.mobile.feature.assistant.domain.assistantRequestModeFor
 
-internal fun AssistantUiState.requestModeFor(input: String): AssistantRequestMode =
+internal fun AssistantUiState.requestModeFor(
+    input: String,
+    forcePendingDraftReply: Boolean = false
+): AssistantRequestMode =
     when (reviewSession) {
         AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
         is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
         is AssistantReviewSession.Evaluated -> AssistantRequestMode.Answer
         null -> if (editTarget != null) {
             AssistantRequestMode.Draft
-        } else if (pendingDraftRequest != null) {
+        } else if (forcePendingDraftReply && pendingDraftRequest != null) {
             AssistantRequestMode.Draft
         } else {
             assistantRequestModeFor(input)

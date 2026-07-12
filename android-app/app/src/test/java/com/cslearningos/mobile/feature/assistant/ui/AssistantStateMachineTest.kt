@@ -13,10 +13,19 @@ import org.junit.Test
 
 class AssistantStateMachineTest {
     @Test
-    fun requestModeUsesPendingDraftRequestBeforeClassifier() {
+    fun requestModeIgnoresPendingDraftRequestForOrdinaryComposerInput() {
         val mode = AssistantUiState(
             pendingDraftRequest = "create note about binary tree"
         ).requestModeFor("what is a binary tree")
+
+        assertEquals(AssistantRequestMode.Answer, mode)
+    }
+
+    @Test
+    fun requestModeCanBeForcedToDraftForAgentActionReplies() {
+        val mode = AssistantUiState(
+            pendingDraftRequest = "create note about binary tree"
+        ).requestModeFor("No. Recheck the topics and propose a better selection.", forcePendingDraftReply = true)
 
         assertEquals(AssistantRequestMode.Draft, mode)
     }

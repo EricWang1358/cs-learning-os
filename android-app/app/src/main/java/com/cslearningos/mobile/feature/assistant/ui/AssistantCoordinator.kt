@@ -220,12 +220,18 @@ class AssistantCoordinator(
         }
     }
 
-    fun send(settings: AiProviderSettings): Boolean {
+    fun send(
+        settings: AiProviderSettings,
+        forcePendingDraftReply: Boolean = false
+    ): Boolean {
         val snapshot = mutableState.value
         val input = snapshot.input.trim()
         if (input.isBlank() || snapshot.isBusy) return false
 
-        val mode = snapshot.requestModeFor(input)
+        val mode = snapshot.requestModeFor(
+            input,
+            forcePendingDraftReply = forcePendingDraftReply
+        )
         val userMessageId = messageId("user")
         val responseMessageId = messageId("assistant")
         val requestConversationId = conversationId
@@ -438,6 +444,15 @@ class AssistantCoordinator(
             }
         }
         return true
+    }
+
+    fun sendAgentActionReply(reply: String, settings: AiProviderSettings): Boolean {
+        val shouldForcePendingDraftReply = mutableState.value.pendingDraftRequest != null
+        setInput(reply)
+        return send(
+            settings = settings,
+            forcePendingDraftReply = shouldForcePendingDraftReply
+        )
     }
 
     fun retry(messageId: String, settings: AiProviderSettings): Boolean {
