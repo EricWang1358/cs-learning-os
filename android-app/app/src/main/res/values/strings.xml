@@ -64,6 +64,9 @@
     <string name="assistant_agent_custom">Custom</string>
     <string name="assistant_agent_custom_placeholder">Type your instruction.</string>
     <string name="assistant_agent_reject_selection_reply">No. Recheck the topics and propose a better selection.</string>
+    <string name="assistant_draft_confirm_title">Create editable draft?</string>
+    <string name="assistant_draft_confirm_body">I can turn this into an editable node draft first. You can review it before saving.</string>
+    <string name="assistant_draft_confirm_reject_reply">No. Ask me clarifying questions or propose a safer split first.</string>
     <string name="assistant_guide_title">Knowledge assistant guide</string>
     <string name="assistant_guide_eyebrow">assistant tutorial</string>
     <string name="assistant_guide_intro">Use the assistant as a supervised drafting and study helper. It can prepare editable work, cite local matches, and help review, but final writes still go through local confirmation.</string>

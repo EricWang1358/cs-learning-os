@@ -9,6 +9,7 @@ import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditProposal
 import com.cslearningos.mobile.feature.assistant.domain.AssistantEditTarget
 import com.cslearningos.mobile.feature.assistant.domain.AssistantRequestMode
@@ -228,6 +229,18 @@ class AssistantCoordinator(
                 isBusy = true,
                 lastRequestMode = mode
             )
+        }
+        if (mode == AssistantRequestMode.Draft && snapshot.editTarget == null && !input.isApprovedDraftRequest()) {
+            updateMessage(responseMessageId) { message ->
+                message.copy(
+                    body = string(R.string.assistant_draft_confirm_body),
+                    action = AssistantMessageAction.AgentInteraction(input.toDraftConfirmationInteraction(string)),
+                    isStreaming = false
+                )
+            }
+            mutableState.update { it.copy(isBusy = false) }
+            scope.launch { persistConversation(requestConversationId) }
+            return true
         }
         replyJob = scope.launch {
             try {
@@ -519,6 +532,22 @@ private fun shouldHideStructuredStreaming(
     editTarget: AssistantEditTarget?
 ): Boolean =
     mode == AssistantRequestMode.Draft || editTarget != null
+
+private fun String.isApprovedDraftRequest(): Boolean =
+    trim().startsWith(ApprovedDraftPrefix, ignoreCase = true)
+
+private fun String.toDraftConfirmationInteraction(string: (Int) -> String): AssistantAgentInteraction.Confirm {
+    val request = trim()
+    return AssistantAgentInteraction.Confirm(
+        title = string(R.string.assistant_draft_confirm_title),
+        body = string(R.string.assistant_draft_confirm_body),
+        acceptReply = "$ApprovedDraftPrefix $request",
+        rejectReply = string(R.string.assistant_draft_confirm_reject_reply),
+        customPlaceholder = string(R.string.assistant_agent_custom_placeholder)
+    )
+}
+
+private const val ApprovedDraftPrefix = "Generate the editable draft for:"
 
 private fun AssistantConversation.toSummary(): AssistantConversationSummary {
     val firstUserMessage = messages.firstOrNull { it.role == AssistantConversationRole.User }?.body.orEmpty()

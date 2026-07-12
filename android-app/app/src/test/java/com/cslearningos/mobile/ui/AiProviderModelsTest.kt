@@ -71,6 +71,15 @@ class AiProviderModelsTest {
         assertEquals("Capture Draft", titleFromAiMarkdown("Body only", fallback = "Capture Draft"))
     }
 
+    @Test
+    fun assistantComposerSummarizesLongInputAsTextAttachment() {
+        val attachment = assistantComposerTextAttachment("a".repeat(900))
+
+        assertEquals("material.txt", attachment?.fileName)
+        assertEquals(900, attachment?.characterCount)
+        assertTrue(attachment?.preview?.length ?: 0 <= 96)
+    }
+
     private fun captureSlip(): CaptureSlipEntity =
         CaptureSlipEntity(
             id = "slip-1",

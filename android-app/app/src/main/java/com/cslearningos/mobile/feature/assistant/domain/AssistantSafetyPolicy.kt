@@ -78,7 +78,8 @@ fun assistantRequestModeFor(message: String): AssistantRequestMode {
         "create a note",
         "create note",
         "draft a note",
-        "make a note"
+        "make a note",
+        "generate the editable draft"
     )
     return if (draftSignals.any(normalized::contains)) {
         AssistantRequestMode.Draft

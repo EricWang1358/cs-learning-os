@@ -113,6 +113,7 @@ private fun parseNodeProposal(
         .trim()
         .takeIf(String::isNotBlank)
         ?: return null
+    if (!markdown.hasMarkdownTitleHeading()) return null
     return AssistantEditProposal.Node(
         target = target,
         titleHint = target.titleHint,
@@ -177,6 +178,12 @@ private fun String.looseAreaId(areas: List<AssistantAreaOption>): String? {
             normalized.startsWith("${area.name.lowercase()} ")
     }?.id
 }
+
+private fun String.hasMarkdownTitleHeading(): Boolean =
+    lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.matches(Regex("#\\s+\\S.*")) == true
 
 private val NodeDirectiveLine = Regex("^\\s*<!--\\s*(cs-[^>]*?)\\s*-->\\s*(?:\\r?\\n|$)", RegexOption.MULTILINE)
 private val NodeAreaDirectiveLine = Regex("^\\s*<!--\\s*cs-area\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))

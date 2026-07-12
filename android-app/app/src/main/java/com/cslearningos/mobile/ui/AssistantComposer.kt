@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.cslearningos.mobile.R
 
 @Composable
@@ -75,6 +77,7 @@ private fun AssistantInputField(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(AssistantUiTokens.ComposerCornerRadius)
+    val attachment = assistantComposerTextAttachment(value)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -99,14 +102,42 @@ private fun AssistantInputField(
                     .padding(horizontal = AssistantUiTokens.InputHorizontalPadding),
                 contentAlignment = Alignment.CenterStart
             ) {
-                if (value.isBlank()) {
+                when {
+                    value.isBlank() -> {
                     Text(
                         text = stringResource(R.string.assistant_input_label),
                         color = WorkbenchColors.Muted.copy(alpha = AssistantUiTokens.InputHintAlpha),
                         fontSize = AssistantUiTokens.InputTextSize
                     )
+                    }
+
+                    attachment != null -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "${attachment.fileName} · ${attachment.characterCount} chars",
+                                color = WorkbenchColors.InkStrong,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                            if (attachment.preview.isNotBlank()) {
+                                Text(
+                                    text = attachment.preview,
+                                    color = WorkbenchColors.Muted,
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
                 }
-                innerTextField()
+                if (attachment == null) {
+                    innerTextField()
+                } else {
+                    Box(modifier = Modifier.heightIn(max = 1.dp)) {
+                        innerTextField()
+                    }
+                }
             }
         }
     )

@@ -108,3 +108,28 @@ fun titleFromAiMarkdown(markdown: String, fallback: String): String =
         ?.trim()
         ?.takeIf { it.isNotBlank() }
         ?: fallback
+
+data class AssistantComposerTextAttachment(
+    val fileName: String,
+    val characterCount: Int,
+    val preview: String
+)
+
+fun assistantComposerTextAttachment(value: String): AssistantComposerTextAttachment? {
+    val normalized = value.trim()
+    if (normalized.length < AssistantComposerAttachmentThreshold) return null
+    val preview = normalized
+        .lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        .orEmpty()
+        .take(AssistantComposerAttachmentPreviewCharacters)
+    return AssistantComposerTextAttachment(
+        fileName = "material.txt",
+        characterCount = normalized.length,
+        preview = preview
+    )
+}
+
+private const val AssistantComposerAttachmentThreshold = 700
+private const val AssistantComposerAttachmentPreviewCharacters = 96

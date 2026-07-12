@@ -159,6 +159,30 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun newNodeProposalRequiresMarkdownHeadingBeforeEditableDraft() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "Create note",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            Area: abilities
+            I generated a complete draft for you.
+
+            This covers setup, conversation management, and prompts.
+            """.trimIndent(),
+            listOf(AssistantAreaOption(id = "abilities", name = "Abilities"))
+        )
+
+        assertNull(proposal)
+    }
+
+    @Test
     fun nodeProposalFailsClosedForUnknownOrAmbiguousCsDirectives() {
         val target = AssistantEditTarget.Node("node-1", 3L, "Graph traversal", "# Graph traversal", "algorithms")
 

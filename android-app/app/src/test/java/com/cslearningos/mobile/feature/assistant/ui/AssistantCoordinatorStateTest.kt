@@ -16,6 +16,7 @@ import com.cslearningos.mobile.feature.assistant.data.KnowledgeAssistantService
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversation
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationMessage
 import com.cslearningos.mobile.feature.assistant.domain.AssistantConversationRole
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction
 import com.cslearningos.mobile.feature.assistant.domain.KnowledgeAssistantChatMessage
 import com.cslearningos.mobile.ui.AiProviderSettings
 import java.lang.reflect.Proxy
@@ -216,6 +217,28 @@ class AssistantCoordinatorStateTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun newNodeDraftRequestShowsLocalConfirmationBeforeCallingModel() = runTest {
+        val service = CountingAssistantService()
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = service,
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.setInput("create note about Codex workflow")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+
+        val reply = coordinator.state.value.messages.last()
+        assertEquals(0, service.calls)
+        assertTrue(reply.action is AssistantMessageAction.AgentInteraction)
+        val interaction = (reply.action as AssistantMessageAction.AgentInteraction).interaction
+        assertTrue(interaction is AssistantAgentInteraction.Confirm)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun structuredCaptureProtocolIsHiddenWhileStreaming() = runTest {
         val slip = CaptureSlipEntity(
             id = "capture-1",
@@ -359,6 +382,21 @@ class AssistantCoordinatorStateTest {
             onDelta: suspend (String) -> Unit
         ) {
             onDelta(reply)
+        }
+    }
+
+    private class CountingAssistantService : KnowledgeAssistantService {
+        var calls = 0
+
+        override suspend fun streamReply(
+            baseUrl: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
+            onDelta: suspend (String) -> Unit
+        ) {
+            calls += 1
         }
     }
 
