@@ -599,7 +599,7 @@ stateDiagram-v2
 
 ### Target Invariants
 
-- A Node target carries `nodeId`, Markdown, and a validated existing Area ID. A proposed Area change is visible in the Node editor before save.
+- A Node target carries `nodeId`, Markdown, and either a validated existing Area ID or `null` for a new draft when the assistant cannot justify one clear Area. When the Area is `null`, the Node editor must require explicit Area selection before save. If the Markdown draft contains review cards, those cards must not sync into Review until that save completes with a chosen Area.
 - A Quiz target carries `quizId`, optional `nodeId`, prompt, answer, and explanation. Saving retains the quiz ID and its `ReviewStateEntity`; it does not create a replacement question.
 - A Capture target carries `slipId`, body, type, topic hint, and source label. Saving retains the Capture ID and does not promote it to a Node unless the user separately chooses promotion.
 - Target directives must be complete and type-correct. Missing/invalid directives leave the previous target intact and display a clarifying assistant response; they never erase fields.
@@ -611,6 +611,7 @@ stateDiagram-v2
 - General Answer and interview-review modes must not inherit a typed edit target or offer an edit confirmation action.
 - Top-level Assistant navigation preserves the current conversation. Only explicit fresh-entry callers may reset conversation state before showing Assistant.
 - Restoring history must clear transient busy/selection/auto-open flags while preserving the stored messages and typed `editTarget`.
+- Review Area summaries, selected review keys, and per-quiz Area snapshots must compare on `Area.slug`. Imported or restored data may legitimately keep `Area.id != Area.slug`, and Review counts/navigation must still stay correct.
 
 ### Transition Acceptance Matrix
 

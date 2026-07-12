@@ -117,7 +117,7 @@ class AssistantActionClaimsTest {
         )
 
         val action = decision.action as AssistantMessageAction.OpenEditableDraft
-        assertEquals("algorithms", action.areaId)
+        assertNull(action.areaId)
         assertEquals("# Interview topic\n\nPrepare examples and trade-offs.", action.markdown)
         assertEquals(action.markdown, decision.editTarget?.markdown)
     }

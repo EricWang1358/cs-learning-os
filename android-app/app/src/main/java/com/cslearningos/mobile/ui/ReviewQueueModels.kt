@@ -64,9 +64,9 @@ fun buildReviewAreaSummaries(
         .sortedWith(compareBy<AreaEntity> { it.order }.thenBy { it.name.lowercase() })
         .map { area ->
             ReviewAreaSummary(
-                areaId = area.id,
-                dueCount = dueQuizzes.count { it.area == area.id },
-                totalCount = quizzes.count { it.area == area.id }
+                areaId = area.slug,
+                dueCount = dueQuizzes.count { it.area == area.slug },
+                totalCount = quizzes.count { it.area == area.slug }
             )
         }
 

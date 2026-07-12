@@ -82,6 +82,27 @@ class ReviewQueueModelsTest {
     }
 
     @Test
+    fun reviewAreaSummariesUseAreaSlugSoImportedIdsStillMatchQuizCounts() {
+        val areas = listOf(
+            area(id = "systems-memory", slug = "systems", name = "Systems", order = 1),
+            area(id = "network-basics", slug = "network", name = "Network", order = 2)
+        )
+        val due = listOf(
+            quiz("q1", area = "systems"),
+            quiz("q2", area = "network")
+        )
+
+        assertEquals(
+            listOf(
+                ReviewAreaSummary(areaId = null, dueCount = 2, totalCount = 2),
+                ReviewAreaSummary(areaId = "systems", dueCount = 1, totalCount = 1),
+                ReviewAreaSummary(areaId = "network", dueCount = 1, totalCount = 1)
+            ),
+            buildReviewAreaSummaries(areas = areas, dueQuizzes = due, quizzes = due)
+        )
+    }
+
+    @Test
     fun reviewProgressUsesOnlyCardsFromSelectedArea() {
         val cards = reviewCardsForArea(
             quizzes = listOf(
@@ -119,10 +140,10 @@ class ReviewQueueModelsTest {
         assertEquals("q3", next?.id)
     }
 
-    private fun area(id: String, name: String, order: Int) =
+    private fun area(id: String, name: String, order: Int, slug: String = id) =
         AreaEntity(
             id = id,
-            slug = id,
+            slug = slug,
             name = name,
             order = order,
             createdAt = 1_000L,

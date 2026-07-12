@@ -240,6 +240,39 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun newNodeProposalKeepsAreaUnsetWhenAssistantDoesNotRecommendOne() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "Paging",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            # Paging
+
+            Virtual addresses map to physical frames.
+
+            :::quiz
+            question: What does paging map?
+            answer: Virtual pages to physical frames.
+            explanation: The MMU uses page tables for the translation.
+            :::
+            """.trimIndent(),
+            listOf(
+                AssistantAreaOption(id = "systems-memory", name = "Systems", exampleTitles = listOf("Virtual Memory")),
+                AssistantAreaOption(id = "algorithms-graphs", name = "Algorithms", exampleTitles = listOf("BFS"))
+            )
+        ) as AssistantEditProposal.Node
+
+        assertNull(proposal.areaId)
+        assertEquals("# Paging", proposal.markdown.lineSequence().first())
+    }
+
+    @Test
     fun newNodeProposalRequiresMarkdownHeadingBeforeEditableDraft() {
         val target = AssistantEditTarget.Node(
             id = null,

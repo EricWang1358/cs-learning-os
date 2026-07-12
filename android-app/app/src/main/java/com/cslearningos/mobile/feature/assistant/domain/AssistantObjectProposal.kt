@@ -116,7 +116,7 @@ private fun parseNodeProposal(
 
     val areaId = (areaDirectives.singleOrNull() ?: looseAreaDirectives.singleOrNull())?.let { requestedAreaId ->
         areas.firstOrNull { it.id == requestedAreaId }?.id ?: return null
-    } ?: target.areaId ?: normalizedReply.looseAreaId(areas) ?: areas.firstOrNull()?.id
+    } ?: target.areaId ?: normalizedReply.looseAreaId(areas)
     val placementReason = reasonDirectives.singleOrNull()?.takeIf { areaDirectives.isNotEmpty() }
     val captureSuggestion = captureDirectives.singleOrNull()
     val markdown = normalizedReply

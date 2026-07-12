@@ -119,6 +119,9 @@ private fun routeNavigationRank(route: AppRoute): Int {
 private fun hideGlobalStatusBanner(route: AppRoute, state: LearningUiState): Boolean =
     route == AppRoute.Review && state.reviewedQuiz != null
 
+private fun findAreaByReviewKey(areas: List<com.cslearningos.mobile.data.AreaEntity>, reviewAreaKey: String?) =
+    reviewAreaKey?.let { key -> areas.firstOrNull { it.id == key || it.slug == key } }
+
 @Composable
 fun LearningOsApp(
     shellViewModel: AppShellViewModel = viewModel(),
@@ -879,9 +882,9 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 )
             }
             summaries.forEach { summary ->
-                val label = summary.areaId?.let { areaId ->
-                    state.areas.firstOrNull { it.id == areaId }?.let { displayAreaName(context, it) }
-                } ?: stringResource(R.string.review_all_areas)
+                val label = findAreaByReviewKey(state.areas, summary.areaId)
+                    ?.let { displayAreaName(context, it) }
+                    ?: stringResource(R.string.review_all_areas)
                 ReviewAreaChoiceRow(
                     title = label,
                     detail = stringResource(R.string.review_area_due_total, summary.dueCount, summary.totalCount),
@@ -910,9 +913,9 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         state.dueQuizzes.filter { state.reviewAreaId == null || it.area == state.reviewAreaId }
     }
     val progress = remember(quiz?.id, reviewCards) { reviewProgress(quiz?.id, reviewCards) }
-    val areaLabel = state.reviewAreaId?.let { areaId ->
-        state.areas.firstOrNull { it.id == areaId }?.let { displayAreaName(context, it) }
-    } ?: stringResource(R.string.review_all_areas)
+    val areaLabel = findAreaByReviewKey(state.areas, state.reviewAreaId)
+        ?.let { displayAreaName(context, it) }
+        ?: stringResource(R.string.review_all_areas)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
             eyebrow = stringResource(R.string.review_title),
