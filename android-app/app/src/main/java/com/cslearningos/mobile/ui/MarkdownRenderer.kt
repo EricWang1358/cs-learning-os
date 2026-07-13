@@ -2,22 +2,34 @@ package com.cslearningos.mobile.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +43,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.cslearningos.mobile.ui.markdown.MarkdownBlock
 import com.cslearningos.mobile.ui.markdown.MarkdownCodeBlock
 import com.cslearningos.mobile.ui.markdown.MarkdownHeadingBlock
@@ -49,6 +63,7 @@ import com.cslearningos.mobile.ui.markdown.buildMarkdownAnnotatedText
 private val CardShape = RoundedCornerShape(16.dp)
 private val BlockShape = RoundedCornerShape(16.dp)
 private val PillShape = RoundedCornerShape(999.dp)
+private val TableCellMinWidth = 144.dp
 
 @Composable
 fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier, card: Boolean = true) {
@@ -263,6 +278,8 @@ private fun TableBlock(block: MarkdownTableBlock) {
         block.headers.size,
         block.rows.maxOfOrNull { it.size } ?: 0
     ).coerceAtLeast(1)
+    val canExpand = columnCount > 2 || block.rows.size > 4
+    var expanded by remember(block) { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -271,6 +288,47 @@ private fun TableBlock(block: MarkdownTableBlock) {
             .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
             .border(1.dp, WorkbenchColors.LineStrong, BlockShape)
     ) {
+        if (canExpand) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(WorkbenchColors.SurfaceSoft),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = { expanded = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.OpenInFull,
+                        contentDescription = "Expand table",
+                        tint = WorkbenchColors.Ink
+                    )
+                }
+            }
+        }
+        TableGrid(
+            block = block,
+            columnCount = columnCount,
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        )
+    }
+
+    if (expanded) {
+        ExpandedTableDialog(
+            block = block,
+            columnCount = columnCount,
+            onExit = { expanded = false }
+        )
+    }
+}
+
+@Composable
+private fun TableGrid(
+    block: MarkdownTableBlock,
+    columnCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
         TableRowBlock(
             cells = padTableCells(block.headers, columnCount),
             header = true
@@ -282,29 +340,67 @@ private fun TableBlock(block: MarkdownTableBlock) {
 }
 
 @Composable
+private fun ExpandedTableDialog(
+    block: MarkdownTableBlock,
+    columnCount: Int,
+    onExit: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onExit,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(WorkbenchColors.Surface)
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onExit) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Exit table view",
+                        tint = WorkbenchColors.Ink
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                TableGrid(
+                    block = block,
+                    columnCount = columnCount,
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun TableRowBlock(
     cells: List<List<MarkdownInline>>,
     header: Boolean
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
             .background(if (header) WorkbenchColors.SurfaceSoft else Color.Transparent)
     ) {
-        cells.forEachIndexed { index, cell ->
-            val borderModifier = if (index < cells.lastIndex) {
-                Modifier.border(
-                    width = 1.dp,
-                    color = WorkbenchColors.Line,
-                    shape = RoundedCornerShape(0.dp)
-                )
-            } else {
-                Modifier
-            }
+        cells.forEach { cell ->
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .then(borderModifier)
+                    .width(TableCellMinWidth)
+                    .border(
+                        width = 1.dp,
+                        color = WorkbenchColors.Line,
+                        shape = RoundedCornerShape(0.dp)
+                    )
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
                 RichText(
