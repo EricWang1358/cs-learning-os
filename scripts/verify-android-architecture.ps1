@@ -32,11 +32,11 @@ $requiredProjects = @(
 )
 
 $forbiddenPureReferences = @(
-    "import android.",
-    "import androidx.",
-    "import com.cslearningos.mobile.ui.",
-    "import com.cslearningos.mobile.data.",
-    "import org.json."
+    "android.",
+    "androidx.",
+    "com.cslearningos.mobile.ui.",
+    "com.cslearningos.mobile.data.",
+    "org.json."
 )
 
 $moduleDependencyAllowlist = [ordered]@{
@@ -128,7 +128,7 @@ if ($null -ne $appBuild -and $appBuild.Contains("../content-demo")) {
     $violations.Add("App build input escapes android-app: android-app/app/build.gradle contains ../content-demo")
 }
 
-$projectDependencyPattern = 'project\s*\(\s*(?:path\s*=\s*)?["''](?<path>:[^"'']+)["'']\s*\)'
+$projectDependencyPattern = 'project\s*\(\s*(?:path\s*[:=]\s*)?["''](?<path>:[^"'']+)["'']\s*\)'
 foreach ($modulePath in $moduleDependencyAllowlist.Keys) {
     $buildText = Get-ModuleBuildText $modulePath
     if ($null -eq $buildText) { continue }
@@ -173,11 +173,31 @@ $gradleFiles = Get-ChildItem -LiteralPath $androidRoot -Recurse -File | Where-Ob
 }
 foreach ($file in $gradleFiles) {
     $relativeFile = $file.FullName.Substring(($ProjectRoot.TrimEnd('\') + '\').Length)
+    $normalizedRelativeFile = $relativeFile.Replace('\', '/')
     foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern @("../", "..\", "parentFile")) {
         $violations.Add("Gradle input may escape android-app: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
     }
     foreach ($match in Select-String -LiteralPath $file.FullName -Pattern '(?i)(from|file|files|includeBuild)\s*\(\s*["''](?:[A-Za-z]:[\\/]|[\\/]{2})') {
         $violations.Add("Absolute local Gradle input is forbidden: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
+    }
+    foreach ($match in Select-String -LiteralPath $file.FullName -Pattern '\b(from|file|files|includeBuild)\s*\(') {
+        $line = $match.Line.Trim()
+        $allowed = switch ($normalizedRelativeFile) {
+            "android-app/settings.gradle" {
+                $line -match '^includeBuild\(\s*["'']build-logic["'']\s*\)$'
+                break
+            }
+            "android-app/app/build.gradle" {
+                $line -match '^from\(\s*["'']\$rootDir/starter-content["'']\s*\)\s*\{?$' -or
+                    $line -match '^def starterAssetsDir = file\(\s*["'']\$buildDir/generated/starter-assets["'']\s*\)$' -or
+                    $line -eq 'implementation files('
+                break
+            }
+            default { $false }
+        }
+        if (-not $allowed) {
+            $violations.Add("Unapproved local Gradle input: ${relativeFile}:$($match.LineNumber): $line")
+        }
     }
 }
 

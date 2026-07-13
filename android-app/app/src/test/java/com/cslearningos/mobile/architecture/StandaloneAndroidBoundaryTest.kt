@@ -45,10 +45,28 @@ class StandaloneAndroidBoundaryTest {
             }
             .forEach { gradleFile ->
                 val text = gradleFile.readText(Charsets.UTF_8)
+                val relativePath = gradleFile.relativeTo(root).invariantSeparatorsPath
                 assertFalse("Parent traversal in ${gradleFile.path}", text.contains("../"))
                 assertFalse("Parent traversal in ${gradleFile.path}", text.contains("..\\"))
                 assertFalse("Parent traversal in ${gradleFile.path}", text.contains("parentFile"))
+                text.lineSequence()
+                    .filter { line -> Regex("\\b(from|file|files|includeBuild)\\s*\\(").containsMatchIn(line) }
+                    .forEach { line ->
+                        assertTrue(
+                            "Unapproved local Gradle input in $relativePath: ${line.trim()}",
+                            isApprovedLocalInput(relativePath, line.trim())
+                        )
+                    }
             }
+    }
+
+    private fun isApprovedLocalInput(relativePath: String, line: String): Boolean = when (relativePath) {
+        "settings.gradle" -> line == "includeBuild(\"build-logic\")"
+        "app/build.gradle" ->
+            line == "def starterAssetsDir = file(\"\$buildDir/generated/starter-assets\")" ||
+                line == "from(\"\$rootDir/starter-content\") {" ||
+                line == "implementation files("
+        else -> false
     }
 
     private fun androidRoot(): File {

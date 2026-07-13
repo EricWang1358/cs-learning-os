@@ -112,12 +112,29 @@ implementation project(":feature:assistant:impl")
 implementation project(":adapter:model-openai")
 '@
 
-    Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" 'implementation(project(path = ":domain:assistant"))'
+    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" @'
+def externalDir = rootDir.toPath().resolveSibling("private-content").toFile()
+from(externalDir)
+implementation project(":domain:assistant")
+implementation project(":feature:assistant:api")
+implementation project(":feature:assistant:impl")
+implementation project(":adapter:model-openai")
+'@
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "indirect parent build input"
+    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" @'
+from("$rootDir/starter-content")
+implementation project(":domain:assistant")
+implementation project(":feature:assistant:api")
+implementation project(":feature:assistant:impl")
+implementation project(":adapter:model-openai")
+'@
+
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" "implementation project(path: ':domain:assistant')"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "reverse kernel dependency"
     Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" "dependencies {}"
 
-    Set-FixtureFile $fixtureRoot "android-app/core/kernel/src/main/kotlin/example/Kernel.kt" "package example`nimport android.content.Context"
-    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "forbidden kernel import"
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/src/main/kotlin/example/Kernel.kt" "package example`nval type = android.content.Context::class"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "forbidden fully-qualified kernel reference"
     Remove-Item -Force (Join-Path $fixtureRoot "android-app/core/kernel/src/main/kotlin/example/Kernel.kt")
 
     Set-FixtureFile $fixtureRoot "android-app/feature/assistant/impl/build.gradle" "dependencies {}"
