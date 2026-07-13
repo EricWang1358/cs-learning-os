@@ -77,4 +77,24 @@ class MarkdownRendererTableTest {
 
         composeRule.onNodeWithContentDescription("Expand table").assertExists()
     }
+
+    @Test
+    fun fourRowTwoColumnTable_doesNotOfferFullScreenView() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkdownRenderer(
+                    markdown = """
+                        | One | Two |
+                        | --- | --- |
+                        | A | 1 |
+                        | B | 2 |
+                        | C | 3 |
+                        | D | 4 |
+                    """.trimIndent()
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Expand table").assertDoesNotExist()
+    }
 }
