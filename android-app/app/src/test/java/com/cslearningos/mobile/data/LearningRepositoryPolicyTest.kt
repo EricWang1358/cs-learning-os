@@ -1,5 +1,6 @@
 package com.cslearningos.mobile.data
 
+import com.cslearningos.mobile.content.application.ContentCommandPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
@@ -31,120 +32,6 @@ class LearningRepositoryPolicyTest {
         assertEquals(7L, updated.revision)
         assertEquals(SyncStatus.clean, updated.syncStatus)
         assertNull(updated.deletedAt)
-    }
-
-    @Test
-    fun explicitMissingAreaCannotBeRecreatedWhileSavingANode() = runTest {
-        val repository = LearningRepository(FakeLearningDao())
-
-        val result = runCatching {
-            repository.saveNode(
-                id = null,
-                title = "Area race",
-                markdownBody = "# Area race",
-                areaId = "deleted-area"
-            )
-        }
-
-        assertTrue(result.isFailure)
-    }
-
-    @Test
-    fun savingMissingExplicitNodeIdFailsWithoutCreatingNode() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-
-        val failure = runCatching {
-            repository.saveNode(
-                id = "missing-node",
-                expectedRevision = null,
-                title = "Must not create",
-                markdownBody = "# Must not create",
-                now = 2_000L
-            )
-        }.exceptionOrNull()
-
-        assertTrue(failure is IllegalArgumentException)
-        assertTrue(dao.nodes.isEmpty())
-    }
-
-    @Test
-    fun savingNodeWithStaleExpectedRevisionFailsWithoutChangingNode() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-        val original = LearningNodeEntity(
-            id = "node-1",
-            title = "Original node",
-            markdownBody = "# Original node",
-            createdAt = 1_000L,
-            updatedAt = 1_000L,
-            lastReadAt = null,
-            revision = 4L,
-            syncStatus = SyncStatus.clean,
-            deletedAt = null,
-            area = "systems",
-            areaId = "systems",
-            track = "memory"
-        )
-        dao.areas["systems"] = AreaEntity(
-            id = "systems",
-            slug = "systems",
-            name = "Systems",
-            order = 20,
-            createdAt = 1_000L,
-            updatedAt = 1_000L,
-            deletedAt = null
-        )
-        dao.nodes[original.id] = original
-
-        val failure = runCatching {
-            repository.saveNode(
-                id = original.id,
-                expectedRevision = 3L,
-                title = "Updated node",
-                markdownBody = "# Updated node",
-                now = 2_000L
-            )
-        }.exceptionOrNull()
-
-        assertTrue(failure is IllegalStateException)
-        assertEquals(original, dao.nodes.getValue(original.id))
-    }
-
-    @Test
-    fun savingTombstonedExplicitNodeFailsAndLeavesNodeTombstoned() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-        val original = LearningNodeEntity(
-            id = "node-1",
-            title = "Deleted node",
-            markdownBody = "# Deleted node",
-            createdAt = 1_000L,
-            updatedAt = 1_500L,
-            lastReadAt = null,
-            revision = 4L,
-            syncStatus = SyncStatus.deleted,
-            deletedAt = 1_500L,
-            area = "systems",
-            areaId = "systems",
-            track = "memory"
-        )
-        dao.nodes[original.id] = original
-
-        val failure = runCatching {
-            repository.saveNode(
-                id = original.id,
-                expectedRevision = original.revision,
-                title = "Resurrected node",
-                markdownBody = "# Resurrected node",
-                now = 2_000L
-            )
-        }.exceptionOrNull()
-
-        assertTrue(failure is IllegalStateException)
-        assertEquals(original, dao.nodes.getValue(original.id))
-        assertEquals(1_500L, dao.nodes.getValue(original.id).deletedAt)
-        assertEquals(SyncStatus.deleted, dao.nodes.getValue(original.id).syncStatus)
     }
 
     @Test
@@ -217,115 +104,9 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
-    fun saveNodeTombstonesMarkdownQuizWhenSourceBlockIsRemoved() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-        val original = repository.saveNode(
-            id = null,
-            title = "Binary search",
-            markdownBody = """
-                # Binary search
-
-                :::quiz id=mid-overflow
-                question: Why avoid `(l + r) / 2`?
-                answer: It can overflow before division.
-                :::
-            """.trimIndent(),
-            now = 1_000L
-        )
-
-        repository.saveNode(
-            id = original.id,
-            title = original.title,
-            markdownBody = "# Binary search\n\nUse `l + (r - l) / 2`.",
-            now = 2_000L
-        )
-
-        val quiz = dao.quizzes.getValue("${original.id}:mid-overflow")
-        assertEquals(2_000L, quiz.deletedAt)
-        assertEquals(SyncStatus.deleted, quiz.syncStatus)
-        assertTrue(dao.getActiveQuizzesForNode(original.id).isEmpty())
-        assertTrue("Removed markdown quiz should leave the FTS index", dao.deletedQuizFtsIds.contains(quiz.id))
-    }
-
-    @Test
-    fun saveNodeSyncsCollapsedAssistantQuizIntoReviewState() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-        dao.areas["systems"] = AreaEntity(
-            id = "systems",
-            slug = "systems",
-            name = "Systems",
-            order = 1,
-            createdAt = 1_000L,
-            updatedAt = 1_000L,
-            deletedAt = null
-        )
-
-        val node = repository.saveNode(
-            id = null,
-            title = "Assistant quiz sync",
-            markdownBody = """
-                ## Review cards
-
-                :::quizquestion: What creates the Review card? answer: Saving the node syncs Markdown quiz blocks. explanation: The repository creates both quiz_items and review_states.
-                :::
-            """.trimIndent(),
-            areaId = "systems",
-            now = 1_000L
-        )
-
-        val quiz = dao.getActiveQuizzesForNode(node.id).single()
-        assertEquals("What creates the Review card?", quiz.prompt)
-        assertEquals("Saving the node syncs Markdown quiz blocks.", quiz.answer)
-        assertEquals("systems", quiz.area)
-        assertEquals(1_000L, dao.reviewStates.getValue(quiz.id).dueAt)
-    }
-
-    @Test
-    fun anonymousMarkdownQuizRemovalDoesNotMoveReviewIdentityToAnotherCard() = runTest {
-        val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
-        val original = repository.saveNode(
-            id = null,
-            title = "Anonymous cards",
-            markdownBody = """
-                :::quiz
-                question: First card?
-                answer: First answer.
-                :::
-
-                :::quiz
-                question: Second card?
-                answer: Second answer.
-                :::
-            """.trimIndent(),
-            now = 1_000L
-        )
-        val firstId = dao.quizzes.values.single { it.prompt == "First card?" }.id
-        val secondId = dao.quizzes.values.single { it.prompt == "Second card?" }.id
-
-        repository.saveNode(
-            id = original.id,
-            title = original.title,
-            markdownBody = """
-                :::quiz
-                question: Second card?
-                answer: Second answer.
-                :::
-            """.trimIndent(),
-            now = 2_000L
-        )
-
-        assertEquals(2_000L, dao.quizzes.getValue(firstId).deletedAt)
-        assertNull(dao.quizzes.getValue(secondId).deletedAt)
-        assertEquals("Second card?", dao.quizzes.getValue(secondId).prompt)
-    }
-
-    @Test
     fun seedStarterContentUpsertsNodesQuizzesAndReviewState() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val pack = StarterContentPackage(
             nodes = listOf(
                 LearningNodeEntity(
@@ -379,7 +160,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun convertedCaptureSlipLinksToSavedNodeAndLeavesInbox() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val slip = CaptureSlipEntity(
             id = "slip-1",
             body = "What is a page fault?",
@@ -408,7 +189,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun archiveRestoreAndPermanentDeleteCaptureSlipFollowVisibleArchiveLifecycle() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val slip = CaptureSlipEntity(
             id = "slip-1",
             body = "What is a page fault?",
@@ -451,7 +232,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun permanentDeleteCaptureSlipRequiresArchivedStatus() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val slip = CaptureSlipEntity(
             id = "slip-1",
             body = "Keep me visible until explicitly archived",
@@ -479,7 +260,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingExistingCaptureSlipPreservesWorkflowMetadataAndAdvancesRevision() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val original = CaptureSlipEntity(
             id = "slip-1",
             body = "Original capture",
@@ -522,7 +303,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingMissingExplicitCaptureSlipIdFailsWithoutCreatingASlip() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
 
         val failure = runCatching {
             repository.saveCaptureSlip(
@@ -542,7 +323,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingCaptureSlipWithStaleExpectedRevisionFailsWithoutChangingSlip() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val original = CaptureSlipEntity(
             id = "slip-1",
             body = "Original capture",
@@ -578,7 +359,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingTombstonedExplicitCaptureSlipFailsAndLeavesSlipUnchanged() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val original = CaptureSlipEntity(
             id = "slip-1",
             body = "Deleted capture",
@@ -614,7 +395,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingExistingQuizForItsOriginalNodePreservesThatNodesAreaAndTrack() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.nodes["node-b"] = LearningNodeEntity(
             id = "node-b",
             title = "Node B",
@@ -662,7 +443,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingStandaloneQuizWithExplicitAreaAddsItToThatReviewAreaAndCreatesDueState() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.areas["systems"] = AreaEntity(
             id = "systems",
             slug = "systems",
@@ -691,7 +472,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingStandaloneQuizWithMissingExplicitAreaFailsWithoutCreatingQuiz() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
 
         val failure = runCatching {
             repository.saveManualQuiz(
@@ -712,7 +493,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingMissingExplicitQuizIdFailsWithoutCreatingQuiz() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
 
         val failure = runCatching {
             repository.saveManualQuiz(
@@ -733,7 +514,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingQuizWithStaleExpectedRevisionPreservesReviewStateAndQuiz() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val original = QuizItemEntity(
             id = "quiz-1",
             nodeId = "node-1",
@@ -782,7 +563,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun savingTombstonedExplicitQuizFailsAndPreservesReviewStateAndQuiz() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val original = QuizItemEntity(
             id = "quiz-1",
             nodeId = "node-1",
@@ -831,7 +612,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun compatibilityFacadeAnswerQuizStillSchedulesReviewProgress() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.reviewStates["quiz-1"] = ReviewStateEntity(
             quizId = "quiz-1",
             ease = 2.5,
@@ -856,7 +637,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun moveRestoreAndPermanentDeleteNodeFollowTrashbinLifecycle() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         val node = LearningNodeEntity(
             id = "node-1",
             title = "Virtual Memory",
@@ -930,7 +711,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun createRenameMoveCheckAndDeleteEmptyAreaFollowFolderRules() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.areas["systems"] = AreaEntity(
             id = "systems",
             slug = "systems",
@@ -980,7 +761,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun restoreNodeFromTrashRevivesDeletedAreaInsteadOfLeavingNodeOrphaned() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.areas["systems"] = AreaEntity(
             id = "systems",
             slug = "systems",
@@ -1018,7 +799,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun deleteAreaIfEmptyTreatsTrashNodesAsStillOccupyingThatArea() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.areas["systems"] = AreaEntity(
             id = "systems",
             slug = "systems",
@@ -1056,7 +837,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun clearStarterContentDeletesOnlyStarterRecords() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.nodes["starter"] = LearningNodeEntity(
             id = "starter",
             title = "Starter",
@@ -1114,7 +895,7 @@ class LearningRepositoryPolicyTest {
     @Test
     fun readableMarkdownExportIncludesActiveLearningArtifacts() = runTest {
         val dao = FakeLearningDao()
-        val repository = LearningRepository(dao)
+        val repository = repository(dao)
         dao.areas["cs-fundamentals"] = AreaEntity(
             id = "cs-fundamentals",
             slug = "cs-fundamentals",
@@ -1192,6 +973,11 @@ class LearningRepositoryPolicyTest {
         assertTrue(exported.contains("Virtual pages to physical frames."))
     }
 }
+
+private fun repository(dao: LearningDao): LearningRepository = LearningRepository(
+    dao = dao,
+    contentCommands = ContentCommandPort { error("Node saves are outside this repository policy test.") }
+)
 
 private class FakeLearningDao : LearningDao {
     val areas = linkedMapOf<String, AreaEntity>()

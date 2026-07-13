@@ -17,6 +17,7 @@ import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentImporter
+import com.cslearningos.mobile.content.room.RoomContentCommandAdapter
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.backup.data.LearningRepositoryBackupRepository
@@ -51,8 +52,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = LearningDatabase.create(application)
     private val repository = LearningRepository(
-        LearningDatabase.create(application).learningDao()
+        database = database,
+        contentCommands = RoomContentCommandAdapter(database)
     )
     private val _state = MutableStateFlow(LearningUiState())
     private val dueReviewNow = MutableStateFlow(System.currentTimeMillis())
@@ -268,34 +271,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startNewNode(areaId: String? = state.value.selectedLibraryAreaId) {
-        _state.update {
-            it.copy(
-                screen = AppScreen.Editor,
-                editorAreaId = areaId,
-                editorNodeId = null,
-                editorExpectedRevision = null,
-                editorSourceCaptureSlipId = null,
-                editorTitle = "",
-                editorBody = "",
-                message = null
-            )
-        }
+        _state.update { it.forNewNodeEditor(areaId) }
     }
 
     fun editNode(node: LearningNodeEntity) {
-        _state.update {
-            it.copy(
-                screen = AppScreen.Editor,
-                selectedNode = node,
-                editorAreaId = node.areaId,
-                editorNodeId = node.id,
-                editorExpectedRevision = node.revision,
-                editorSourceCaptureSlipId = null,
-                editorTitle = node.title,
-                editorBody = node.markdownBody,
-                message = null
-            )
-        }
+        _state.update { it.forExistingNodeEditor(node) }
     }
 
     fun openNode(node: LearningNodeEntity) {
@@ -324,15 +304,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setEditorTitle(value: String) {
-        _state.update { it.copy(editorTitle = value) }
+        _state.update { it.withEditorTitle(value) }
     }
 
     fun setEditorBody(value: String) {
-        _state.update { it.copy(editorBody = value) }
+        _state.update { it.withEditorBody(value) }
     }
 
     fun setEditorAreaId(value: String) {
-        _state.update { it.copy(editorAreaId = value) }
+        _state.update { it.withEditorAreaId(value) }
     }
 
     fun saveNode() {
@@ -345,9 +325,11 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _state.update { it.copy(message = uiText(R.string.message_choose_area_before_save)) }
             return
         }
+        _state.update { it.withPendingNodeSave() }
+        val commandSnapshot = state.value
         viewModelScope.launch {
             runCatching {
-                repository.saveNodeFromEditor(snapshot)
+                repository.saveNodeFromEditor(commandSnapshot)
             }.onSuccess { node ->
                 snapshot.editorSourceCaptureSlipId?.let { slipId ->
                     repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
@@ -361,13 +343,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun cancelEditor() {
-        _state.update {
-            it.copy(
-                screen = if (it.selectedNode == null) AppScreen.Home else AppScreen.Reader,
-                editorAreaId = null,
-                message = null
-            )
-        }
+        _state.update(LearningUiState::cancelNodeEditor)
     }
 
     fun reviseEditorDraftWithAssistant() {
@@ -396,6 +372,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     editorSourceCaptureSlipId = null,
                     editorTitle = "",
                     editorBody = "",
+                    pendingNodeSave = null,
                     message = uiText(R.string.message_node_moved_to_trashbin)
                 )
             }

@@ -1,21 +1,26 @@
 package com.cslearningos.mobile.feature.library.data
 
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
+import com.cslearningos.mobile.content.application.ContentCommandFailure
+import com.cslearningos.mobile.content.application.ContentCommandPort
+import com.cslearningos.mobile.content.application.ContentCommandResult
+import com.cslearningos.mobile.content.application.NodeSaveMode
+import com.cslearningos.mobile.content.application.SaveNodeCommand
+import com.cslearningos.mobile.content.domain.NodeId
+import com.cslearningos.mobile.content.room.NodeRoomMapper
+import com.cslearningos.mobile.core.kernel.CommandId
+import com.cslearningos.mobile.core.kernel.EntityRevision
 import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.NodeFtsEntity
 import com.cslearningos.mobile.data.QuizFtsEntity
 import com.cslearningos.mobile.data.QuizItemEntity
-import com.cslearningos.mobile.data.QuizSource
 import com.cslearningos.mobile.data.ReaderQuestionEntity
-import com.cslearningos.mobile.data.ReviewResult
-import com.cslearningos.mobile.data.ReviewStateEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentPackage
 import com.cslearningos.mobile.data.SyncStatus
 import com.cslearningos.mobile.data.withReadTrace
-import com.cslearningos.mobile.content.domain.MarkdownQuizParser
 import kotlinx.coroutines.flow.Flow
 import java.text.Normalizer
 import java.util.UUID
@@ -28,7 +33,8 @@ import kotlin.math.absoluteValue
  * repository split is still in progress.
  */
 class LibraryRepository(
-    private val dao: LearningDao
+    private val dao: LearningDao,
+    private val contentCommands: ContentCommandPort
 ) {
     val areas: Flow<List<AreaEntity>> = dao.observeAreas()
     val nodes: Flow<List<LearningNodeEntity>> = dao.observeNodes()
@@ -45,44 +51,29 @@ class LibraryRepository(
         now: Long = System.currentTimeMillis()
     ): LearningNodeEntity {
         val existing = id?.let { nodeId ->
-            dao.getNode(nodeId)
-                ?: throw IllegalArgumentException("Node $nodeId does not exist.")
+            dao.getNode(nodeId) ?: throw IllegalArgumentException("Node is no longer available.")
         }
-        existing?.let { node ->
-            check(node.deletedAt == null) { "Node ${node.id} has been deleted." }
-            check(expectedRevision == null || node.revision == expectedRevision) { "Node ${node.id} changed before save." }
-        }
-        val resolvedArea = if (areaId != null) {
-            dao.getArea(areaId) ?: throw IllegalArgumentException("Selected Area is no longer available.")
-        } else {
-            resolveArea(existing?.areaId ?: existing?.area ?: DefaultAreaSlug, now)
-        }
-        val node = LearningNodeEntity(
-            id = existing?.id ?: UUID.randomUUID().toString(),
-            title = title.ifBlank { UntitledNodeTitle },
-            markdownBody = markdownBody,
-            createdAt = existing?.createdAt ?: now,
-            updatedAt = now,
-            lastReadAt = existing?.lastReadAt,
-            revision = (existing?.revision ?: 0L) + RevisionStep,
-            syncStatus = SyncStatus.dirty,
-            deletedAt = null,
-            area = resolvedArea.slug,
-            areaId = resolvedArea.id,
-            track = existing?.track ?: DefaultTrack,
-            order = existing?.order ?: DefaultNodeOrder,
-            summary = existing?.summary ?: markdownBody.lineSequence()
-                .firstOrNull { it.isNotBlank() && !it.trim().startsWith("#") }
-                ?.trim()
-                .orEmpty(),
-            visibility = existing?.visibility ?: SupportVisibility,
-            isStarter = existing?.isStarter ?: false,
-            isChecked = existing?.isChecked ?: false
+        val resolvedAreaId = areaId ?: existing?.areaId ?: resolveArea(DefaultAreaSlug, now).id
+        return saveNode(
+            SaveNodeCommand(
+                commandId = CommandId(UUID.randomUUID().toString()),
+                nodeId = NodeId(existing?.id ?: UUID.randomUUID().toString()),
+                mode = if (existing == null) NodeSaveMode.Create else NodeSaveMode.Update,
+                expectedRevision = (expectedRevision ?: existing?.revision)?.let(::EntityRevision),
+                areaId = resolvedAreaId,
+                title = title,
+                markdownBody = markdownBody,
+                occurredAt = now
+            )
         )
-        dao.upsertNode(node)
-        indexNode(node)
-        syncMarkdownQuizzes(node, now)
-        return node
+    }
+
+    suspend fun saveNode(command: SaveNodeCommand): LearningNodeEntity = when (val result = contentCommands.saveNode(command)) {
+        is ContentCommandResult.Success -> NodeRoomMapper.toEntity(
+            node = result.node,
+            existing = dao.getNode(result.node.id.value)
+        )
+        is ContentCommandResult.Failure -> throw compatibilitySaveFailure(result.failure)
     }
 
     suspend fun markRead(nodeId: String, now: Long = System.currentTimeMillis()) {
@@ -299,53 +290,6 @@ class LibraryRepository(
         return dao.searchNodes(query) + dao.searchQuizzes(query)
     }
 
-    private suspend fun syncMarkdownQuizzes(node: LearningNodeEntity, now: Long) {
-        val parsedCards = MarkdownQuizParser.parse(node.markdownBody)
-        val activeAnchors = parsedCards.mapTo(mutableSetOf()) { it.sourceAnchor }
-
-        dao.getActiveQuizzesForNode(node.id)
-            .filter { it.source == QuizSource.markdown && it.sourceAnchor !in activeAnchors }
-            .forEach { removed ->
-                dao.upsertQuiz(
-                    removed.copy(
-                        updatedAt = now,
-                        revision = removed.revision + RevisionStep,
-                        syncStatus = SyncStatus.deleted,
-                        deletedAt = now
-                    )
-                )
-                dao.deleteQuizFts(removed.id)
-            }
-
-        parsedCards.forEach { parsed ->
-            val id = "${node.id}:${parsed.sourceAnchor}"
-            val existing = dao.getQuiz(id)
-            val quiz = QuizItemEntity(
-                id = id,
-                nodeId = node.id,
-                prompt = parsed.prompt,
-                answer = parsed.answer,
-                explanation = parsed.explanation,
-                source = QuizSource.markdown,
-                sourceAnchor = parsed.sourceAnchor,
-                createdAt = existing?.createdAt ?: now,
-                updatedAt = now,
-                revision = (existing?.revision ?: 0L) + RevisionStep,
-                syncStatus = SyncStatus.dirty,
-                deletedAt = null,
-                area = node.area,
-                track = node.track,
-                visibility = PracticeVisibility,
-                isStarter = node.isStarter
-            )
-            dao.upsertQuiz(quiz)
-            if (existing == null) {
-                dao.upsertReviewState(defaultReviewState(quiz.id, now))
-            }
-            indexQuiz(quiz)
-        }
-    }
-
     private suspend fun indexNode(node: LearningNodeEntity) {
         dao.deleteNodeFts(node.id)
         if (node.deletedAt == null && node.visibility != TrashVisibility) {
@@ -379,18 +323,16 @@ class LibraryRepository(
         dao.deleteReviewAttemptsForQuiz(quizId)
     }
 
-    private fun defaultReviewState(quizId: String, now: Long): ReviewStateEntity =
-        ReviewStateEntity(
-            quizId = quizId,
-            ease = DefaultReviewEase,
-            intervalDays = InitialIntervalDays,
-            dueAt = now,
-            lastResult = ReviewResult.again,
-            attemptCount = InitialAttemptCount,
-            updatedAt = now
-        )
-
     private fun stableRowId(id: String): Int = id.hashCode().absoluteValue.coerceAtLeast(MinimumStableRowId)
+
+    private fun compatibilitySaveFailure(failure: ContentCommandFailure): RuntimeException = when (failure) {
+        is ContentCommandFailure.Validation,
+        is ContentCommandFailure.Missing -> IllegalArgumentException("Node save was rejected.")
+        ContentCommandFailure.Deleted,
+        is ContentCommandFailure.StaleRevision,
+        ContentCommandFailure.CommandReuseConflict,
+        is ContentCommandFailure.Storage -> IllegalStateException("Node save could not be completed.")
+    }
 
     private suspend fun resolveArea(areaIdOrSlug: String, now: Long): AreaEntity =
         dao.getArea(areaIdOrSlug)
@@ -451,11 +393,6 @@ class LibraryRepository(
     private companion object {
         const val CoreVisibility = "core"
         const val DefaultAreaSlug = "questions"
-        const val DefaultNodeOrder = 1_000
-        const val DefaultReviewEase = 2.5
-        const val DefaultTrack = "general"
-        const val InitialAttemptCount = 0
-        const val InitialIntervalDays = 0
         const val InitialSlugSuffix = 2
         const val MinimumStableRowId = 1
         const val NewAreaName = "New Area"
@@ -463,6 +400,5 @@ class LibraryRepository(
         const val RevisionStep = 1L
         const val SupportVisibility = "support"
         const val TrashVisibility = "trash"
-        const val UntitledNodeTitle = "Untitled"
     }
 }

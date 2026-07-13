@@ -1,6 +1,10 @@
 package com.cslearningos.mobile.data
 
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
+import com.cslearningos.mobile.content.application.ContentCommandFailure
+import com.cslearningos.mobile.content.application.ContentCommandPort
+import com.cslearningos.mobile.content.application.ContentCommandResult
+import com.cslearningos.mobile.content.application.SaveNodeCommand
 import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.capture.data.CaptureRepository
 import com.cslearningos.mobile.feature.assistant.data.AssistantConversationRepository
@@ -18,9 +22,16 @@ class LearningRepository private constructor(
     private val reviewRepository: ReviewRepository,
     private val assistantConversationRepository: AssistantConversationRepository
 ) {
-    constructor(dao: LearningDao) : this(
+    constructor(database: LearningDatabase, contentCommands: ContentCommandPort) : this(
+        dao = database.learningDao(),
+        contentCommands = contentCommands
+    )
+
+    constructor(dao: LearningDao) : this(dao, unsupportedContentCommands)
+
+    constructor(dao: LearningDao, contentCommands: ContentCommandPort) : this(
         dao = dao,
-        libraryRepository = LibraryRepository(dao),
+        libraryRepository = LibraryRepository(dao, contentCommands),
         captureRepository = CaptureRepository(dao),
         reviewRepository = ReviewRepository(dao),
         assistantConversationRepository = AssistantConversationRepository(dao)
@@ -57,6 +68,8 @@ class LearningRepository private constructor(
         areaId = areaId,
         now = now
     )
+
+    suspend fun saveNode(command: SaveNodeCommand): LearningNodeEntity = libraryRepository.saveNode(command)
 
     suspend fun markRead(nodeId: String, now: Long = System.currentTimeMillis()) {
         libraryRepository.markRead(nodeId = nodeId, now = now)
@@ -383,5 +396,9 @@ class LearningRepository private constructor(
         const val BackupRestoreTimestamp = 0L
         const val MinimumStableRowId = 1
         const val TrashVisibility = "trash"
+
+        val unsupportedContentCommands = ContentCommandPort {
+            ContentCommandResult.Failure(ContentCommandFailure.Storage("content.command.unavailable"))
+        }
     }
 }
