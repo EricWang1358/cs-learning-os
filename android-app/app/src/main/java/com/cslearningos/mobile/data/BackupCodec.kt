@@ -2,9 +2,17 @@ package com.cslearningos.mobile.data
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.ArrayDeque
 
 object BackupCodec {
     const val SchemaVersion = 1
+    const val MaxRecordsPerCollection = 2_000
+    const val MaxMarkdownBodyCharacters = 1_000_000
+    const val MaxContentStringCharacters = 100_000
+    const val MaxMetadataStringCharacters = 4_096
+
+    /** Bounds raw JSON before org.json allocates a deeply nested object graph. */
+    const val MaxJsonNesting = 64
 
     fun encode(backup: LearningBackup): String =
         JSONObject()
@@ -20,24 +28,40 @@ object BackupCodec {
             .toString(2)
 
     fun decode(rawJson: String): LearningBackup {
+        validateRawJsonStructure(rawJson)
         val root = JSONObject(rawJson)
         val schemaVersion = root.getInt("schemaVersion")
         require(schemaVersion == SchemaVersion) {
             "Unsupported backup schema version: $schemaVersion"
         }
-        val nodes = root.getJSONArray("nodes").mapObjects { it.toNode() }
-        val areas = root.optJSONArray("areas")?.mapObjects { it.toArea() }.orEmpty()
+        val nodesJson = root.requiredArray("nodes").also { it.validateNodeStrings() }
+        val areasJson = root.optionalArray("areas")
+        val quizzesJson = root.requiredArray("quizzes")
+        val reviewStatesJson = root.requiredArray("reviewStates")
+        val attemptsJson = root.requiredArray("attempts")
+        val readerQuestionsJson = root.optionalArray("readerQuestions")
+        val captureSlipsJson = root.optionalArray("captureSlips")
+
+        areasJson?.validateAreaStrings()
+        quizzesJson.validateQuizStrings()
+        reviewStatesJson.validateReviewStateStrings()
+        attemptsJson.validateAttemptStrings()
+        readerQuestionsJson?.validateReaderQuestionStrings()
+        captureSlipsJson?.validateCaptureSlipStrings()
+
+        val nodes = nodesJson.mapObjects { it.toNode() }
+        val areas = areasJson?.mapObjects { it.toArea() }.orEmpty()
         val inferredAreas = if (areas.isEmpty()) inferAreasFromNodes(nodes) else areas
         return LearningBackup(
             schemaVersion = schemaVersion,
             exportedAt = root.getLong("exportedAt"),
             areas = inferredAreas,
             nodes = nodes,
-            quizzes = root.getJSONArray("quizzes").mapObjects { it.toQuiz() },
-            reviewStates = root.getJSONArray("reviewStates").mapObjects { it.toReviewState() },
-            attempts = root.getJSONArray("attempts").mapObjects { it.toAttempt() },
-            readerQuestions = root.optJSONArray("readerQuestions")?.mapObjects { it.toReaderQuestion() }.orEmpty(),
-            captureSlips = root.optJSONArray("captureSlips")?.mapObjects { it.toCaptureSlip() }.orEmpty()
+            quizzes = quizzesJson.mapObjects { it.toQuiz() },
+            reviewStates = reviewStatesJson.mapObjects { it.toReviewState() },
+            attempts = attemptsJson.mapObjects { it.toAttempt() },
+            readerQuestions = readerQuestionsJson?.mapObjects { it.toReaderQuestion() }.orEmpty(),
+            captureSlips = captureSlipsJson?.mapObjects { it.toCaptureSlip() }.orEmpty()
         )
     }
 
@@ -148,7 +172,7 @@ object BackupCodec {
         LearningNodeEntity(
             id = getString("id"),
             title = getString("title"),
-            markdownBody = getString("markdownBody"),
+            markdownBody = getString("markdownBody").also(::validateMarkdownBody),
             createdAt = getLong("createdAt"),
             updatedAt = getLong("updatedAt"),
             lastReadAt = nullableLong("lastReadAt"),
@@ -234,6 +258,145 @@ object BackupCodec {
 
     private fun JSONObject.nullableLong(name: String): Long? =
         if (isNull(name)) null else getLong(name)
+
+    private fun JSONObject.requiredArray(name: String): JSONArray =
+        getJSONArray(name).also { it.validateRecordCount(name) }
+
+    private fun JSONObject.optionalArray(name: String): JSONArray? =
+        optJSONArray(name)?.also { it.validateRecordCount(name) }
+
+    private fun JSONArray.validateRecordCount(name: String) {
+        require(length() <= MaxRecordsPerCollection) {
+            "Backup $name collection exceeds $MaxRecordsPerCollection records."
+        }
+    }
+
+    private fun JSONArray.validateNodeStrings() = validateObjects { node ->
+        node.validateRequiredString("id")
+        node.validateRequiredString("title")
+        node.validateRequiredString("markdownBody", MaxMarkdownBodyCharacters)
+        node.validateOptionalString("area")
+        node.validateOptionalString("areaId")
+        node.validateOptionalString("track")
+        node.validateOptionalString("summary", MaxContentStringCharacters)
+        node.validateOptionalString("visibility")
+        node.validateRequiredString("syncStatus")
+    }
+
+    private fun JSONArray.validateAreaStrings() = validateObjects { area ->
+        area.validateRequiredString("id")
+        area.validateOptionalString("slug")
+        area.validateOptionalString("name")
+    }
+
+    private fun JSONArray.validateQuizStrings() = validateObjects { quiz ->
+        quiz.validateRequiredString("id")
+        quiz.validateNullableString("nodeId")
+        quiz.validateRequiredString("prompt", MaxContentStringCharacters)
+        quiz.validateRequiredString("answer", MaxContentStringCharacters)
+        quiz.validateRequiredString("explanation", MaxContentStringCharacters)
+        quiz.validateRequiredString("source")
+        quiz.validateNullableString("sourceAnchor")
+        quiz.validateRequiredString("syncStatus")
+        quiz.validateOptionalString("area")
+        quiz.validateOptionalString("track")
+        quiz.validateOptionalString("visibility")
+    }
+
+    private fun JSONArray.validateReviewStateStrings() = validateObjects { state ->
+        state.validateRequiredString("quizId")
+        state.validateRequiredString("lastResult")
+    }
+
+    private fun JSONArray.validateAttemptStrings() = validateObjects { attempt ->
+        attempt.validateRequiredString("id")
+        attempt.validateRequiredString("quizId")
+        attempt.validateRequiredString("result")
+    }
+
+    private fun JSONArray.validateReaderQuestionStrings() = validateObjects { question ->
+        question.validateRequiredString("id")
+        question.validateRequiredString("nodeId")
+        question.validateRequiredString("body", MaxContentStringCharacters)
+        question.validateRequiredString("syncStatus")
+    }
+
+    private fun JSONArray.validateCaptureSlipStrings() = validateObjects { slip ->
+        slip.validateRequiredString("id")
+        slip.validateRequiredString("body", MaxContentStringCharacters)
+        slip.validateRequiredString("type")
+        slip.validateNullableString("topicHint", MaxContentStringCharacters)
+        slip.validateNullableString("sourceLabel")
+        slip.validateNullableString("linkedNodeId")
+        slip.validateRequiredString("status")
+        slip.validateRequiredString("syncStatus")
+    }
+
+    private fun JSONArray.validateObjects(validator: (JSONObject) -> Unit) {
+        for (index in 0 until length()) {
+            validator(getJSONObject(index))
+        }
+    }
+
+    private fun JSONObject.validateRequiredString(name: String, limit: Int = MaxMetadataStringCharacters) {
+        validateStringLength(name, getString(name), limit)
+    }
+
+    private fun JSONObject.validateOptionalString(name: String, limit: Int = MaxMetadataStringCharacters) {
+        if (has(name) && !isNull(name)) validateStringLength(name, getString(name), limit)
+    }
+
+    private fun JSONObject.validateNullableString(name: String, limit: Int = MaxMetadataStringCharacters) {
+        if (!isNull(name)) validateStringLength(name, getString(name), limit)
+    }
+
+    private fun validateStringLength(name: String, value: String, limit: Int) {
+        require(value.length <= limit) {
+            "Backup $name exceeds $limit characters."
+        }
+    }
+
+    private fun validateMarkdownBody(markdownBody: String) {
+        validateStringLength("markdownBody", markdownBody, MaxMarkdownBodyCharacters)
+    }
+
+    private fun validateRawJsonStructure(rawJson: String) {
+        val openings = ArrayDeque<Char>()
+        var inString = false
+        var escaping = false
+
+        rawJson.forEach { character ->
+            if (inString) {
+                when {
+                    escaping -> escaping = false
+                    character == '\\' -> escaping = true
+                    character == '"' -> inString = false
+                }
+            } else {
+                when (character) {
+                    '"' -> inString = true
+                    '{', '[' -> {
+                        openings.addLast(character)
+                        require(openings.size <= MaxJsonNesting) {
+                            "Backup JSON nesting exceeds $MaxJsonNesting levels."
+                        }
+                    }
+
+                    '}', ']' -> {
+                        require(openings.isNotEmpty() && matches(openings.removeLast(), character)) {
+                            "Backup JSON contains an unmatched closure."
+                        }
+                    }
+                }
+            }
+        }
+
+        require(!inString) { "Backup JSON contains an unterminated string." }
+        require(openings.isEmpty()) { "Backup JSON contains unmatched openings." }
+    }
+
+    private fun matches(opening: Char, closing: Char): Boolean =
+        (opening == '{' && closing == '}') || (opening == '[' && closing == ']')
 
     private fun JSONObject.nullableString(name: String): String? =
         if (isNull(name)) null else getString(name)

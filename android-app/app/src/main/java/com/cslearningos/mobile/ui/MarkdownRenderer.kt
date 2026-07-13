@@ -63,6 +63,7 @@ import com.cslearningos.mobile.ui.markdown.MarkdownTableBlock
 import com.cslearningos.mobile.ui.markdown.MarkdownLinkAnnotationTag
 import com.cslearningos.mobile.ui.markdown.QuizAwareMarkdownDocument
 import com.cslearningos.mobile.ui.markdown.buildMarkdownAnnotatedText
+import com.cslearningos.mobile.ui.markdown.isSafeMarkdownDestination
 
 private val CardShape = RoundedCornerShape(16.dp)
 private val BlockShape = RoundedCornerShape(16.dp)
@@ -663,6 +664,7 @@ private fun RichText(
                     end = offset
                 )
                 .firstOrNull()
+                ?.takeIf { isSafeMarkdownDestination(it.item) }
                 ?.let { uriHandler.openUri(it.item) }
         }
     )

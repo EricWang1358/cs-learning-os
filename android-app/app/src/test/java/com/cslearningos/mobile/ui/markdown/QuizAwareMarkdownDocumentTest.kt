@@ -192,4 +192,59 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals(2, tables[0].headers.size)
         assertEquals(3, tables[1].headers.size)
     }
+
+    @Test
+    fun parseOversizedInputAsPlainTextWithoutInvokingTheMarkdownParser() {
+        val markdown = "# ".repeat(500_001)
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseExcessiveNestingAsPlainTextWithoutRecursiveTraversal() {
+        val markdown = "> ".repeat(65) + "deep"
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseExcessiveInlineNestingAsPlainTextWithoutRecursiveTraversal() {
+        val markdown = "*".repeat(129) + "deep" + "*".repeat(129)
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseTabIndentedHundredLevelListAsPlainTextBeforeRecursiveTraversal() {
+        val markdown = buildString {
+            repeat(100) { depth ->
+                append("\t".repeat(depth))
+                append("- level $depth\n")
+            }
+        }.trimEnd()
+
+        assertTrue(StandardMarkdownDocument.requiresPlainTextFallback(markdown))
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
 }

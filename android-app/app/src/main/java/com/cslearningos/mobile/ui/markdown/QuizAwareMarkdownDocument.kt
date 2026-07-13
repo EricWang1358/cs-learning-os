@@ -4,7 +4,13 @@ import com.cslearningos.mobile.markdown.AssistantMarkdownNormalizer
 
 object QuizAwareMarkdownDocument {
     fun parse(markdown: String): List<MarkdownBlock> {
+        if (StandardMarkdownDocument.requiresPlainTextFallback(markdown)) {
+            return StandardMarkdownDocument.plainTextFallback(markdown)
+        }
         val normalizedMarkdown = AssistantMarkdownNormalizer.normalize(markdown)
+        if (StandardMarkdownDocument.requiresPlainTextFallback(normalizedMarkdown)) {
+            return StandardMarkdownDocument.plainTextFallback(normalizedMarkdown)
+        }
         if (normalizedMarkdown.isBlank()) return emptyList()
 
         val blocks = mutableListOf<MarkdownBlock>()
