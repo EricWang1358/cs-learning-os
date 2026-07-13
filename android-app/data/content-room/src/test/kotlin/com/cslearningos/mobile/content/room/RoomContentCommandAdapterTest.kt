@@ -87,6 +87,24 @@ class RoomContentCommandAdapterTest {
     }
 
     @Test
+    fun invalidLegacyDefaultAreaCreateLeavesNoTransactionSideEffects() = runTest {
+        val result = adapter().saveNode(
+            createCommand(
+                areaId = "questions",
+                title = "",
+                markdown = ""
+            )
+        )
+
+        assertFailure(ContentCommandFailure.Validation("content.empty"), result)
+        val dao = database.learningDao()
+        assertNull(dao.getArea("questions"))
+        assertNull(dao.getNode("node-1"))
+        assertNull(dao.getProcessedCommand("command-1"))
+        assertNull(dao.getOutboxForCommand("command-1"))
+    }
+
+    @Test
     fun explicitCreateWithoutAreaRemainsAValidationFailure() = runTest {
         val result = adapter().saveNode(createCommand(areaId = null))
 

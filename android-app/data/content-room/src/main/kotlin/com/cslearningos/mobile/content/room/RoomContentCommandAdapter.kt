@@ -51,13 +51,15 @@ class RoomContentCommandAdapter(
         if (preconditionFailure != null) return ContentCommandResult.Failure(preconditionFailure)
 
         val areaId = command.areaId ?: existingEntity!!.areaId
-        val areaEntity = resolveArea(dao, areaId, command.occurredAt)
-            ?: return ContentCommandResult.Failure(ContentCommandFailure.Missing(AREA_TARGET))
+        val existingArea = findArea(dao, areaId)
+        if (existingArea == null && areaId != DEFAULT_AREA_SLUG) {
+            return ContentCommandResult.Failure(ContentCommandFailure.Missing(AREA_TARGET))
+        }
         val decision = NodeEditor.save(
             existing = existingEntity?.let(NodeRoomMapper::toDomain),
             expectedRevision = command.expectedRevision,
             nodeId = command.nodeId,
-            area = ContentAreaRef(id = areaEntity.id, slug = areaEntity.slug),
+            area = existingArea?.toAreaRef() ?: ContentAreaRef(DEFAULT_AREA_SLUG, DEFAULT_AREA_SLUG),
             title = command.title,
             markdownBody = command.markdownBody,
             now = command.occurredAt
@@ -65,20 +67,22 @@ class RoomContentCommandAdapter(
         val accepted = decision as? NodeSaveDecision.Accepted
             ?: return ContentCommandResult.Failure((decision as NodeSaveDecision.Rejected).failure.toApplicationFailure())
 
-        val savedEntity = NodeRoomMapper.toEntity(accepted.node, existingEntity)
+        val persistedArea = existingArea ?: createDefaultArea(dao, command.occurredAt)
+        val savedNode = accepted.node.copy(area = persistedArea.toAreaRef())
+        val savedEntity = NodeRoomMapper.toEntity(savedNode, existingEntity)
         dao.upsertNode(savedEntity)
         projectionWriter.write(dao, savedEntity, command.occurredAt)
 
-        val payload = ContentNodeCodec.encode(accepted.node)
+        val payload = ContentNodeCodec.encode(savedNode)
         dao.insertOutbox(
             ReplicationOutboxEntity(
                 changeId = changeIdFactory(),
                 commandId = command.commandId.value,
                 aggregateType = AGGREGATE_TYPE,
-                aggregateId = accepted.node.id.value,
+                aggregateId = savedNode.id.value,
                 operation = accepted.operation.name.lowercase(),
                 baseRevision = existingEntity?.revision,
-                newRevision = accepted.node.revision.value,
+                newRevision = savedNode.revision.value,
                 domainSchemaVersion = ContentNodeCodec.SchemaVersion,
                 payloadJson = payload,
                 payloadHash = ContentNodeCodec.sha256Hex(payload),
@@ -96,7 +100,7 @@ class RoomContentCommandAdapter(
                 processedAt = command.occurredAt
             )
         )
-        return ContentCommandResult.Success(accepted.node)
+        return ContentCommandResult.Success(savedNode)
     }
 
     private fun preconditionFailure(
@@ -120,17 +124,13 @@ class RoomContentCommandAdapter(
         )
     }
 
-    private suspend fun resolveArea(
+    private suspend fun findArea(
         dao: LearningDao,
-        areaIdOrSlug: String,
-        now: Long
+        areaIdOrSlug: String
     ): AreaEntity? = dao.getArea(areaIdOrSlug)
         ?: dao.getAreaBySlug(areaIdOrSlug)
-        ?: if (areaIdOrSlug == DEFAULT_AREA_SLUG) {
-            createDefaultArea(dao, now)
-        } else {
-            null
-        }
+
+    private fun AreaEntity.toAreaRef(): ContentAreaRef = ContentAreaRef(id = id, slug = slug)
 
     private suspend fun createDefaultArea(
         dao: LearningDao,
