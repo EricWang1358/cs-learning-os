@@ -1121,6 +1121,12 @@ private class FakeLearningDao : LearningDao {
     override suspend fun deleteAllCaptureSlips() = unsupported()
     override suspend fun deleteAllNodeFts() = unsupported()
     override suspend fun deleteAllQuizFts() = unsupported()
+    override suspend fun deleteAllProcessedCommands() {
+        processedCommands.clear()
+    }
+    override suspend fun deleteAllOutboxItems() {
+        outbox.clear()
+    }
     override suspend fun searchNodes(query: String): List<SearchResultEntity> = emptyList()
     override suspend fun searchQuizzes(query: String): List<SearchResultEntity> = emptyList()
 

@@ -135,6 +135,8 @@ private class FakeReviewLearningDao(
     override suspend fun deleteAllCaptureSlips() = unsupported()
     override suspend fun deleteAllNodeFts() = unsupported()
     override suspend fun deleteAllQuizFts() = unsupported()
+    override suspend fun deleteAllProcessedCommands() = unsupported()
+    override suspend fun deleteAllOutboxItems() = unsupported()
     override suspend fun searchNodes(query: String): List<com.cslearningos.mobile.data.SearchResultEntity> = unsupported()
     override suspend fun searchQuizzes(query: String): List<com.cslearningos.mobile.data.SearchResultEntity> = unsupported()
 

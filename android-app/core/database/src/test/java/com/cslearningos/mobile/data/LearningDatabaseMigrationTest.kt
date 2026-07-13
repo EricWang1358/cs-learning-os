@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.data
 
 import androidx.room.testing.MigrationTestHelper
+import androidx.room.Room
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -9,7 +10,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import kotlinx.coroutines.runBlocking
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -49,4 +52,79 @@ class LearningDatabaseMigrationTest {
             }
         }
     }
+
+    @Test
+    fun restoreBackupReplacesCanonicalDataAndClearsV7OperationalRecords() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(),
+            LearningDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val dao = database.learningDao()
+            dao.upsertNode(node(id = "stale-node", title = "Stale"))
+            dao.insertProcessedCommand(
+                ProcessedCommandEntity(
+                    commandId = "command-1",
+                    commandType = "content.node.save",
+                    requestFingerprint = "fingerprint",
+                    resultType = "saved",
+                    resultPayloadJson = "{}",
+                    processedAt = 1_000
+                )
+            )
+            dao.insertOutbox(
+                ReplicationOutboxEntity(
+                    changeId = "change-1",
+                    commandId = "command-1",
+                    aggregateType = "content_node",
+                    aggregateId = "stale-node",
+                    operation = "upsert",
+                    baseRevision = null,
+                    newRevision = 1,
+                    domainSchemaVersion = 1,
+                    payloadJson = "{}",
+                    payloadHash = "hash",
+                    state = "pending",
+                    createdAt = 1_000
+                )
+            )
+
+            dao.restoreBackup(
+                areas = emptyList(),
+                nodes = listOf(node(id = "restored-node", title = "Restored")),
+                quizzes = emptyList(),
+                states = emptyList(),
+                attempts = emptyList(),
+                questions = emptyList(),
+                captureSlips = emptyList(),
+                nodeFts = emptyList(),
+                quizFts = emptyList()
+            )
+
+            assertEquals(listOf("restored-node"), dao.getAllNodes().map(LearningNodeEntity::id))
+            assertEquals(0, rowCount(database, "processed_commands"))
+            assertEquals(0, rowCount(database, "replication_outbox"))
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun node(id: String, title: String) = LearningNodeEntity(
+        id = id,
+        title = title,
+        markdownBody = "#$title",
+        createdAt = 1_000,
+        updatedAt = 1_000,
+        lastReadAt = null,
+        revision = 1,
+        syncStatus = SyncStatus.dirty,
+        deletedAt = null
+    )
+
+    private fun rowCount(database: LearningDatabase, table: String): Int =
+        database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            cursor.getInt(0)
+        }
 }

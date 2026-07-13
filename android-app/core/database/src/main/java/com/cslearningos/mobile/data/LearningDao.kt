@@ -226,6 +226,12 @@ interface LearningDao {
     @Query("DELETE FROM quiz_fts")
     suspend fun deleteAllQuizFts()
 
+    @Query("DELETE FROM processed_commands")
+    suspend fun deleteAllProcessedCommands()
+
+    @Query("DELETE FROM replication_outbox")
+    suspend fun deleteAllOutboxItems()
+
     @Query(
         """
         SELECT 'node' AS type, node_id AS id, title, snippet(node_fts, 3, '[', ']', '...', 12) AS snippet
@@ -270,6 +276,8 @@ interface LearningDao {
         quizFts: List<QuizFtsEntity>
     ) {
         clearAll()
+        deleteAllProcessedCommands()
+        deleteAllOutboxItems()
         upsertAreas(areas)
         upsertNodes(nodes)
         upsertQuizzes(quizzes)
