@@ -356,7 +356,7 @@ stateDiagram-v2
     [*] --> not_checked
     not_checked --> metadata_ready: /api/ai/preflight
     not_checked --> metadata_failed: missing CLI, auth file, or config file
-    metadata_ready --> model_ready: /api/ai/preflight?run_model=true
+    metadata_ready --> model_ready: POST /api/ai/model-preflight with X-CS-Local-Action: 1
     metadata_ready --> model_failed: provider/auth/schema/timeout failure
     model_ready --> draft_enabled
     metadata_ready --> draft_enabled: lightweight mode allowed with warning
@@ -366,13 +366,13 @@ stateDiagram-v2
 
 Preflight modes:
 
-- Lightweight metadata check: verifies Codex CLI path, generated Codex HOME, copied auth file, generated config file, provider name, model, and base URL.
+- Lightweight metadata check: read-only probe of the Codex CLI path and source auth file, plus the derivable managed config, provider name, model, and base URL.
 - Real model check: performs a tiny JSON-schema Codex call and confirms structured output.
 
 Rules:
 
 - Lightweight preflight must not spend model tokens.
-- Real model preflight should be user-triggered or release-gate-triggered.
+- Real model preflight should be user-triggered or release-gate-triggered through `POST /api/ai/model-preflight` with exactly one `X-CS-Local-Action: 1` header. The local process rejects concurrent or cooldown requests before invoking Codex.
 - Draft jobs should record provider/model/config context so failures can be traced.
 - UI should show preflight status before or near `Draft with AI`.
 

@@ -39,6 +39,8 @@ cd ..
 
 The frontend opens at `http://127.0.0.1:5173`; the API runs at `http://127.0.0.1:8000`. See [app/README.md](app/README.md) for frontend-only commands.
 
+The supported `scripts/dev.ps1` launcher binds the API to loopback only. Direct Uvicorn deployment outside the local desktop profile requires a separate authenticated deployment design; it is not a supported way to expose this API on a network.
+
 ## Data safety
 
 - Personal data stays local unless you explicitly share a backup or use an optional AI provider.

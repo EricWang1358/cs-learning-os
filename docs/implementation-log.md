@@ -788,7 +788,7 @@ Verified:
 
 Completed:
 - Added `GET /api/ai/preflight` for lightweight provider readiness checks.
-- Added optional `GET /api/ai/preflight?run_model=true` for a tiny real Codex JSON-schema call.
+- Added guarded `POST /api/ai/model-preflight` for a tiny real Codex JSON-schema call. It requires exactly one `X-CS-Local-Action: 1` header and rejects active or cooldown requests before invoking Codex.
 - Documented lightweight vs real-model preflight behavior in README and state-machine docs.
 
 Verified:

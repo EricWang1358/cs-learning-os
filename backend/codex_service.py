@@ -122,6 +122,29 @@ def codex_is_configured() -> bool:
     return bool(codex_cli_path())
 
 
+def codex_configuration_probe() -> dict:
+    executable = codex_cli_path()
+    auth_file = codex_auth_file()
+    home = codex_job_home()
+    checks = {
+        "cli": bool(executable),
+        "auth_file": auth_file.is_file(),
+        # The managed config is derived from the active Codex settings when a model action runs.
+        "config_file": bool(executable),
+    }
+    return {
+        "ok": all(checks.values()),
+        "checks": checks,
+        "codex_cli": executable,
+        "model": codex_model_name(),
+        "model_provider": codex_model_provider_name(),
+        "base_url": codex_base_url(),
+        "codex_home": str(home),
+        "ran_model": False,
+        "message": "Codex CLI metadata checks passed." if all(checks.values()) else "Codex CLI is not ready.",
+    }
+
+
 def codex_preflight(run_model: bool = False) -> dict:
     executable = codex_cli_path()
     home = ensure_codex_job_home() if executable else codex_job_home()

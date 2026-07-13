@@ -14,10 +14,16 @@ os.environ["CS_LEARNING_AI_PROVIDER"] = "openai-api"
 os.environ["CS_LEARNING_AI_ENABLED"] = "true"
 os.environ.pop("OPENAI_API_KEY", None)
 
-from ingest import ingest
-from api import app
-from patch_policy import apply_patch_ops
-import content_write_service
+try:
+    from .ingest import ingest
+    from .api import app
+    from .patch_policy import apply_patch_ops
+    from . import content_write_service
+except ImportError:
+    from ingest import ingest
+    from api import app
+    from patch_policy import apply_patch_ops
+    import content_write_service
 
 
 def wait_for_job(client: TestClient, job_id: int, terminal_statuses: set[str] | None = None) -> dict:
@@ -122,6 +128,9 @@ def main() -> int:
     assert "ok" in preflight.json()
     assert preflight.json()["enabled"] is True
     assert preflight.json()["ran_model"] is False
+
+    blocked_model_preflight = client.post("/api/ai/model-preflight")
+    assert blocked_model_preflight.status_code == 403, blocked_model_preflight.text
 
     os.environ["CS_LEARNING_AI_ENABLED"] = "false"
     disabled_preflight = client.get("/api/ai/preflight")
