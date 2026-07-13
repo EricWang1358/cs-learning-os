@@ -174,4 +174,22 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals("", quiz.info)
         assertEquals("question: What creates the Review card?", quiz.lines.first())
     }
+
+    @Test
+    fun parseSeparatesAdjacentTablesWithDifferentColumnCounts() {
+        val tables = QuizAwareMarkdownDocument.parse(
+            """
+            Name | Value
+            --- | ---
+            one | 1
+            Left | Middle | Right
+            --- | --- | ---
+            a | b | c
+            """.trimIndent()
+        ).filterIsInstance<MarkdownTableBlock>()
+
+        assertEquals(2, tables.size)
+        assertEquals(2, tables[0].headers.size)
+        assertEquals(3, tables[1].headers.size)
+    }
 }

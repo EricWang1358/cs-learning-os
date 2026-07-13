@@ -218,7 +218,7 @@ object AssistantMarkdownNormalizer {
     }
 
     private fun appendTableWithParagraphBoundary(normalized: MutableList<String>, tableRows: List<String>) {
-        if (normalized.lastOrNull()?.let { it.isNotBlank() && !isNormalizedTableRow(it) } == true) {
+        if (normalized.lastOrNull()?.isNotBlank() == true) {
             normalized += ""
         }
         normalized += tableRows.map(::normalizeTableRow)
@@ -251,11 +251,6 @@ object AssistantMarkdownNormalizer {
         if (content.isBlank()) return null
         val pipes = content.unescapedPipesOutsideInlineCode()
         return (pipes + 1).takeIf { pipes > 0 }
-    }
-
-    private fun isNormalizedTableRow(line: String): Boolean {
-        val trimmed = line.trim()
-        return trimmed.startsWith('|') && trimmed.endsWith('|') && tableColumnCount(trimmed) != null
     }
 
     private fun String.unescapedPipesOutsideInlineCode(): Int {

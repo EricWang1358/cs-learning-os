@@ -141,7 +141,7 @@ class AssistantMarkdownNormalizerTest {
     }
 
     @Test
-    fun normalizeDoesNotInsertBlankLineBetweenAdjacentTables() {
+    fun normalizeSeparatesAdjacentDifferentWidthTablesWithOneBlankLine() {
         val normalized = AssistantMarkdownNormalizer.normalize(
             """
             Name | Value
@@ -158,6 +158,7 @@ class AssistantMarkdownNormalizerTest {
             |Name | Value|
             |--- | ---|
             |one | 1|
+
             |Left | Middle | Right|
             |--- | --- | ---|
             |a | b | c|
