@@ -1,6 +1,10 @@
 package com.cslearningos.mobile.ui
 
 import com.cslearningos.mobile.data.LearningNodeEntity
+import com.cslearningos.mobile.data.CaptureNodeDraft
+import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.data.CaptureSlipStatus
+import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.SyncStatus
 import com.cslearningos.mobile.feature.backup.ui.resetTransientStateAfterRestore
 import org.junit.Assert.assertEquals
@@ -60,6 +64,43 @@ class NodeSavePendingStateTest {
 
         assertNull(pending.forNewNodeEditor("systems").pendingNodeSave)
         assertNull(pending.forExistingNodeEditor(sampleNode()).pendingNodeSave)
+    }
+
+    @Test
+    fun capturePromotionAndAiDraftReplacementClearPendingIdentity() {
+        val pending = LearningUiState(
+            pendingNodeSave = PendingNodeSave("command", "node", "fingerprint")
+        )
+        val slip = CaptureSlipEntity(
+            id = "capture-1",
+            body = "What is a page fault?",
+            type = CaptureSlipType.question,
+            topicHint = "Virtual memory",
+            sourceLabel = null,
+            linkedNodeId = null,
+            status = CaptureSlipStatus.inbox,
+            createdAt = 10L,
+            updatedAt = 10L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null
+        )
+        val captureDraft = CaptureNodeDraft(
+            title = "Page faults",
+            markdownBody = "# Page faults",
+            suggestedAreaId = "systems",
+            suggestedNodeId = null
+        )
+
+        assertNull(pending.forCapturePromotionEditor(slip, captureDraft).pendingNodeSave)
+        assertNull(
+            pending.forAiCaptureDraftEditor(
+                slip = slip,
+                areaId = "systems",
+                title = "AI draft",
+                body = "# AI draft"
+            ).pendingNodeSave
+        )
     }
 
     private fun sampleNode(): LearningNodeEntity = LearningNodeEntity(

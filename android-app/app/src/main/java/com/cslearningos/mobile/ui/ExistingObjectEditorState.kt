@@ -8,6 +8,7 @@ import com.cslearningos.mobile.content.domain.NodeId
 import com.cslearningos.mobile.core.kernel.CommandId
 import com.cslearningos.mobile.core.kernel.EntityRevision
 import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.data.CaptureNodeDraft
 import com.cslearningos.mobile.data.LearningRepository
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.QuizItemEntity
@@ -36,6 +37,39 @@ internal fun LearningUiState.forExistingNodeEditor(node: LearningNodeEntity): Le
     editorBody = node.markdownBody,
     pendingNodeSave = null,
     message = null
+)
+
+internal fun LearningUiState.forCapturePromotionEditor(
+    slip: CaptureSlipEntity,
+    draft: CaptureNodeDraft
+): LearningUiState = copy(
+    screen = AppScreen.Editor,
+    editorNodeId = null,
+    editorExpectedRevision = null,
+    editorAreaId = draft.suggestedAreaId,
+    editorSourceCaptureSlipId = slip.id,
+    selectedNode = draft.suggestedNodeId?.let { nodeId -> nodes.firstOrNull { it.id == nodeId } },
+    editorTitle = draft.title,
+    editorBody = draft.markdownBody,
+    pendingNodeSave = null,
+    message = uiText(R.string.message_review_capture_draft)
+)
+
+internal fun LearningUiState.forAiCaptureDraftEditor(
+    slip: CaptureSlipEntity,
+    areaId: String?,
+    title: String,
+    body: String
+): LearningUiState = copy(
+    screen = AppScreen.Editor,
+    editorNodeId = null,
+    editorExpectedRevision = null,
+    editorAreaId = areaId,
+    editorSourceCaptureSlipId = slip.id,
+    selectedNode = null,
+    editorTitle = title,
+    editorBody = body,
+    pendingNodeSave = null
 )
 
 internal fun LearningUiState.withEditorTitle(value: String): LearningUiState =

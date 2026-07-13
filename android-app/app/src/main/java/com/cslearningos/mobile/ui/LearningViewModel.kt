@@ -654,19 +654,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
 
     fun promoteCaptureSlipToNode(slip: CaptureSlipEntity) {
         val draft = CaptureNodeDraft.fromSlip(slip, existingNodes = state.value.nodes)
-        _state.update {
-            it.copy(
-                screen = AppScreen.Editor,
-                editorNodeId = null,
-                editorExpectedRevision = null,
-                editorAreaId = draft.suggestedAreaId,
-                editorSourceCaptureSlipId = slip.id,
-                selectedNode = draft.suggestedNodeId?.let { nodeId -> state.value.nodes.firstOrNull { node -> node.id == nodeId } },
-                editorTitle = draft.title,
-                editorBody = draft.markdownBody,
-                message = uiText(R.string.message_review_capture_draft)
-            )
-        }
+        _state.update { it.forCapturePromotionEditor(slip, draft) }
     }
 
     fun draftCaptureSlipWithAi(slip: CaptureSlipEntity) {
@@ -719,15 +707,12 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                 val placement = parseAssistantDraftPlacement(markdown, captureAssistantAreaOptions(snapshot.areas, snapshot.nodes))
                 val draft = assistantMarkdownDraft(placement.markdown, fallbackTitle)
                 _state.update {
-                    it.copy(
-                        screen = AppScreen.Editor,
-                        editorNodeId = null,
-                        editorExpectedRevision = null,
-                        editorAreaId = placement.areaId,
-                        editorSourceCaptureSlipId = slip.id,
-                        selectedNode = null,
-                        editorTitle = draft.title,
-                        editorBody = draft.body,
+                    it.forAiCaptureDraftEditor(
+                        slip = slip,
+                        areaId = placement.areaId,
+                        title = draft.title,
+                        body = draft.body
+                    ).copy(
                         aiBusy = false,
                         pendingAiDraftSlipId = null,
                         aiServiceStatus = AiServiceStatus(
