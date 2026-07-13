@@ -151,6 +151,7 @@
     <string name="quiz_editor_title">添加复习卡片</string>
     <string name="quiz_editor_body">关联节点：%1$s。写好题目和答案后即可保存。</string>
     <string name="quiz_editor_default_link">通用复习</string>
+    <string name="quiz_editor_choose_area">选择复习 Area</string>
     <string name="quiz_prompt_field">题目</string>
     <string name="quiz_answer_field">答案</string>
     <string name="quiz_explanation_field">解释</string>
@@ -375,6 +376,7 @@
     <string name="message_ai_draft_failed">AI 草稿生成失败。</string>
     <string name="message_question_resolved">问题已标记为已解决</string>
     <string name="message_question_answer_required">题目和答案不能为空。</string>
+    <string name="message_choose_quiz_area_before_save">保存独立复习卡前请选择 Area。</string>
     <string name="message_quiz_saved">测验已保存</string>
     <string name="message_review_saved">复习结果已保存</string>
     <string name="message_review_saved_again">已加入近期重练。先看一遍解析，再试一次。</string>

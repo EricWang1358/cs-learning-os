@@ -34,6 +34,12 @@ sealed interface AssistantConversationAction {
         val explanation: String
     ) : AssistantConversationAction
 
+    data class OpenNewQuizDraft(
+        val prompt: String,
+        val answer: String,
+        val explanation: String
+    ) : AssistantConversationAction
+
     data class OpenEditableCaptureDraft(
         val slipId: String,
         val expectedRevision: Long,

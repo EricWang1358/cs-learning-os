@@ -38,10 +38,16 @@ internal fun LearningUiState.afterNodeSaved(node: LearningNodeEntity): LearningU
 internal fun LearningUiState.afterCaptureSaved(): LearningUiState =
     clearedCaptureEditor().copy(message = uiText(R.string.message_capture_saved_to_inbox))
 
-internal fun LearningUiState.afterQuizSaved(): LearningUiState = copy(
-    screen = AppScreen.Home,
+internal fun LearningUiState.afterQuizSaved(quiz: QuizItemEntity): LearningUiState = copy(
+    screen = if (quiz.nodeId != null && selectedNode != null) AppScreen.Reader else AppScreen.Review,
+    selectedQuiz = quiz,
+    reviewedQuiz = null,
+    reviewAreaId = quiz.area,
+    reviewSetupVisible = quiz.nodeId != null && selectedNode != null,
+    quizAnswerVisible = false,
     quizEditorId = null,
     quizExpectedRevision = null,
+    quizAreaId = null,
     message = uiText(R.string.message_quiz_saved)
 )
 
@@ -72,6 +78,7 @@ suspend fun LearningRepository.saveQuizFromEditor(state: LearningUiState): QuizI
         id = state.quizEditorId,
         expectedRevision = state.quizExpectedRevision,
         nodeId = state.quizNodeIdForSave(),
+        areaId = state.quizAreaIdForSave(),
         prompt = state.quizPrompt,
         answer = state.quizAnswer,
         explanation = state.quizExplanation
@@ -82,3 +89,6 @@ internal fun LearningUiState.forExistingQuizEditorWithoutSelectedNode(quiz: Quiz
 
 internal fun LearningUiState.quizNodeIdForSave(): String? =
     if (quizEditorId != null) selectedQuiz?.nodeId else selectedNode?.id ?: selectedQuiz?.nodeId
+
+internal fun LearningUiState.quizAreaIdForSave(): String? =
+    if (quizNodeIdForSave() == null) quizAreaId else null

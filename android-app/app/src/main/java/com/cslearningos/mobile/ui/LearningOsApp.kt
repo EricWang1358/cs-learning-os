@@ -846,6 +846,16 @@ private fun SearchResultCard(result: SearchResultEntity, onOpen: () -> Unit) {
 
 @Composable
 private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
+    val context = LocalContext.current
+    val linkedNodeId = state.quizNodeIdForSave()
+    val areas = remember(state.areas) { state.areas.filter { it.deletedAt == null } }
+    val selectedArea = remember(areas, state.quizAreaId, state.selectedQuiz?.area, state.quizEditorId) {
+        areas.firstOrNull { it.id == state.quizAreaId }
+            ?: state.selectedQuiz
+                ?.area
+                ?.takeIf { state.quizEditorId != null }
+                ?.let { areaKey -> areas.firstOrNull { it.id == areaKey || it.slug == areaKey } }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailHeading(
             eyebrow = stringResource(R.string.quiz_editor_eyebrow),
@@ -855,6 +865,19 @@ private fun QuizEditorScreen(state: LearningUiState, viewModel: LearningViewMode
                 state.selectedNode?.title ?: stringResource(R.string.quiz_editor_default_link)
             )
         )
+        if (linkedNodeId == null && areas.isNotEmpty()) {
+            WorkbenchMenuButton(
+                text = selectedArea?.let { displayAreaName(context, it) }
+                    ?: stringResource(R.string.quiz_editor_choose_area),
+                options = areas.map { area ->
+                    WorkbenchMenuOption(displayAreaName(context, area)) {
+                        viewModel.setQuizAreaId(area.id)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                expandToContainer = true
+            )
+        }
         WorkbenchTextField(state.quizPrompt, viewModel::setQuizPrompt, stringResource(R.string.quiz_prompt_field), minLines = 3)
         WorkbenchTextField(state.quizAnswer, viewModel::setQuizAnswer, stringResource(R.string.quiz_answer_field), minLines = 3)
         WorkbenchTextField(state.quizExplanation, viewModel::setQuizExplanation, stringResource(R.string.quiz_explanation_field), minLines = 4)

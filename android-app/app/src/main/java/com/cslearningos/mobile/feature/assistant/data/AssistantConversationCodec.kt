@@ -126,6 +126,11 @@ object AssistantConversationCodec {
                 .put("answer", answer)
                 .put("explanation", explanation)
 
+            is AssistantConversationAction.OpenNewQuizDraft -> put("kind", "open_new_quiz_draft")
+                .put("prompt", prompt)
+                .put("answer", answer)
+                .put("explanation", explanation)
+
             is AssistantConversationAction.OpenEditableCaptureDraft -> put("kind", "open_capture_draft")
                 .put("slip_id", slipId)
                 .put("expected_revision", expectedRevision)
@@ -167,6 +172,12 @@ object AssistantConversationCodec {
                 answer = optString("answer"),
                 explanation = optString("explanation")
             ).takeIf { it.quizId.isNotBlank() && it.expectedRevision >= 0 }
+
+            "open_new_quiz_draft" -> AssistantConversationAction.OpenNewQuizDraft(
+                prompt = optString("prompt"),
+                answer = optString("answer"),
+                explanation = optString("explanation")
+            ).takeIf { it.prompt.isNotBlank() && it.answer.isNotBlank() }
 
             "open_capture_draft" -> AssistantConversationAction.OpenEditableCaptureDraft(
                 slipId = optString("slip_id"),

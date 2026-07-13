@@ -245,6 +245,7 @@
     <string name="quiz_editor_title">Add review card</string>
     <string name="quiz_editor_body">Linked to %1$s. Add the prompt and answer, then save.</string>
     <string name="quiz_editor_default_link">general review</string>
+    <string name="quiz_editor_choose_area">Choose Review Area</string>
     <string name="quiz_prompt_field">Question</string>
     <string name="quiz_answer_field">Answer</string>
     <string name="quiz_explanation_field">Explanation</string>
@@ -492,6 +493,7 @@
     <string name="message_ai_draft_failed">AI draft failed.</string>
     <string name="message_question_resolved">Question marked resolved</string>
     <string name="message_question_answer_required">Question and answer are required.</string>
+    <string name="message_choose_quiz_area_before_save">Choose an Area before saving this standalone review card.</string>
     <string name="message_quiz_saved">Quiz saved</string>
     <string name="message_review_saved">Review saved</string>
     <string name="message_review_saved_again">Added to near-term practice. Review the explanation once, then try it again.</string>

@@ -604,6 +604,7 @@ stateDiagram-v2
 - Markdown rendering uses commonmark plus the GFM table extension after the app's narrow AI-output normalizer. The normalizer may repair common model formatting mistakes such as a heading collapsed into a table header, but it should not replace the commonmark parser with broad ad hoc Markdown parsing.
 - Review cards are synced only when a saved Node body contains parseable `:::quiz` blocks. The quiz parser accepts the standard multiline form and narrowly tolerated model mistakes such as `:::quizquestion:` or collapsed `question: ... answer: ... explanation: ...` fields, then `LibraryRepository.saveNode` creates both the `QuizItemEntity` and its default `ReviewStateEntity`.
 - A Quiz target carries `quizId`, optional `nodeId`, prompt, answer, and explanation. Saving retains the quiz ID and its `ReviewStateEntity`; it does not create a replacement question.
+- Interview-review chat output must never call `saveManualQuiz` directly. `cs-review-answer` creates an `OpenNewQuizDraft` action only; the bridge opens QuizEditor with prompt/answer/explanation prefilled, the user can edit it, and a standalone quiz must choose an Area before Save. A node-linked quiz returns to Reader after save; a standalone quiz opens Review because Review is its management view.
 - A Capture target carries `slipId`, body, type, topic hint, and source label. Saving retains the Capture ID and does not promote it to a Node unless the user separately chooses promotion.
 - Target directives must be complete and type-correct. Missing/invalid directives leave the previous target intact and display a clarifying assistant response; they never erase fields.
 - Every message action is single-claim. Repeated taps cannot create duplicate slips or duplicate writes.
@@ -625,6 +626,7 @@ stateDiagram-v2
 | `Browse -> TargetPrepared` | live Node/Capture/Quiz selected | target stores original ID and all editable fields | coordinator target tests |
 | `DraftSelectionPending -> Streaming` | user confirms selected outputs | request continues in Draft mode and clears `pendingDraftRequest` | coordinator and state-machine tests |
 | `TargetPrepared -> DraftReady` | final reply has valid directives for its target type | message offers the matching editor action | action parser tests |
+| `ReviewEvaluation -> DraftReady` | interview reply includes `cs-review-answer` | new quiz draft opens without direct persistence; user edits and chooses Area before save | coordinator, codec, editor, and repository tests |
 | `Streaming -> InteractionPending` | reply contains structured action payload | visible card replaces free-form action parsing | agent-interaction codec and coordinator tests |
 | `DraftReady -> AutoOpenPending -> EditorOpen` | reply action is editable and bridge is active | correct editor opens without a second tap | bridge/UI-state tests |
 | `DraftReady -> EditorOpen` | user taps review action | correct editor gets the same object ID | bridge/UI-state tests |

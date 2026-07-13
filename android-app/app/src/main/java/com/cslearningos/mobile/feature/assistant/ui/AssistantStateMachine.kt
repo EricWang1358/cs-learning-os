@@ -127,6 +127,7 @@ internal fun AssistantMessageAction?.autoOpenMessageIdOrNull(messageId: String):
     when (this) {
         is AssistantMessageAction.OpenEditableDraft,
         is AssistantMessageAction.OpenEditableQuizDraft,
+        is AssistantMessageAction.OpenNewQuizDraft,
         is AssistantMessageAction.OpenEditableCaptureDraft -> messageId
         else -> null
     }

@@ -660,6 +660,56 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingStandaloneQuizWithExplicitAreaAddsItToThatReviewAreaAndCreatesDueState() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 10,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+
+        val saved = repository.saveManualQuiz(
+            nodeId = null,
+            areaId = "systems",
+            prompt = "What does paging translate?",
+            answer = "Virtual page numbers to physical frames.",
+            explanation = "This is why virtual memory can isolate processes.",
+            now = 2_000L
+        )
+
+        assertNull(saved.nodeId)
+        assertEquals("systems", saved.area)
+        assertEquals("general", saved.track)
+        assertEquals(2_000L, dao.reviewStates.getValue(saved.id).dueAt)
+    }
+
+    @Test
+    fun savingStandaloneQuizWithMissingExplicitAreaFailsWithoutCreatingQuiz() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+
+        val failure = runCatching {
+            repository.saveManualQuiz(
+                nodeId = null,
+                areaId = "missing-area",
+                prompt = "Prompt",
+                answer = "Answer",
+                explanation = "",
+                now = 2_000L
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(dao.quizzes.isEmpty())
+        assertTrue(dao.reviewStates.isEmpty())
+    }
+
+    @Test
     fun savingMissingExplicitQuizIdFailsWithoutCreatingQuiz() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)

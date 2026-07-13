@@ -346,10 +346,9 @@ class AssistantCoordinator(
                     AssistantRequestMode.ReviewEvaluation -> {
                         val review = snapshot.reviewSession as? AssistantReviewSession.AwaitingAnswer
                         val evaluation = parseAssistantReviewEvaluation(replyForDecision)
-                        val quiz = review?.let { session ->
+                        action = review?.let { session ->
                             evaluation.dailyReviewAnswer?.let { answer ->
-                                repository.saveManualQuiz(
-                                    nodeId = null,
+                                AssistantMessageAction.OpenNewQuizDraft(
                                     prompt = session.question,
                                     answer = answer,
                                     explanation = evaluation.feedback
@@ -357,12 +356,11 @@ class AssistantCoordinator(
                             }
                         }
                         visibleBody = evaluation.feedback
-                        action = quiz?.let { AssistantMessageAction.OpenDailyReview }
                         nextReviewSession = review?.let { session ->
                             AssistantReviewSession.Evaluated(
                                 topic = session.topic,
                                 question = session.question,
-                                quizId = quiz?.id
+                                quizId = null
                             )
                         }
                     }
@@ -474,6 +472,11 @@ class AssistantCoordinator(
         mutableState.value.messages
             .firstOrNull { it.id == messageId }
             ?.action as? AssistantMessageAction.OpenEditableQuizDraft
+
+    fun newQuizDraftAction(messageId: String): AssistantMessageAction.OpenNewQuizDraft? =
+        mutableState.value.messages
+            .firstOrNull { it.id == messageId }
+            ?.action as? AssistantMessageAction.OpenNewQuizDraft
 
     fun captureDraftAction(messageId: String): AssistantMessageAction.OpenEditableCaptureDraft? =
         mutableState.value.messages

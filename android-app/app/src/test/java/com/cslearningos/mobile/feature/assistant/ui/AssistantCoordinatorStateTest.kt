@@ -181,6 +181,38 @@ class AssistantCoordinatorStateTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun interviewReviewEvaluationCreatesEditableQuizDraftWithoutSaving() = runTest {
+        val dao = QuizDraftReviewDao()
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(dao.proxy()),
+            service = QueuedAssistantService(
+                listOf(
+                    "What does virtual memory separate?",
+                    "Good answer.\n<!-- cs-review-answer: Virtual memory separates virtual addresses from physical memory. -->"
+                )
+            ),
+            string = { it.toString() },
+            scope = this
+        )
+
+        coordinator.startInterviewReview()
+        coordinator.setInput("Virtual memory")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+        coordinator.setInput("It separates addresses from RAM.")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+
+        val reply = coordinator.state.value.messages.last()
+        assertEquals(0, dao.savedQuizCount)
+        val action = reply.action as AssistantMessageAction.OpenNewQuizDraft
+        assertEquals("What does virtual memory separate?", action.prompt)
+        assertEquals("Virtual memory separates virtual addresses from physical memory.", action.answer)
+        assertTrue(action.explanation.contains("Good answer."))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun openingHistoryWhileStreamIsBusyCannotReplaceStateOrPersistIntoHistoryConversation() = runTest {
         val historyConversation = AssistantConversation(
             id = "history-b",
@@ -492,6 +524,49 @@ class AssistantCoordinatorStateTest {
             }
         } as LearningDao
 
+    private class QuizDraftReviewDao {
+        var savedQuizCount = 0
+
+        fun proxy(): LearningDao =
+            Proxy.newProxyInstance(
+                LearningDao::class.java.classLoader,
+                arrayOf(LearningDao::class.java)
+            ) { _, method, _ ->
+                when (method.name) {
+                    "observeAreas" -> flowOf(
+                        listOf(
+                            AreaEntity(
+                                id = "systems",
+                                slug = "systems",
+                                name = "Systems",
+                                order = 10,
+                                createdAt = 1L,
+                                updatedAt = 1L,
+                                deletedAt = null
+                            )
+                        )
+                    )
+
+                    "observeNodes", "observeQuizzes" -> flowOf(emptyList<Any>())
+                    "searchNodes", "searchQuizzes" -> emptyList<Any>()
+                    "latestAssistantConversation" -> null
+                    "upsertAssistantConversation" -> Unit
+                    "upsertQuiz" -> {
+                        savedQuizCount += 1
+                        Unit
+                    }
+
+                    else -> when {
+                        Flow::class.java.isAssignableFrom(method.returnType) -> flowOf(emptyList<Any>())
+                        method.returnType == Boolean::class.javaPrimitiveType -> false
+                        method.returnType == Int::class.javaPrimitiveType -> 0
+                        method.returnType == Long::class.javaPrimitiveType -> 0L
+                        else -> null
+                    }
+                }
+            } as LearningDao
+    }
+
     private fun AssistantConversation.toEntity(updatedAt: Long): AssistantConversationEntity =
         AssistantConversationEntity(
             id = id,
@@ -522,6 +597,23 @@ class AssistantCoordinatorStateTest {
             onDelta: suspend (String) -> Unit
         ) {
             onDelta(reply)
+        }
+    }
+
+    private class QueuedAssistantService(
+        replies: List<String>
+    ) : KnowledgeAssistantService {
+        private val replies = ArrayDeque(replies)
+
+        override suspend fun streamReply(
+            baseUrl: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            messages: List<KnowledgeAssistantChatMessage>,
+            onDelta: suspend (String) -> Unit
+        ) {
+            onDelta(replies.removeFirst())
         }
     }
 

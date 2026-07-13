@@ -5,6 +5,7 @@ import com.cslearningos.mobile.domain.MarkdownQuizParser
 import com.cslearningos.mobile.ui.AppScreen
 import com.cslearningos.mobile.ui.LearningUiState
 import com.cslearningos.mobile.ui.assistantMarkdownDraft
+import com.cslearningos.mobile.ui.forNewQuizDraftEditor
 import com.cslearningos.mobile.ui.titleFromAiMarkdown
 import com.cslearningos.mobile.ui.uiText
 import kotlinx.coroutines.CoroutineScope
@@ -110,6 +111,17 @@ class AssistantAppBridge(
 
     fun openQuizDraft(messageId: String) {
         scope.launch {
+            val newAction = coordinator.newQuizDraftAction(messageId)
+            if (newAction != null) {
+                updateState {
+                    it.forNewQuizDraftEditor(
+                        prompt = newAction.prompt,
+                        answer = newAction.answer,
+                        explanation = newAction.explanation
+                    )
+                }
+                return@launch
+            }
             val action = coordinator.quizDraftAction(messageId) ?: return@launch
             val quiz = (coordinator.resolveDestination("quiz", action.quizId) as? AssistantDestination.Quiz)?.quiz
             if (quiz == null || quiz.deletedAt != null || quiz.revision != action.expectedRevision) {
@@ -126,6 +138,7 @@ class AssistantAppBridge(
                     quizPrompt = action.prompt,
                     quizAnswer = action.answer,
                     quizExplanation = action.explanation,
+                    quizAreaId = null,
                     message = uiText(R.string.message_assistant_draft_ready)
                 )
             }

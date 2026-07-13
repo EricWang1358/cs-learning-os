@@ -111,6 +111,31 @@ class AssistantConversationCodecTest {
     }
 
     @Test
+    fun roundTripsNewQuizDraftActionThroughStoredMessages() {
+        val message = AssistantMessage(
+            id = "reply",
+            role = AssistantMessageRole.Assistant,
+            body = "Review-card draft ready.",
+            action = AssistantMessageAction.OpenNewQuizDraft(
+                prompt = "What does virtual memory separate?",
+                answer = "Virtual addresses from physical memory.",
+                explanation = "This is the core abstraction behind paging."
+            )
+        )
+        val conversation = AssistantConversation(
+            id = "conversation-new-quiz",
+            messages = listOf(message.toStoredMessage())
+        )
+
+        val restored = AssistantConversationCodec.decode(AssistantConversationCodec.encode(conversation))
+            .messages
+            .single()
+            .toUiMessage()
+
+        assertEquals(message.action, restored.action)
+    }
+
+    @Test
     fun roundTripsNewNodeDraftActionWithNullNodeIdThroughStoredMessages() {
         val message = AssistantMessage(
             id = "reply",

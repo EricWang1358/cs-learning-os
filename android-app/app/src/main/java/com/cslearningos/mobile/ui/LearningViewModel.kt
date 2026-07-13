@@ -117,6 +117,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     when (assistant.messages.firstOrNull { it.id == messageId }?.action) {
                         is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableDraft -> assistantActions.openDraft(messageId)
                         is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableQuizDraft -> assistantActions.openQuizDraft(messageId)
+                        is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenNewQuizDraft -> assistantActions.openQuizDraft(messageId)
                         is com.cslearningos.mobile.feature.assistant.ui.AssistantMessageAction.OpenEditableCaptureDraft -> assistantActions.openCaptureDraft(messageId)
                         else -> Unit
                     }
@@ -453,6 +454,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(quizExplanation = value) }
     }
 
+    fun setQuizAreaId(value: String) {
+        _state.update { it.copy(quizAreaId = value, message = null) }
+    }
+
     fun editQuiz(quiz: QuizItemEntity) {
         _state.update { it.forExistingQuizEditorWithoutSelectedNode(quiz) }
     }
@@ -786,11 +791,15 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             _state.update { it.copy(message = uiText(R.string.message_question_answer_required)) }
             return
         }
+        if (snapshot.quizEditorId == null && snapshot.quizNodeIdForSave() == null && snapshot.quizAreaIdForSave() == null) {
+            _state.update { it.copy(message = uiText(R.string.message_choose_quiz_area_before_save)) }
+            return
+        }
         viewModelScope.launch {
             runCatching {
                 repository.saveQuizFromEditor(snapshot)
             }.onSuccess { quiz ->
-                _state.update { it.afterQuizSaved() }
+                _state.update { it.afterQuizSaved(quiz) }
                 refreshDueReviews(quiz.updatedAt)
             }.onFailure {
                 _state.update { it.withObjectSaveRejected() }

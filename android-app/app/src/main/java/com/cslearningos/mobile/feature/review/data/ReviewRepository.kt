@@ -28,6 +28,7 @@ class ReviewRepository(
         id: String? = null,
         expectedRevision: Long? = null,
         nodeId: String?,
+        areaId: String? = null,
         prompt: String,
         answer: String,
         explanation: String,
@@ -42,6 +43,11 @@ class ReviewRepository(
             quiz
         }
         val resolvedNodeId = nodeId ?: existing?.nodeId
+        val standaloneArea = if (resolvedNodeId == null && areaId != null) {
+            requireNotNull(dao.getArea(areaId)) { "Area $areaId does not exist." }
+        } else {
+            null
+        }
         val quiz = QuizItemEntity(
             id = existing?.id ?: UUID.randomUUID().toString(),
             nodeId = resolvedNodeId,
@@ -55,8 +61,13 @@ class ReviewRepository(
             revision = (existing?.revision ?: 0L) + InitialRevision,
             syncStatus = SyncStatus.dirty,
             deletedAt = null,
-            area = snapshotAreaForNode(resolvedNodeId),
-            track = snapshotTrackForNode(resolvedNodeId),
+            area = when {
+                resolvedNodeId != null -> snapshotAreaForNode(resolvedNodeId)
+                standaloneArea != null -> standaloneArea.slug
+                existing != null -> existing.area
+                else -> DefaultAreaSlug
+            },
+            track = if (resolvedNodeId != null) snapshotTrackForNode(resolvedNodeId) else existing?.track ?: DefaultTrack,
             visibility = existing?.visibility ?: PracticeVisibility,
             isStarter = existing?.isStarter ?: false
         )
