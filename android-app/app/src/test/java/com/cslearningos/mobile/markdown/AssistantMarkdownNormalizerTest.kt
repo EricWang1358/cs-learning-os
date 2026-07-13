@@ -121,6 +121,52 @@ class AssistantMarkdownNormalizerTest {
     }
 
     @Test
+    fun normalizeRepairsTableWithPipeInsideInlineCodeCell() {
+        val normalized = AssistantMarkdownNormalizer.normalize(
+            """
+            Syntax | Example
+            --- | ---
+            Kotlin | `a | b`
+            """.trimIndent()
+        )
+
+        assertEquals(
+            """
+            |Syntax | Example|
+            |--- | ---|
+            |Kotlin | `a | b`|
+            """.trimIndent(),
+            normalized
+        )
+    }
+
+    @Test
+    fun normalizeDoesNotInsertBlankLineBetweenAdjacentTables() {
+        val normalized = AssistantMarkdownNormalizer.normalize(
+            """
+            Name | Value
+            --- | ---
+            one | 1
+            Left | Middle | Right
+            --- | --- | ---
+            a | b | c
+            """.trimIndent()
+        )
+
+        assertEquals(
+            """
+            |Name | Value|
+            |--- | ---|
+            |one | 1|
+            |Left | Middle | Right|
+            |--- | --- | ---|
+            |a | b | c|
+            """.trimIndent(),
+            normalized
+        )
+    }
+
+    @Test
     fun normalizeDoesNotRepairTableLikeContentInsideCodeOrQuizFences() {
         val markdown = """
             ```text

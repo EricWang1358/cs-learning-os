@@ -218,7 +218,7 @@ object AssistantMarkdownNormalizer {
     }
 
     private fun appendTableWithParagraphBoundary(normalized: MutableList<String>, tableRows: List<String>) {
-        if (normalized.lastOrNull()?.isNotBlank() == true) {
+        if (normalized.lastOrNull()?.let { it.isNotBlank() && !isNormalizedTableRow(it) } == true) {
             normalized += ""
         }
         normalized += tableRows.map(::normalizeTableRow)
@@ -249,20 +249,45 @@ object AssistantMarkdownNormalizer {
     private fun tableColumnCount(line: String): Int? {
         val content = line.trim().trim('|').trim()
         if (content.isBlank()) return null
-        val pipes = content.indices.count { index ->
-            content[index] == '|' && content.takeWhileBackslashes(index) % 2 == 0
-        }
+        val pipes = content.unescapedPipesOutsideInlineCode()
         return (pipes + 1).takeIf { pipes > 0 }
     }
 
-    private fun String.takeWhileBackslashes(before: Int): Int {
-        var count = 0
-        var index = before - 1
-        while (index >= 0 && this[index] == '\\') {
-            count += 1
-            index -= 1
+    private fun isNormalizedTableRow(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed.startsWith('|') && trimmed.endsWith('|') && tableColumnCount(trimmed) != null
+    }
+
+    private fun String.unescapedPipesOutsideInlineCode(): Int {
+        var pipes = 0
+        var index = 0
+        var inlineCodeDelimiterLength = 0
+        while (index < length) {
+            when (this[index]) {
+                '\\' -> index += 2
+                '`' -> {
+                    val delimiterLength = backtickRunLength(index)
+                    if (inlineCodeDelimiterLength == 0) {
+                        inlineCodeDelimiterLength = delimiterLength
+                    } else if (inlineCodeDelimiterLength == delimiterLength) {
+                        inlineCodeDelimiterLength = 0
+                    }
+                    index += delimiterLength
+                }
+                '|' -> {
+                    if (inlineCodeDelimiterLength == 0) pipes += 1
+                    index += 1
+                }
+                else -> index += 1
+            }
         }
-        return count
+        return pipes
+    }
+
+    private fun String.backtickRunLength(start: Int): Int {
+        var index = start
+        while (index < length && this[index] == '`') index += 1
+        return index - start
     }
 
     private val TightHeading = Regex("^(#{1,6})([^#\\s].*)$")
