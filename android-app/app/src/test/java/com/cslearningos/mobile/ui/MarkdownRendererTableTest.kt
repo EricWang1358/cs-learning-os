@@ -3,6 +3,7 @@ package com.cslearningos.mobile.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
@@ -31,6 +32,7 @@ class MarkdownRendererTableTest {
             }
         }
 
+        composeRule.onNodeWithTag("compact-table-grid").assertExists()
         composeRule.onNodeWithContentDescription("Expand table").assertExists().performClick()
 
         composeRule.onNodeWithContentDescription("Exit table view").assertExists().performClick()
@@ -96,5 +98,33 @@ class MarkdownRendererTableTest {
         }
 
         composeRule.onNodeWithContentDescription("Expand table").assertDoesNotExist()
+    }
+
+    @Test
+    fun expandedTable_doesNotComposeCompactGrid() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkdownRenderer(
+                    markdown = """
+                        | One | Two | Three |
+                        | --- | --- | --- |
+                        | A | B | C |
+                    """.trimIndent()
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Expand table").performClick()
+
+        composeRule.onNodeWithTag("compact-table-grid").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Exit table view").assertExists()
+    }
+
+    @Test
+    fun tableCellBoundary_drawsEverySharedEdgeOnce() {
+        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = false, drawTopDivider = false), tableCellBoundary(0, 0))
+        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = true, drawTopDivider = false), tableCellBoundary(0, 1))
+        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = false, drawTopDivider = true), tableCellBoundary(1, 0))
+        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = true, drawTopDivider = true), tableCellBoundary(1, 1))
     }
 }

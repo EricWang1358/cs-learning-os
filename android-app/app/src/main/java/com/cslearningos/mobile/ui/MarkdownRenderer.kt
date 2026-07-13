@@ -13,11 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
@@ -33,13 +34,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,6 +68,20 @@ private val CardShape = RoundedCornerShape(16.dp)
 private val BlockShape = RoundedCornerShape(16.dp)
 private val PillShape = RoundedCornerShape(999.dp)
 private val TableCellMinWidth = 144.dp
+
+internal data class TableCellBoundary(
+    val drawStartDivider: Boolean,
+    val drawTopDivider: Boolean
+)
+
+internal fun tableCellBoundary(rowIndex: Int, columnIndex: Int): TableCellBoundary {
+    require(rowIndex >= 0) { "rowIndex must not be negative" }
+    require(columnIndex >= 0) { "columnIndex must not be negative" }
+    return TableCellBoundary(
+        drawStartDivider = columnIndex > 0,
+        drawTopDivider = rowIndex > 0
+    )
+}
 
 @Composable
 fun MarkdownRenderer(markdown: String, modifier: Modifier = Modifier, card: Boolean = true) {
@@ -281,6 +299,29 @@ private fun TableBlock(block: MarkdownTableBlock) {
     val canExpand = columnCount > 2 || block.rows.size > 4
     var expanded by remember(block) { mutableStateOf(false) }
 
+    if (expanded) {
+        ExpandedTableDialog(
+            block = block,
+            columnCount = columnCount,
+            onExit = { expanded = false }
+        )
+    } else {
+        CompactTableSurface(
+            block = block,
+            columnCount = columnCount,
+            canExpand = canExpand,
+            onExpand = { expanded = true }
+        )
+    }
+}
+
+@Composable
+private fun CompactTableSurface(
+    block: MarkdownTableBlock,
+    columnCount: Int,
+    canExpand: Boolean,
+    onExpand: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -295,9 +336,7 @@ private fun TableBlock(block: MarkdownTableBlock) {
                     .background(WorkbenchColors.SurfaceSoft),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(
-                    onClick = { expanded = true }
-                ) {
+                IconButton(onClick = onExpand) {
                     Icon(
                         imageVector = Icons.Filled.OpenInFull,
                         contentDescription = "Expand table",
@@ -306,35 +345,31 @@ private fun TableBlock(block: MarkdownTableBlock) {
                 }
             }
         }
-        TableGrid(
-            block = block,
-            columnCount = columnCount,
-            modifier = Modifier.horizontalScroll(rememberScrollState())
-        )
-    }
-
-    if (expanded) {
-        ExpandedTableDialog(
-            block = block,
-            columnCount = columnCount,
-            onExit = { expanded = false }
-        )
+        CompactTableGrid(block = block, columnCount = columnCount)
     }
 }
 
 @Composable
-private fun TableGrid(
+private fun CompactTableGrid(
     block: MarkdownTableBlock,
-    columnCount: Int,
-    modifier: Modifier = Modifier
+    columnCount: Int
 ) {
-    Column(modifier = modifier) {
+    Column(
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .testTag("compact-table-grid")
+    ) {
         TableRowBlock(
             cells = padTableCells(block.headers, columnCount),
-            header = true
+            header = true,
+            rowIndex = 0
         )
-        block.rows.forEach { row ->
-            TableRowBlock(cells = padTableCells(row, columnCount), header = false)
+        block.rows.forEachIndexed { index, row ->
+            TableRowBlock(
+                cells = padTableCells(row, columnCount),
+                header = false,
+                rowIndex = index + 1
+            )
         }
     }
 }
@@ -371,13 +406,36 @@ private fun ExpandedTableDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
+                    .clip(BlockShape)
+                    .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
+                    .border(1.dp, WorkbenchColors.LineStrong, BlockShape)
             ) {
-                TableGrid(
-                    block = block,
-                    columnCount = columnCount,
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                )
+                ExpandedTableGrid(block = block, columnCount = columnCount)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandedTableGrid(
+    block: MarkdownTableBlock,
+    columnCount: Int
+) {
+    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.width(TableCellMinWidth * columnCount)) {
+            TableRowBlock(
+                cells = padTableCells(block.headers, columnCount),
+                header = true,
+                rowIndex = 0
+            )
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                itemsIndexed(block.rows) { index, row ->
+                    TableRowBlock(
+                        cells = padTableCells(row, columnCount),
+                        header = false,
+                        rowIndex = index + 1
+                    )
+                }
             }
         }
     }
@@ -386,21 +444,19 @@ private fun ExpandedTableDialog(
 @Composable
 private fun TableRowBlock(
     cells: List<List<MarkdownInline>>,
-    header: Boolean
+    header: Boolean,
+    rowIndex: Int
 ) {
     Row(
         modifier = Modifier
             .background(if (header) WorkbenchColors.SurfaceSoft else Color.Transparent)
     ) {
-        cells.forEach { cell ->
+        cells.forEachIndexed { columnIndex, cell ->
+            val boundary = tableCellBoundary(rowIndex, columnIndex)
             Box(
                 modifier = Modifier
                     .width(TableCellMinWidth)
-                    .border(
-                        width = 1.dp,
-                        color = WorkbenchColors.Line,
-                        shape = RoundedCornerShape(0.dp)
-                    )
+                    .drawTableCellDividers(boundary)
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
                 RichText(
@@ -413,6 +469,26 @@ private fun TableRowBlock(
                 )
             }
         }
+    }
+}
+
+private fun Modifier.drawTableCellDividers(boundary: TableCellBoundary): Modifier = drawBehind {
+    val strokeWidth = 1.dp.toPx()
+    if (boundary.drawStartDivider) {
+        drawLine(
+            color = WorkbenchColors.Line,
+            start = Offset(0f, 0f),
+            end = Offset(0f, size.height),
+            strokeWidth = strokeWidth
+        )
+    }
+    if (boundary.drawTopDivider) {
+        drawLine(
+            color = WorkbenchColors.Line,
+            start = Offset(0f, 0f),
+            end = Offset(size.width, 0f),
+            strokeWidth = strokeWidth
+        )
     }
 }
 
