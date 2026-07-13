@@ -35,6 +35,20 @@ class StandaloneAndroidBoundaryTest {
                 "build-logic/src/main/groovy/com/cslearningos/buildlogic/KotlinLibraryConventionPlugin.groovy"
             ).isFile
         )
+
+        root.walkTopDown()
+            .filter { file ->
+                file.isFile &&
+                    file.name in setOf("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts") &&
+                    file.invariantSeparatorsPath.contains("/build/").not() &&
+                    file.invariantSeparatorsPath.contains("/.gradle/").not()
+            }
+            .forEach { gradleFile ->
+                val text = gradleFile.readText(Charsets.UTF_8)
+                assertFalse("Parent traversal in ${gradleFile.path}", text.contains("../"))
+                assertFalse("Parent traversal in ${gradleFile.path}", text.contains("..\\"))
+                assertFalse("Parent traversal in ${gradleFile.path}", text.contains("parentFile"))
+            }
     }
 
     private fun androidRoot(): File {

@@ -30,9 +30,9 @@ function New-ArchitectureFixture {
         "android-app/app/src/main/java/com/cslearningos/mobile/feature/library",
         "android-app/app/src/main/java/com/cslearningos/mobile/feature/capture",
         "android-app/app/src/main/java/com/cslearningos/mobile/feature/review",
-        "android-app/core/kernel",
+        "android-app/core/kernel/src/main/kotlin/example",
         "android-app/domain/assistant/src/main/kotlin/example",
-        "android-app/feature/assistant/api",
+        "android-app/feature/assistant/api/src/main/kotlin/example",
         "android-app/feature/assistant/impl",
         "android-app/adapter/model-openai"
     )
@@ -43,7 +43,16 @@ function New-ArchitectureFixture {
     Set-FixtureFile $Root "android-app/app/src/main/java/com/cslearningos/mobile/core/common/AndroidArchitectureConstants.kt"
     Set-FixtureFile $Root "android-app/app/src/main/java/com/cslearningos/mobile/ui/LearningViewModel.kt"
     Set-FixtureFile $Root "android-app/app/src/main/java/com/cslearningos/mobile/data/LearningRepository.kt"
-    Set-FixtureFile $Root "android-app/app/build.gradle" 'from("$rootDir/starter-content")'
+    Set-FixtureFile $Root "android-app/app/build.gradle" @'
+from("$rootDir/starter-content")
+implementation project(":domain:assistant")
+implementation project(":feature:assistant:api")
+implementation project(":feature:assistant:impl")
+implementation project(":adapter:model-openai")
+'@
+    Set-FixtureFile $Root "android-app/core/kernel/build.gradle" "dependencies {}"
+    Set-FixtureFile $Root "android-app/domain/assistant/build.gradle" 'implementation project(":core:kernel")'
+    Set-FixtureFile $Root "android-app/feature/assistant/api/build.gradle" "dependencies {}"
     Set-FixtureFile $Root "android-app/settings.gradle" @'
 include ":core:kernel"
 include ":domain:assistant"
@@ -86,15 +95,30 @@ try {
 
     Remove-Item -Recurse -Force (Join-Path $fixtureRoot "android-app/core/kernel")
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "missing required module"
-    New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRoot "android-app/core/kernel") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRoot "android-app/core/kernel/src/main/kotlin/example") | Out-Null
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" "dependencies {}"
 
     Set-FixtureFile $fixtureRoot "android-app/domain/assistant/src/main/kotlin/example/Assistant.kt" "package example`nimport android.content.Context"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "forbidden domain import"
     Set-FixtureFile $fixtureRoot "android-app/domain/assistant/src/main/kotlin/example/Assistant.kt" "package example"
 
-    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" 'from("../content-demo")'
+    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" 'from("$rootDir/../private-content")'
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "parent starter-content dependency"
-    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" 'from("$rootDir/starter-content")'
+    Set-FixtureFile $fixtureRoot "android-app/app/build.gradle" @'
+from("$rootDir/starter-content")
+implementation project(":domain:assistant")
+implementation project(":feature:assistant:api")
+implementation project(":feature:assistant:impl")
+implementation project(":adapter:model-openai")
+'@
+
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" 'implementation(project(path = ":domain:assistant"))'
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "reverse kernel dependency"
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/build.gradle" "dependencies {}"
+
+    Set-FixtureFile $fixtureRoot "android-app/core/kernel/src/main/kotlin/example/Kernel.kt" "package example`nimport android.content.Context"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "forbidden kernel import"
+    Remove-Item -Force (Join-Path $fixtureRoot "android-app/core/kernel/src/main/kotlin/example/Kernel.kt")
 
     Set-FixtureFile $fixtureRoot "android-app/feature/assistant/impl/build.gradle" "dependencies {}"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "missing assistant API dependency"

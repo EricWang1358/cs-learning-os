@@ -21,14 +21,15 @@ Dependency direction points toward contracts and domain policy. `:domain:assista
 | Caller | Port or event | Callee | Canonical write allowed | Phase |
 | --- | --- | --- | --- | --- |
 | User/UI | `AssistantEntryRequest` | Assistant entry policy | No | Active |
-| Assistant runtime | `ModelRequest` through `ModelGateway` | model adapter | No | Active |
-| Model adapter | `ModelEvent` correlated by `runId` | Assistant run machine | No | Active |
+| `:app` compatibility facade | `ModelRequest` through `ModelGateway` | model adapter | No | Active |
+| Model adapter | `ModelEvent` carrying `runId` | `:app` compatibility facade | No | Active |
+| Target Assistant runtime | `ModelEvent` through `AssistantRunMachine` | Session/Run aggregates | No | Next |
 | Assistant parser | reviewed proposal | application command port | Only after acceptance | Next |
 | Application command | validated transaction | Room repositories | Yes | Next |
 | Room transaction | committed outbox record | replication worker | Already committed data only | Future |
 | Replication worker | versioned envelope/checkpoint | device-neutral peer | No direct UI/model mutation | Future |
 
-Model output is always untrusted proposal data. It cannot directly write Nodes, Quizzes, Captures, review state, Room rows, backup data, or synchronization records. Cancellation, supersession, and stale callbacks are isolated by `runId`; proposal application will additionally compare the target base revision/hash.
+Model output is always untrusted proposal data. It cannot directly write Nodes, Quizzes, Captures, review state, Room rows, backup data, or synchronization records. The current coordinator retains its response-message correlation while `AssistantRunMachine` defines, but does not yet drive, the target `runId` cancellation/supersession/stale-callback guarantee. Proposal application will additionally compare the target base revision/hash.
 
 ## Source Tree
 
@@ -59,6 +60,6 @@ The verifier requires the module graph and dependency edges, rejects parent `con
 
 ## Phase 1 Handoff
 
-Phase 1 activates `:core:kernel`, `:domain:assistant`, `:feature:assistant:api`, `:feature:assistant:impl`, and `:adapter:model-openai`. Existing navigation behavior, Room data, backup schema v1, assistant prompts, streaming, cancellation, and draft review remain behind the `:app` compatibility shell.
+Phase 1 activates `:core:kernel`, `:domain:assistant`, `:feature:assistant:api`, `:feature:assistant:impl`, and `:adapter:model-openai`. The run machine is an executable domain contract with pure tests, not yet the production coordinator. Existing navigation behavior, Room data, backup schema v1, assistant prompts, streaming, cancellation, and draft review remain behind the `:app` compatibility shell.
 
 Replication is not implemented in Phase 1. The next child project is Phase 2: separate domain/application models from Room entities and repositories while preserving Room as the local source of truth. Outbox/inbox replication begins only after that command and transaction boundary exists.

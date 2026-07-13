@@ -31,12 +31,32 @@ $requiredProjects = @(
     ":adapter:model-openai"
 )
 
-$forbiddenDomainImports = @(
+$forbiddenPureReferences = @(
     "import android.",
     "import androidx.",
     "import com.cslearningos.mobile.ui.",
     "import com.cslearningos.mobile.data.",
     "import org.json."
+)
+
+$moduleDependencyAllowlist = [ordered]@{
+    "android-app/core/kernel" = @()
+    "android-app/domain/assistant" = @(':core:kernel')
+    "android-app/feature/assistant/api" = @()
+    "android-app/feature/assistant/impl" = @(':feature:assistant:api')
+    "android-app/adapter/model-openai" = @(':domain:assistant')
+    "android-app/app" = @(
+        ':domain:assistant',
+        ':feature:assistant:api',
+        ':feature:assistant:impl',
+        ':adapter:model-openai'
+    )
+}
+
+$pureSourceRoots = @(
+    "android-app/core/kernel/src/main",
+    "android-app/domain/assistant/src/main",
+    "android-app/feature/assistant/api/src/main"
 )
 
 $violations = [System.Collections.Generic.List[string]]::new()
@@ -108,27 +128,57 @@ if ($null -ne $appBuild -and $appBuild.Contains("../content-demo")) {
     $violations.Add("App build input escapes android-app: android-app/app/build.gradle contains ../content-demo")
 }
 
-$assistantImplBuild = Get-ModuleBuildText "android-app/feature/assistant/impl"
-if ($null -ne $assistantImplBuild -and $assistantImplBuild -notmatch 'project\s*\(\s*["'']?:feature:assistant:api["'']\s*\)') {
-    $violations.Add("Assistant implementation must depend on :feature:assistant:api")
-}
-
-$modelAdapterBuild = Get-ModuleBuildText "android-app/adapter/model-openai"
-if ($null -ne $modelAdapterBuild -and $modelAdapterBuild -notmatch 'project\s*\(\s*["'']?:domain:assistant["'']\s*\)') {
-    $violations.Add("OpenAI model adapter must depend on :domain:assistant")
-}
-
-$domainSourceRoot = Join-Path $ProjectRoot "android-app/domain/assistant/src/main"
-if (Test-Path -LiteralPath $domainSourceRoot -PathType Container) {
-    foreach ($file in Get-ChildItem -LiteralPath $domainSourceRoot -Recurse -File -Filter "*.kt") {
-        $rootPrefix = $ProjectRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-        $relativeFile = $file.FullName.Substring($rootPrefix.Length)
-        foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern $forbiddenDomainImports) {
-            $violations.Add("Forbidden domain import: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
+$projectDependencyPattern = 'project\s*\(\s*(?:path\s*=\s*)?["''](?<path>:[^"'']+)["'']\s*\)'
+foreach ($modulePath in $moduleDependencyAllowlist.Keys) {
+    $buildText = Get-ModuleBuildText $modulePath
+    if ($null -eq $buildText) { continue }
+    $actualDependencies = @(
+        [regex]::Matches($buildText, $projectDependencyPattern) |
+            ForEach-Object { $_.Groups["path"].Value } |
+            Sort-Object -Unique
+    )
+    $allowedDependencies = @($moduleDependencyAllowlist[$modulePath])
+    foreach ($dependency in $actualDependencies) {
+        if ($dependency -notin $allowedDependencies) {
+            $violations.Add("Forbidden project dependency: $modulePath -> $dependency")
         }
     }
-} else {
-    $violations.Add("Assistant domain source root is missing: android-app/domain/assistant/src/main")
+    foreach ($dependency in $allowedDependencies) {
+        if ($dependency -notin $actualDependencies) {
+            $violations.Add("Missing required project dependency: $modulePath -> $dependency")
+        }
+    }
+}
+
+foreach ($sourceRoot in $pureSourceRoots) {
+    $fullSourceRoot = Join-Path $ProjectRoot $sourceRoot
+    if (-not (Test-Path -LiteralPath $fullSourceRoot -PathType Container)) {
+        $violations.Add("Pure Kotlin source root is missing: $sourceRoot")
+        continue
+    }
+    foreach ($file in Get-ChildItem -LiteralPath $fullSourceRoot -Recurse -File -Filter "*.kt") {
+        $rootPrefix = $ProjectRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+        $relativeFile = $file.FullName.Substring($rootPrefix.Length)
+        foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern $forbiddenPureReferences) {
+            $violations.Add("Forbidden pure-module reference: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
+        }
+    }
+}
+
+$androidRoot = Join-Path $ProjectRoot "android-app"
+$gradleFiles = Get-ChildItem -LiteralPath $androidRoot -Recurse -File | Where-Object {
+    $_.Name -in @("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts") -and
+    $_.FullName -notmatch '[\\/]build[\\/]' -and
+    $_.FullName -notmatch '[\\/]\.gradle[\\/]'
+}
+foreach ($file in $gradleFiles) {
+    $relativeFile = $file.FullName.Substring(($ProjectRoot.TrimEnd('\') + '\').Length)
+    foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern @("../", "..\", "parentFile")) {
+        $violations.Add("Gradle input may escape android-app: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
+    }
+    foreach ($match in Select-String -LiteralPath $file.FullName -Pattern '(?i)(from|file|files|includeBuild)\s*\(\s*["''](?:[A-Za-z]:[\\/]|[\\/]{2})') {
+        $violations.Add("Absolute local Gradle input is forbidden: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
+    }
 }
 
 Test-LegacyFileSize "android-app/app/src/main/java/com/cslearningos/mobile/ui/LearningViewModel.kt" 38000

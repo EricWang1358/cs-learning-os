@@ -9,6 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -37,6 +38,7 @@ class OpenAiModelGateway(
             contextWindowTokens = null
         )
 
+    @OptIn(InternalCoroutinesApi::class)
     override fun stream(request: ModelRequest): Flow<ModelEvent> = channelFlow {
         withContext(Dispatchers.IO) {
             val connection = connectionFactory(URL(openAiChatCompletionsUrl(baseUrl))).apply {
@@ -48,8 +50,11 @@ class OpenAiModelGateway(
                 setRequestProperty("Accept", "text/event-stream, application/json")
                 setRequestProperty("Content-Type", "application/json")
             }
-            val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
-                connection.disconnect()
+            val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion(
+                onCancelling = true,
+                invokeImmediately = true
+            ) { cause ->
+                if (cause != null) connection.disconnect()
             }
             try {
                 connection.outputStream.use { output ->
@@ -93,8 +98,11 @@ class OpenAiModelGateway(
                                 )
                                 return@withContext
                             }
-                            OpenAiSseResult.Control,
-                            OpenAiSseResult.Done -> receivedSseFrame = true
+                            OpenAiSseResult.Control -> receivedSseFrame = true
+                            OpenAiSseResult.Done -> {
+                                receivedSseFrame = true
+                                break
+                            }
                             OpenAiSseResult.Ignored -> if (line.isNotBlank()) {
                                 rawResponse.appendLine(line)
                             }
