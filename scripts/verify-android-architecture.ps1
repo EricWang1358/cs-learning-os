@@ -28,6 +28,7 @@ $requiredPaths = @(
 )
 
 $requiredProjects = @(
+    ":app",
     ":core:kernel",
     ":core:database",
     ":domain:assistant",

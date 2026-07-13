@@ -75,6 +75,7 @@ implementation project(":application:content")
 '@
     Set-FixtureFile $Root "android-app/feature/assistant/api/build.gradle" "dependencies {}"
     Set-FixtureFile $Root "android-app/settings.gradle" @'
+include ":app"
 include ":core:kernel"
 include ":core:database"
 include ":domain:assistant"
@@ -117,6 +118,31 @@ $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cslearningos-archit
 try {
     New-ArchitectureFixture $fixtureRoot
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 0 "valid modular fixture"
+
+    Set-FixtureFile $fixtureRoot "android-app/settings.gradle" @'
+include ":core:kernel"
+include ":core:database"
+include ":domain:assistant"
+include ":domain:content"
+include ":application:content"
+include ":data:content-room"
+include ":feature:assistant:api"
+include ":feature:assistant:impl"
+include ":adapter:model-openai"
+'@
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "missing app composition root"
+    Set-FixtureFile $fixtureRoot "android-app/settings.gradle" @'
+include ":app"
+include ":core:kernel"
+include ":core:database"
+include ":domain:assistant"
+include ":domain:content"
+include ":application:content"
+include ":data:content-room"
+include ":feature:assistant:api"
+include ":feature:assistant:impl"
+include ":adapter:model-openai"
+'@
 
     Remove-Item -Recurse -Force (Join-Path $fixtureRoot "android-app/core/kernel")
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "missing required module"
