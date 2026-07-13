@@ -49,7 +49,7 @@ object ContentNodeCodec {
             .put("isChecked", node.isChecked)
 
         return fieldOrder.joinToString(prefix = "{", postfix = "}", separator = ",") { field ->
-            "\"$field\":${JSONObject.valueToString(objectPayload.get(field))}"
+            "\"$field\":${jsonValue(objectPayload.get(field))}"
         }
     }
 
@@ -113,5 +113,34 @@ object ContentNodeCodec {
 
     private fun JSONObject.requirePresent(name: String) {
         require(has(name) && !isNull(name)) { "Missing required content node field: $name" }
+    }
+
+    private fun jsonValue(value: Any?): String = when (value) {
+        null, JSONObject.NULL -> "null"
+        is String -> jsonString(value)
+        is Boolean, is Number -> value.toString()
+        else -> error("Unsupported content node value type: ${value::class.java.name}")
+    }
+
+    private fun jsonString(value: String): String = buildString(value.length + 2) {
+        append('\"')
+        value.forEach { character ->
+            when (character) {
+                '\\' -> append("\\\\")
+                '\"' -> append("\\\"")
+                '\b' -> append("\\b")
+                '\u000c' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> if (character.code < 0x20) {
+                    append("\\u")
+                    append(character.code.toString(16).padStart(4, '0'))
+                } else {
+                    append(character)
+                }
+            }
+        }
+        append('\"')
     }
 }
