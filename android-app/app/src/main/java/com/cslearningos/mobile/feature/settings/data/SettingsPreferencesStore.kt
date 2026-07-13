@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.feature.settings.data
 
 import android.content.SharedPreferences
+import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
 import com.cslearningos.mobile.ui.AppearanceMode
 import com.cslearningos.mobile.ui.SystemLanguage
 
@@ -34,18 +35,21 @@ interface SettingsStore {
     fun loadSettings(): SettingsSnapshot
 
     fun saveSettings(snapshot: SettingsSnapshot)
+
+    fun clearApiKey()
 }
 
 class SettingsPreferencesStore(
     private val aiPrefs: SharedPreferences,
-    private val appPrefs: SharedPreferences
+    private val appPrefs: SharedPreferences,
+    private val apiKeyProtector: ApiKeyProtector = AndroidKeystoreApiKeyProtector()
 ) : SettingsStore {
     override fun loadSettings(): SettingsSnapshot =
         SettingsSnapshot(
             aiSettings = AiSettingsSnapshot(
                 provider = aiPrefs.getString(KEY_PROVIDER, null) ?: DEFAULT_PROVIDER,
-                apiKey = aiPrefs.getString(KEY_API_KEY, null) ?: DEFAULT_API_KEY,
-                baseUrl = aiPrefs.getString(KEY_BASE_URL, null) ?: DEFAULT_BASE_URL,
+                apiKey = loadApiKey(),
+                baseUrl = loadBaseUrl(),
                 model = aiPrefs.getString(KEY_MODEL, null) ?: DEFAULT_MODEL,
                 thinkingEnabled = aiPrefs.getBoolean(KEY_THINKING_ENABLED, DEFAULT_THINKING_ENABLED)
             ),
@@ -62,12 +66,19 @@ class SettingsPreferencesStore(
         )
 
     override fun saveSettings(snapshot: SettingsSnapshot) {
-        aiPrefs.edit()
+        val apiKey = snapshot.aiSettings.apiKey
+        val encryptedApiKey = apiKey.takeIf(String::isNotBlank)?.let(apiKeyProtector::encrypt)
+        val baseUrl = safeBaseUrl(snapshot.aiSettings.baseUrl)
+        val aiEditor = aiPrefs.edit()
             .putString(KEY_PROVIDER, snapshot.aiSettings.provider)
-            .putString(KEY_API_KEY, snapshot.aiSettings.apiKey)
-            .putString(KEY_BASE_URL, snapshot.aiSettings.baseUrl)
+            .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_MODEL, snapshot.aiSettings.model)
             .putBoolean(KEY_THINKING_ENABLED, snapshot.aiSettings.thinkingEnabled)
+        if (encryptedApiKey != null) {
+            aiEditor.putString(KEY_API_KEY_ENCRYPTED, encryptedApiKey)
+            aiEditor.remove(KEY_API_KEY)
+        }
+        aiEditor
             .apply()
 
         appPrefs.edit()
@@ -76,12 +87,48 @@ class SettingsPreferencesStore(
             .apply()
     }
 
+    override fun clearApiKey() {
+        aiPrefs.edit()
+            .remove(KEY_API_KEY_ENCRYPTED)
+            .remove(KEY_API_KEY)
+            .apply()
+    }
+
+    private fun loadApiKey(): String {
+        val encryptedApiKey = aiPrefs.getString(KEY_API_KEY_ENCRYPTED, null)
+        if (encryptedApiKey != null) return apiKeyProtector.decrypt(encryptedApiKey) ?: DEFAULT_API_KEY
+
+        val legacyApiKey = aiPrefs.getString(KEY_API_KEY, null) ?: return DEFAULT_API_KEY
+        val migratedApiKey = runCatching { apiKeyProtector.encrypt(legacyApiKey) }.getOrNull()
+            ?: return DEFAULT_API_KEY
+        aiPrefs.edit()
+            .putString(KEY_API_KEY_ENCRYPTED, migratedApiKey)
+            .remove(KEY_API_KEY)
+            .apply()
+        return legacyApiKey
+    }
+
+    private fun loadBaseUrl(): String {
+        val storedBaseUrl = aiPrefs.getString(KEY_BASE_URL, null) ?: return DEFAULT_BASE_URL
+        val safeBaseUrl = safeBaseUrl(storedBaseUrl)
+        if (safeBaseUrl != storedBaseUrl) {
+            aiPrefs.edit().putString(KEY_BASE_URL, safeBaseUrl).apply()
+        }
+        return safeBaseUrl
+    }
+
+    private fun safeBaseUrl(candidate: String): String =
+        candidate.takeIf(::isValidProviderEndpoint)
+            ?: aiPrefs.getString(KEY_BASE_URL, null)?.takeIf(::isValidProviderEndpoint)
+            ?: DEFAULT_BASE_URL
+
     private inline fun <reified T : Enum<T>> readEnum(rawValue: String?, defaultValue: T): T =
         enumValues<T>().firstOrNull { it.name == rawValue } ?: defaultValue
 
     private companion object {
         const val KEY_PROVIDER = "provider"
         const val KEY_API_KEY = "apiKey"
+        const val KEY_API_KEY_ENCRYPTED = "apiKeyEncrypted"
         const val KEY_BASE_URL = "baseUrl"
         const val KEY_MODEL = "model"
         const val KEY_THINKING_ENABLED = "thinkingEnabled"

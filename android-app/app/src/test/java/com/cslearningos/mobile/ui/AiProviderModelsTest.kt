@@ -6,6 +6,7 @@ import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.SyncStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,6 +19,17 @@ class AiProviderModelsTest {
             listOf(R.string.more_api_key_label, R.string.more_base_url_label, R.string.more_model_label),
             settings.missingRequiredFields()
         )
+    }
+
+    @Test
+    fun httpEndpointIsNotConfigured() {
+        val settings = AiProviderSettings(
+            apiKey = "sk-test",
+            baseUrl = "http://provider.test/v1",
+            model = "model"
+        )
+
+        assertFalse(settings.isConfigured)
     }
 
     @Test

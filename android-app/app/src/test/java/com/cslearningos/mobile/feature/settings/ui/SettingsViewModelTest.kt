@@ -1,8 +1,12 @@
 package com.cslearningos.mobile.feature.settings.ui
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.cslearningos.mobile.feature.settings.data.AiDraftService
 import com.cslearningos.mobile.feature.settings.data.AiSettingsSnapshot
+import com.cslearningos.mobile.feature.settings.data.ApiKeyProtector
 import com.cslearningos.mobile.feature.settings.data.AppSettingsSnapshot
+import com.cslearningos.mobile.feature.settings.data.SettingsPreferencesStore
 import com.cslearningos.mobile.feature.settings.data.SettingsSnapshot
 import com.cslearningos.mobile.feature.settings.data.SettingsStore
 import com.cslearningos.mobile.feature.settings.domain.ValidateAiSettingsUseCase
@@ -17,12 +21,18 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class SettingsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
 
@@ -84,6 +94,43 @@ class SettingsViewModelTest {
         assertEquals("https://api.openai.example/v1", savedSnapshot?.aiSettings?.baseUrl)
         assertEquals("gpt-test", savedSnapshot?.aiSettings?.model)
         assertEquals(true, savedSnapshot?.aiSettings?.thinkingEnabled)
+    }
+
+    @Test
+    fun settingBlankApiKeyInvokesExplicitCredentialClear() {
+        val store = FakeSettingsStore()
+        val viewModel = SettingsViewModel(
+            store = store,
+            aiDraftService = FakeAiDraftService(),
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
+        )
+
+        viewModel.setApiKey("")
+
+        assertEquals(1, store.clearApiKeyCalls)
+    }
+
+    @Test
+    fun settingBlankApiKeyClearsUnresolvedLegacyCredentialFromPreferences() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val aiPrefs = context.getSharedPreferences("settings-view-model-legacy-ai", Context.MODE_PRIVATE)
+        val appPrefs = context.getSharedPreferences("settings-view-model-legacy-app", Context.MODE_PRIVATE)
+        aiPrefs.edit().clear().putString("apiKey", "sk-legacy").commit()
+        appPrefs.edit().clear().commit()
+        val store = SettingsPreferencesStore(aiPrefs, appPrefs, FailsLegacyEncryptionProtector)
+        val viewModel = SettingsViewModel(
+            store = store,
+            aiDraftService = FakeAiDraftService(),
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
+        )
+
+        assertEquals("", viewModel.uiState.value.apiKey)
+        viewModel.setApiKey("")
+
+        assertFalse(aiPrefs.contains("apiKey"))
+        assertFalse(aiPrefs.contains("apiKeyEncrypted"))
     }
 
     @Test
@@ -177,12 +224,17 @@ class SettingsViewModelTest {
         private var snapshot = initialSnapshot
 
         var savedSnapshot: SettingsSnapshot? = null
+        var clearApiKeyCalls = 0
 
         override fun loadSettings(): SettingsSnapshot = snapshot
 
         override fun saveSettings(snapshot: SettingsSnapshot) {
             this.snapshot = snapshot
             savedSnapshot = snapshot
+        }
+
+        override fun clearApiKey() {
+            clearApiKeyCalls += 1
         }
     }
 
@@ -194,5 +246,14 @@ class SettingsViewModelTest {
 
         override suspend fun requestDraft(baseUrl: String, apiKey: String, model: String, prompt: String): String =
             "# Draft"
+    }
+
+    private object FailsLegacyEncryptionProtector : ApiKeyProtector {
+        override fun encrypt(plainText: String): String {
+            if (plainText == "sk-legacy") error("Keystore unavailable")
+            return "test:$plainText"
+        }
+
+        override fun decrypt(envelope: String): String? = null
     }
 }

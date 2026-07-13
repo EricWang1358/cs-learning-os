@@ -44,6 +44,7 @@ class SettingsViewModel(
     }
 
     fun setApiKey(value: String) {
+        if (value.isBlank()) store.clearApiKey()
         updateEditableState { it.copy(apiKey = value) }
     }
 

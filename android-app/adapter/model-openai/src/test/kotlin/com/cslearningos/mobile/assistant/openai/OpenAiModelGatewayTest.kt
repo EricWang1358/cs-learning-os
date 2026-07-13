@@ -103,6 +103,48 @@ class OpenAiModelGatewayTest {
         assertTrue(connection.disconnected)
     }
 
+    @Test
+    fun rejectsHttpEndpointBeforeCreatingConnection() = runTest {
+        var connectionAttempts = 0
+        val gateway = OpenAiModelGateway(
+            baseUrl = "http://example.test/v1",
+            apiKey = "test-key",
+            model = "test-model",
+            connectTimeoutMillis = 1_000,
+            readTimeoutMillis = 2_000,
+            connectionFactory = {
+                connectionAttempts += 1
+                error("Connection must not be created")
+            }
+        )
+
+        val events = gateway.stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(0, connectionAttempts)
+        assertTrue(events.single() is ModelEvent.Failed)
+    }
+
+    @Test
+    fun rejectsMalformedEndpointBeforeCreatingConnection() = runTest {
+        var connectionAttempts = 0
+        val gateway = OpenAiModelGateway(
+            baseUrl = "https:///v1",
+            apiKey = "test-key",
+            model = "test-model",
+            connectTimeoutMillis = 1_000,
+            readTimeoutMillis = 2_000,
+            connectionFactory = {
+                connectionAttempts += 1
+                error("Connection must not be created")
+            }
+        )
+
+        val events = gateway.stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(0, connectionAttempts)
+        assertTrue(events.single() is ModelEvent.Failed)
+    }
+
     private fun gateway(connection: FakeHttpConnection): OpenAiModelGateway =
         OpenAiModelGateway(
             baseUrl = "https://example.test/v1",

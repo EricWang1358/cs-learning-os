@@ -1,5 +1,7 @@
 package com.cslearningos.mobile.feature.settings.domain
 
+import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
+
 data class AiSettingsValidationResult(
     val missingFields: List<String> = emptyList()
 ) {
@@ -18,7 +20,7 @@ class ValidateAiSettingsUseCase {
             missingFields = buildList {
                 if (provider.isBlank()) add(FIELD_PROVIDER)
                 if (apiKey.isBlank()) add(FIELD_API_KEY)
-                if (baseUrl.isBlank()) add(FIELD_BASE_URL)
+                if (!isValidProviderEndpoint(baseUrl)) add(FIELD_BASE_URL)
                 if (model.isBlank()) add(FIELD_MODEL)
             }
         )

@@ -5,6 +5,8 @@ import com.cslearningos.mobile.assistant.domain.ModelEvent
 import com.cslearningos.mobile.assistant.domain.ModelFailure
 import com.cslearningos.mobile.assistant.domain.ModelGateway
 import com.cslearningos.mobile.assistant.domain.ModelRequest
+import com.cslearningos.mobile.assistant.domain.InvalidProviderEndpointMessage
+import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.CancellationException
@@ -41,6 +43,10 @@ class OpenAiModelGateway(
     @OptIn(InternalCoroutinesApi::class)
     override fun stream(request: ModelRequest): Flow<ModelEvent> = channelFlow {
         withContext(Dispatchers.IO) {
+            if (!isValidProviderEndpoint(baseUrl)) {
+                send(ModelEvent.Failed(request.runId, ModelFailure.Transport(InvalidProviderEndpointMessage)))
+                return@withContext
+            }
             val connection = connectionFactory(URL(openAiChatCompletionsUrl(baseUrl))).apply {
                 requestMethod = "POST"
                 connectTimeout = connectTimeoutMillis
