@@ -20,9 +20,11 @@ import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntit
         ReviewAttemptEntity::class,
         NodeFtsEntity::class,
         QuizFtsEntity::class,
-        AssistantConversationEntity::class
+        AssistantConversationEntity::class,
+        ProcessedCommandEntity::class,
+        ReplicationOutboxEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -133,13 +135,69 @@ abstract class LearningDatabase : RoomDatabase() {
             }
         }
 
+        internal val Migration6To7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `processed_commands` (
+                        `command_id` TEXT NOT NULL,
+                        `command_type` TEXT NOT NULL,
+                        `request_fingerprint` TEXT NOT NULL,
+                        `result_type` TEXT NOT NULL,
+                        `result_payload_json` TEXT NOT NULL,
+                        `processed_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`command_id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `replication_outbox` (
+                        `change_id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `aggregate_type` TEXT NOT NULL,
+                        `aggregate_id` TEXT NOT NULL,
+                        `operation` TEXT NOT NULL,
+                        `base_revision` INTEGER,
+                        `new_revision` INTEGER NOT NULL,
+                        `domain_schema_version` INTEGER NOT NULL,
+                        `payload_json` TEXT NOT NULL,
+                        `payload_hash` TEXT NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`change_id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS `index_replication_outbox_command_id`
+                    ON `replication_outbox` (`command_id`)
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS `index_replication_outbox_state_created_at`
+                    ON `replication_outbox` (`state`, `created_at`)
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 LearningDatabase::class.java,
                 "learning-os.db"
             )
-                .addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6)
+                .addMigrations(
+                    Migration1To2,
+                    Migration2To3,
+                    Migration3To4,
+                    Migration4To5,
+                    Migration5To6,
+                    Migration6To7
+                )
                 .build()
     }
 }

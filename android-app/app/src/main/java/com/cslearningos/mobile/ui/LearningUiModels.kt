@@ -44,6 +44,12 @@ data class AppNotice(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+data class PendingNodeSave(
+    val commandId: String,
+    val nodeId: String,
+    val fingerprint: String
+)
+
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
     val assistant: AssistantUiState = AssistantUiState(),
@@ -68,6 +74,7 @@ data class LearningUiState(
     val editorSourceCaptureSlipId: String? = null,
     val editorTitle: String = "",
     val editorBody: String = "",
+    val pendingNodeSave: PendingNodeSave? = null,
     val searchQuery: String = "",
     val searchResults: List<SearchResultEntity> = emptyList(),
     val quizPrompt: String = "",

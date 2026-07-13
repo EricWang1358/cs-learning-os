@@ -124,6 +124,18 @@ interface LearningDao {
     @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
     suspend fun countActiveNodesInArea(areaId: String): Int
 
+    @Query("SELECT * FROM processed_commands WHERE command_id = :commandId LIMIT 1")
+    suspend fun getProcessedCommand(commandId: String): ProcessedCommandEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProcessedCommand(command: ProcessedCommandEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertOutbox(item: ReplicationOutboxEntity)
+
+    @Query("SELECT * FROM replication_outbox WHERE command_id = :commandId LIMIT 1")
+    suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertArea(area: AreaEntity)
 
@@ -214,6 +226,12 @@ interface LearningDao {
     @Query("DELETE FROM quiz_fts")
     suspend fun deleteAllQuizFts()
 
+    @Query("DELETE FROM processed_commands")
+    suspend fun deleteAllProcessedCommands()
+
+    @Query("DELETE FROM replication_outbox")
+    suspend fun deleteAllOutboxItems()
+
     @Query(
         """
         SELECT 'node' AS type, node_id AS id, title, snippet(node_fts, 3, '[', ']', '...', 12) AS snippet
@@ -258,6 +276,8 @@ interface LearningDao {
         quizFts: List<QuizFtsEntity>
     ) {
         clearAll()
+        deleteAllProcessedCommands()
+        deleteAllOutboxItems()
         upsertAreas(areas)
         upsertNodes(nodes)
         upsertQuizzes(quizzes)

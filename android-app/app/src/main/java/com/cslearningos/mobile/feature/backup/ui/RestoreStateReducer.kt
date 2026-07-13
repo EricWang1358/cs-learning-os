@@ -12,6 +12,7 @@ fun LearningUiState.resetTransientStateAfterRestore(): LearningUiState =
         editorSourceCaptureSlipId = null,
         editorTitle = "",
         editorBody = "",
+        pendingNodeSave = null,
         searchQuery = "",
         searchResults = emptyList(),
         quizPrompt = "",

@@ -1,0 +1,9 @@
+plugins {
+    id "cslearningos.kotlin.library"
+}
+
+dependencies {
+    implementation project(":core:kernel")
+    implementation project(":domain:content")
+    testImplementation libs.junit
+}

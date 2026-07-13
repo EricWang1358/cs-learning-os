@@ -17,15 +17,24 @@ $requiredPaths = @(
     "android-app/app/src/main/java/com/cslearningos/mobile/feature/capture",
     "android-app/app/src/main/java/com/cslearningos/mobile/feature/review",
     "android-app/core/kernel",
+    "android-app/core/database",
     "android-app/domain/assistant",
+    "android-app/domain/content",
+    "android-app/application/content",
+    "android-app/data/content-room",
     "android-app/feature/assistant/api",
     "android-app/feature/assistant/impl",
     "android-app/adapter/model-openai"
 )
 
 $requiredProjects = @(
+    ":app",
     ":core:kernel",
+    ":core:database",
     ":domain:assistant",
+    ":domain:content",
+    ":application:content",
+    ":data:content-room",
     ":feature:assistant:api",
     ":feature:assistant:impl",
     ":adapter:model-openai"
@@ -41,11 +50,20 @@ $forbiddenPureReferences = @(
 
 $moduleDependencyAllowlist = [ordered]@{
     "android-app/core/kernel" = @()
+    "android-app/core/database" = @()
     "android-app/domain/assistant" = @(':core:kernel')
+    "android-app/domain/content" = @(':core:kernel')
+    "android-app/application/content" = @(':core:kernel', ':domain:content')
+    "android-app/data/content-room" = @(':core:kernel', ':core:database', ':domain:content', ':application:content')
     "android-app/feature/assistant/api" = @()
     "android-app/feature/assistant/impl" = @(':feature:assistant:api')
     "android-app/adapter/model-openai" = @(':domain:assistant')
     "android-app/app" = @(
+        ':core:kernel',
+        ':core:database',
+        ':domain:content',
+        ':application:content',
+        ':data:content-room',
         ':domain:assistant',
         ':feature:assistant:api',
         ':feature:assistant:impl',
@@ -53,11 +71,22 @@ $moduleDependencyAllowlist = [ordered]@{
     )
 }
 
-$pureSourceRoots = @(
-    "android-app/core/kernel/src/main",
-    "android-app/domain/assistant/src/main",
-    "android-app/feature/assistant/api/src/main"
-)
+$sourceBoundaryRules = [ordered]@{
+    "android-app/core/kernel/src/main" = $forbiddenPureReferences
+    "android-app/domain/assistant/src/main" = $forbiddenPureReferences
+    "android-app/feature/assistant/api/src/main" = $forbiddenPureReferences
+    "android-app/domain/content/src/main" = @(
+        "android.", "androidx.", "com.cslearningos.mobile.ui.",
+        "com.cslearningos.mobile.data.", "org.json.", "androidx.room."
+    )
+    "android-app/application/content/src/main" = $forbiddenPureReferences
+    "android-app/core/database/src/main" = @(
+        "com.cslearningos.mobile.ui.", "com.cslearningos.mobile.app."
+    )
+    "android-app/data/content-room/src/main" = @(
+        "com.cslearningos.mobile.ui.", "androidx.compose."
+    )
+}
 
 $violations = [System.Collections.Generic.List[string]]::new()
 
@@ -128,7 +157,7 @@ if ($null -ne $appBuild -and $appBuild.Contains("../content-demo")) {
     $violations.Add("App build input escapes android-app: android-app/app/build.gradle contains ../content-demo")
 }
 
-$projectDependencyPattern = 'project\s*\(\s*(?:path\s*[:=]\s*)?["''](?<path>:[^"'']+)["'']\s*\)'
+$projectDependencyPattern = 'project\s*\(\s*(?:path\s*[:=]\s*)?["''](?<path>:[^"'']+)["''](?:\s*,[^)]*)?\s*\)'
 foreach ($modulePath in $moduleDependencyAllowlist.Keys) {
     $buildText = Get-ModuleBuildText $modulePath
     if ($null -eq $buildText) { continue }
@@ -150,7 +179,7 @@ foreach ($modulePath in $moduleDependencyAllowlist.Keys) {
     }
 }
 
-foreach ($sourceRoot in $pureSourceRoots) {
+foreach ($sourceRoot in $sourceBoundaryRules.Keys) {
     $fullSourceRoot = Join-Path $ProjectRoot $sourceRoot
     if (-not (Test-Path -LiteralPath $fullSourceRoot -PathType Container)) {
         $violations.Add("Pure Kotlin source root is missing: $sourceRoot")
@@ -159,14 +188,14 @@ foreach ($sourceRoot in $pureSourceRoots) {
     foreach ($file in Get-ChildItem -LiteralPath $fullSourceRoot -Recurse -File -Filter "*.kt") {
         $rootPrefix = $ProjectRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
         $relativeFile = $file.FullName.Substring($rootPrefix.Length)
-        foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern $forbiddenPureReferences) {
+        foreach ($match in Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern $sourceBoundaryRules[$sourceRoot]) {
             $violations.Add("Forbidden pure-module reference: ${relativeFile}:$($match.LineNumber): $($match.Line.Trim())")
         }
     }
 }
 
 $androidRoot = Join-Path $ProjectRoot "android-app"
-$gradleFiles = Get-ChildItem -LiteralPath $androidRoot -Recurse -File | Where-Object {
+$gradleFiles = Get-ChildItem -LiteralPath $androidRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -in @("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts") -and
     $_.FullName -notmatch '[\\/]build[\\/]' -and
     $_.FullName -notmatch '[\\/]\.gradle[\\/]'

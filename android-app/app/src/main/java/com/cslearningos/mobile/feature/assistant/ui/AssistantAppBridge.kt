@@ -4,7 +4,7 @@ import com.cslearningos.mobile.assistant.api.AssistantConversationPolicy
 import com.cslearningos.mobile.assistant.api.AssistantEntryRequest
 import com.cslearningos.mobile.assistant.api.AssistantTargetRef
 import com.cslearningos.mobile.R
-import com.cslearningos.mobile.domain.MarkdownQuizParser
+import com.cslearningos.mobile.content.domain.MarkdownQuizParser
 import com.cslearningos.mobile.ui.AppScreen
 import com.cslearningos.mobile.ui.LearningUiState
 import com.cslearningos.mobile.ui.assistantMarkdownDraft
@@ -125,6 +125,7 @@ class AssistantAppBridge(
                     editorSourceCaptureSlipId = null,
                     editorTitle = draft.title,
                     editorBody = draft.body,
+                    pendingNodeSave = null,
                     message = uiText(assistantDraftReadyMessageResId(action.markdown, action.areaId))
                 )
             }
@@ -140,7 +141,7 @@ class AssistantAppBridge(
                         prompt = newAction.prompt,
                         answer = newAction.answer,
                         explanation = newAction.explanation
-                    )
+                    ).copy(pendingNodeSave = null)
                 }
                 return@launch
             }
@@ -161,6 +162,7 @@ class AssistantAppBridge(
                     quizAnswer = action.answer,
                     quizExplanation = action.explanation,
                     quizAreaId = null,
+                    pendingNodeSave = null,
                     message = uiText(R.string.message_assistant_draft_ready)
                 )
             }
@@ -184,6 +186,7 @@ class AssistantAppBridge(
                     captureTopicHint = action.topicHint,
                     captureSourceLabel = action.sourceLabel,
                     captureType = action.type,
+                    pendingNodeSave = null,
                     message = uiText(R.string.message_assistant_draft_ready)
                 )
             }
@@ -209,6 +212,7 @@ class AssistantAppBridge(
                         screen = AppScreen.Review,
                         selectedQuiz = destination.quiz,
                         quizAnswerVisible = false,
+                        pendingNodeSave = null,
                         message = null
                     )
                 }
@@ -222,6 +226,7 @@ class AssistantAppBridge(
                         captureTopicHint = destination.slip.topicHint.orEmpty(),
                         captureSourceLabel = destination.slip.sourceLabel.orEmpty(),
                         captureType = destination.slip.type,
+                        pendingNodeSave = null,
                         message = null
                     )
                 }
