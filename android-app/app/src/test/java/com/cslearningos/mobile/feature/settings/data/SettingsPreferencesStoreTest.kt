@@ -60,19 +60,30 @@ class SettingsPreferencesStoreTest {
     }
 
     @Test
-    fun loadLeavesLegacyPlaintextWhenMigrationEncryptionFails() {
+    fun loadClearsLegacyPlaintextWhenMigrationEncryptionFails() {
         aiPrefs.edit().putString("apiKey", "sk-legacy").commit()
         val store = SettingsPreferencesStore(aiPrefs, appPrefs, FailingApiKeyProtector)
 
         val loaded = store.loadSettings()
 
         assertEquals("", loaded.aiSettings.apiKey)
-        assertEquals("sk-legacy", aiPrefs.getString("apiKey", null))
+        assertFalse(aiPrefs.contains("apiKey"))
         assertFalse(aiPrefs.contains("apiKeyEncrypted"))
     }
 
     @Test
-    fun savePreservesUnresolvedLegacyApiKeyUntilNonblankEncryptionSucceeds() {
+    fun loadClearsLegacyPlaintextWhenMigrationEncryptionProducesMalformedCiphertext() {
+        aiPrefs.edit().putString("apiKey", "sk-legacy").commit()
+
+        val loaded = SettingsPreferencesStore(aiPrefs, appPrefs, MalformedEncryptionProtector).loadSettings()
+
+        assertEquals("", loaded.aiSettings.apiKey)
+        assertFalse(aiPrefs.contains("apiKey"))
+        assertFalse(aiPrefs.contains("apiKeyEncrypted"))
+    }
+
+    @Test
+    fun saveDoesNotRestoreLegacyPlaintextAfterFailedMigration() {
         aiPrefs.edit().putString("apiKey", "sk-legacy").commit()
         val unresolvedStore = SettingsPreferencesStore(aiPrefs, appPrefs, FailsLegacyEncryptionProtector)
 
@@ -83,7 +94,7 @@ class SettingsPreferencesStoreTest {
             )
         )
 
-        assertEquals("sk-legacy", aiPrefs.getString("apiKey", null))
+        assertFalse(aiPrefs.contains("apiKey"))
         assertFalse(aiPrefs.contains("apiKeyEncrypted"))
 
         newStore().saveSettings(snapshot(apiKey = "sk-reentered"))
@@ -102,7 +113,21 @@ class SettingsPreferencesStoreTest {
         val loaded = newStore().loadSettings()
 
         assertEquals("", loaded.aiSettings.apiKey)
-        assertEquals("sk-legacy", aiPrefs.getString("apiKey", null))
+        assertFalse(aiPrefs.contains("apiKey"))
+        assertFalse(aiPrefs.contains("apiKeyEncrypted"))
+    }
+
+    @Test
+    fun clearApiKeyRemovesBothEncryptedAndLegacyValues() {
+        aiPrefs.edit()
+            .putString("apiKeyEncrypted", "fake:c2stc2VjcmV0")
+            .putString("apiKey", "sk-legacy")
+            .commit()
+
+        newStore().clearApiKey()
+
+        assertFalse(aiPrefs.contains("apiKey"))
+        assertFalse(aiPrefs.contains("apiKeyEncrypted"))
     }
 
     @Test
@@ -182,5 +207,11 @@ class SettingsPreferencesStoreTest {
         }
 
         override fun decrypt(envelope: String): String? = FakeApiKeyProtector.decrypt(envelope)
+    }
+
+    private object MalformedEncryptionProtector : ApiKeyProtector {
+        override fun encrypt(plainText: String): String = "malformed"
+
+        override fun decrypt(envelope: String): String? = null
     }
 }

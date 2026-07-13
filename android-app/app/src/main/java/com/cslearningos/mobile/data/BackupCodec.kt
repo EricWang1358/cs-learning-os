@@ -13,6 +13,10 @@ object BackupCodec {
 
     /** Bounds raw JSON before org.json allocates a deeply nested object graph. */
     const val MaxJsonNesting = 64
+    /** Bounds every raw JSON object and array, including unknown payload containers. */
+    const val MaxJsonContainerEntries = MaxRecordsPerCollection
+    /** Allows every supported collection at its record limit while bounding unknown payloads globally. */
+    const val MaxJsonValues = 200_000
 
     fun encode(backup: LearningBackup): String =
         JSONObject()
@@ -361,42 +365,175 @@ object BackupCodec {
     }
 
     private fun validateRawJsonStructure(rawJson: String) {
-        val openings = ArrayDeque<Char>()
-        var inString = false
-        var escaping = false
+        val containers = ArrayDeque<RawJsonContainer>()
+        var index = 0
+        var rootValueSeen = false
+        var valueCount = 0
 
-        rawJson.forEach { character ->
-            if (inString) {
-                when {
-                    escaping -> escaping = false
-                    character == '\\' -> escaping = true
-                    character == '"' -> inString = false
+        fun countValue() {
+            valueCount += 1
+            require(valueCount <= MaxJsonValues) {
+                "Backup JSON exceeds $MaxJsonValues values."
+            }
+        }
+
+        fun countContainerEntry(container: RawJsonContainer) {
+            container.entryCount += 1
+            require(container.entryCount <= MaxJsonContainerEntries) {
+                "Backup JSON ${if (container.opening == '[') "array" else "object"} exceeds " +
+                    "$MaxJsonContainerEntries entries."
+            }
+        }
+
+        fun startValue(): Int {
+            countValue()
+            return when (rawJson[index]) {
+                '{', '[' -> {
+                    containers.addLast(RawJsonContainer(rawJson[index]))
+                    require(containers.size <= MaxJsonNesting) {
+                        "Backup JSON nesting exceeds $MaxJsonNesting levels."
+                    }
+                    index + 1
                 }
-            } else {
-                when (character) {
-                    '"' -> inString = true
-                    '{', '[' -> {
-                        openings.addLast(character)
-                        require(openings.size <= MaxJsonNesting) {
-                            "Backup JSON nesting exceeds $MaxJsonNesting levels."
+
+                '"' -> consumeJsonString(rawJson, index)
+                '}', ']', ',', ':' -> throw IllegalArgumentException("Backup JSON contains an unmatched closure.")
+                else -> consumeRawJsonScalar(rawJson, index)
+            }
+        }
+
+        while (index < rawJson.length) {
+            if (rawJson[index].isWhitespace()) {
+                index += 1
+                continue
+            }
+
+            if (containers.isEmpty()) {
+                require(!rootValueSeen) { "Backup JSON contains trailing content." }
+                rootValueSeen = true
+                index = startValue()
+                continue
+            }
+
+            val container = containers.last()
+            if (container.opening == '[') {
+                when (container.state) {
+                    ARRAY_EXPECT_VALUE_OR_END -> {
+                        if (rawJson[index] == ']') {
+                            containers.removeLast()
+                            index += 1
+                        } else {
+                            countContainerEntry(container)
+                            container.state = ARRAY_EXPECT_COMMA_OR_END
+                            index = startValue()
                         }
                     }
 
-                    '}', ']' -> {
-                        require(openings.isNotEmpty() && matches(openings.removeLast(), character)) {
-                            "Backup JSON contains an unmatched closure."
+                    ARRAY_EXPECT_COMMA_OR_END -> when (rawJson[index]) {
+                        ',' -> {
+                            container.state = ARRAY_EXPECT_VALUE_OR_END
+                            index += 1
                         }
+
+                        ']' -> {
+                            containers.removeLast()
+                            index += 1
+                        }
+
+                        else -> throw IllegalArgumentException("Backup JSON array is missing a separator.")
+                    }
+                }
+            } else {
+                when (container.state) {
+                    OBJECT_EXPECT_KEY_OR_END -> {
+                        if (rawJson[index] == '}') {
+                            containers.removeLast()
+                            index += 1
+                        } else {
+                            require(rawJson[index] == '"') { "Backup JSON object key must be a string." }
+                            countContainerEntry(container)
+                            container.state = OBJECT_EXPECT_COLON
+                            index = consumeJsonString(rawJson, index)
+                        }
+                    }
+
+                    OBJECT_EXPECT_COLON -> {
+                        require(rawJson[index] == ':') { "Backup JSON object key is missing a value." }
+                        container.state = OBJECT_EXPECT_VALUE
+                        index += 1
+                    }
+
+                    OBJECT_EXPECT_VALUE -> {
+                        container.state = OBJECT_EXPECT_COMMA_OR_END
+                        index = startValue()
+                    }
+
+                    OBJECT_EXPECT_COMMA_OR_END -> when (rawJson[index]) {
+                        ',' -> {
+                            container.state = OBJECT_EXPECT_KEY_OR_END
+                            index += 1
+                        }
+
+                        '}' -> {
+                            containers.removeLast()
+                            index += 1
+                        }
+
+                        else -> throw IllegalArgumentException("Backup JSON object is missing a separator.")
                     }
                 }
             }
         }
 
-        require(!inString) { "Backup JSON contains an unterminated string." }
-        require(openings.isEmpty()) { "Backup JSON contains unmatched openings." }
+        require(rootValueSeen) { "Backup JSON is empty." }
+        require(containers.isEmpty()) { "Backup JSON contains unmatched openings." }
     }
 
-    private fun matches(opening: Char, closing: Char): Boolean =
-        (opening == '{' && closing == '}') || (opening == '[' && closing == ']')
+    private fun consumeJsonString(rawJson: String, startIndex: Int): Int {
+        var index = startIndex + 1
+        while (index < rawJson.length) {
+            when (rawJson[index]) {
+                '"' -> return index + 1
+                '\\' -> {
+                    index += 1
+                    require(index < rawJson.length) { "Backup JSON contains an unterminated string." }
+                    if (rawJson[index] == 'u') {
+                        require(index + 4 < rawJson.length && (index + 1..index + 4).all { rawJson[it].isDigit() || rawJson[it].lowercaseChar() in 'a'..'f' }) {
+                            "Backup JSON contains an invalid string escape."
+                        }
+                        index += 4
+                    } else {
+                        require(rawJson[index] in "\\\"/bfnrt") { "Backup JSON contains an invalid string escape." }
+                    }
+                }
+            }
+            index += 1
+        }
+        throw IllegalArgumentException("Backup JSON contains an unterminated string.")
+    }
+
+    private fun consumeRawJsonScalar(rawJson: String, startIndex: Int): Int {
+        var index = startIndex
+        while (index < rawJson.length && rawJson[index] !in RAW_JSON_VALUE_DELIMITERS) {
+            index += 1
+        }
+        require(index > startIndex) { "Backup JSON contains an invalid value." }
+        return index
+    }
+
+    private data class RawJsonContainer(
+        val opening: Char,
+        var state: Int = ARRAY_EXPECT_VALUE_OR_END,
+        var entryCount: Int = 0
+    )
+
+    private const val ARRAY_EXPECT_VALUE_OR_END = 0
+    private const val ARRAY_EXPECT_COMMA_OR_END = 1
+    private const val OBJECT_EXPECT_KEY_OR_END = 0
+    private const val OBJECT_EXPECT_COLON = 1
+    private const val OBJECT_EXPECT_VALUE = 2
+    private const val OBJECT_EXPECT_COMMA_OR_END = 3
+    private const val RAW_JSON_VALUE_DELIMITERS = " \t\r\n,]}"
 
     private fun JSONObject.nullableString(name: String): String? =
         if (isNull(name)) null else getString(name)

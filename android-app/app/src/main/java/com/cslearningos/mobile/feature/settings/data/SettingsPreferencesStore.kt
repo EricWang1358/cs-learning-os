@@ -96,11 +96,25 @@ class SettingsPreferencesStore(
 
     private fun loadApiKey(): String {
         val encryptedApiKey = aiPrefs.getString(KEY_API_KEY_ENCRYPTED, null)
-        if (encryptedApiKey != null) return apiKeyProtector.decrypt(encryptedApiKey) ?: DEFAULT_API_KEY
+        if (encryptedApiKey != null) {
+            val decryptedApiKey = runCatching { apiKeyProtector.decrypt(encryptedApiKey) }.getOrNull()
+            if (decryptedApiKey != null) return decryptedApiKey
+            clearApiKey()
+            return DEFAULT_API_KEY
+        }
 
         val legacyApiKey = aiPrefs.getString(KEY_API_KEY, null) ?: return DEFAULT_API_KEY
-        val migratedApiKey = runCatching { apiKeyProtector.encrypt(legacyApiKey) }.getOrNull()
-            ?: return DEFAULT_API_KEY
+        val migratedApiKey = runCatching {
+            apiKeyProtector.encrypt(legacyApiKey).takeIf { encrypted ->
+                apiKeyProtector.decrypt(encrypted) == legacyApiKey
+            }
+        }.getOrNull()
+        if (migratedApiKey == null) {
+            // Keeping plaintext as a recovery fallback would violate the at-rest encryption policy.
+            // A failed migration therefore requires the user to enter the key again.
+            clearApiKey()
+            return DEFAULT_API_KEY
+        }
         aiPrefs.edit()
             .putString(KEY_API_KEY_ENCRYPTED, migratedApiKey)
             .remove(KEY_API_KEY)

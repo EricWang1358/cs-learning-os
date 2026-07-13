@@ -112,7 +112,7 @@ class BackupCodecAreaCompatibilityTest {
             BackupCodec.decode(rawJson)
         }
 
-        assertTrue(error.message.orEmpty().contains("nodes"))
+        assertTrue(error.message.orEmpty().contains("array"))
     }
 
     @Test
@@ -160,6 +160,31 @@ class BackupCodecAreaCompatibilityTest {
         }
 
         assertTrue(error.message.orEmpty().contains("nesting"))
+    }
+
+    @Test
+    fun decodeRejectsOversizedUnknownTopLevelArrayBeforeJsonObjectParsing() {
+        val scalars = (1..2_001).joinToString(",") { "0" }
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            BackupCodec.decode(backupJson(extra = "\"unknown\":[$scalars]"))
+        }
+
+        assertTrue(error.message.orEmpty().contains("array"))
+    }
+
+    @Test
+    fun decodeRejectsOversizedUnknownPerRecordArrayBeforeJsonObjectParsing() {
+        val scalars = (1..2_001).joinToString(",") { "0" }
+        val node = nodeJson(title = "Paging")
+            .removeSuffix("}")
+            .plus(", \"unknown\":[$scalars]}")
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            BackupCodec.decode(backupJson(nodes = "[$node]"))
+        }
+
+        assertTrue(error.message.orEmpty().contains("array"))
     }
 
     @Test
