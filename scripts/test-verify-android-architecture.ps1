@@ -159,6 +159,10 @@ include ":adapter:model-openai"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "reverse database dependency"
     Set-FixtureFile $fixtureRoot "android-app/core/database/build.gradle" "dependencies {}"
 
+    Set-FixtureFile $fixtureRoot "android-app/core/database/build.gradle" "implementation project(path: ':app', configuration: 'default')"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "configured reverse database dependency"
+    Set-FixtureFile $fixtureRoot "android-app/core/database/build.gradle" "dependencies {}"
+
     Set-FixtureFile $fixtureRoot "android-app/domain/content/src/main/kotlin/example/Content.kt" "package example`nimport androidx.room.Entity"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "Room reference in content domain"
     Remove-Item -Force (Join-Path $fixtureRoot "android-app/domain/content/src/main/kotlin/example/Content.kt")

@@ -159,7 +159,7 @@ if ($null -ne $appBuild -and $appBuild.Contains("../content-demo")) {
     $violations.Add("App build input escapes android-app: android-app/app/build.gradle contains ../content-demo")
 }
 
-$projectDependencyPattern = 'project\s*\(\s*(?:path\s*[:=]\s*)?["''](?<path>:[^"'']+)["'']\s*\)'
+$projectDependencyPattern = 'project\s*\(\s*(?:path\s*[:=]\s*)?["''](?<path>:[^"'']+)["''](?:\s*,[^)]*)?\s*\)'
 foreach ($modulePath in $moduleDependencyAllowlist.Keys) {
     $buildText = Get-ModuleBuildText $modulePath
     if ($null -eq $buildText) { continue }
