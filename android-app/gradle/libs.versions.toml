@@ -4,7 +4,7 @@ coroutines = "1.9.0"
 json = "20240303"
 junit = "4.13.2"
 room = "2.6.1"
-robolectric = "4.13.2"
+robolectric = "4.13"
 androidx-test-core = "1.6.1"
 
 [libraries]

@@ -12,6 +12,10 @@ android {
         minSdk 26
     }
 
+    sourceSets {
+        test.assets.srcDirs += ["$projectDir/schemas"]
+    }
+
     testOptions {
         unitTests.includeAndroidResources = true
     }
@@ -28,7 +32,7 @@ android {
 
 dependencies {
     implementation libs.coroutines.core
-    implementation libs.room.runtime
+    api libs.room.runtime
     implementation libs.room.ktx
     ksp libs.room.compiler
 

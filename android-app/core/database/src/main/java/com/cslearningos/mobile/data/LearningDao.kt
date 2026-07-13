@@ -124,6 +124,18 @@ interface LearningDao {
     @Query("SELECT COUNT(*) FROM learning_nodes WHERE area_id = :areaId AND deleted_at IS NULL")
     suspend fun countActiveNodesInArea(areaId: String): Int
 
+    @Query("SELECT * FROM processed_commands WHERE command_id = :commandId LIMIT 1")
+    suspend fun getProcessedCommand(commandId: String): ProcessedCommandEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProcessedCommand(command: ProcessedCommandEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertOutbox(item: ReplicationOutboxEntity)
+
+    @Query("SELECT * FROM replication_outbox WHERE command_id = :commandId LIMIT 1")
+    suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertArea(area: AreaEntity)
 

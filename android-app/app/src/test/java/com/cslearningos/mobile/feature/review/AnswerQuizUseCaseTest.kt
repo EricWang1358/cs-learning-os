@@ -5,6 +5,7 @@ import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.NodeFtsEntity
+import com.cslearningos.mobile.data.ProcessedCommandEntity
 import com.cslearningos.mobile.data.QuizFtsEntity
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
@@ -12,6 +13,7 @@ import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.ReviewAttemptEntity
 import com.cslearningos.mobile.data.ReviewResult
 import com.cslearningos.mobile.data.ReviewStateEntity
+import com.cslearningos.mobile.data.ReplicationOutboxEntity
 import com.cslearningos.mobile.domain.ReviewRating
 import com.cslearningos.mobile.feature.review.data.ReviewRepository
 import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
@@ -95,6 +97,10 @@ private class FakeReviewLearningDao(
     override suspend fun getAssistantConversation(id: String): AssistantConversationEntity? = unsupported()
     override suspend fun deleteAssistantConversation(id: String) = unsupported()
     override suspend fun countActiveNodesInArea(areaId: String): Int = unsupported()
+    override suspend fun getProcessedCommand(commandId: String): ProcessedCommandEntity? = unsupported()
+    override suspend fun insertProcessedCommand(command: ProcessedCommandEntity) = unsupported()
+    override suspend fun insertOutbox(item: ReplicationOutboxEntity) = unsupported()
+    override suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity? = unsupported()
     override suspend fun upsertArea(area: AreaEntity) = unsupported()
     override suspend fun upsertNode(node: LearningNodeEntity) = unsupported()
     override suspend fun upsertQuiz(quiz: QuizItemEntity) = unsupported()

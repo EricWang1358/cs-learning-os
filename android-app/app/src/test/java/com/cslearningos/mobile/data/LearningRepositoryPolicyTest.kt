@@ -1201,6 +1201,8 @@ private class FakeLearningDao : LearningDao {
     val reviewAttempts = linkedMapOf<String, ReviewAttemptEntity>()
     val readerQuestions = linkedMapOf<String, ReaderQuestionEntity>()
     val captureSlips = linkedMapOf<String, CaptureSlipEntity>()
+    val processedCommands = linkedMapOf<String, ProcessedCommandEntity>()
+    val outbox = linkedMapOf<String, ReplicationOutboxEntity>()
     val deletedNodeFtsIds = mutableListOf<String>()
     val deletedQuizFtsIds = mutableListOf<String>()
 
@@ -1254,6 +1256,19 @@ private class FakeLearningDao : LearningDao {
     override suspend fun deleteAssistantConversation(id: String) = Unit
     override suspend fun countActiveNodesInArea(areaId: String): Int =
         nodes.values.count { it.areaId == areaId && it.deletedAt == null }
+    override suspend fun getProcessedCommand(commandId: String): ProcessedCommandEntity? =
+        processedCommands[commandId]
+    override suspend fun insertProcessedCommand(command: ProcessedCommandEntity) {
+        check(command.commandId !in processedCommands)
+        processedCommands[command.commandId] = command
+    }
+    override suspend fun insertOutbox(item: ReplicationOutboxEntity) {
+        check(item.changeId !in outbox)
+        check(outbox.values.none { it.commandId == item.commandId })
+        outbox[item.changeId] = item
+    }
+    override suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity? =
+        outbox.values.firstOrNull { it.commandId == commandId }
     override suspend fun upsertArea(area: AreaEntity) {
         areas[area.id] = area
     }
