@@ -10,7 +10,8 @@ data class ParsedQuizCard(
 )
 
 object MarkdownQuizParser {
-    private val StartRegex = Regex("""^:::\s*quiz(?:\s+id=([A-Za-z0-9_-]+))?\s*$""")
+    private val StartRegex = Regex("""^:::\s*quiz(?:\s+id=([A-Za-z0-9_-]+))?\s*(.*)$""")
+    private val FieldRegex = Regex("""^(question|answer|explanation)\s*:\s*(.*)$""", RegexOption.IGNORE_CASE)
 
     fun parse(markdown: String): List<ParsedQuizCard> {
         val lines = markdown.lines()
@@ -25,24 +26,13 @@ object MarkdownQuizParser {
             }
 
             val fields = linkedMapOf<String, String>()
-            var currentKey: String? = null
+            val inlinePayload = match.groupValues.getOrNull(2).orEmpty().trim()
+            if (inlinePayload.isNotBlank()) {
+                applyQuizLine(inlinePayload, fields)
+            }
             index += 1
             while (index < lines.size && lines[index].trim() != ":::") {
-                val line = lines[index]
-                val delimiter = line.indexOf(':')
-                if (delimiter > 0) {
-                    val key = line.substring(0, delimiter).trim().lowercase()
-                    val value = line.substring(delimiter + 1).trim()
-                    fields[key] = value
-                    currentKey = key
-                } else if (currentKey != null && line.startsWith(" ")) {
-                    val continuation = line.trim()
-                    if (continuation.isNotBlank()) {
-                        fields[currentKey] = listOf(fields[currentKey].orEmpty(), continuation)
-                            .filter { it.isNotBlank() }
-                            .joinToString("\n")
-                    }
-                }
+                applyQuizLine(lines[index], fields)
                 index += 1
             }
 
@@ -62,6 +52,24 @@ object MarkdownQuizParser {
         }
 
         return cards
+    }
+
+    private fun applyQuizLine(line: String, fields: MutableMap<String, String>): String? {
+        val trimmed = line.trim()
+        val field = FieldRegex.matchEntire(trimmed)
+        if (field != null) {
+            val key = field.groupValues[1].lowercase()
+            fields[key] = field.groupValues[2].trim()
+            return key
+        }
+
+        val currentKey = fields.keys.lastOrNull() ?: return null
+        if (trimmed.isNotBlank()) {
+            fields[currentKey] = listOf(fields[currentKey].orEmpty(), trimmed)
+                .filter { it.isNotBlank() }
+                .joinToString("\n")
+        }
+        return currentKey
     }
 
     private fun stableAnonymousAnchor(prompt: String, answer: String): String {

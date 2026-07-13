@@ -111,6 +111,29 @@ class AiProviderModelsTest {
         )
     }
 
+    @Test
+    fun assistantMarkdownDraftUsesPlainTitleDirectiveBeforeMarkdownHeading() {
+        val draft = assistantMarkdownDraft(
+            """
+            <!-- cs-title: Skill 触发机制 -->
+            # Model accidentally returned a Markdown title too
+
+            ## Core concepts
+            Skills are chosen before the skill body is loaded.
+            """.trimIndent(),
+            fallback = "Capture Draft"
+        )
+
+        assertEquals("Skill 触发机制", draft.title)
+        assertEquals(
+            """
+            ## Core concepts
+            Skills are chosen before the skill body is loaded.
+            """.trimIndent(),
+            draft.body
+        )
+    }
+
     private fun captureSlip(): CaptureSlipEntity =
         CaptureSlipEntity(
             id = "slip-1",

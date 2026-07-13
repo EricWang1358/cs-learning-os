@@ -89,6 +89,13 @@ object AssistantMarkdownNormalizer {
                 continue
             }
 
+            val splitHeadingTable = splitHeadingCollapsedIntoTableHeader(line, lines.getOrNull(index + 1))
+            if (splitHeadingTable != null) {
+                normalized += splitHeadingTable
+                index += 1
+                continue
+            }
+
             normalized += normalizeLine(line)
             index += 1
         }
@@ -158,6 +165,23 @@ object AssistantMarkdownNormalizer {
         return normalized
     }
 
+    private fun splitHeadingCollapsedIntoTableHeader(line: String, nextLine: String?): List<String>? {
+        val trimmedNext = nextLine?.trim().orEmpty()
+        if (!TableDelimiterLine.matches(trimmedNext)) return null
+
+        val indent = line.takeWhile { it == ' ' || it == '\t' }
+        val content = line.drop(indent.length)
+        val match = HeadingWithTableHeader.matchEntire(content) ?: return null
+        val heading = normalizeHeading(match.groupValues[1])
+        val header = match.groupValues[2].trim().trimStart('|')
+        if (header.isBlank()) return null
+        return listOf(
+            indent + heading,
+            "",
+            indent + "|$header"
+        )
+    }
+
     private val TightHeading = Regex("^(#{1,6})([^#\\s].*)$")
     private val TextPrefixedHeading = Regex("(?i)^text(#{1,6})([^#\\s].*)$")
     private val TightBullet = Regex("^([-*])([^\\s].*)$")
@@ -167,4 +191,6 @@ object AssistantMarkdownNormalizer {
     private val MalformedFenceHeader = Regex("^(```|~~~)(kotlin|java|json|text|markdown|md|xml|yaml|yml|bash|sh|python|js|ts)([^\\s].+)$", RegexOption.IGNORE_CASE)
     private val MarkdownHeadingLine = Regex("^#{1,6}\\s*[^#\\s].*$")
     private val MarkdownSectionLine = Regex("^(#{1,6}\\s*[^#\\s].*|[-*]\\s+.+)$")
+    private val HeadingWithTableHeader = Regex("^(#{1,6}\\s+[^|]+?)\\|(.+\\|\\s*)$")
+    private val TableDelimiterLine = Regex("^\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$")
 }

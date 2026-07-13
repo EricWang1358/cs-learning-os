@@ -59,7 +59,8 @@ class AssistantSafetyPolicyTest {
         )
 
         assertTrue(prompt.contains("cs-area-reason"))
-        assertTrue(prompt.contains("still draft the note"))
-        assertTrue(prompt.contains("Never invent an Area"))
+        assertTrue(prompt.contains("cs-title"))
+        assertTrue(prompt.contains("never invent an Area"))
+        assertTrue(prompt.contains(":::quiz on its own line"))
     }
 }

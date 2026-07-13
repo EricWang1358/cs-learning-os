@@ -256,6 +256,9 @@
     <string name="review_select_area_title">Choose review range</string>
     <string name="review_select_area_summary">%1$d due today · %2$d total cards</string>
     <string name="review_area_due_total">%1$d due · %2$d total</string>
+    <string name="review_area_empty_cards">No review cards in this Area yet.</string>
+    <string name="review_card_due_badge">Due</string>
+    <string name="review_card_total_badge">Card</string>
     <string name="review_progress_body">Card %1$d / %2$d · %3$s</string>
     <string name="review_empty_title">Queue is clear</string>
     <string name="review_empty_body">Add quiz cards from a note or Markdown :::quiz block. Due cards will appear here.</string>

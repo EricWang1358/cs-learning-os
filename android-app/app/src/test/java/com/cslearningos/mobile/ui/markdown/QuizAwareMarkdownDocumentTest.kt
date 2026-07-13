@@ -137,4 +137,24 @@ class QuizAwareMarkdownDocumentTest {
         assertTrue(code.code.contains("interface MyInterface"))
         assertTrue(code.code.contains("fun bar()"))
     }
+
+    @Test
+    fun parseRecoversTableWhenAssistantCollapsesHeadingAndHeader() {
+        val blocks = QuizAwareMarkdownDocument.parse(
+            """
+            ## Examples or cases|请求类型 |示例 |是否触发 Skill |原因 |
+            |----------|-----|----------------|-----|
+            |简单单步任务|"读取这个 PDF"|通常不触发|Claude 直接处理更高效|
+            |复杂多步任务|"提取 PDF 中的表格并转为 Excel"|触发|需要专门的工作流程|
+            """.trimIndent()
+        )
+
+        assertEquals(2, blocks.size)
+        assertEquals(MarkdownHeadingBlock::class.java, blocks[0]::class.java)
+        assertEquals(MarkdownTableBlock::class.java, blocks[1]::class.java)
+
+        val table = blocks[1] as MarkdownTableBlock
+        assertEquals(4, table.headers.size)
+        assertEquals(2, table.rows.size)
+    }
 }

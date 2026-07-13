@@ -80,4 +80,26 @@ class AssistantMarkdownNormalizerTest {
             normalized
         )
     }
+
+    @Test
+    fun normalizeSplitsHeadingThatWasCollapsedIntoTableHeader() {
+        val normalized = AssistantMarkdownNormalizer.normalize(
+            """
+            ## Examples or cases|请求类型 |示例 |是否触发 Skill |原因 |
+            |----------|-----|----------------|-----|
+            |简单单步任务|"读取这个 PDF"|通常不触发|Claude 直接处理更高效|
+            """.trimIndent()
+        )
+
+        assertEquals(
+            """
+            ## Examples or cases
+
+            |请求类型 |示例 |是否触发 Skill |原因 |
+            |----------|-----|----------------|-----|
+            |简单单步任务|"读取这个 PDF"|通常不触发|Claude 直接处理更高效|
+            """.trimIndent(),
+            normalized
+        )
+    }
 }

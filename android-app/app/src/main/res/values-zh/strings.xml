@@ -162,6 +162,9 @@
     <string name="review_select_area_title">选择复习范围</string>
     <string name="review_select_area_summary">今天到期 %1$d 张 · 总计 %2$d 张</string>
     <string name="review_area_due_total">到期 %1$d · 总计 %2$d</string>
+    <string name="review_area_empty_cards">这个 Area 还没有复习卡片。</string>
+    <string name="review_card_due_badge">到期</string>
+    <string name="review_card_total_badge">卡片</string>
     <string name="review_progress_body">第 %1$d / %2$d 题 · %3$s</string>
     <string name="review_empty_title">队列已清空</string>
     <string name="review_empty_body">可以从笔记或 Markdown 的 :::quiz 块生成测验卡片。到期后会在这里出现。</string>

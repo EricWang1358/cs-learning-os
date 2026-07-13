@@ -76,8 +76,8 @@ fun buildCaptureAiDraftPrompt(
         Return Markdown only. Do not wrap the answer in code fences.
         If one existing Area below is a clear fit, begin with <!-- cs-area: AREA_ID --> and <!-- cs-area-reason: one concrete reason -->.
         If no Area is a clear fit, omit both directives. Never invent an Area.
+        Begin with <!-- cs-title: concise plain-text title -->.
         Include these sections:
-        # A concise learning-node title
         ## Captured Context
         ## Explanation
         ## Common Mistake
@@ -115,10 +115,17 @@ fun assistantMarkdownDraft(markdown: String, fallback: String): AssistantMarkdow
         return AssistantMarkdownDraft(title = fallback, body = "")
     }
 
-    val lines = normalized.lines()
+    val explicitTitle = CsTitleDirective.find(normalized)
+        ?.groupValues
+        ?.get(1)
+        ?.cleanPlainTitle()
+        ?.takeIf(String::isNotBlank)
+
+    val withoutTitleDirective = normalized.replace(CsTitleDirectiveLine, "").trim()
+    val lines = withoutTitleDirective.lines()
     val titleIndex = lines.indexOfFirst { line -> line.trim().startsWith("# ") }
     if (titleIndex < 0) {
-        return AssistantMarkdownDraft(title = fallback, body = normalized)
+        return AssistantMarkdownDraft(title = explicitTitle ?: fallback, body = withoutTitleDirective)
     }
 
     val extractedTitle = lines[titleIndex]
@@ -134,10 +141,18 @@ fun assistantMarkdownDraft(markdown: String, fallback: String): AssistantMarkdow
     }.dropWhile { it.isBlank() }
 
     return AssistantMarkdownDraft(
-        title = extractedTitle,
+        title = explicitTitle ?: extractedTitle,
         body = remainingLines.joinToString("\n").trim()
     )
 }
+
+private fun String.cleanPlainTitle(): String =
+    trim()
+        .trim('#', '*', '`', '"', '\'', ' ')
+        .replace(Regex("\\s+"), " ")
+
+private val CsTitleDirective = Regex("<!--\\s*cs-title\\s*:\\s*([^>]+?)\\s*-->", RegexOption.IGNORE_CASE)
+private val CsTitleDirectiveLine = Regex("^\\s*<!--\\s*cs-title\\s*:\\s*[^>]+?\\s*-->\\s*(?:\\r?\\n|$)", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 
 data class AssistantComposerTextAttachment(
     val fileName: String,

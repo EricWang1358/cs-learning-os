@@ -96,6 +96,7 @@ import java.util.Date
 import kotlinx.coroutines.launch
 
 private val CardShape = RoundedCornerShape(16.dp)
+private const val ReviewAllAreasKey = "__all_review_areas__"
 
 fun selectedBottomTabFor(screen: AppScreen): AppScreen =
     selectedBottomRouteFor(screen.toAppRoute()).toAppScreen()
@@ -871,6 +872,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         val summaries = remember(state.areas, state.dueQuizzes, state.quizzes) {
             buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
         }
+        var expandedAreaKey by remember { mutableStateOf<String?>(ReviewAllAreasKey) }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.review_select_area_title), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
@@ -885,12 +887,44 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                 val label = findAreaByReviewKey(state.areas, summary.areaId)
                     ?.let { displayAreaName(context, it) }
                     ?: stringResource(R.string.review_all_areas)
+                val areaKey = summary.areaId ?: ReviewAllAreasKey
+                val expanded = expandedAreaKey == areaKey
+                val areaCards = remember(state.quizzes, summary.areaId) {
+                    reviewCardsForArea(state.quizzes, summary.areaId)
+                }
+                val dueIds = remember(state.dueQuizzes, summary.areaId) {
+                    reviewCardsForArea(state.dueQuizzes, summary.areaId).mapTo(mutableSetOf()) { it.id }
+                }
                 ReviewAreaChoiceRow(
                     title = label,
                     detail = stringResource(R.string.review_area_due_total, summary.dueCount, summary.totalCount),
-                    selected = summary.areaId == null,
-                    onClick = { viewModel.startReviewForArea(summary.areaId) }
+                    selected = expanded,
+                    onClick = { expandedAreaKey = if (expanded) null else areaKey }
                 )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn(tween(WorkbenchMotion.StateMillis)) + expandVertically(tween(WorkbenchMotion.DisclosureMillis)),
+                    exit = fadeOut(tween(WorkbenchMotion.StateMillis)) + shrinkVertically(tween(WorkbenchMotion.DisclosureMillis))
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (areaCards.isEmpty()) {
+                            Text(
+                                stringResource(R.string.review_area_empty_cards),
+                                color = WorkbenchColors.Muted,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                        } else {
+                            areaCards.forEach { quiz ->
+                                ReviewQuizChoiceRow(
+                                    quiz = quiz,
+                                    due = quiz.id in dueIds,
+                                    onClick = { viewModel.startReviewForQuiz(quiz) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         return
@@ -1026,6 +1060,42 @@ private fun ReviewAreaChoiceRow(
     ) {
         Text(title, color = titleColor, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(detail, color = detailColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ReviewQuizChoiceRow(
+    quiz: QuizItemEntity,
+    due: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.62f))
+            .border(BorderStroke(1.dp, WorkbenchColors.Line.copy(alpha = 0.50f)), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            quiz.prompt,
+            color = WorkbenchColors.InkStrong,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            stringResource(if (due) R.string.review_card_due_badge else R.string.review_card_total_badge),
+            color = if (due) WorkbenchColors.AccentStrong else WorkbenchColors.Muted,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

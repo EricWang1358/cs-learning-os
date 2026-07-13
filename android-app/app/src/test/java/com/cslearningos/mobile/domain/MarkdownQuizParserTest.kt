@@ -91,4 +91,44 @@ class MarkdownQuizParserTest {
             card.explanation
         )
     }
+
+    @Test
+    fun parsesQuizStartWhenAssistantOmitsNewlineAfterFence() {
+        val markdown = """
+            ## Review cards
+            :::quizquestion: What value does the app save as the review prompt?
+            answer: The explicit question field.
+            explanation: The parser should recover common assistant formatting without treating prose as a quiz.
+            :::
+        """.trimIndent()
+
+        val card = MarkdownQuizParser.parse(markdown).single()
+
+        assertEquals("What value does the app save as the review prompt?", card.prompt)
+        assertEquals("The explicit question field.", card.answer)
+    }
+
+    @Test
+    fun keepsUnindentedFieldContinuationsUntilNextKnownField() {
+        val markdown = """
+            :::quiz
+            question: Why can title parsing break?
+            Because the model may put body text on the same heading line.
+            answer: Store title separately from the Markdown body.
+            explanation: A continuation line without indentation still belongs to the active field.
+            It should not be dropped before the closing fence.
+            :::
+        """.trimIndent()
+
+        val card = MarkdownQuizParser.parse(markdown).single()
+
+        assertEquals(
+            "Why can title parsing break?\nBecause the model may put body text on the same heading line.",
+            card.prompt
+        )
+        assertEquals(
+            "A continuation line without indentation still belongs to the active field.\nIt should not be dropped before the closing fence.",
+            card.explanation
+        )
+    }
 }

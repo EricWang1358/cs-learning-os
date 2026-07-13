@@ -273,6 +273,40 @@ class AssistantObjectProposalTest {
     }
 
     @Test
+    fun nodeProposalAcceptsPlainTitleDirectiveSeparateFromMarkdownBody() {
+        val target = AssistantEditTarget.Node(
+            id = null,
+            revision = 0L,
+            titleHint = "Create note",
+            markdown = "",
+            areaId = null
+        )
+
+        val proposal = parseAssistantObjectProposal(
+            target,
+            """
+            <!-- cs-title: Skill 触发机制 -->
+            <!-- cs-area: abilities -->
+            ## Core concepts
+
+            Skills are selected from their name and description before the body is loaded.
+            """.trimIndent(),
+            listOf(AssistantAreaOption(id = "abilities", name = "Abilities"))
+        ) as AssistantEditProposal.Node
+
+        assertEquals("Skill 触发机制", proposal.titleHint)
+        assertEquals("abilities", proposal.areaId)
+        assertEquals(
+            """
+            ## Core concepts
+
+            Skills are selected from their name and description before the body is loaded.
+            """.trimIndent(),
+            proposal.markdown
+        )
+    }
+
+    @Test
     fun newNodeProposalRequiresMarkdownHeadingBeforeEditableDraft() {
         val target = AssistantEditTarget.Node(
             id = null,

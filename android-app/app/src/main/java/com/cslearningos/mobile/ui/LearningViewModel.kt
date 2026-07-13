@@ -807,6 +807,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.startReviewSessionForArea(areaId) }
     }
 
+    fun startReviewForQuiz(quiz: QuizItemEntity) {
+        _state.update { it.startReviewSessionForQuiz(quiz) }
+    }
+
     fun selectReviewArea(areaId: String?) {
         _state.update { it.selectReviewSessionArea(areaId) }
     }
