@@ -1,5 +1,7 @@
 package com.cslearningos.mobile.content.application
 
+import java.io.ByteArrayInputStream
+import java.io.DataInputStream
 import com.cslearningos.mobile.content.domain.ContentAreaRef
 import com.cslearningos.mobile.content.domain.ContentNode
 import com.cslearningos.mobile.content.domain.NodeId
@@ -33,6 +35,14 @@ class SaveNodeCommandTest {
 
         assertEquals(CommandFingerprint.of(original), CommandFingerprint.of(original))
         assertEquals(CommandFingerprint.of(original), CommandFingerprint.of(replay))
+    }
+
+    @Test
+    fun fingerprintPayloadStartsWithStableContentNodeSaveType() {
+        DataInputStream(ByteArrayInputStream(CommandFingerprint.encoded(command()))).use { input ->
+            assertEquals("content.node.save", input.readLengthPrefixed())
+            assertEquals(NodeSaveMode.Update.name, input.readLengthPrefixed())
+        }
     }
 
     @Test
@@ -121,4 +131,10 @@ class SaveNodeCommandTest {
         isStarter = false,
         isChecked = false
     )
+
+    private fun DataInputStream.readLengthPrefixed(): String {
+        val bytes = ByteArray(readInt())
+        readFully(bytes)
+        return bytes.toString(Charsets.UTF_8)
+    }
 }

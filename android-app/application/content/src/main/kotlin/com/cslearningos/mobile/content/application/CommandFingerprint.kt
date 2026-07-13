@@ -6,8 +6,13 @@ import java.security.MessageDigest
 
 object CommandFingerprint {
     fun of(command: SaveNodeCommand): String {
-        val bytes = ByteArrayOutputStream().use { buffer ->
+        return MessageDigest.getInstance("SHA-256").digest(encoded(command)).toHexString()
+    }
+
+    internal fun encoded(command: SaveNodeCommand): ByteArray =
+        ByteArrayOutputStream().use { buffer ->
             DataOutputStream(buffer).use { output ->
+                output.writeLengthPrefixed(COMMAND_TYPE)
                 output.writeLengthPrefixed(command.mode.name)
                 output.writeLengthPrefixed(command.nodeId.value)
                 output.writeNullableLong(command.expectedRevision?.value)
@@ -17,8 +22,7 @@ object CommandFingerprint {
             }
             buffer.toByteArray()
         }
-        return MessageDigest.getInstance("SHA-256").digest(bytes).toHexString()
-    }
+
 
     private fun DataOutputStream.writeNullableLong(value: Long?) {
         writeBoolean(value != null)
@@ -39,4 +43,6 @@ object CommandFingerprint {
     private fun ByteArray.toHexString(): String = joinToString(separator = "") { byte ->
         "%02x".format(byte.toInt() and 0xff)
     }
+
+    private const val COMMAND_TYPE = "content.node.save"
 }
