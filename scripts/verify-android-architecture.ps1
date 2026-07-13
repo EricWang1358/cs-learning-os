@@ -79,9 +79,7 @@ $sourceBoundaryRules = [ordered]@{
         "android.", "androidx.", "com.cslearningos.mobile.ui.",
         "com.cslearningos.mobile.data.", "org.json.", "androidx.room."
     )
-    "android-app/application/content/src/main" = @(
-        "com.cslearningos.mobile.data.", "com.cslearningos.mobile.ui."
-    )
+    "android-app/application/content/src/main" = $forbiddenPureReferences
     "android-app/core/database/src/main" = @(
         "com.cslearningos.mobile.ui.", "com.cslearningos.mobile.app."
     )

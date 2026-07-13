@@ -171,6 +171,18 @@ include ":adapter:model-openai"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "legacy app-data reference in content application"
     Remove-Item -Force (Join-Path $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt")
 
+    Set-FixtureFile $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt" "package example`nimport android.content.Context"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "Android reference in content application"
+    Remove-Item -Force (Join-Path $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt")
+
+    Set-FixtureFile $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt" "package example`nimport androidx.room.Dao"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "Room reference in content application"
+    Remove-Item -Force (Join-Path $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt")
+
+    Set-FixtureFile $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt" "package example`nimport org.json.JSONObject"
+    Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "JSON reference in content application"
+    Remove-Item -Force (Join-Path $fixtureRoot "android-app/application/content/src/main/kotlin/example/Command.kt")
+
     Set-FixtureFile $fixtureRoot "android-app/data/content-room/src/main/kotlin/example/Adapter.kt" "package example`nimport com.cslearningos.mobile.ui.LibraryScreen"
     Assert-ExitCode (Invoke-ArchitectureVerifier $fixtureRoot) 1 "UI reference in Room content adapter"
     Remove-Item -Force (Join-Path $fixtureRoot "android-app/data/content-room/src/main/kotlin/example/Adapter.kt")
