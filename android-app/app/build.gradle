@@ -55,6 +55,11 @@ tasks.matching { it.name.startsWith("generate") && it.name.endsWith("Assets") }.
 }
 
 dependencies {
+    implementation project(":core:kernel")
+    implementation project(":core:database")
+    implementation project(":domain:content")
+    implementation project(":application:content")
+    implementation project(":data:content-room")
     implementation project(":domain:assistant")
     implementation project(":feature:assistant:api")
     implementation project(":feature:assistant:impl")

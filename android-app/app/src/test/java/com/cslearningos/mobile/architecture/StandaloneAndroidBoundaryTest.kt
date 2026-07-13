@@ -22,6 +22,10 @@ class StandaloneAndroidBoundaryTest {
 
         val requiredProjects = listOf(
             ":core:kernel",
+            ":core:database",
+            ":domain:content",
+            ":application:content",
+            ":data:content-room",
             ":domain:assistant",
             ":feature:assistant:api",
             ":feature:assistant:impl",
@@ -29,6 +33,11 @@ class StandaloneAndroidBoundaryTest {
         )
         requiredProjects.forEach { projectPath ->
             assertTrue("Missing $projectPath", settings.contains("include \"$projectPath\""))
+            val projectDirectory = projectPath.removePrefix(":").replace(':', '/')
+            assertTrue(
+                "Missing build.gradle for $projectPath",
+                root.resolve("$projectDirectory/build.gradle").isFile
+            )
         }
         assertTrue(
             root.resolve(
