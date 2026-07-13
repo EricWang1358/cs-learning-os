@@ -6,6 +6,8 @@ import com.cslearningos.mobile.ui.aiChatCompletionsUrl
 import com.cslearningos.mobile.ui.aiModelsUrl
 import com.cslearningos.mobile.ui.parseOpenAiChatContent
 import com.cslearningos.mobile.ui.parseOpenAiModelIds
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +76,7 @@ class OpenAiCompatibleDraftService(
             requestMethod = "GET"
             connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
             readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
+            instanceFollowRedirects = false
             setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("Accept", "application/json")
         }
@@ -86,6 +89,7 @@ class OpenAiCompatibleDraftService(
             connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
             readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
             doOutput = true
+            instanceFollowRedirects = false
             setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
@@ -104,14 +108,30 @@ fun Throwable.safeAiError(): String =
 
 private fun HttpURLConnection.useResponse(): String =
     try {
-        val responseBody = (if (responseCode in 200..299) inputStream else errorStream)
-            ?.bufferedReader()
-            ?.use { it.readText() }
+        val statusCode = responseCode
+        val responseBody = (if (statusCode in 200..299) inputStream else errorStream)
+            ?.use { it.readBoundedResponse() }
             .orEmpty()
-        if (responseCode !in 200..299) {
-            throw IllegalStateException("HTTP $responseCode: ${responseBody.take(240)}")
+        if (statusCode !in 200..299) {
+            throw IllegalStateException("HTTP $statusCode")
         }
         responseBody
     } finally {
         disconnect()
     }
+
+private fun InputStream.readBoundedResponse(): String {
+    val response = ByteArrayOutputStream()
+    val buffer = ByteArray(ResponseBodyMaximumBytes.coerceAtMost(8_192))
+    while (true) {
+        val bytesRead = read(buffer)
+        if (bytesRead < 0) break
+        if (response.size() > ResponseBodyMaximumBytes - bytesRead) {
+            throw IllegalStateException("Model response exceeded maximum size.")
+        }
+        response.write(buffer, 0, bytesRead)
+    }
+    return response.toString(Charsets.UTF_8.name())
+}
+
+private const val ResponseBodyMaximumBytes = 1_048_576
