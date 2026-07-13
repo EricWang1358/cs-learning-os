@@ -187,6 +187,18 @@ class AssistantMarkdownNormalizerTest {
     }
 
     @Test
+    fun normalizeDoesNotRepairTableInsideQuizPayloadCollapsedIntoOpeningFence() {
+        val markdown = """
+            :::quizquestion: Topic | Area
+            --- | ---
+            Virtual Memory | cs-fundamentals
+            :::
+            """.trimIndent()
+
+        assertEquals(markdown, AssistantMarkdownNormalizer.normalize(markdown))
+    }
+
+    @Test
     fun normalizeLeavesIncompleteTableCandidateAndPipeProseUntouched() {
         val markdown = """
             Topic | Area

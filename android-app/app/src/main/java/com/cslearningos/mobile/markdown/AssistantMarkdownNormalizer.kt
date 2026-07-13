@@ -59,7 +59,7 @@ object AssistantMarkdownNormalizer {
                 continue
             }
 
-            if (QuizFenceStart.matches(trimmed)) {
+            if (isQuizFenceStart(trimmed)) {
                 normalized += line
                 openQuizFence = true
                 index += 1
@@ -285,13 +285,16 @@ object AssistantMarkdownNormalizer {
         return index - start
     }
 
+    private fun isQuizFenceStart(trimmed: String): Boolean =
+        trimmed.startsWith(":::") &&
+            trimmed.removePrefix(":::").trimStart().startsWith("quiz")
+
     private val TightHeading = Regex("^(#{1,6})([^#\\s].*)$")
     private val TextPrefixedHeading = Regex("(?i)^text(#{1,6})([^#\\s].*)$")
     private val TightBullet = Regex("^([-*])([^\\s].*)$")
     private val InlineFenceStart = Regex("(?<=\\S)(```|~~~)(?=[A-Za-z0-9]|$)")
     private val InlineHeading = Regex("(?<=\\S)(#{2,6})(?=[^#\\s])")
     private val FenceLine = Regex("^(```|~~~)\\s*([^\\s].*)?$")
-    private val QuizFenceStart = Regex("^:::\\s*quiz(?:\\s+.*)?$", RegexOption.IGNORE_CASE)
     private val MalformedFenceHeader = Regex("^(```|~~~)(kotlin|java|json|text|markdown|md|xml|yaml|yml|bash|sh|python|js|ts)([^\\s].+)$", RegexOption.IGNORE_CASE)
     private val MarkdownHeadingLine = Regex("^#{1,6}\\s*[^#\\s].*$")
     private val MarkdownSectionLine = Regex("^(#{1,6}\\s*[^#\\s].*|[-*]\\s+.+)$")
