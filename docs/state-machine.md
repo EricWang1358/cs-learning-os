@@ -539,6 +539,27 @@ Future health rules:
 - GitHub upload size defaults to local tracked-file estimates. Remote GitHub API checks are opt-in through `CS_LEARNING_GITHUB_REMOTE_SIZE=1` to avoid rate limits and network stalls.
 - `/api/system/metrics` returns real-time DB counts plus cached heavy metrics. If no snapshot exists, it returns a lightweight fallback immediately and records `cache.refreshing=true`.
 
+## Android Phase 2A Node Command Transaction
+
+Android Node create/edit now has a narrow layered write path. This is the active migration slice; trash, restore, permanent delete, remote replication, and the remaining legacy repositories are outside it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Editing
+    Editing --> Saving: explicit SaveNodeCommand
+    Saving --> Editing: validation, conflict, or transaction failure
+    Saving --> Committed: canonical Node, projections, receipt, outbox commit
+    Committed --> [*]
+    Saving --> Replayed: same command ID and fingerprint
+    Replayed --> [*]
+```
+
+The path is `User/UI -> ContentCommandPort -> RoomContentCommandAdapter -> Room`. `ContentNode` and `SaveNodeCommand` are independent of Room. The mapper owns the translation to legacy Room entities; it preserves `lastReadAt`, writes the existing dirty `sync_status`, and excludes both fields from the domain model and canonical outbox payload.
+
+Room schema v7 adds `processed_commands` and `replication_outbox` through an additive v6-to-v7 migration. A command ID may replay only its originally stored result when its stable command fingerprint matches. Reusing an ID with different content is a conflict. In the single Room transaction, the adapter validates the command, writes the Node, refreshes quiz/FTS/review projections, records the processed command, and appends the local outbox row. A projection error rolls back all of these writes.
+
+The outbox is not a network protocol. It contains only local versioned domain changes after commit. Device discovery, transport, remote inbox application, replica IDs, causal envelopes, merge/conflict policy, acknowledgement, retry scheduling, and sync UI remain unimplemented.
+
 ## Android Modular Assistant Target State
 
 The current `AssistantCoordinator` state is a compatibility implementation during Phase 1. Target ownership is split into Session, Run, Interaction, and Proposal aggregates. Model transport implements `ModelGateway`; it cannot persist Nodes, Quizzes, Captures, review state, or synchronization records.
