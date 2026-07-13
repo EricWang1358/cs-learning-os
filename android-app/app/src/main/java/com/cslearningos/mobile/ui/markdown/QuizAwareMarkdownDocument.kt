@@ -49,7 +49,9 @@ object QuizAwareMarkdownDocument {
                 trimmed.startsWith(":::") && trimmed.removePrefix(":::").trimStart().startsWith("quiz") -> {
                     flushBuffer()
                     val quizLines = mutableListOf<String>()
-                    val info = trimmed.removePrefix(":::").trim().removePrefix("quiz").trim()
+                    val rawInfo = trimmed.removePrefix(":::").trim().removePrefix("quiz").trim()
+                    val info = quizInfo(rawInfo)
+                    quizPayload(rawInfo)?.let { quizLines += it }
                     index += 1
                     while (index < lines.size && lines[index].trim() != ":::") {
                         quizLines += lines[index].trimEnd()
@@ -67,4 +69,24 @@ object QuizAwareMarkdownDocument {
         flushBuffer()
         return blocks
     }
+
+    private fun quizInfo(rawInfo: String): String {
+        val trimmed = rawInfo.trim()
+        if (trimmed.startsWithQuizField()) return ""
+        val idMatch = QuizInfoWithInlinePayload.matchEntire(trimmed)
+        return idMatch?.groupValues?.get(1).orEmpty().ifBlank { trimmed }
+    }
+
+    private fun quizPayload(rawInfo: String): String? {
+        val trimmed = rawInfo.trim()
+        if (trimmed.startsWithQuizField()) return trimmed
+        val idMatch = QuizInfoWithInlinePayload.matchEntire(trimmed) ?: return null
+        return idMatch.groupValues[2].trim().takeIf { it.startsWithQuizField() }
+    }
+
+    private fun String.startsWithQuizField(): Boolean =
+        QuizFieldPrefix.containsMatchIn(this)
+
+    private val QuizFieldPrefix = Regex("""^(question|answer|explanation)\s*:""", RegexOption.IGNORE_CASE)
+    private val QuizInfoWithInlinePayload = Regex("""^(id=[A-Za-z0-9_-]+)\s+(.+)$""")
 }

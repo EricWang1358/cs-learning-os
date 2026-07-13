@@ -919,7 +919,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
                                 ReviewQuizChoiceRow(
                                     quiz = quiz,
                                     due = quiz.id in dueIds,
-                                    onClick = { viewModel.startReviewForQuiz(quiz) }
+                                    onClick = { viewModel.startReviewForQuiz(quiz, summary.areaId) }
                                 )
                             }
                         }

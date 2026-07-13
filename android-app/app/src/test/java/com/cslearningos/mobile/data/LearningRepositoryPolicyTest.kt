@@ -249,6 +249,40 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun saveNodeSyncsCollapsedAssistantQuizIntoReviewState() = runTest {
+        val dao = FakeLearningDao()
+        val repository = LearningRepository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 1,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+
+        val node = repository.saveNode(
+            id = null,
+            title = "Assistant quiz sync",
+            markdownBody = """
+                ## Review cards
+
+                :::quizquestion: What creates the Review card? answer: Saving the node syncs Markdown quiz blocks. explanation: The repository creates both quiz_items and review_states.
+                :::
+            """.trimIndent(),
+            areaId = "systems",
+            now = 1_000L
+        )
+
+        val quiz = dao.getActiveQuizzesForNode(node.id).single()
+        assertEquals("What creates the Review card?", quiz.prompt)
+        assertEquals("Saving the node syncs Markdown quiz blocks.", quiz.answer)
+        assertEquals("systems", quiz.area)
+        assertEquals(1_000L, dao.reviewStates.getValue(quiz.id).dueAt)
+    }
+
+    @Test
     fun anonymousMarkdownQuizRemovalDoesNotMoveReviewIdentityToAnotherCard() = runTest {
         val dao = FakeLearningDao()
         val repository = LearningRepository(dao)

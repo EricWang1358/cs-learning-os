@@ -600,6 +600,9 @@ stateDiagram-v2
 ### Target Invariants
 
 - A Node target carries `nodeId`, Markdown, and either a validated existing Area ID or `null` for a new draft when the assistant cannot justify one clear Area. When the Area is `null`, the Node editor must require explicit Area selection before save. If the Markdown draft contains review cards, those cards must not sync into Review until that save completes with a chosen Area.
+- Android assistant Node drafts carry the node title as a separate plain-text `cs-title` directive, not as Markdown body text. The app extracts that value into the editor title and removes the directive before editing/saving. A legacy leading `# Title` is still accepted for compatibility, but new prompts must ask for `cs-title` to avoid title/body parsing drift.
+- Markdown rendering uses commonmark plus the GFM table extension after the app's narrow AI-output normalizer. The normalizer may repair common model formatting mistakes such as a heading collapsed into a table header, but it should not replace the commonmark parser with broad ad hoc Markdown parsing.
+- Review cards are synced only when a saved Node body contains parseable `:::quiz` blocks. The quiz parser accepts the standard multiline form and narrowly tolerated model mistakes such as `:::quizquestion:` or collapsed `question: ... answer: ... explanation: ...` fields, then `LibraryRepository.saveNode` creates both the `QuizItemEntity` and its default `ReviewStateEntity`.
 - A Quiz target carries `quizId`, optional `nodeId`, prompt, answer, and explanation. Saving retains the quiz ID and its `ReviewStateEntity`; it does not create a replacement question.
 - A Capture target carries `slipId`, body, type, topic hint, and source label. Saving retains the Capture ID and does not promote it to a Node unless the user separately chooses promotion.
 - Target directives must be complete and type-correct. Missing/invalid directives leave the previous target intact and display a clarifying assistant response; they never erase fields.
@@ -612,6 +615,7 @@ stateDiagram-v2
 - Top-level Assistant navigation preserves the current conversation. Only explicit fresh-entry callers may reset conversation state before showing Assistant.
 - Restoring history must clear transient busy/selection/auto-open flags while preserving the stored messages and typed `editTarget`.
 - Review Area summaries, selected review keys, and per-quiz Area snapshots must compare on `Area.slug`. Imported or restored data may legitimately keep `Area.id != Area.slug`, and Review counts/navigation must still stay correct.
+- Review setup is a disclosure list. Tapping an Area row expands its quiz cards instead of immediately starting the queue. Tapping a quiz starts at that quiz inside the currently expanded review range: a concrete Area keeps its slug scope, while `All Areas` keeps `reviewAreaId = null` and must not silently narrow to the quiz's own Area.
 
 ### Transition Acceptance Matrix
 
@@ -626,6 +630,8 @@ stateDiagram-v2
 | `DraftReady -> EditorOpen` | user taps review action | correct editor gets the same object ID | bridge/UI-state tests |
 | `EditorOpen -> TargetPrepared` | user asks Assistant to improve current draft | Assistant reopens with same draft body and preserved conversation | ViewModel navigation tests |
 | `EditorOpen -> Persisting -> Browse` | user saves valid fields | repository preserves identity; quiz review state remains | repository policy tests |
+| `EditorOpen -> Persisting -> ReviewVisible` | saved Node body contains tolerated `:::quiz` blocks | quiz rows and default review states are created under the saved Area | markdown parser and repository policy tests |
+| `ReviewSetup -> Prompt` | user expands an Area/All Areas and taps a quiz | selected quiz opens with the same review range scope | review queue model tests |
 | `Persisting -> EditorOpen` | missing parent/object or write failure | fields remain visible with error banner | repository and ViewModel tests |
 | `Streaming -> TargetPrepared` | user cancels or request fails | no stale response can mutate a newer request; retry has original prompt | coordinator lifecycle tests |
 | `HistoryOpen -> AssistantAnswer` | stored conversation selected | messages and typed target restore losslessly | conversation codec tests |

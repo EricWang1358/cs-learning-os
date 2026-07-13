@@ -141,7 +141,7 @@ class ReviewQueueModelsTest {
     }
 
     @Test
-    fun selectedReviewCardStartsSessionWithinThatCardsArea() {
+    fun selectedReviewCardStartsSessionWithinRequestedArea() {
         val selected = quiz("q2", area = "os")
         val state = LearningUiState(
             dueQuizzes = listOf(
@@ -156,9 +156,30 @@ class ReviewQueueModelsTest {
             )
         )
 
-        val next = state.startReviewSessionForQuiz(selected)
+        val next = state.startReviewSessionForQuiz(selected, areaId = "os")
 
         assertEquals("os", next.reviewAreaId)
+        assertEquals("q2", next.selectedQuiz?.id)
+        assertEquals(false, next.reviewSetupVisible)
+    }
+
+    @Test
+    fun selectedReviewCardFromAllAreasKeepsAllAreasRange() {
+        val selected = quiz("q2", area = "os")
+        val state = LearningUiState(
+            dueQuizzes = listOf(
+                quiz("q1", area = "network"),
+                selected
+            ),
+            quizzes = listOf(
+                quiz("q1", area = "network"),
+                selected
+            )
+        )
+
+        val next = state.startReviewSessionForQuiz(selected, areaId = null)
+
+        assertEquals(null, next.reviewAreaId)
         assertEquals("q2", next.selectedQuiz?.id)
         assertEquals(false, next.reviewSetupVisible)
     }

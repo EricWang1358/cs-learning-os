@@ -76,7 +76,7 @@ fun buildCaptureAiDraftPrompt(
         Return Markdown only. Do not wrap the answer in code fences.
         If one existing Area below is a clear fit, begin with <!-- cs-area: AREA_ID --> and <!-- cs-area-reason: one concrete reason -->.
         If no Area is a clear fit, omit both directives. Never invent an Area.
-        Begin with <!-- cs-title: concise plain-text title -->.
+        Then emit exactly one <!-- cs-title: concise plain-text title --> directive; the title value must be plain text, not Markdown, and must not contain body content.
         Include these sections:
         ## Captured Context
         ## Explanation
@@ -85,7 +85,7 @@ fun buildCaptureAiDraftPrompt(
         ## Next Step
 
         The draft should be clear enough for a student to review later, but it must stay editable and should not pretend to be final truth if the capture is ambiguous.
-        In the Review Cards section, write one or more :::quiz blocks using exactly question:, answer:, and explanation: fields so the app can sync them into Review.
+        In the Review Cards section, write one or more :::quiz blocks with :::quiz on its own line, then exactly question:, answer:, and explanation: fields on separate lines, then ::: on its own line so the app can sync them into Review.
 
         Existing node titles that may be relevant:
         $knownNodes

@@ -131,4 +131,19 @@ class MarkdownQuizParserTest {
             card.explanation
         )
     }
+
+    @Test
+    fun parsesQuizFieldsCollapsedOntoOneLine() {
+        val markdown = """
+            :::quiz
+            question: What creates the Review card? answer: Saving the node syncs Markdown quiz blocks. explanation: The repository creates both quiz_items and review_states.
+            :::
+        """.trimIndent()
+
+        val card = MarkdownQuizParser.parse(markdown).single()
+
+        assertEquals("What creates the Review card?", card.prompt)
+        assertEquals("Saving the node syncs Markdown quiz blocks.", card.answer)
+        assertEquals("The repository creates both quiz_items and review_states.", card.explanation)
+    }
 }

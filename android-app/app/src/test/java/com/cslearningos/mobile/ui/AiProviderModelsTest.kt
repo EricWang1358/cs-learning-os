@@ -51,6 +51,8 @@ class AiProviderModelsTest {
         assertTrue(prompt.contains("## Explanation"))
         assertTrue(prompt.contains("## Review Cards"))
         assertTrue(prompt.contains(":::quiz"))
+        assertTrue(prompt.contains("cs-title"))
+        assertTrue(prompt.contains(":::quiz on its own line"))
         assertTrue(prompt.contains("Virtual Memory"))
         assertTrue(prompt.contains("TLB Basics"))
     }

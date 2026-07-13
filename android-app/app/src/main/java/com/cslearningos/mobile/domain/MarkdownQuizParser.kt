@@ -11,7 +11,7 @@ data class ParsedQuizCard(
 
 object MarkdownQuizParser {
     private val StartRegex = Regex("""^:::\s*quiz(?:\s+id=([A-Za-z0-9_-]+))?\s*(.*)$""")
-    private val FieldRegex = Regex("""^(question|answer|explanation)\s*:\s*(.*)$""", RegexOption.IGNORE_CASE)
+    private val FieldLabelRegex = Regex("""\b(question|answer|explanation)\s*:\s*""", RegexOption.IGNORE_CASE)
 
     fun parse(markdown: String): List<ParsedQuizCard> {
         val lines = markdown.lines()
@@ -54,22 +54,39 @@ object MarkdownQuizParser {
         return cards
     }
 
-    private fun applyQuizLine(line: String, fields: MutableMap<String, String>): String? {
+    private fun applyQuizLine(line: String, fields: MutableMap<String, String>) {
         val trimmed = line.trim()
-        val field = FieldRegex.matchEntire(trimmed)
-        if (field != null) {
-            val key = field.groupValues[1].lowercase()
-            fields[key] = field.groupValues[2].trim()
-            return key
+        val labels = FieldLabelRegex.findAll(trimmed).toList()
+        if (labels.isNotEmpty()) {
+            val firstLabel = labels.first()
+            val prefix = trimmed.substring(0, firstLabel.range.first).trim()
+            val currentKey = fields.keys.lastOrNull()
+            if (prefix.isNotBlank() && currentKey != null) {
+                fields.appendFieldValue(currentKey, prefix)
+            }
+            labels.forEachIndexed { index, match ->
+                val key = match.groupValues[1].lowercase()
+                val valueStart = match.range.last + 1
+                val valueEnd = labels.getOrNull(index + 1)?.range?.first ?: trimmed.length
+                fields.appendFieldValue(key, trimmed.substring(valueStart, valueEnd).trim())
+            }
+            return
         }
 
-        val currentKey = fields.keys.lastOrNull() ?: return null
+        val currentKey = fields.keys.lastOrNull() ?: return
         if (trimmed.isNotBlank()) {
-            fields[currentKey] = listOf(fields[currentKey].orEmpty(), trimmed)
-                .filter { it.isNotBlank() }
-                .joinToString("\n")
+            fields.appendFieldValue(currentKey, trimmed)
         }
-        return currentKey
+    }
+
+    private fun MutableMap<String, String>.appendFieldValue(key: String, value: String) {
+        if (value.isBlank()) {
+            putIfAbsent(key, "")
+            return
+        }
+        this[key] = listOf(this[key].orEmpty(), value)
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
     }
 
     private fun stableAnonymousAnchor(prompt: String, answer: String): String {

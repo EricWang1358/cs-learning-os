@@ -157,4 +157,21 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals(4, table.headers.size)
         assertEquals(2, table.rows.size)
     }
+
+    @Test
+    fun parseRecoversQuizQuestionCollapsedIntoOpeningFence() {
+        val blocks = QuizAwareMarkdownDocument.parse(
+            """
+            :::quizquestion: What creates the Review card?
+            answer: Saving the node syncs Markdown quiz blocks.
+            explanation: The repository creates both quiz_items and review_states.
+            :::
+            """.trimIndent()
+        )
+
+        assertEquals(1, blocks.size)
+        val quiz = blocks.single() as MarkdownQuizBlock
+        assertEquals("", quiz.info)
+        assertEquals("question: What creates the Review card?", quiz.lines.first())
+    }
 }

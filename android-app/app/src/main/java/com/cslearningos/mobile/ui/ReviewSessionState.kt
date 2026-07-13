@@ -24,10 +24,10 @@ internal fun LearningUiState.startReviewSessionForArea(areaId: String?): Learnin
     )
 }
 
-internal fun LearningUiState.startReviewSessionForQuiz(quiz: QuizItemEntity): LearningUiState =
+internal fun LearningUiState.startReviewSessionForQuiz(quiz: QuizItemEntity, areaId: String?): LearningUiState =
     copy(
         selectedQuiz = quiz,
-        reviewAreaId = quiz.area,
+        reviewAreaId = areaId,
         reviewSetupVisible = false,
         reviewedQuiz = null,
         quizAnswerVisible = false,
