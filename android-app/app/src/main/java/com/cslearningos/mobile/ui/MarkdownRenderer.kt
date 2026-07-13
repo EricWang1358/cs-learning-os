@@ -71,15 +71,30 @@ private val TableCellMinWidth = 144.dp
 
 internal data class TableCellBoundary(
     val drawStartDivider: Boolean,
-    val drawTopDivider: Boolean
+    val drawTopDivider: Boolean,
+    val drawStartPerimeter: Boolean,
+    val drawTopPerimeter: Boolean,
+    val drawEndPerimeter: Boolean,
+    val drawBottomPerimeter: Boolean
 )
 
-internal fun tableCellBoundary(rowIndex: Int, columnIndex: Int): TableCellBoundary {
+internal fun tableCellBoundary(
+    rowIndex: Int,
+    columnIndex: Int,
+    rowCount: Int,
+    columnCount: Int
+): TableCellBoundary {
     require(rowIndex >= 0) { "rowIndex must not be negative" }
     require(columnIndex >= 0) { "columnIndex must not be negative" }
+    require(rowIndex < rowCount) { "rowIndex must be within the table" }
+    require(columnIndex < columnCount) { "columnIndex must be within the table" }
     return TableCellBoundary(
         drawStartDivider = columnIndex > 0,
-        drawTopDivider = rowIndex > 0
+        drawTopDivider = rowIndex > 0,
+        drawStartPerimeter = columnIndex == 0,
+        drawTopPerimeter = rowIndex == 0,
+        drawEndPerimeter = columnIndex == columnCount - 1,
+        drawBottomPerimeter = rowIndex == rowCount - 1
     )
 }
 
@@ -327,7 +342,6 @@ private fun CompactTableSurface(
             .fillMaxWidth()
             .clip(BlockShape)
             .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
-            .border(1.dp, WorkbenchColors.LineStrong, BlockShape)
     ) {
         if (canExpand) {
             Row(
@@ -354,6 +368,7 @@ private fun CompactTableGrid(
     block: MarkdownTableBlock,
     columnCount: Int
 ) {
+    val rowCount = block.rows.size + 1
     Column(
         modifier = Modifier
             .horizontalScroll(rememberScrollState())
@@ -362,13 +377,17 @@ private fun CompactTableGrid(
         TableRowBlock(
             cells = padTableCells(block.headers, columnCount),
             header = true,
-            rowIndex = 0
+            rowIndex = 0,
+            rowCount = rowCount,
+            columnCount = columnCount
         )
         block.rows.forEachIndexed { index, row ->
             TableRowBlock(
                 cells = padTableCells(row, columnCount),
                 header = false,
-                rowIndex = index + 1
+                rowIndex = index + 1,
+                rowCount = rowCount,
+                columnCount = columnCount
             )
         }
     }
@@ -408,7 +427,6 @@ private fun ExpandedTableDialog(
                     .weight(1f)
                     .clip(BlockShape)
                     .background(WorkbenchColors.Surface.copy(alpha = 0.72f))
-                    .border(1.dp, WorkbenchColors.LineStrong, BlockShape)
             ) {
                 ExpandedTableGrid(block = block, columnCount = columnCount)
             }
@@ -421,19 +439,24 @@ private fun ExpandedTableGrid(
     block: MarkdownTableBlock,
     columnCount: Int
 ) {
+    val rowCount = block.rows.size + 1
     Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
         Column(modifier = Modifier.width(TableCellMinWidth * columnCount)) {
             TableRowBlock(
                 cells = padTableCells(block.headers, columnCount),
                 header = true,
-                rowIndex = 0
+                rowIndex = 0,
+                rowCount = rowCount,
+                columnCount = columnCount
             )
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(block.rows) { index, row ->
                     TableRowBlock(
                         cells = padTableCells(row, columnCount),
                         header = false,
-                        rowIndex = index + 1
+                        rowIndex = index + 1,
+                        rowCount = rowCount,
+                        columnCount = columnCount
                     )
                 }
             }
@@ -445,14 +468,16 @@ private fun ExpandedTableGrid(
 private fun TableRowBlock(
     cells: List<List<MarkdownInline>>,
     header: Boolean,
-    rowIndex: Int
+    rowIndex: Int,
+    rowCount: Int,
+    columnCount: Int
 ) {
     Row(
         modifier = Modifier
             .background(if (header) WorkbenchColors.SurfaceSoft else Color.Transparent)
     ) {
         cells.forEachIndexed { columnIndex, cell ->
-            val boundary = tableCellBoundary(rowIndex, columnIndex)
+            val boundary = tableCellBoundary(rowIndex, columnIndex, rowCount, columnCount)
             Box(
                 modifier = Modifier
                     .width(TableCellMinWidth)
@@ -487,6 +512,38 @@ private fun Modifier.drawTableCellDividers(boundary: TableCellBoundary): Modifie
             color = WorkbenchColors.Line,
             start = Offset(0f, 0f),
             end = Offset(size.width, 0f),
+            strokeWidth = strokeWidth
+        )
+    }
+    if (boundary.drawStartPerimeter) {
+        drawLine(
+            color = WorkbenchColors.LineStrong,
+            start = Offset(0f, 0f),
+            end = Offset(0f, size.height),
+            strokeWidth = strokeWidth
+        )
+    }
+    if (boundary.drawTopPerimeter) {
+        drawLine(
+            color = WorkbenchColors.LineStrong,
+            start = Offset(0f, 0f),
+            end = Offset(size.width, 0f),
+            strokeWidth = strokeWidth
+        )
+    }
+    if (boundary.drawEndPerimeter) {
+        drawLine(
+            color = WorkbenchColors.LineStrong,
+            start = Offset(size.width, 0f),
+            end = Offset(size.width, size.height),
+            strokeWidth = strokeWidth
+        )
+    }
+    if (boundary.drawBottomPerimeter) {
+        drawLine(
+            color = WorkbenchColors.LineStrong,
+            start = Offset(0f, size.height),
+            end = Offset(size.width, size.height),
             strokeWidth = strokeWidth
         )
     }

@@ -121,10 +121,50 @@ class MarkdownRendererTableTest {
     }
 
     @Test
-    fun tableCellBoundary_drawsEverySharedEdgeOnce() {
-        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = false, drawTopDivider = false), tableCellBoundary(0, 0))
-        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = true, drawTopDivider = false), tableCellBoundary(0, 1))
-        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = false, drawTopDivider = true), tableCellBoundary(1, 0))
-        org.junit.Assert.assertEquals(TableCellBoundary(drawStartDivider = true, drawTopDivider = true), tableCellBoundary(1, 1))
+    fun tableCellBoundary_drawsEverySharedAndPerimeterEdgeOnce() {
+        org.junit.Assert.assertEquals(
+            TableCellBoundary(
+                drawStartDivider = false,
+                drawTopDivider = false,
+                drawStartPerimeter = true,
+                drawTopPerimeter = true,
+                drawEndPerimeter = false,
+                drawBottomPerimeter = false
+            ),
+            tableCellBoundary(rowIndex = 0, columnIndex = 0, rowCount = 2, columnCount = 2)
+        )
+        org.junit.Assert.assertEquals(
+            TableCellBoundary(
+                drawStartDivider = true,
+                drawTopDivider = false,
+                drawStartPerimeter = false,
+                drawTopPerimeter = true,
+                drawEndPerimeter = true,
+                drawBottomPerimeter = false
+            ),
+            tableCellBoundary(rowIndex = 0, columnIndex = 1, rowCount = 2, columnCount = 2)
+        )
+        org.junit.Assert.assertEquals(
+            TableCellBoundary(
+                drawStartDivider = false,
+                drawTopDivider = true,
+                drawStartPerimeter = true,
+                drawTopPerimeter = false,
+                drawEndPerimeter = false,
+                drawBottomPerimeter = true
+            ),
+            tableCellBoundary(rowIndex = 1, columnIndex = 0, rowCount = 2, columnCount = 2)
+        )
+        org.junit.Assert.assertEquals(
+            TableCellBoundary(
+                drawStartDivider = true,
+                drawTopDivider = true,
+                drawStartPerimeter = false,
+                drawTopPerimeter = false,
+                drawEndPerimeter = true,
+                drawBottomPerimeter = true
+            ),
+            tableCellBoundary(rowIndex = 1, columnIndex = 1, rowCount = 2, columnCount = 2)
+        )
     }
 }
