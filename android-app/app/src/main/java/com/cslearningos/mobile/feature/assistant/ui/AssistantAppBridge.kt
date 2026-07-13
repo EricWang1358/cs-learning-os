@@ -4,7 +4,7 @@ import com.cslearningos.mobile.assistant.api.AssistantConversationPolicy
 import com.cslearningos.mobile.assistant.api.AssistantEntryRequest
 import com.cslearningos.mobile.assistant.api.AssistantTargetRef
 import com.cslearningos.mobile.R
-import com.cslearningos.mobile.domain.MarkdownQuizParser
+import com.cslearningos.mobile.content.domain.MarkdownQuizParser
 import com.cslearningos.mobile.ui.AppScreen
 import com.cslearningos.mobile.ui.LearningUiState
 import com.cslearningos.mobile.ui.assistantMarkdownDraft

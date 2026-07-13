@@ -1,4 +1,4 @@
-package com.cslearningos.mobile.domain
+package com.cslearningos.mobile.content.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals

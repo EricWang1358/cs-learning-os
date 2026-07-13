@@ -15,7 +15,7 @@ import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentPackage
 import com.cslearningos.mobile.data.SyncStatus
 import com.cslearningos.mobile.data.withReadTrace
-import com.cslearningos.mobile.domain.MarkdownQuizParser
+import com.cslearningos.mobile.content.domain.MarkdownQuizParser
 import kotlinx.coroutines.flow.Flow
 import java.text.Normalizer
 import java.util.UUID
