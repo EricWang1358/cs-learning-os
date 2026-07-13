@@ -100,8 +100,7 @@ class LearningViewModelAssistantNavigationTest {
                 scope = this,
                 onOpenNode = {},
                 onOpenDailyReview = {},
-                onShowAssistant = {},
-                onShowAssistantPreservingConversation = {}
+                onShowAssistant = {}
             )
         )
         return Triple(coordinator, stateFlow, viewModel)

@@ -1,5 +1,8 @@
 package com.cslearningos.mobile.feature.assistant.ui
 
+import com.cslearningos.mobile.assistant.api.AssistantConversationPolicy
+import com.cslearningos.mobile.assistant.api.AssistantEntryRequest
+import com.cslearningos.mobile.assistant.api.AssistantTargetRef
 import com.cslearningos.mobile.R
 import com.cslearningos.mobile.domain.MarkdownQuizParser
 import com.cslearningos.mobile.ui.AppScreen
@@ -18,8 +21,7 @@ class AssistantAppBridge(
     private val scope: CoroutineScope,
     private val onOpenNode: (com.cslearningos.mobile.data.LearningNodeEntity) -> Unit,
     private val onOpenDailyReview: () -> Unit,
-    private val onShowAssistant: () -> Unit,
-    private val onShowAssistantPreservingConversation: () -> Unit
+    private val onShowAssistant: (AssistantEntryRequest) -> Unit
 ) {
     fun newChat() = coordinator.newChat()
 
@@ -36,17 +38,32 @@ class AssistantAppBridge(
     fun prefillQuickPrompt(value: String) = coordinator.prefillQuickPrompt(value)
 
     fun reviseNode(node: com.cslearningos.mobile.data.LearningNodeEntity) {
-        onShowAssistant()
+        onShowAssistant(
+            AssistantEntryRequest(
+                conversationPolicy = AssistantConversationPolicy.Fresh,
+                target = AssistantTargetRef("node", node.id, node.revision)
+            )
+        )
         coordinator.reviseNode(node)
     }
 
     fun reviseQuiz(quiz: com.cslearningos.mobile.data.QuizItemEntity) {
-        onShowAssistant()
+        onShowAssistant(
+            AssistantEntryRequest(
+                conversationPolicy = AssistantConversationPolicy.Fresh,
+                target = AssistantTargetRef("quiz", quiz.id, quiz.revision)
+            )
+        )
         coordinator.reviseQuiz(quiz)
     }
 
     fun reviseCapture(slip: com.cslearningos.mobile.data.CaptureSlipEntity) {
-        onShowAssistant()
+        onShowAssistant(
+            AssistantEntryRequest(
+                conversationPolicy = AssistantConversationPolicy.Fresh,
+                target = AssistantTargetRef("capture", slip.id, slip.revision)
+            )
+        )
         coordinator.reviseCapture(slip)
     }
 
@@ -57,7 +74,12 @@ class AssistantAppBridge(
         markdown: String,
         areaId: String?
     ) {
-        onShowAssistantPreservingConversation()
+        onShowAssistant(
+            AssistantEntryRequest(
+                conversationPolicy = AssistantConversationPolicy.Preserve,
+                target = AssistantTargetRef("node", nodeId, expectedRevision)
+            )
+        )
         coordinator.reviseNodeDraft(
             nodeId = nodeId,
             expectedRevision = expectedRevision,

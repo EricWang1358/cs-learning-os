@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cslearningos.mobile.R
+import com.cslearningos.mobile.assistant.impl.AssistantEntryPolicy
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -85,8 +86,13 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         scope = viewModelScope,
         onOpenNode = ::openNode,
         onOpenDailyReview = ::showReview,
-        onShowAssistant = ::showAssistantFresh,
-        onShowAssistantPreservingConversation = ::showAssistantPreservingConversation
+        onShowAssistant = { request ->
+            if (AssistantEntryPolicy.shouldReset(request)) {
+                showAssistantFresh()
+            } else {
+                showAssistantPreservingConversation()
+            }
+        }
     )
 
     init {
