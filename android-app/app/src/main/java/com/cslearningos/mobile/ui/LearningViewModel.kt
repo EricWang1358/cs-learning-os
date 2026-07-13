@@ -51,13 +51,39 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class LearningViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = LearningDatabase.create(application)
-    private val repository = LearningRepository(
+class LearningViewModel private constructor(
+    application: Application,
+    private val database: LearningDatabase?,
+    private val repository: LearningRepository,
+    initialState: LearningUiState,
+    private val startInitialObservers: Boolean
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, LearningDatabase.create(application))
+
+    private constructor(application: Application, database: LearningDatabase) : this(
+        application = application,
         database = database,
-        contentCommands = RoomContentCommandAdapter(database)
+        repository = LearningRepository(
+            database = database,
+            contentCommands = RoomContentCommandAdapter(database)
+        ),
+        initialState = LearningUiState(),
+        startInitialObservers = true
     )
-    private val _state = MutableStateFlow(LearningUiState())
+
+    internal constructor(
+        application: Application,
+        repository: LearningRepository,
+        initialState: LearningUiState
+    ) : this(
+        application = application,
+        database = null,
+        repository = repository,
+        initialState = initialState,
+        startInitialObservers = false
+    )
+
+    private val _state = MutableStateFlow(initialState)
     private val dueReviewNow = MutableStateFlow(System.currentTimeMillis())
     val state: StateFlow<LearningUiState> = _state.asStateFlow()
     private val validateAiSettingsUseCase = ValidateAiSettingsUseCase()
@@ -99,6 +125,10 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     )
 
     init {
+        if (startInitialObservers) startInitialObservers()
+    }
+
+    private fun startInitialObservers() {
         viewModelScope.launch {
             settingsViewModel.uiState.collect { settingsState ->
                 _state.update { current ->
