@@ -19,6 +19,22 @@ class StandaloneAndroidBoundaryTest {
         assertTrue(root.resolve("starter-content/index.md").isFile)
         assertTrue(root.resolve("docs/architecture.md").isFile)
         assertTrue(root.resolve("docs/data-recovery.md").isFile)
+
+        val requiredProjects = listOf(
+            ":core:kernel",
+            ":domain:assistant",
+            ":feature:assistant:api",
+            ":feature:assistant:impl",
+            ":adapter:model-openai"
+        )
+        requiredProjects.forEach { projectPath ->
+            assertTrue("Missing $projectPath", settings.contains("include \"$projectPath\""))
+        }
+        assertTrue(
+            root.resolve(
+                "build-logic/src/main/groovy/com/cslearningos/buildlogic/KotlinLibraryConventionPlugin.groovy"
+            ).isFile
+        )
     }
 
     private fun androidRoot(): File {

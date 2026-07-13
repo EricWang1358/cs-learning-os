@@ -1,0 +1,11 @@
+plugins {
+    id "cslearningos.kotlin.library"
+}
+
+dependencies {
+    implementation project(":domain:assistant")
+    implementation libs.coroutines.core
+    implementation libs.json
+    testImplementation libs.junit
+    testImplementation libs.coroutines.test
+}

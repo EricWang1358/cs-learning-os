@@ -209,6 +209,8 @@ git commit -m "build(android): make starter inputs self contained"
 
 ## Task 2: Add Convention Build Logic And The Minimum Real Module Graph
 
+**Execution note (2026-07-13):** The repository uses Groovy Gradle scripts, and the local dependency cache did not contain the Kotlin DSL compiler chain. The implemented convention build therefore uses `groovy-gradle-plugin`, `settings.gradle`, `build.gradle`, and `KotlinLibraryConventionPlugin.groovy`. The module graph and dependency rules are unchanged, and both online and subsequent `--offline` `projects` checks pass.
+
 **Files:**
 - Create: `android-app/gradle/libs.versions.toml`
 - Create: `android-app/build-logic/settings.gradle.kts`

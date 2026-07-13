@@ -55,6 +55,11 @@ tasks.matching { it.name.startsWith("generate") && it.name.endsWith("Assets") }.
 }
 
 dependencies {
+    implementation project(":domain:assistant")
+    implementation project(":feature:assistant:api")
+    implementation project(":feature:assistant:impl")
+    implementation project(":adapter:model-openai")
+
     implementation platform("androidx.compose:compose-bom:2024.12.01")
     implementation "androidx.activity:activity-compose:1.9.3"
     implementation "androidx.compose.animation:animation"

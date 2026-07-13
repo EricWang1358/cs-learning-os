@@ -1,0 +1,8 @@
+plugins {
+    id "cslearningos.kotlin.library"
+}
+
+dependencies {
+    implementation project(":feature:assistant:api")
+    testImplementation libs.junit
+}

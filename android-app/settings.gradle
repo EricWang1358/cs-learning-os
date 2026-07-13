@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     repositories {
         google()
         mavenCentral()
@@ -19,3 +20,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "CSLearningOSAndroid"
 include ":app"
+include ":core:kernel"
+include ":domain:assistant"
+include ":feature:assistant:api"
+include ":feature:assistant:impl"
+include ":adapter:model-openai"
