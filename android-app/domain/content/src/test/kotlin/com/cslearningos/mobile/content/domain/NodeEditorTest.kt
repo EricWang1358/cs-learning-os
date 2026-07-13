@@ -91,6 +91,28 @@ class NodeEditorTest {
     }
 
     @Test
+    fun exhaustedRevisionIsRejectedWithoutThrowing() {
+        val existing = existingNode().copy(revision = EntityRevision(Long.MAX_VALUE))
+
+        val decision = NodeEditor.save(
+            existing = existing,
+            expectedRevision = existing.revision,
+            nodeId = existing.id,
+            area = existing.area,
+            title = "Changed",
+            markdownBody = "Changed body",
+            now = 2_000L
+        )
+
+        assertEquals(
+            NodeSaveDecision.Rejected(
+                ContentFailure.Validation("node.revision_exhausted")
+            ),
+            decision
+        )
+    }
+
+    @Test
     fun deletedNodeCannotBeUpdated() {
         val existing = existingNode().copy(deletedAt = 1_500L)
 

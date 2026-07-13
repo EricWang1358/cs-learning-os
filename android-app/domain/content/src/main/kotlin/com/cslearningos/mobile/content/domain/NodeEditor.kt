@@ -109,6 +109,11 @@ object NodeEditor {
                 )
             )
         }
+        if (existing.revision.value == Long.MAX_VALUE) {
+            return NodeSaveDecision.Rejected(
+                ContentFailure.Validation("node.revision_exhausted")
+            )
+        }
 
         return NodeSaveDecision.Accepted(
             node = existing.copy(
