@@ -327,17 +327,24 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
         _state.update { it.withPendingNodeSave() }
         val commandSnapshot = state.value
+        val pending = commandSnapshot.pendingNodeSave ?: return
         viewModelScope.launch {
             runCatching {
                 repository.saveNodeFromEditor(commandSnapshot)
             }.onSuccess { node ->
-                snapshot.editorSourceCaptureSlipId?.let { slipId ->
+                var applied = false
+                _state.update { current ->
+                    current.afterNodeSavedIfPendingMatches(pending, node).also {
+                        applied = it !== current
+                    }
+                }
+                if (!applied) return@onSuccess
+                commandSnapshot.editorSourceCaptureSlipId?.let { slipId ->
                     repository.markCaptureSlipConverted(slipId = slipId, nodeId = node.id)
                 }
-                _state.update { it.afterNodeSaved(node) }
                 refreshDueReviews(node.updatedAt)
             }.onFailure {
-                _state.update { it.withObjectSaveRejected() }
+                _state.update { it.withObjectSaveRejectedIfPendingMatches(pending) }
             }
         }
     }

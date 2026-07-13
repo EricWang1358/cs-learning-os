@@ -140,6 +140,14 @@ internal fun LearningUiState.afterNodeSaved(node: LearningNodeEntity): LearningU
     message = uiText(R.string.message_node_saved)
 )
 
+internal fun LearningUiState.matchesPendingNodeSave(pending: PendingNodeSave): Boolean =
+    pendingNodeSave == pending
+
+internal fun LearningUiState.afterNodeSavedIfPendingMatches(
+    pending: PendingNodeSave,
+    node: LearningNodeEntity
+): LearningUiState = if (matchesPendingNodeSave(pending)) afterNodeSaved(node) else this
+
 internal fun LearningUiState.afterCaptureSaved(): LearningUiState =
     clearedCaptureEditor().copy(message = uiText(R.string.message_capture_saved_to_inbox))
 
@@ -158,6 +166,10 @@ internal fun LearningUiState.afterQuizSaved(quiz: QuizItemEntity): LearningUiSta
 
 internal fun LearningUiState.withObjectSaveRejected(): LearningUiState =
     copy(message = uiText(R.string.message_assistant_source_unavailable))
+
+internal fun LearningUiState.withObjectSaveRejectedIfPendingMatches(
+    pending: PendingNodeSave
+): LearningUiState = if (matchesPendingNodeSave(pending)) withObjectSaveRejected() else this
 
 suspend fun LearningRepository.saveNodeFromEditor(state: LearningUiState): LearningNodeEntity =
     state.pendingNodeSave?.let { pending ->
