@@ -70,6 +70,30 @@ class RoomContentCommandAdapterTest {
     }
 
     @Test
+    fun legacyDefaultAreaIsCreatedInsideTheNodeCommandTransaction() = runTest {
+        val adapter = adapter()
+
+        val result = adapter.saveNode(createCommand(areaId = "questions"))
+
+        assertSuccess(result)
+        database.learningDao().getArea("questions")!!.also { area ->
+            assertEquals("questions", area.slug)
+            assertEquals("questions", area.name)
+            assertEquals(10, area.order)
+            assertEquals(1_000L, area.createdAt)
+            assertEquals(1_000L, area.updatedAt)
+            assertNull(area.deletedAt)
+        }
+    }
+
+    @Test
+    fun explicitCreateWithoutAreaRemainsAValidationFailure() = runTest {
+        val result = adapter().saveNode(createCommand(areaId = null))
+
+        assertFailure(ContentCommandFailure.Validation("create.missing_area"), result)
+    }
+
+    @Test
     fun updateUsesExpectedRevisionAndRetainsNodeIdentity() = runTest {
         seedArea()
         val adapter = adapter()
@@ -185,13 +209,14 @@ class RoomContentCommandAdapterTest {
         expectedRevision: Long? = null,
         title: String = "",
         markdown: String = "Intro text",
+        areaId: String? = "area-1",
         now: Long = 1_000L
     ) = SaveNodeCommand(
         commandId = CommandId(commandId),
         nodeId = NodeId("node-1"),
         mode = mode,
         expectedRevision = expectedRevision?.let(::EntityRevision),
-        areaId = "area-1",
+        areaId = areaId,
         title = title,
         markdownBody = markdown,
         occurredAt = now

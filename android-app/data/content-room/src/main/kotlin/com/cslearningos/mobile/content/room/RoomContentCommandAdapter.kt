@@ -11,6 +11,8 @@ import com.cslearningos.mobile.content.domain.ContentAreaRef
 import com.cslearningos.mobile.content.domain.ContentFailure
 import com.cslearningos.mobile.content.domain.NodeEditor
 import com.cslearningos.mobile.content.domain.NodeSaveDecision
+import com.cslearningos.mobile.data.AreaEntity
+import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningDatabase
 import com.cslearningos.mobile.data.ProcessedCommandEntity
 import com.cslearningos.mobile.data.ReplicationOutboxEntity
@@ -49,7 +51,7 @@ class RoomContentCommandAdapter(
         if (preconditionFailure != null) return ContentCommandResult.Failure(preconditionFailure)
 
         val areaId = command.areaId ?: existingEntity!!.areaId
-        val areaEntity = dao.getArea(areaId)
+        val areaEntity = resolveArea(dao, areaId, command.occurredAt)
             ?: return ContentCommandResult.Failure(ContentCommandFailure.Missing(AREA_TARGET))
         val decision = NodeEditor.save(
             existing = existingEntity?.let(NodeRoomMapper::toDomain),
@@ -118,12 +120,43 @@ class RoomContentCommandAdapter(
         )
     }
 
+    private suspend fun resolveArea(
+        dao: LearningDao,
+        areaIdOrSlug: String,
+        now: Long
+    ): AreaEntity? = dao.getArea(areaIdOrSlug)
+        ?: dao.getAreaBySlug(areaIdOrSlug)
+        ?: if (areaIdOrSlug == DEFAULT_AREA_SLUG) {
+            createDefaultArea(dao, now)
+        } else {
+            null
+        }
+
+    private suspend fun createDefaultArea(
+        dao: LearningDao,
+        now: Long
+    ): AreaEntity {
+        val area = AreaEntity(
+            id = DEFAULT_AREA_SLUG,
+            slug = DEFAULT_AREA_SLUG,
+            name = DEFAULT_AREA_SLUG,
+            order = (dao.getAllAreas().maxOfOrNull { it.order } ?: 0) + AREA_ORDER_STEP,
+            createdAt = now,
+            updatedAt = now,
+            deletedAt = null
+        )
+        dao.upsertArea(area)
+        return area
+    }
+
     private companion object {
         const val AGGREGATE_TYPE = "content.node"
         const val AREA_TARGET = "area"
         const val COMMAND_TYPE = "content.node.save"
         const val CREATE_EXISTS_CODE = "create.node_exists"
         const val CREATE_MISSING_AREA_CODE = "create.missing_area"
+        const val DEFAULT_AREA_SLUG = "questions"
+        const val AREA_ORDER_STEP = 10
         const val NODE_TARGET = "node"
         const val OUTBOX_PENDING = "pending"
         const val RESULT_TYPE = "content.node"

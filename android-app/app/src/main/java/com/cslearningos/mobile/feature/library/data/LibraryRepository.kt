@@ -53,7 +53,7 @@ class LibraryRepository(
         val existing = id?.let { nodeId ->
             dao.getNode(nodeId) ?: throw IllegalArgumentException("Node is no longer available.")
         }
-        val resolvedAreaId = areaId ?: existing?.areaId
+        val resolvedAreaId = areaId ?: existing?.areaId ?: DefaultAreaSlug
         return saveNode(
             SaveNodeCommand(
                 commandId = CommandId(UUID.randomUUID().toString()),
