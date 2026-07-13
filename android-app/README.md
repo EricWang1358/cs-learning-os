@@ -23,7 +23,7 @@ You can instead set `sdk.dir` in the ignored `android-app/local.properties`. The
 
 All notes and study state are stored in Room on the device. Export a backup before restore, cleanup, migration, or changing phones. Restore is a full replacement: current local data is deleted and replaced by the selected backup. Trash can be restored; Delete forever is only recoverable from backup.
 
-See [../docs/first-run.md](../docs/first-run.md) and [../docs/data-recovery.md](../docs/data-recovery.md).
+See [docs/architecture.md](docs/architecture.md) and [docs/data-recovery.md](docs/data-recovery.md).
 
 ## Network permission policy
 

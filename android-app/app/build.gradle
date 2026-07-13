@@ -8,7 +8,7 @@ plugins {
 def starterAssetsDir = file("$buildDir/generated/starter-assets")
 
 tasks.register("syncStarterContentAssets", Sync) {
-    from("$rootDir/../content-demo") {
+    from("$rootDir/starter-content") {
         include "nodes/**/*.md"
         include "quizzes/**/*.md"
         exclude ".trash/**"
