@@ -539,6 +539,47 @@ Future health rules:
 - GitHub upload size defaults to local tracked-file estimates. Remote GitHub API checks are opt-in through `CS_LEARNING_GITHUB_REMOTE_SIZE=1` to avoid rate limits and network stalls.
 - `/api/system/metrics` returns real-time DB counts plus cached heavy metrics. If no snapshot exists, it returns a lightweight fallback immediately and records `cache.refreshing=true`.
 
+## Android Modular Assistant Target State
+
+The current `AssistantCoordinator` state is a compatibility implementation during Phase 1. Target ownership is split into Session, Run, Interaction, and Proposal aggregates. Model transport implements `ModelGateway`; it cannot persist Nodes, Quizzes, Captures, review state, or synchronization records.
+
+Run transitions are correlated by `runId`. A stale, cancelled, interrupted, or superseded callback cannot advance the active run. A proposal stores the target base revision/hash and becomes a user-reviewed application command only after explicit acceptance.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> BuildingContext: Start(runId)
+    BuildingContext --> Streaming: ContextReady(same runId)
+    Streaming --> Parsing: ModelCompleted(same runId)
+    Parsing --> Completed: ParseCompleted(same runId)
+    BuildingContext --> Failed: Fail(same runId)
+    Streaming --> Failed: Fail(same runId)
+    Parsing --> Failed: Fail(same runId)
+    BuildingContext --> Cancelled: Cancel(same runId)
+    Streaming --> Cancelled: Cancel(same runId)
+    Parsing --> Cancelled: Cancel(same runId)
+    BuildingContext --> Superseded: Supersede(same runId)
+    Streaming --> Superseded: Supersede(same runId)
+    Parsing --> Superseded: Supersede(same runId)
+    Completed --> BuildingContext: Start(new runId)
+    Failed --> BuildingContext: Start(new runId)
+    Cancelled --> BuildingContext: Start(new runId)
+    Superseded --> BuildingContext: Start(new runId)
+```
+
+Aggregate ownership is strict:
+
+| Aggregate | Owns | Does not own |
+| --- | --- | --- |
+| Session | conversation identity, ordered turns, active target | HTTP, Room writes, proposal acceptance |
+| Run | one correlated execution and terminal outcome | conversation history, canonical content |
+| Interaction | one pending confirm/select/reply request | model transport, persistence |
+| Proposal | proposed fields, target identity, base revision/hash, review decision | direct canonical mutation |
+
+Only the application command produced after proposal acceptance may enter the data transaction boundary. Replication consumes committed outbox records later; it never consumes raw model output.
+
+The complete approved transitions, port matrix, replication lifecycle, and migration phases are defined in `docs/superpowers/specs/2026-07-13-android-layered-modular-architecture-design.md`.
+
 ## Android Object-Aware Assistant Editing State
 
 This state machine governs Android assistant edits for Nodes, Capture slips, and Review quizzes. It is the release contract for any feature that changes assistant behavior. A model response is never a persistence operation.
