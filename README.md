@@ -15,7 +15,9 @@ For a five-minute walkthrough, read [docs/first-run.md](docs/first-run.md).
 
 ## Android beta
 
-The native Android app works offline for notes, quizzes, review, search, Trash, and backup. AI is optional and only its configured provider needs a network connection.
+The Android beta is a native Jetpack Compose app. Its local Room database is the source of truth, so the core note, quiz, review, search, Trash, export, and restore workflows work offline without an account or backend.
+
+AI is optional. A user-configured provider is the only network boundary: cleartext traffic is disabled, provider endpoints must use HTTPS, and the API key is encrypted with Android Keystore protection. If a stored key cannot be protected or recovered, the app fails closed and asks for it again rather than retaining plaintext. Backup restore validates bounded input before replacing local data.
 
 ```powershell
 cd android-app
@@ -23,6 +25,14 @@ cd android-app
 ```
 
 Install `android-app/app/build/outputs/apk/debug/app-debug.apk`. Android build details and checks are in [android-app/README.md](android-app/README.md).
+
+Android documentation:
+
+- [User guide (Chinese)](android-app/docs/android-app-usage.md)
+- [Architecture](android-app/docs/architecture.md)
+- [Recovery and backup contract](android-app/docs/data-recovery.md)
+- [Client Android-parity plan](docs/client-android-parity-plan.md)
+- [Android documentation status and index](docs/android-migration.md)
 
 ## Developer setup
 

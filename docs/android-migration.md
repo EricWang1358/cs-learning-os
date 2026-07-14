@@ -2,6 +2,16 @@
 
 CS Learning OS is a local-first personal learning app that can later support desktop sync, hosted sync, or SaaS deployment profiles. Android now owns a native offline product slice rather than embedding the desktop app.
 
+## Current Documentation
+
+- [Android architecture](../android-app/docs/architecture.md) describes the native Compose, domain, and Room boundaries.
+- [Recovery and backup contract](../android-app/docs/data-recovery.md) defines export, restore, and input limits.
+- [Android workflow](android-workflow.md) records engineering and release verification gates.
+- [Android user guide](../android-app/docs/android-app-usage.md) explains the current product flows, including optional AI guidance.
+- [Client Android-parity plan](client-android-parity-plan.md) tracks the planned React client and API work without representing it as shipped functionality.
+
+Cross-device synchronization, accounts, remote transport, conflict resolution, and a computer-client sync path are deferred. The local outbox is preparation for a future adapter, not a working synchronization feature.
+
 ## Non-negotiables
 
 - Local-first: Markdown editing, reading, search, review, and study state do not require an account.
