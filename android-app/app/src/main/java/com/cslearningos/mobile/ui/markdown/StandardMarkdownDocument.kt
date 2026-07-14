@@ -28,6 +28,7 @@ import org.commonmark.node.StrongEmphasis
 import org.commonmark.node.Text
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
+import java.util.ArrayDeque
 
 sealed interface MarkdownBlock
 
@@ -98,17 +99,105 @@ data class MarkdownLinkInline(
 data object MarkdownLineBreakInline : MarkdownInline
 
 object StandardMarkdownDocument {
+    const val MaxInputChars = 1_000_000
+    const val MaxNesting = 64
+
     private val parser = Parser.builder()
         .extensions(listOf(TablesExtension.create()))
         .build()
 
     fun parse(markdown: String): List<MarkdownBlock> {
         if (markdown.isBlank()) return emptyList()
+        if (requiresPlainTextFallback(markdown)) return plainTextFallback(markdown)
         val document = parser.parse(markdown)
-        return parseChildren(document, depth = 0)
+        if (hasExcessiveAstNesting(document)) return plainTextFallback(markdown)
+        return try {
+            parseChildren(document, depth = 0)
+        } catch (_: MarkdownDepthLimitExceeded) {
+            plainTextFallback(markdown)
+        }
     }
 
+    fun requiresPlainTextFallback(markdown: String): Boolean =
+        markdown.length > MaxInputChars || exceedsNestingLimit(markdown)
+
+    fun plainTextFallback(markdown: String): List<MarkdownBlock> =
+        listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown))))
+
+    private fun exceedsNestingLimit(markdown: String): Boolean =
+        markdown.lineSequence().any { line ->
+            var index = 0
+            var quoteDepth = 0
+            while (index < line.length) {
+                while (index < line.length && line[index].isWhitespace()) index += 1
+                if (index >= line.length || line[index] != '>') break
+                quoteDepth += 1
+                if (quoteDepth > MaxNesting) return@any true
+                index += 1
+            }
+
+            val indentation = line.takeWhile { it == ' ' || it == '\t' }
+            val indentationDepth = indentation.count { it == '\t' } + indentation.count { it == ' ' } / 2
+            indentationDepth > MaxNesting || line.hasExcessiveInlineDelimiterRun()
+        }
+
+    private fun String.hasExcessiveInlineDelimiterRun(): Boolean {
+        var runLength = 0
+        var delimiter: Char? = null
+
+        forEach { character ->
+            if (character == '*' || character == '_') {
+                runLength = if (character == delimiter) runLength + 1 else 1
+                delimiter = character
+                if (runLength > MaxNesting * 2) return true
+            } else {
+                runLength = 0
+                delimiter = null
+            }
+        }
+
+        return false
+    }
+
+    private fun hasExcessiveAstNesting(root: Node): Boolean {
+        val pending = ArrayDeque<NodeDepth>()
+        pending.addLast(NodeDepth(node = root, blockDepth = 0, inlineDepth = 0))
+
+        while (pending.isNotEmpty()) {
+            val current = pending.removeLast()
+            var child = current.node.firstChild
+            while (child != null) {
+                val blockDepth = current.blockDepth + when (current.node) {
+                    is BlockQuote, is ListItem -> 1
+                    else -> 0
+                }
+                val inlineDepth = if (child.isInlineNode()) {
+                    if (current.node.isInlineNode()) current.inlineDepth + 1 else 0
+                } else {
+                    0
+                }
+                if (blockDepth > MaxNesting || inlineDepth > MaxNesting) return true
+                pending.addLast(NodeDepth(child, blockDepth, inlineDepth))
+                child = child.next
+            }
+        }
+
+        return false
+    }
+
+    private fun Node.isInlineNode(): Boolean =
+        this is Text ||
+            this is StrongEmphasis ||
+            this is Emphasis ||
+            this is Code ||
+            this is Link ||
+            this is SoftLineBreak ||
+            this is HardLineBreak ||
+            this is HtmlInline ||
+            this is Image
+
     private fun parseChildren(parent: Node, depth: Int): List<MarkdownBlock> {
+        enforceDepthLimit(depth)
         val blocks = mutableListOf<MarkdownBlock>()
         var child = parent.firstChild
 
@@ -116,11 +205,11 @@ object StandardMarkdownDocument {
             when (child) {
                 is Heading -> blocks += MarkdownHeadingBlock(
                     level = child.level,
-                    inlines = parseInlines(child)
+                    inlines = parseInlines(child, depth = 0)
                 )
 
-                is Paragraph -> blocks += MarkdownParagraphBlock(parseInlines(child))
-                is BlockQuote -> blocks += MarkdownQuoteBlock(parseChildren(child, depth))
+                is Paragraph -> blocks += MarkdownParagraphBlock(parseInlines(child, depth = 0))
+                is BlockQuote -> blocks += MarkdownQuoteBlock(parseChildren(child, depth + 1))
                 is org.commonmark.node.BulletList -> blocks += parseList(child, depth)
                 is OrderedList -> blocks += parseList(child, depth)
                 is FencedCodeBlock -> blocks += MarkdownCodeBlock(
@@ -149,6 +238,7 @@ object StandardMarkdownDocument {
     }
 
     private fun parseList(list: CommonmarkListBlock, depth: Int): MarkdownListBlock {
+        enforceDepthLimit(depth)
         val ordered = list is OrderedList
         val startNumber = (list as? OrderedList)?.startNumber ?: 1
         val delimiter = (list as? OrderedList)?.markerDelimiter ?: '.'
@@ -215,33 +305,34 @@ object StandardMarkdownDocument {
         var child = row.firstChild
         while (child != null) {
             if (child is TableCell) {
-                cells += parseInlines(child)
+                cells += parseInlines(child, depth = 0)
             }
             child = child.next
         }
         return cells
     }
 
-    private fun parseInlines(parent: Node): List<MarkdownInline> {
+    private fun parseInlines(parent: Node, depth: Int): List<MarkdownInline> {
+        enforceDepthLimit(depth)
         val inlines = mutableListOf<MarkdownInline>()
         var child = parent.firstChild
 
         while (child != null) {
             when (child) {
                 is Text -> inlines += MarkdownTextInline(child.literal.orEmpty())
-                is StrongEmphasis -> inlines += MarkdownStrongInline(parseInlines(child))
-                is Emphasis -> inlines += MarkdownEmphasisInline(parseInlines(child))
+                is StrongEmphasis -> inlines += MarkdownStrongInline(parseInlines(child, depth + 1))
+                is Emphasis -> inlines += MarkdownEmphasisInline(parseInlines(child, depth + 1))
                 is Code -> inlines += MarkdownCodeInline(child.literal.orEmpty())
                 is Link -> inlines += MarkdownLinkInline(
                     destination = child.destination.orEmpty(),
-                    children = parseInlines(child)
+                    children = parseInlines(child, depth + 1)
                 )
 
                 is SoftLineBreak, is HardLineBreak -> inlines += MarkdownLineBreakInline
                 is HtmlInline -> inlines += MarkdownTextInline(child.literal.orEmpty())
-                is Image -> inlines += parseInlines(child)
+                is Image -> inlines += parseInlines(child, depth + 1)
                 else -> if (child.firstChild != null) {
-                    inlines += parseInlines(child)
+                    inlines += parseInlines(child, depth + 1)
                 }
             }
             child = child.next
@@ -249,6 +340,18 @@ object StandardMarkdownDocument {
 
         return mergeAdjacentText(inlines)
     }
+
+    private fun enforceDepthLimit(depth: Int) {
+        if (depth > MaxNesting) throw MarkdownDepthLimitExceeded
+    }
+
+    private data class NodeDepth(
+        val node: Node,
+        val blockDepth: Int,
+        val inlineDepth: Int
+    )
+
+    private data object MarkdownDepthLimitExceeded : RuntimeException()
 
     private fun mergeAdjacentText(inlines: List<MarkdownInline>): List<MarkdownInline> {
         if (inlines.isEmpty()) return inlines

@@ -1,7 +1,7 @@
 package com.cslearningos.mobile.ui
 
-import java.util.Locale
 import java.io.File
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -53,23 +53,25 @@ class AppLocalizationTest {
         val defaultStrings = resourceText("values/strings.xml")
         val chineseStrings = resourceText("values-zh/strings.xml")
 
-        listOf("Capture", "Library", "Review", "Backup").forEach { label ->
-            assertTrue(defaultStrings.contains("Open $label") || defaultStrings.contains(label))
+        listOf("Capture", "Library", "Review", "More").forEach { label ->
+            assertTrue(defaultStrings.contains(label))
         }
-        assertTrue(defaultStrings.contains("find it in Library"))
+        assertTrue(defaultStrings.contains("local first"))
+        assertTrue(defaultStrings.contains("More - Service"))
+        assertTrue(defaultStrings.contains("generated output is always a proposal"))
         assertTrue(defaultStrings.contains("restore replaces current local data"))
-        assertTrue(defaultStrings.contains("export first"))
+        assertTrue(defaultStrings.contains("export a backup"))
         assertTrue(defaultStrings.contains("Delete forever"))
         assertTrue(defaultStrings.contains("only recoverable from a backup"))
         assertFalse(defaultStrings.contains("adapter"))
         assertFalse(defaultStrings.contains("source of truth"))
         assertTrue(defaultStrings.contains("more_section_expanded"))
 
-        assertTrue(chineseStrings.contains("在知识库里找到它"))
-        assertTrue(chineseStrings.contains("恢复会替换当前本地数据"))
-        assertTrue(chineseStrings.contains("请先导出"))
-        assertTrue(chineseStrings.contains("永久删除"))
-        assertTrue(chineseStrings.contains("只能从备份恢复"))
+        assertTrue(chineseStrings.contains("Room"))
+        assertTrue(chineseStrings.contains("API Key"))
+        assertTrue(chineseStrings.contains("HTTPS"))
+        assertTrue(chineseStrings.contains("Markdown"))
+        assertTrue(chineseStrings.contains("more_guide_step_bodies"))
         assertTrue(chineseStrings.contains("more_section_expanded"))
     }
 

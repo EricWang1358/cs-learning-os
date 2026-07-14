@@ -398,6 +398,7 @@
     <string name="message_ai_validation_succeeded">AI 校验成功。</string>
     <string name="message_ai_validation_failed">AI 校验失败。</string>
     <string name="message_ai_settings_saved_locally">AI 设置已保存在本机。</string>
+    <string name="message_ai_settings_save_failed">此设备无法安全保存 AI 设置。</string>
     <string name="message_pulling_ai_models">正在拉取 AI 模型列表……</string>
     <string name="message_no_model_ids">没有返回模型 ID。</string>
     <string name="message_ai_models_pulled">AI 模型已拉取完成。</string>
@@ -439,6 +440,7 @@
     <string name="ai_status_validation_failed_title">AI 校验失败</string>
     <string name="ai_status_settings_saved_title">AI 设置已保存</string>
     <string name="ai_status_settings_saved_body">供应商、API key、Base URL、模型和 thinking 偏好都已保存在本机。</string>
+    <string name="ai_status_settings_save_failed_title">AI 设置未保存</string>
     <string name="ai_status_pull_unavailable_title">暂时还不能拉取模型</string>
     <string name="ai_status_pull_title">正在拉取模型列表</string>
     <string name="ai_status_pull_body">正在调用 %1$s。如果你的供应商不支持列出模型，也可以手动输入模型名。</string>
@@ -452,10 +454,10 @@
     <string name="message_backup_export_failed">导出备份失败</string>
     <string name="message_backup_saved_to_device">备份已保存到本地</string>
     <string name="more_section_guide_title">教程</string>
-    <string name="more_section_guide_body">把手机端最常用的流程直接放在这里。</string>
+    <string name="more_section_guide_body">内置当前本地优先手机工作流的使用说明。</string>
     <string name="more_value_start_here">先看这里</string>
     <string name="more_guide_label">怎么用这个 App</string>
-    <string name="more_guide_intro">五分钟走一遍：记录一个想法，在知识库里找到它，复习一张卡，再导出备份。</string>
+    <string name="more_guide_intro">这个 App 采用本地优先模式：学习内容、笔记、Capture Slip、复习记录和备份默认都保存在这台设备上。这里重点说明可选 AI 配置、从 Capture 到知识库的整理流程，以及恢复或换机前如何保护数据。</string>
     <string name="more_guide_step_badge">步骤 %1$d</string>
     <string name="more_guide_open_capture">打开捕捉</string>
     <string name="more_guide_open_library">打开知识库</string>
@@ -463,16 +465,60 @@
     <string name="more_guide_open_backup">打开备份</string>
 
     <string-array name="more_guide_step_titles">
-        <item>先捕捉一件事</item>
-        <item>在知识库找到它</item>
-        <item>复习一张卡</item>
-        <item>导出一个备份</item>
+        <item>先确认本地优先基础</item>
+        <item>只在需要时配置 AI</item>
+        <item>把 Capture 整理成可审阅笔记</item>
+        <item>恢复或清理前先备份</item>
     </string-array>
     <string-array name="more_guide_step_bodies">
-        <item>想法快消失前，先保存一条短记录。之后再整理也可以。</item>
-        <item>打开知识库，阅读笔记，或新建一条笔记。</item>
-        <item>先显示答案，再评分；下次复习时间会自动更新。</item>
-        <item>恢复、清理或换手机前，先分享或保存一份备份。</item>
+        <item>首页、捕捉、知识库、复习和更多页面都直接使用本机 Room 数据。核心学习流程不依赖账号、桌面端或远程服务。</item>
+        <item>进入 更多 - 服务，保存服务商名称、API Key、HTTPS Base URL 和模型名，再执行“校验”。AI 只是可选能力，生成内容始终是待你确认的提案。</item>
+        <item>新建或打开一条 Capture Slip；如果已配置 AI，可先生成草稿。审阅标题、Area、Markdown 正文和题卡内容后，再决定是否保存到知识库。</item>
+        <item>在 更多 - 数据 导出备份，再进行恢复、永久删除、本地清理或换机。恢复会替换当前本地数据，而不是合并。</item>
+    </string-array>
+    <string name="assistant_guide_title">知识助理说明</string>
+    <string name="assistant_guide_eyebrow">助理教程</string>
+    <string name="assistant_guide_intro">把知识助理当作可选、受监督的学习帮手。它可以解释概念、准备可编辑草稿并引用本地检索结果，但任何最终保存都必须先经过你的审阅。</string>
+    <string name="assistant_guide_open_assistant">打开助理</string>
+    <string name="assistant_guide_entry_label">知识助理</string>
+    <string name="assistant_guide_entry_body">说明助理当前能做什么、怎样安全使用，以及出错后如何恢复。</string>
+    <string name="assistant_guide_open">打开知识助理说明</string>
+    <string name="assistant_guide_capabilities_eyebrow">当前能力</string>
+    <string name="assistant_guide_capabilities_title">现在可以帮你做什么</string>
+    <string name="assistant_guide_workflow_eyebrow">推荐流程</string>
+    <string name="assistant_guide_workflow_title">推荐使用方式</string>
+    <string name="assistant_guide_safety_eyebrow">安全边界</string>
+    <string name="assistant_guide_safety_title">使用边界</string>
+    <string name="assistant_guide_rollback_eyebrow">纠错恢复</string>
+    <string name="assistant_guide_rollback_title">出错时怎么处理</string>
+
+    <string-array name="assistant_guide_capabilities">
+        <item>结合你配置的 AI 服务和少量本地检索摘录，解释概念、总结笔记并回答学习问题。</item>
+        <item>根据“创建笔记”“整理这条 Capture”之类的请求，生成可编辑的 Markdown 草稿。</item>
+        <item>为现有 Node、Quiz 或 Capture Slip 提出修改建议，同时保留本地对象身份和版本检查。</item>
+        <item>辅助复习规划和追问式学习，在同一个对话窗口里继续围绕当前主题展开。</item>
+        <item>展示本地命中来源，方便你核对回答依据，而不是直接相信没有出处的结论。</item>
+        <item>当草稿生成或保存前需要你决定时，先请求轻量确认，而不是直接替你落库。</item>
+    </string-array>
+    <string-array name="assistant_guide_workflow">
+        <item>先在 更多 - 服务 保存并校验 AI 配置。若校验失败，先修正 Base URL、模型名或 API Key，再发送助理请求。</item>
+        <item>一次只提一个明确任务，例如解释概念、把 Capture 变成草稿，或帮助规划一次复习。</item>
+        <item>把每次生成结果都当作提案。保存前先检查标题、Area、Markdown 正文和题卡内容。</item>
+        <item>同一主题的追问尽量留在同一个助理窗口；切换任务时，再开始新对话。</item>
+        <item>大段原始资料更适合先存进本地 Node 或 Capture Slip，而不是整段贴进聊天，因为检索时只会发送较短摘录。</item>
+    </string-array>
+    <string-array name="assistant_guide_safety">
+        <item>AI 是可选功能。即使不配置服务商，笔记、Capture、复习、回收站和备份仍然可以本地使用。</item>
+        <item>只接受 HTTPS 服务地址，API Key 只保存在本机，并由 Android Keystore 保护。</item>
+        <item>助理不能静默创建、覆盖、移动或删除本地 Node 和 Area。草稿保存、Capture 保存和复习保存都仍需显式操作。</item>
+        <item>未知的 Area 名不会被当成真实 Area；版本检查也会阻止旧草稿悄悄覆盖更新过的本地内容。</item>
+        <item>不要在问题里输入你不希望发送给外部 AI 服务商的敏感信息。</item>
+    </string-array>
+    <string-array name="assistant_guide_rollback">
+        <item>如果回复或草稿不对，可以要求重写，或直接退出编辑页不保存。在你点击保存前，不会发生静默写入。</item>
+        <item>如果已经保存了错误笔记，可以手动编辑，或先移到回收站；在“永久删除”前都还能恢复。</item>
+        <item>清理、恢复或换机前，先到 更多 - 数据 导出备份。恢复会替换当前本地数据，而不是合并。</item>
+        <item>如果助理请求突然不可用，先回到 更多 - 服务，重新执行“校验”或“模型”，再重试。</item>
     </string-array>
     <string name="assistant_title">知识助理</string>
     <string name="assistant_open_description">打开知识助理</string>

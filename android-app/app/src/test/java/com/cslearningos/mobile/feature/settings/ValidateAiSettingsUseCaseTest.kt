@@ -36,4 +36,31 @@ class ValidateAiSettingsUseCaseTest {
         assertTrue(result.isValid)
         assertTrue(result.missingFields.isEmpty())
     }
+
+    @Test
+    fun validateAiSettingsRejectsHttpBaseUrl() {
+        assertInvalidBaseUrl("http://provider.test/v1")
+    }
+
+    @Test
+    fun validateAiSettingsRejectsHttpsBaseUrlWithoutHost() {
+        assertInvalidBaseUrl("https:///v1")
+    }
+
+    @Test
+    fun validateAiSettingsRejectsMalformedBaseUrl() {
+        assertInvalidBaseUrl("not-a-url")
+    }
+
+    private fun assertInvalidBaseUrl(baseUrl: String) {
+        val result = ValidateAiSettingsUseCase()(
+            provider = "Provider",
+            apiKey = "sk-test",
+            baseUrl = baseUrl,
+            model = "model"
+        )
+
+        assertEquals(listOf("baseUrl"), result.missingFields)
+        assertFalse(result.isValid)
+    }
 }

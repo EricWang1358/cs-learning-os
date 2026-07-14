@@ -4,8 +4,10 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -17,6 +19,8 @@ data class BackupDocument(
 )
 
 object BackupTransferCoordinator {
+    const val MaxImportBytes = 8 * 1024 * 1024
+
     private val fileNameFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
         .withZone(ZoneId.systemDefault())
 
@@ -54,8 +58,24 @@ object BackupTransferCoordinator {
     fun readImportedText(contentResolver: ContentResolver, uri: Uri): String {
         val inputStream = contentResolver.openInputStream(uri)
             ?: throw IOException("Could not open selected backup file.")
-        return inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-            reader.readText()
+        return inputStream.use(::readImportedText)
+    }
+
+    internal fun readImportedText(inputStream: InputStream): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var bytesRead = 0
+
+        while (true) {
+            val read = inputStream.read(buffer)
+            if (read == -1) break
+            if (bytesRead > MaxImportBytes - read) {
+                throw IOException("Selected backup file is too large.")
+            }
+            output.write(buffer, 0, read)
+            bytesRead += read
         }
+
+        return output.toString(Charsets.UTF_8.name())
     }
 }

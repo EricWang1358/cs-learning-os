@@ -11,6 +11,7 @@ import com.cslearningos.mobile.ui.assistantMarkdownDraft
 import com.cslearningos.mobile.ui.forNewQuizDraftEditor
 import com.cslearningos.mobile.ui.titleFromAiMarkdown
 import com.cslearningos.mobile.ui.uiText
+import com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -94,6 +95,17 @@ class AssistantAppBridge(
     fun sendMessage() = coordinator.send(currentSettings())
 
     fun replyToAgentAction(reply: String) = coordinator.sendAgentActionReply(reply, currentSettings())
+
+    fun confirmAreaMove(interaction: AssistantAgentInteraction.MoveNodeArea) {
+        scope.launch {
+            val message = if (coordinator.confirmAreaMove(interaction)) {
+                uiText(R.string.message_node_moved_to_area)
+            } else {
+                uiText(R.string.message_assistant_source_unavailable)
+            }
+            updateState { it.copy(message = message) }
+        }
+    }
 
     fun retryMessage(messageId: String) = coordinator.retry(messageId, currentSettings())
 

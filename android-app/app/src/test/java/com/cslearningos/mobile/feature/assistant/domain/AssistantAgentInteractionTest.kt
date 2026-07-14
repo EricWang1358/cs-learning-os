@@ -99,6 +99,31 @@ class AssistantAgentInteractionTest {
     }
 
     @Test
+    fun parsesOnlyCompleteNodeAreaMoveProposals() {
+        val parsed = parseAssistantAgentInteraction(
+            """
+            Move the graph note into Algorithms.
+            <!-- cs-agent-action -->
+            {"kind":"move_node_area","nodeId":"node-1","expectedRevision":7,"targetAreaId":"algorithms","reason":"It belongs with traversal notes."}
+            <!-- /cs-agent-action -->
+            """.trimIndent()
+        )
+
+        val move = parsed.interaction as AssistantAgentInteraction.MoveNodeArea
+        assertEquals("Move the graph note into Algorithms.", parsed.visibleReply)
+        assertEquals("node-1", move.nodeId)
+        assertEquals(7L, move.expectedRevision)
+        assertEquals("algorithms", move.targetAreaId)
+        assertEquals("It belongs with traversal notes.", move.reason)
+
+        assertNull(
+            parseAssistantAgentInteraction(
+                """<!-- cs-agent-action -->{"kind":"move_node_area","nodeId":"node-1","targetAreaId":"algorithms","reason":"Missing revision."}<!-- /cs-agent-action -->"""
+            ).interaction
+        )
+    }
+
+    @Test
     fun missingAgentActionFieldsUseReadableFallbackText() {
         val confirm = JSONObject("""{"kind":"confirm"}""").toAgentInteraction() as AssistantAgentInteraction.Confirm
         assertEquals("Confirm next step", confirm.title)

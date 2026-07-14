@@ -8,8 +8,15 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import java.net.URI
 
 const val MarkdownLinkAnnotationTag = "markdown-link"
+
+internal fun isSafeMarkdownDestination(destination: String): Boolean =
+    runCatching {
+        val uri = URI(destination)
+        uri.scheme.equals("https", ignoreCase = true) && uri.host != null
+    }.getOrDefault(false)
 
 data class MarkdownCodeSpan(
     val text: String,
@@ -68,17 +75,19 @@ private fun AnnotatedString.Builder.appendMarkdownInlines(
                     appendMarkdownInlines(inline.children, codeSpans)
                 }
                 if (length > start) {
-                    addStringAnnotation(
-                        tag = MarkdownLinkAnnotationTag,
-                        annotation = inline.destination,
-                        start = start,
-                        end = length
-                    )
-                    addStyle(
-                        style = SpanStyle(textDecoration = TextDecoration.Underline),
-                        start = start,
-                        end = length
-                    )
+                    if (isSafeMarkdownDestination(inline.destination)) {
+                        addStringAnnotation(
+                            tag = MarkdownLinkAnnotationTag,
+                            annotation = inline.destination,
+                            start = start,
+                            end = length
+                        )
+                        addStyle(
+                            style = SpanStyle(textDecoration = TextDecoration.Underline),
+                            start = start,
+                            end = length
+                        )
+                    }
                 }
             }
 

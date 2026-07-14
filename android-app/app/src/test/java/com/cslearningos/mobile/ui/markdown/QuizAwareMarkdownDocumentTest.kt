@@ -174,4 +174,77 @@ class QuizAwareMarkdownDocumentTest {
         assertEquals("", quiz.info)
         assertEquals("question: What creates the Review card?", quiz.lines.first())
     }
+
+    @Test
+    fun parseSeparatesAdjacentTablesWithDifferentColumnCounts() {
+        val tables = QuizAwareMarkdownDocument.parse(
+            """
+            Name | Value
+            --- | ---
+            one | 1
+            Left | Middle | Right
+            --- | --- | ---
+            a | b | c
+            """.trimIndent()
+        ).filterIsInstance<MarkdownTableBlock>()
+
+        assertEquals(2, tables.size)
+        assertEquals(2, tables[0].headers.size)
+        assertEquals(3, tables[1].headers.size)
+    }
+
+    @Test
+    fun parseOversizedInputAsPlainTextWithoutInvokingTheMarkdownParser() {
+        val markdown = "# ".repeat(500_001)
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseExcessiveNestingAsPlainTextWithoutRecursiveTraversal() {
+        val markdown = "> ".repeat(65) + "deep"
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseExcessiveInlineNestingAsPlainTextWithoutRecursiveTraversal() {
+        val markdown = "*".repeat(129) + "deep" + "*".repeat(129)
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
+
+    @Test
+    fun parseTabIndentedHundredLevelListAsPlainTextBeforeRecursiveTraversal() {
+        val markdown = buildString {
+            repeat(100) { depth ->
+                append("\t".repeat(depth))
+                append("- level $depth\n")
+            }
+        }.trimEnd()
+
+        assertTrue(StandardMarkdownDocument.requiresPlainTextFallback(markdown))
+
+        val blocks = QuizAwareMarkdownDocument.parse(markdown)
+
+        assertEquals(
+            listOf(MarkdownParagraphBlock(listOf(MarkdownTextInline(markdown)))),
+            blocks
+        )
+    }
 }

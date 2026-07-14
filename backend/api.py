@@ -17,6 +17,7 @@ try:
     from .codex_service import (
         codex_base_url,
         codex_cli_path,
+        codex_configuration_probe,
         codex_is_configured,
         codex_job_home,
         codex_model_name,
@@ -41,6 +42,7 @@ except ImportError:
     from codex_service import (
         codex_base_url,
         codex_cli_path,
+        codex_configuration_probe,
         codex_is_configured,
         codex_job_home,
         codex_model_name,
@@ -116,6 +118,7 @@ app.include_router(
         codex_base_url,
         codex_cli_path,
         codex_job_home,
+        codex_configuration_probe,
         codex_preflight,
         ai_enabled,
         app_profile,

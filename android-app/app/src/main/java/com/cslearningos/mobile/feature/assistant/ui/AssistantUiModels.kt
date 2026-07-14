@@ -48,6 +48,12 @@ sealed interface AssistantMessageAction {
         val explanation: String
     ) : AssistantMessageAction
 
+    data class OpenNewQuizDraft(
+        val prompt: String,
+        val answer: String,
+        val explanation: String
+    ) : AssistantMessageAction
+
     data class OpenEditableCaptureDraft(
         val slipId: String,
         val expectedRevision: Long,
@@ -144,6 +150,12 @@ private fun AssistantConversationAction.toUiAction(): AssistantMessageAction? = 
         explanation = explanation
     )
 
+    is AssistantConversationAction.OpenNewQuizDraft -> AssistantMessageAction.OpenNewQuizDraft(
+        prompt = prompt,
+        answer = answer,
+        explanation = explanation
+    )
+
     is AssistantConversationAction.OpenEditableCaptureDraft -> CaptureSlipType.entries
         .firstOrNull { it.name == typeName }
         ?.let { type ->
@@ -179,6 +191,12 @@ private fun AssistantMessageAction.toStoredAction(): AssistantConversationAction
         quizId = quizId,
         expectedRevision = expectedRevision,
         nodeId = nodeId,
+        prompt = prompt,
+        answer = answer,
+        explanation = explanation
+    )
+
+    is AssistantMessageAction.OpenNewQuizDraft -> AssistantConversationAction.OpenNewQuizDraft(
         prompt = prompt,
         answer = answer,
         explanation = explanation
@@ -356,5 +374,6 @@ data class AssistantUiState(
     val reviewSession: AssistantReviewSession? = null,
     val conversationHistory: List<AssistantConversationSummary> = emptyList(),
     val historyVisible: Boolean = false,
-    val pendingDraftRequest: String? = null
+    val pendingDraftRequest: String? = null,
+    val pendingAutoOpenMessageId: String? = null
 )

@@ -29,6 +29,116 @@ import org.junit.Test
 
 class OpenAiModelGatewayTest {
     @Test
+    fun acceptsAtLimitJsonFallbackWithoutTrailingNewline() = runTest {
+        val runId = AssistantRunId("run-1")
+        val prefix = "{\"choices\":[{\"message\":{\"content\":\""
+        val suffix = "\"}}]}"
+        val content = "x".repeat(1_048_576 - prefix.length - suffix.length)
+        val response = prefix + content + suffix
+        val connection = FakeHttpConnection(statusCode = 200, response = response)
+
+        assertEquals(1_048_576, response.toByteArray(Charsets.UTF_8).size)
+
+        val events = gateway(connection).stream(request(runId)).toList()
+
+        assertEquals(ModelEvent.Completed(runId), events.last())
+        assertFalse(events.any { it is ModelEvent.Failed })
+        assertEquals(content, events.filterIsInstance<ModelEvent.Token>().joinToString("") { it.value })
+    }
+
+    @Test
+    fun usesGenericTextForNonAuthHttpErrors() = runTest {
+        val sentinel = "provider-http-sentinel"
+        val connection = FakeHttpConnection(statusCode = 500, response = sentinel)
+
+        val events = gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        val failed = events.single() as ModelEvent.Failed
+        assertEquals(ModelFailure.Http(500, "HTTP 500"), failed.failure)
+        assertFalse(failed.toString().contains(sentinel))
+    }
+
+    @Test
+    fun usesGenericTextForSseProviderErrors() = runTest {
+        val sentinel = "provider-sse-sentinel"
+        val connection = FakeHttpConnection(
+            statusCode = 200,
+            response = "data: {\"error\":{\"message\":\"$sentinel\"}}\n"
+        )
+
+        val events = gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        val failed = events.single() as ModelEvent.Failed
+        assertEquals(ModelFailure.Protocol("Model streaming failed."), failed.failure)
+        assertFalse(failed.toString().contains(sentinel))
+    }
+
+    @Test
+    fun rejectsOversizedSuccessfulResponseComposedOfBlankCrlfLines() = runTest {
+        val connection = FakeHttpConnection(
+            statusCode = 200,
+            responseStream = CumulativeBlankLineInputStream()
+        )
+
+        val events = gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(
+            listOf(
+                ModelEvent.Failed(
+                    AssistantRunId("run-1"),
+                    ModelFailure.Protocol("Model response exceeded maximum size.")
+                )
+            ),
+            events
+        )
+    }
+
+    @Test
+    fun closesSuccessfulSseResponseWhenDisconnectDoesNotCloseIt() = runTest {
+        val response = CloseTrackingInputStream("data: [DONE]\n".toByteArray())
+        val connection = FakeHttpConnection(
+            statusCode = 200,
+            responseStream = response,
+            disconnectClosesResponse = false
+        )
+
+        val events = gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(listOf(ModelEvent.Completed(AssistantRunId("run-1"))), events)
+        assertTrue(response.closed)
+    }
+
+    @Test
+    fun disablesRedirectFollowingForApiKeyBearingConnection() = runTest {
+        val connection = FakeHttpConnection(
+            statusCode = 200,
+            response = "data: [DONE]\n"
+        )
+
+        gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        assertFalse(connection.instanceFollowRedirects)
+    }
+
+    @Test
+    fun failsSafelyWhenNonSseFallbackExceedsResponseLimit() = runTest {
+        val oversizedResponse = OversizedLineInputStream()
+        val connection = FakeHttpConnection(
+            statusCode = 200,
+            responseStream = oversizedResponse
+        )
+
+        val events = gateway(connection).stream(request(AssistantRunId("run-1"))).toList()
+
+        val failed = events.single() as ModelEvent.Failed
+        assertEquals(
+            ModelFailure.Protocol("Model response exceeded maximum size."),
+            failed.failure
+        )
+        assertTrue(oversizedResponse.closed)
+    }
+
+    @Test
     fun emitsProviderNeutralTokensAndCompletion() = runTest {
         val connection = FakeHttpConnection(
             statusCode = 200,
@@ -103,6 +213,48 @@ class OpenAiModelGatewayTest {
         assertTrue(connection.disconnected)
     }
 
+    @Test
+    fun rejectsHttpEndpointBeforeCreatingConnection() = runTest {
+        var connectionAttempts = 0
+        val gateway = OpenAiModelGateway(
+            baseUrl = "http://example.test/v1",
+            apiKey = "test-key",
+            model = "test-model",
+            connectTimeoutMillis = 1_000,
+            readTimeoutMillis = 2_000,
+            connectionFactory = {
+                connectionAttempts += 1
+                error("Connection must not be created")
+            }
+        )
+
+        val events = gateway.stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(0, connectionAttempts)
+        assertTrue(events.single() is ModelEvent.Failed)
+    }
+
+    @Test
+    fun rejectsMalformedEndpointBeforeCreatingConnection() = runTest {
+        var connectionAttempts = 0
+        val gateway = OpenAiModelGateway(
+            baseUrl = "https:///v1",
+            apiKey = "test-key",
+            model = "test-model",
+            connectTimeoutMillis = 1_000,
+            readTimeoutMillis = 2_000,
+            connectionFactory = {
+                connectionAttempts += 1
+                error("Connection must not be created")
+            }
+        )
+
+        val events = gateway.stream(request(AssistantRunId("run-1"))).toList()
+
+        assertEquals(0, connectionAttempts)
+        assertTrue(events.single() is ModelEvent.Failed)
+    }
+
     private fun gateway(connection: FakeHttpConnection): OpenAiModelGateway =
         OpenAiModelGateway(
             baseUrl = "https://example.test/v1",
@@ -127,7 +279,8 @@ private class FakeHttpConnection(
     url: URL = URL("https://example.test/v1/chat/completions"),
     private val statusCode: Int,
     response: String = "",
-    private val responseStream: InputStream = ByteArrayInputStream(response.toByteArray())
+    private val responseStream: InputStream = ByteArrayInputStream(response.toByteArray()),
+    private val disconnectClosesResponse: Boolean = true
 ) : HttpURLConnection(url) {
     private val requestBytes = ByteArrayOutputStream()
     val requestProperties = linkedMapOf<String, String>()
@@ -143,7 +296,7 @@ private class FakeHttpConnection(
     }
     override fun disconnect() {
         disconnected = true
-        responseStream.close()
+        if (disconnectClosesResponse) responseStream.close()
     }
     override fun usingProxy(): Boolean = false
     override fun connect() = Unit
@@ -163,5 +316,44 @@ private class DisconnectableBlockingInputStream : InputStream() {
 
     override fun close() {
         disconnected.countDown()
+    }
+}
+
+private class OversizedLineInputStream : InputStream() {
+    private var bytesRead = 0
+    var closed = false
+        private set
+
+    override fun read(): Int {
+        if (bytesRead > 1_048_576) {
+            error("Response reader consumed beyond the overflow byte")
+        }
+        bytesRead += 1
+        return 'x'.code
+    }
+
+    override fun close() {
+        closed = true
+    }
+}
+
+private class CumulativeBlankLineInputStream : InputStream() {
+    private var bytesRead = 0
+
+    override fun read(): Int {
+        if (bytesRead > 1_048_576) return -1
+        val nextByte = if (bytesRead % 2 == 0) '\r' else '\n'
+        bytesRead += 1
+        return nextByte.code
+    }
+}
+
+private class CloseTrackingInputStream(bytes: ByteArray) : ByteArrayInputStream(bytes) {
+    var closed = false
+        private set
+
+    override fun close() {
+        closed = true
+        super.close()
     }
 }

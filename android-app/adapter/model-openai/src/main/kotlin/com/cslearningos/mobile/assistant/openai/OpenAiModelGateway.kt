@@ -5,6 +5,8 @@ import com.cslearningos.mobile.assistant.domain.ModelEvent
 import com.cslearningos.mobile.assistant.domain.ModelFailure
 import com.cslearningos.mobile.assistant.domain.ModelGateway
 import com.cslearningos.mobile.assistant.domain.ModelRequest
+import com.cslearningos.mobile.assistant.domain.InvalidProviderEndpointMessage
+import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.CancellationException
@@ -41,11 +43,16 @@ class OpenAiModelGateway(
     @OptIn(InternalCoroutinesApi::class)
     override fun stream(request: ModelRequest): Flow<ModelEvent> = channelFlow {
         withContext(Dispatchers.IO) {
+            if (!isValidProviderEndpoint(baseUrl)) {
+                send(ModelEvent.Failed(request.runId, ModelFailure.Transport(InvalidProviderEndpointMessage)))
+                return@withContext
+            }
             val connection = connectionFactory(URL(openAiChatCompletionsUrl(baseUrl))).apply {
                 requestMethod = "POST"
                 connectTimeout = connectTimeoutMillis
                 readTimeout = readTimeoutMillis
                 doOutput = true
+                instanceFollowRedirects = false
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Accept", "text/event-stream, application/json")
                 setRequestProperty("Content-Type", "application/json")
@@ -67,11 +74,11 @@ class OpenAiModelGateway(
                     connection.errorStream
                 }
                 if (responseCode !in HttpSuccessRange) {
-                    val responseBody = responseStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    responseStream?.use { it.discardBoundedResponse() }
                     send(
                         ModelEvent.Failed(
                             request.runId,
-                            responseFailure(responseCode, responseBody)
+                            responseFailure(responseCode)
                         )
                     )
                     return@withContext
@@ -79,32 +86,44 @@ class OpenAiModelGateway(
 
                 var receivedSseFrame = false
                 val rawResponse = StringBuilder()
-                responseStream?.bufferedReader()?.use { reader ->
-                    while (true) {
-                        val line = reader.readLine() ?: break
-                        currentCoroutineContext().ensureActive()
-                        when (val parsed = OpenAiSseParser.parse(line)) {
-                            is OpenAiSseResult.Token -> {
-                                receivedSseFrame = true
-                                send(ModelEvent.Token(request.runId, parsed.value))
-                            }
-                            is OpenAiSseResult.Error -> {
-                                receivedSseFrame = true
+                responseStream?.let { response ->
+                    BoundedResponseInputStream(response).use { stream ->
+                        while (true) {
+                            val line = try {
+                                stream.readBoundedLine()
+                            } catch (_: ResponseTooLargeException) {
                                 send(
                                     ModelEvent.Failed(
                                         request.runId,
-                                        ModelFailure.Protocol(parsed.message.safeMessage())
+                                        ModelFailure.Protocol(ResponseTooLargeMessage)
                                     )
                                 )
                                 return@withContext
-                            }
-                            OpenAiSseResult.Control -> receivedSseFrame = true
-                            OpenAiSseResult.Done -> {
-                                receivedSseFrame = true
-                                break
-                            }
-                            OpenAiSseResult.Ignored -> if (line.isNotBlank()) {
-                                rawResponse.appendLine(line)
+                            } ?: break
+                            currentCoroutineContext().ensureActive()
+                            when (val parsed = OpenAiSseParser.parse(line)) {
+                                is OpenAiSseResult.Token -> {
+                                    receivedSseFrame = true
+                                    send(ModelEvent.Token(request.runId, parsed.value))
+                                }
+                                is OpenAiSseResult.Error -> {
+                                    receivedSseFrame = true
+                                    send(
+                                        ModelEvent.Failed(
+                                            request.runId,
+                                            ModelFailure.Protocol(GenericStreamingFailureMessage)
+                                        )
+                                    )
+                                    return@withContext
+                                }
+                                OpenAiSseResult.Control -> receivedSseFrame = true
+                                OpenAiSseResult.Done -> {
+                                    receivedSseFrame = true
+                                    break
+                                }
+                                OpenAiSseResult.Ignored -> if (line.isNotBlank()) {
+                                    rawResponse.append(line).append('\n')
+                                }
                             }
                         }
                     }
@@ -160,12 +179,12 @@ class OpenAiModelGateway(
             .put("messages", payloadMessages)
     }
 
-    private fun responseFailure(statusCode: Int, responseBody: String): ModelFailure =
+    private fun responseFailure(statusCode: Int): ModelFailure =
         when (statusCode) {
             HttpURLConnection.HTTP_UNAUTHORIZED,
             HttpURLConnection.HTTP_FORBIDDEN -> ModelFailure.Authentication(statusCode)
             TooManyRequestsStatus -> ModelFailure.RateLimited(null)
-            else -> ModelFailure.Http(statusCode, responseBody.safeMessage())
+            else -> ModelFailure.Http(statusCode, "HTTP $statusCode")
         }
 
     private fun String?.safeMessage(): String =
@@ -174,11 +193,62 @@ class OpenAiModelGateway(
             .ifBlank { "Model transport failed." }
             .take(MaximumErrorCharacters)
 
+    private fun java.io.InputStream.discardBoundedResponse() {
+        val response = BoundedResponseInputStream(this)
+        val buffer = ByteArray(ResponseBodyMaximumBytes.coerceAtMost(8_192))
+        while (true) {
+            val bytesRead = response.read(buffer)
+            if (bytesRead < 0) break
+        }
+    }
+
+    private fun java.io.InputStream.readBoundedLine(): String? {
+        val line = java.io.ByteArrayOutputStream()
+        while (true) {
+            val nextByte = read()
+            if (nextByte < 0) {
+                return line.takeIf { it.size() > 0 }?.toString(Charsets.UTF_8.name())
+            }
+            if (nextByte == '\n'.code) {
+                val bytes = line.toByteArray()
+                val length = if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.size - 1 else bytes.size
+                return bytes.copyOf(length).toString(Charsets.UTF_8)
+            }
+            if (line.size() >= ResponseBodyMaximumBytes) {
+                throw ResponseTooLargeException()
+            }
+            line.write(nextByte)
+        }
+    }
+
     private companion object {
         const val DefaultTemperature = 0.25
         const val FallbackChunkSize = 24
         const val MaximumErrorCharacters = 240
+        const val ResponseBodyMaximumBytes = 1_048_576
+        const val ResponseTooLargeMessage = "Model response exceeded maximum size."
+        const val GenericStreamingFailureMessage = "Model streaming failed."
         const val TooManyRequestsStatus = 429
         val HttpSuccessRange = 200..299
+    }
+
+    private class ResponseTooLargeException : IllegalStateException(ResponseTooLargeMessage)
+
+    private class BoundedResponseInputStream(
+        private val delegate: java.io.InputStream
+    ) : java.io.InputStream() {
+        private var bytesRead = 0
+
+        override fun read(): Int {
+            val nextByte = delegate.read()
+            if (nextByte < 0) return -1
+            if (bytesRead >= ResponseBodyMaximumBytes) throw ResponseTooLargeException()
+            bytesRead += 1
+            return nextByte
+        }
+
+        override fun close() {
+            delegate.close()
+        }
     }
 }

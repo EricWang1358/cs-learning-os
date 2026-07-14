@@ -8,6 +8,7 @@ import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
+import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
 import com.cslearningos.mobile.feature.assistant.ui.AssistantUiState
 
 enum class AppScreen {
@@ -34,7 +35,7 @@ data class AiProviderSettings(
     val apiKeyVisible: Boolean = false
 ) {
     val isConfigured: Boolean
-        get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
+        get() = apiKey.isNotBlank() && isValidProviderEndpoint(baseUrl) && model.isNotBlank()
 }
 
 data class AppNotice(

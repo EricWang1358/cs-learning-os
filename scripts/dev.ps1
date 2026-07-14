@@ -34,6 +34,7 @@ $ApiOutLog = Join-Path $GeneratedDir "api-$ApiPort.out.log"
 $ApiErrLog = Join-Path $GeneratedDir "api-$ApiPort.err.log"
 $FrontendOutLog = Join-Path $GeneratedDir "frontend-$FrontendPort.out.log"
 $FrontendErrLog = Join-Path $GeneratedDir "frontend-$FrontendPort.err.log"
+$ApiHost = "127.0.0.1"
 
 function Stop-PortOwner {
     param([int]$Port)
@@ -97,7 +98,7 @@ if (-not $NoIngest) {
     & $Python -m backend.ingest --content $ResolvedContentDir --db $ResolvedDbPath
 }
 
-Write-Host "Starting API on http://127.0.0.1:$ApiPort"
+Write-Host "Starting API on http://${ApiHost}:$ApiPort"
 $PreviousContentEnv = $env:CS_LEARNING_CONTENT
 $PreviousDbEnv = $env:CS_LEARNING_DB
 $env:CS_LEARNING_CONTENT = $ResolvedContentDir
@@ -105,7 +106,7 @@ $env:CS_LEARNING_DB = $ResolvedDbPath
 $api = Start-Process `
     -WindowStyle Hidden `
     -FilePath $Python `
-    -ArgumentList @("-m", "uvicorn", "backend.api:app", "--host", "127.0.0.1", "--port", "$ApiPort") `
+    -ArgumentList @("-m", "uvicorn", "backend.api:app", "--host", "$ApiHost", "--port", "$ApiPort") `
     -WorkingDirectory $Root `
     -RedirectStandardOutput $ApiOutLog `
     -RedirectStandardError $ApiErrLog `
@@ -127,7 +128,7 @@ $frontend = Start-Process `
 
 Write-Host ""
 Write-Host "CS Learning OS is starting:"
-Write-Host "  API:      http://127.0.0.1:$ApiPort"
+Write-Host "  API:      http://${ApiHost}:$ApiPort"
 Write-Host "  Frontend: http://127.0.0.1:$FrontendPort"
 Write-Host "  Content:  $ResolvedContentDir"
 Write-Host "  DB:       $ResolvedDbPath"

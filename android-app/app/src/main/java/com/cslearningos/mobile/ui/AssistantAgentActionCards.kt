@@ -44,7 +44,8 @@ import com.cslearningos.mobile.feature.assistant.domain.SelectContextItem
 @Composable
 fun AssistantAgentInteractionCard(
     interaction: AssistantAgentInteraction,
-    onReply: (String) -> Unit
+    onReply: (String) -> Unit,
+    onConfirmAreaMove: (AssistantAgentInteraction.MoveNodeArea) -> Unit
 ) {
     when (interaction) {
         is AssistantAgentInteraction.Confirm -> AssistantConfirmActionCard(
@@ -56,6 +57,26 @@ fun AssistantAgentInteractionCard(
             interaction = interaction,
             onReply = onReply
         )
+
+        is AssistantAgentInteraction.MoveNodeArea -> AssistantMoveNodeAreaCard(
+            interaction = interaction,
+            onConfirm = onConfirmAreaMove
+        )
+    }
+}
+
+@Composable
+private fun AssistantMoveNodeAreaCard(
+    interaction: AssistantAgentInteraction.MoveNodeArea,
+    onConfirm: (AssistantAgentInteraction.MoveNodeArea) -> Unit
+) {
+    AgentActionSurface {
+        Text("Move note to Area", color = WorkbenchColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(interaction.targetAreaId, color = WorkbenchColors.InkStrong, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(interaction.reason, color = WorkbenchColors.Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        AgentChoiceButton(icon = "\u2713", label = stringResource(R.string.assistant_agent_accept), modifier = Modifier.fillMaxWidth()) {
+            onConfirm(interaction)
+        }
     }
 }
 

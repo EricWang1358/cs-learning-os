@@ -75,19 +75,19 @@
     <string name="assistant_draft_confirm_reject_reply">No. Ask me clarifying questions or propose a safer split first.</string>
     <string name="assistant_guide_title">Knowledge assistant guide</string>
     <string name="assistant_guide_eyebrow">assistant tutorial</string>
-    <string name="assistant_guide_intro">Use the assistant as a supervised drafting and study helper. It can prepare editable work, cite local matches, and help review, but final writes still go through local confirmation.</string>
+    <string name="assistant_guide_intro">Use the assistant as an optional, supervised study helper. It can explain concepts, prepare editable drafts, and cite local matches, but every final save still happens only after your review.</string>
     <string name="assistant_guide_open_assistant">Open assistant</string>
     <string name="assistant_guide_entry_label">Knowledge assistant</string>
-    <string name="assistant_guide_entry_body">Capabilities, safe workflow, and rollback rules for the AI assistant.</string>
+    <string name="assistant_guide_entry_body">What the assistant can do, how to use it safely, and how to recover from mistakes.</string>
     <string name="assistant_guide_open">Open assistant guide</string>
     <string name="assistant_guide_capabilities_eyebrow">current functions</string>
-    <string name="assistant_guide_capabilities_title">What it can do now</string>
+    <string name="assistant_guide_capabilities_title">What it can help with now</string>
     <string name="assistant_guide_workflow_eyebrow">recommended flow</string>
-    <string name="assistant_guide_workflow_title">How to use it with fewer tokens</string>
+    <string name="assistant_guide_workflow_title">Recommended workflow</string>
     <string name="assistant_guide_safety_eyebrow">risk control</string>
-    <string name="assistant_guide_safety_title">What the assistant cannot do silently</string>
+    <string name="assistant_guide_safety_title">Safety boundaries</string>
     <string name="assistant_guide_rollback_eyebrow">rollback</string>
-    <string name="assistant_guide_rollback_title">How to recover from mistakes</string>
+    <string name="assistant_guide_rollback_title">If something goes wrong</string>
     <string name="message_assistant_input_required">Write a question before sending.</string>
     <string name="message_assistant_draft_ready">Draft ready. Review and save it when you agree.</string>
     <string name="message_assistant_draft_choose_area_for_review">Draft ready. Choose an Area before saving so its review cards appear in Review.</string>
@@ -96,32 +96,32 @@
     <string name="message_assistant_source_unavailable">That local source is no longer available.</string>
 
     <string-array name="assistant_guide_capabilities">
-        <item>Answer learning questions using the configured OpenAI-compatible service and optional local search results.</item>
-        <item>Create editable Markdown node drafts from requests like "create a note" or "创建笔记".</item>
-        <item>Improve an existing Node, Quiz, or Capture slip while preserving its local identity and revision check.</item>
-        <item>Suggest an existing Area for a draft; the user reviews the editor before anything becomes a saved node.</item>
-        <item>Run interview-style review: ask one question, evaluate the answer, and save a daily review card.</item>
-        <item>Keep same-window conversation context as role messages, with older turns compacted locally when needed.</item>
-        <item>Ask for lightweight confirmation or context selection when a generation step needs your decision.</item>
+        <item>Explain concepts, summarize notes, and answer study questions with your configured AI provider plus short local search excerpts.</item>
+        <item>Prepare editable Markdown drafts from requests such as creating a note, outlining a topic, or reorganizing a Capture slip.</item>
+        <item>Suggest revisions for an existing Node, Quiz, or Capture slip while keeping local object identity and revision checks intact.</item>
+        <item>Support review planning and question-driven study help, including guided follow-up in the same conversation window.</item>
+        <item>Show citations for local matches so you can inspect the basis of a reply instead of trusting an unsupported answer.</item>
+        <item>Ask for lightweight confirmation when a drafting or save-related step needs your decision.</item>
     </string-array>
     <string-array name="assistant_guide_workflow">
-        <item>Start with a concrete task: "创建笔记：主题", "improve this node", or "ask me one review question".</item>
-        <item>Use the generated draft as a proposal, then open the editable draft and save only after checking the content and Area.</item>
-        <item>Prefer focused follow-ups in the same assistant window; the app now sends prior user and assistant turns as conversation messages.</item>
-        <item>If a conversation mixes topics, let the assistant show a selectable context table before generating nodes or review cards.</item>
-        <item>Keep large source material in Nodes/Capture slips instead of pasting everything into chat; local search sends only short excerpts.</item>
+        <item>First save and validate AI settings under More - Service. If validation fails, fix the base URL, model, or API key before sending assistant requests.</item>
+        <item>Ask for one concrete task at a time: explain a concept, turn a Capture slip into a draft, or help plan a review session.</item>
+        <item>Treat every generated answer or draft as a proposal. Review the title, Area, Markdown body, and quiz cards before saving anything.</item>
+        <item>Keep follow-up questions in the same assistant window when they belong to one topic; start a new chat when you switch tasks.</item>
+        <item>Store large source material in local Nodes or Capture slips instead of pasting everything into chat, because only short local excerpts are sent for retrieval.</item>
     </string-array>
     <string-array name="assistant_guide_safety">
-        <item>The model never directly creates, renames, moves, or deletes Areas or Nodes in the database.</item>
-        <item>Draft, capture-save, and review-save actions require an explicit app action; local search is read-only.</item>
-        <item>Unknown Area names are not accepted as real Areas. If needed, choose or create the Area yourself before saving.</item>
-        <item>Existing object edits carry revision checks, so stale drafts do not overwrite changed local content silently.</item>
+        <item>AI is optional. Notes, Capture, Review, Trash, and backups continue to work locally even if no provider is configured.</item>
+        <item>Only HTTPS provider endpoints are accepted, and API keys stay on this device protected by Android Keystore.</item>
+        <item>The assistant cannot silently create, overwrite, move, or delete local Nodes and Areas. Draft, capture-save, and review-save still require an explicit app action.</item>
+        <item>Unknown Area names are not treated as real Areas, and revision checks prevent stale drafts from silently replacing newer local edits.</item>
+        <item>Do not send secrets or material you would not want shared with the external AI provider you configured.</item>
     </string-array>
     <string-array name="assistant_guide_rollback">
-        <item>If a draft is wrong, discard it by leaving the editor without saving, or ask the assistant to regenerate.</item>
-        <item>If a saved Node is wrong, edit it manually or move it to Trash; Trash can restore the Node before permanent deletion.</item>
-        <item>Before larger cleanup or restore operations, export a backup from More -> Data.</item>
-        <item>If AI settings fail, use Validate and Models under More -> Service before sending more assistant requests.</item>
+        <item>If a reply or draft is wrong, ask for a revision or leave the editor without saving. No silent write happens until you confirm Save.</item>
+        <item>If you saved a bad Node, edit it manually or move it to Trash. Trash can restore it until you choose Delete forever.</item>
+        <item>Before cleanup, restore, or device changes, export a backup from More - Data. Restore replaces current local data instead of merging it.</item>
+        <item>If assistant requests stop working, return to More - Service and run Validate or Models before retrying.</item>
     </string-array>
 
     <string name="language_follow_system">Follow system</string>
@@ -404,7 +404,7 @@
     <string name="more_section_data_title">Data</string>
     <string name="more_section_data_body">Backup, restore, and local cleanup.</string>
     <string name="more_section_guide_title">Guide</string>
-    <string name="more_section_guide_body">A built-in quickstart for the phone workflow.</string>
+    <string name="more_section_guide_body">Built-in instructions for the current local-first phone workflow.</string>
     <string name="more_section_support_title">Support</string>
     <string name="more_section_support_body">Diagnostics and product contract.</string>
     <string name="more_value_local_first">Local first</string>
@@ -445,7 +445,7 @@
     <string name="more_delete_forever_confirm_title">Delete forever?</string>
     <string name="more_delete_forever_confirm_body">Delete “%1$s” forever? This cannot be undone in the app and is only recoverable from a backup.</string>
     <string name="more_guide_label">How to use this app</string>
-    <string name="more_guide_intro">A five-minute tour: capture one idea, find it in Library, review one card, then export a backup.</string>
+    <string name="more_guide_intro">This app is local first: study content, notes, capture slips, review history, and backups stay on this device by default. Use this guide to configure optional AI, turn a Capture slip into a reviewed note, and protect your data before restore or device changes.</string>
     <string name="more_guide_step_badge">Step %1$d</string>
     <string name="more_support_label">Local-first contract</string>
     <string name="more_support_body">Works offline with no account, desktop, or API key. AI is optional; your notes, review cards, Trash, and backups stay local.</string>
@@ -455,16 +455,16 @@
     <string name="more_guide_open_backup">Open Backup</string>
 
     <string-array name="more_guide_step_titles">
-        <item>Capture one thing</item>
-        <item>Find it in Library</item>
-        <item>Review one card</item>
-        <item>Export a backup</item>
+        <item>Confirm the local-first basics</item>
+        <item>Configure AI only if you need it</item>
+        <item>Turn Capture into a reviewed note</item>
+        <item>Back up before restore or cleanup</item>
     </string-array>
     <string-array name="more_guide_step_bodies">
-        <item>Save a short slip before the idea disappears. You can organize it later.</item>
-        <item>Open Library, read a note, or create a new one.</item>
-        <item>Reveal the answer, rate it, and let the next date update itself.</item>
-        <item>Share or save a backup before restore, cleanup, or phone changes.</item>
+        <item>Home, Capture, Library, Review, and More all work from local Room data. You do not need an account, desktop app, or server for the core study flow.</item>
+        <item>Open More - Service, save provider name, API key, HTTPS base URL, and model, then run Validate. AI is optional and generated output is always a proposal.</item>
+        <item>Create or open a Capture slip, generate an AI draft if configured, review the title, Area, Markdown, and quiz cards, then save only when the note is ready for Library.</item>
+        <item>Use More - Data to export a backup before restore, deleting forever, local cleanup, or moving to another phone. Restore replaces the current local dataset.</item>
     </string-array>
 
     <string name="message_add_title_or_markdown">Add a title or some Markdown before saving.</string>
@@ -517,6 +517,7 @@
     <string name="message_ai_validation_succeeded">AI validation succeeded.</string>
     <string name="message_ai_validation_failed">AI validation failed.</string>
     <string name="message_ai_settings_saved_locally">AI settings saved locally.</string>
+    <string name="message_ai_settings_save_failed">This device could not securely save the AI settings.</string>
     <string name="message_pulling_ai_models">Pulling AI models...</string>
     <string name="message_no_model_ids">No model IDs returned.</string>
     <string name="message_ai_models_pulled">AI models pulled.</string>
@@ -558,6 +559,7 @@
     <string name="ai_status_validation_failed_title">AI validation failed</string>
     <string name="ai_status_settings_saved_title">AI settings saved</string>
     <string name="ai_status_settings_saved_body">Provider, API key, base URL, model, and thinking preference are saved locally on this phone.</string>
+    <string name="ai_status_settings_save_failed_title">AI settings not saved</string>
     <string name="ai_status_pull_unavailable_title">Cannot pull models yet</string>
     <string name="ai_status_pull_title">Pulling model list</string>
     <string name="ai_status_pull_body">Calling %1$s. If your provider blocks model listing, type the model manually.</string>

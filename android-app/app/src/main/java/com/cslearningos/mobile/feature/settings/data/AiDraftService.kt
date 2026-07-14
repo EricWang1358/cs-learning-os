@@ -1,10 +1,13 @@
 package com.cslearningos.mobile.feature.settings.data
 
+import com.cslearningos.mobile.assistant.domain.requireValidProviderEndpoint
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.ui.aiChatCompletionsUrl
 import com.cslearningos.mobile.ui.aiModelsUrl
 import com.cslearningos.mobile.ui.parseOpenAiChatContent
 import com.cslearningos.mobile.ui.parseOpenAiModelIds
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +21,14 @@ interface AiDraftService {
     suspend fun requestDraft(baseUrl: String, apiKey: String, model: String, prompt: String): String
 }
 
-class OpenAiCompatibleDraftService : AiDraftService {
+class OpenAiCompatibleDraftService(
+    private val connectionFactory: (URL) -> HttpURLConnection = { url ->
+        url.openConnection() as HttpURLConnection
+    }
+) : AiDraftService {
     override suspend fun fetchModelIds(baseUrl: String, apiKey: String): List<String> =
         withContext(Dispatchers.IO) {
+            requireValidProviderEndpoint(baseUrl)
             parseOpenAiModelIds(
                 openAiGet(
                     url = aiModelsUrl(baseUrl),
@@ -35,6 +43,7 @@ class OpenAiCompatibleDraftService : AiDraftService {
         model: String,
         prompt: String
     ): String = withContext(Dispatchers.IO) {
+        requireValidProviderEndpoint(baseUrl)
         val payload = JSONObject()
             .put("model", model)
             .put("temperature", 0.2)
@@ -61,6 +70,35 @@ class OpenAiCompatibleDraftService : AiDraftService {
             throw IllegalStateException("The model returned an empty draft.")
         }
     }
+
+    private fun openAiGet(url: String, apiKey: String): String {
+        val connection = connectionFactory(URL(url)).apply {
+            requestMethod = "GET"
+            connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
+            readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
+            instanceFollowRedirects = false
+            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Accept", "application/json")
+        }
+        return connection.useResponse()
+    }
+
+    private fun openAiPost(url: String, apiKey: String, payload: JSONObject): String {
+        val connection = connectionFactory(URL(url)).apply {
+            requestMethod = "POST"
+            connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
+            readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
+            doOutput = true
+            instanceFollowRedirects = false
+            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "application/json")
+        }
+        connection.outputStream.use { stream ->
+            stream.write(payload.toString().toByteArray(Charsets.UTF_8))
+        }
+        return connection.useResponse()
+    }
 }
 
 fun Throwable.safeAiError(): String =
@@ -68,43 +106,32 @@ fun Throwable.safeAiError(): String =
         .replace(Regex("sk-[A-Za-z0-9_-]+"), "sk-...")
         .take(260)
 
-private fun openAiGet(url: String, apiKey: String): String {
-    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-        requestMethod = "GET"
-        connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
-        readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
-        setRequestProperty("Authorization", "Bearer $apiKey")
-        setRequestProperty("Accept", "application/json")
-    }
-    return connection.useResponse()
-}
-
-private fun openAiPost(url: String, apiKey: String, payload: JSONObject): String {
-    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-        requestMethod = "POST"
-        connectTimeout = AndroidArchitectureConstants.AiConnectTimeoutMillis
-        readTimeout = AndroidArchitectureConstants.AiReadTimeoutMillis
-        doOutput = true
-        setRequestProperty("Authorization", "Bearer $apiKey")
-        setRequestProperty("Accept", "application/json")
-        setRequestProperty("Content-Type", "application/json")
-    }
-    connection.outputStream.use { stream ->
-        stream.write(payload.toString().toByteArray(Charsets.UTF_8))
-    }
-    return connection.useResponse()
-}
-
 private fun HttpURLConnection.useResponse(): String =
     try {
-        val responseBody = (if (responseCode in 200..299) inputStream else errorStream)
-            ?.bufferedReader()
-            ?.use { it.readText() }
+        val statusCode = responseCode
+        val responseBody = (if (statusCode in 200..299) inputStream else errorStream)
+            ?.use { it.readBoundedResponse() }
             .orEmpty()
-        if (responseCode !in 200..299) {
-            throw IllegalStateException("HTTP $responseCode: ${responseBody.take(240)}")
+        if (statusCode !in 200..299) {
+            throw IllegalStateException("HTTP $statusCode")
         }
         responseBody
     } finally {
         disconnect()
     }
+
+private fun InputStream.readBoundedResponse(): String {
+    val response = ByteArrayOutputStream()
+    val buffer = ByteArray(ResponseBodyMaximumBytes.coerceAtMost(8_192))
+    while (true) {
+        val bytesRead = read(buffer)
+        if (bytesRead < 0) break
+        if (response.size() > ResponseBodyMaximumBytes - bytesRead) {
+            throw IllegalStateException("Model response exceeded maximum size.")
+        }
+        response.write(buffer, 0, bytesRead)
+    }
+    return response.toString(Charsets.UTF_8.name())
+}
+
+private const val ResponseBodyMaximumBytes = 1_048_576

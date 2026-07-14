@@ -18,6 +18,7 @@ object AssistantMarkdownNormalizer {
         var index = 0
         var openFence: String? = null
         var openFenceInfo: String? = null
+        var openQuizFence = false
         var ignoredClosingFence: String? = null
 
         while (index < lines.size) {
@@ -26,6 +27,15 @@ object AssistantMarkdownNormalizer {
 
             if (ignoredClosingFence != null && trimmed == ignoredClosingFence) {
                 ignoredClosingFence = null
+                index += 1
+                continue
+            }
+
+            if (openQuizFence) {
+                normalized += line
+                if (trimmed == ":::") {
+                    openQuizFence = false
+                }
                 index += 1
                 continue
             }
@@ -45,6 +55,13 @@ object AssistantMarkdownNormalizer {
                     continue
                 }
                 normalized += normalizeFenceBodyLine(line)
+                index += 1
+                continue
+            }
+
+            if (isQuizFenceStart(trimmed)) {
+                normalized += line
+                openQuizFence = true
                 index += 1
                 continue
             }
@@ -89,11 +106,26 @@ object AssistantMarkdownNormalizer {
                 continue
             }
 
+            val tableEnd = completeGfmTableEnd(lines, delimiterIndex = index + 1, headerLine = line)
+            if (tableEnd != null) {
+                appendTableWithParagraphBoundary(normalized, lines.subList(index, tableEnd + 1))
+                index = tableEnd + 1
+                continue
+            }
+
             val splitHeadingTable = splitHeadingCollapsedIntoTableHeader(line, lines.getOrNull(index + 1))
             if (splitHeadingTable != null) {
-                normalized += splitHeadingTable
-                index += 1
-                continue
+                val header = splitHeadingTable[2]
+                val splitTableEnd = completeGfmTableEnd(lines, delimiterIndex = index + 1, headerLine = header)
+                if (splitTableEnd != null) {
+                    normalized += splitHeadingTable.take(2)
+                    appendTableWithParagraphBoundary(
+                        normalized = normalized,
+                        tableRows = listOf(header) + lines.subList(index + 1, splitTableEnd + 1),
+                    )
+                    index = splitTableEnd + 1
+                    continue
+                }
             }
 
             normalized += normalizeLine(line)
@@ -116,6 +148,9 @@ object AssistantMarkdownNormalizer {
             return expandedLines.joinToString("\n") { expandedLine -> normalizeLine(indent + expandedLine) }
         }
         val normalizedContent = expandedLines.single()
+        if (TableDelimiterLine.matches(normalizedContent.trim())) {
+            return indent + normalizedContent.trimEnd()
+        }
         val textPrefixedHeading = TextPrefixedHeading.matchEntire(normalizedContent)
         if (textPrefixedHeading != null) {
             return indent + normalizeHeading(textPrefixedHeading.groupValues[1] + textPrefixedHeading.groupValues[2])
@@ -181,6 +216,78 @@ object AssistantMarkdownNormalizer {
             indent + "|$header"
         )
     }
+
+    private fun appendTableWithParagraphBoundary(normalized: MutableList<String>, tableRows: List<String>) {
+        if (normalized.lastOrNull()?.isNotBlank() == true) {
+            normalized += ""
+        }
+        normalized += tableRows.map(::normalizeTableRow)
+    }
+
+    private fun completeGfmTableEnd(lines: List<String>, delimiterIndex: Int, headerLine: String): Int? {
+        val headerColumns = tableColumnCount(headerLine) ?: return null
+        val delimiter = lines.getOrNull(delimiterIndex)?.trim().orEmpty()
+        if (!TableDelimiterLine.matches(delimiter) || tableColumnCount(delimiter) != headerColumns) return null
+
+        var tableEnd = delimiterIndex
+        while (true) {
+            val candidate = lines.getOrNull(tableEnd + 1) ?: break
+            if (tableColumnCount(candidate) != headerColumns) break
+            tableEnd += 1
+        }
+        return tableEnd.takeIf { it > delimiterIndex }
+    }
+
+    private fun normalizeTableRow(line: String): String {
+        val indent = line.takeWhile { it == ' ' || it == '\t' }
+        val content = line.drop(indent.length).trim()
+        val leadingBoundary = if (content.startsWith('|')) "" else "|"
+        val trailingBoundary = if (content.endsWith('|')) "" else "|"
+        return indent + leadingBoundary + content + trailingBoundary
+    }
+
+    private fun tableColumnCount(line: String): Int? {
+        val content = line.trim().trim('|').trim()
+        if (content.isBlank()) return null
+        val pipes = content.unescapedPipesOutsideInlineCode()
+        return (pipes + 1).takeIf { pipes > 0 }
+    }
+
+    private fun String.unescapedPipesOutsideInlineCode(): Int {
+        var pipes = 0
+        var index = 0
+        var inlineCodeDelimiterLength = 0
+        while (index < length) {
+            when (this[index]) {
+                '\\' -> index += 2
+                '`' -> {
+                    val delimiterLength = backtickRunLength(index)
+                    if (inlineCodeDelimiterLength == 0) {
+                        inlineCodeDelimiterLength = delimiterLength
+                    } else if (inlineCodeDelimiterLength == delimiterLength) {
+                        inlineCodeDelimiterLength = 0
+                    }
+                    index += delimiterLength
+                }
+                '|' -> {
+                    if (inlineCodeDelimiterLength == 0) pipes += 1
+                    index += 1
+                }
+                else -> index += 1
+            }
+        }
+        return pipes
+    }
+
+    private fun String.backtickRunLength(start: Int): Int {
+        var index = start
+        while (index < length && this[index] == '`') index += 1
+        return index - start
+    }
+
+    private fun isQuizFenceStart(trimmed: String): Boolean =
+        trimmed.startsWith(":::") &&
+            trimmed.removePrefix(":::").trimStart().startsWith("quiz")
 
     private val TightHeading = Regex("^(#{1,6})([^#\\s].*)$")
     private val TextPrefixedHeading = Regex("(?i)^text(#{1,6})([^#\\s].*)$")

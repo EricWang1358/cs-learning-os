@@ -32,4 +32,37 @@ class MarkdownTextAnnotationsTest {
         assertEquals("https://example.com/cache", annotations.single().item)
         assertTrue(result.codeSpans.any { it.text == "mov" })
     }
+
+    @Test
+    fun buildMarkdownAnnotatedTextOnlyAnnotatesHttpsLinks() {
+        val unsafeLinks = listOf(
+            "http://example.com/insecure",
+            "javascript:alert(1)",
+            "file:///data/local/tmp/secret",
+            "content://com.example.provider/data",
+            "intent://scan/#Intent;scheme=zxing;end"
+        )
+        val result = buildMarkdownAnnotatedText(
+            unsafeLinks.mapIndexed { index, destination ->
+                MarkdownLinkInline(
+                    destination = destination,
+                    children = listOf(MarkdownTextInline("unsafe-$index"))
+                )
+            } + listOf(
+                MarkdownLinkInline(
+                    destination = "https://example.com/secure",
+                    children = listOf(MarkdownTextInline("safe"))
+                )
+            )
+        )
+
+        val annotations = result.text.getStringAnnotations(
+            tag = MarkdownLinkAnnotationTag,
+            start = 0,
+            end = result.text.length
+        )
+
+        assertEquals("unsafe-0unsafe-1unsafe-2unsafe-3unsafe-4safe", result.text.text)
+        assertEquals(listOf("https://example.com/secure"), annotations.map { it.item })
+    }
 }

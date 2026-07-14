@@ -804,6 +804,7 @@ private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
             label = stringResource(R.string.editor_body_field),
             minLines = 16
         )
+        StatusBanner(state.message)
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.editor_save_markdown), viewModel::saveNode, primary = true)
             WorkbenchButton(stringResource(R.string.assistant_improve_object), viewModel::reviseEditorDraftWithAssistant)
@@ -895,7 +896,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         val summaries = remember(state.areas, state.dueQuizzes, state.quizzes) {
             buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
         }
-        var expandedAreaKey by remember { mutableStateOf<String?>(ReviewAllAreasKey) }
+        var expandedAreaKey by remember { mutableStateOf<String?>(null) }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.review_select_area_title), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)

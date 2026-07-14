@@ -83,6 +83,9 @@ internal fun LearningUiState.withEditorAreaId(value: String): LearningUiState =
 
 internal fun LearningUiState.withPendingNodeSave(): LearningUiState {
     pendingNodeSave?.let { return this }
+    if (editorNodeId != null && editorExpectedRevision == null) {
+        return withObjectSaveRejected()
+    }
     val nodeId = editorNodeId ?: UUID.randomUUID().toString()
     val command = SaveNodeCommand(
         commandId = CommandId(UUID.randomUUID().toString()),

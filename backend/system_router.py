@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Callable
+from threading import Lock
+from time import monotonic
+from typing import Callable, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
 
 try:
     from . import maintenance_service
@@ -14,6 +16,7 @@ except ImportError:
 
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
+MODEL_PREFLIGHT_COOLDOWN_SECONDS = 5.0
 
 
 def create_system_router(
@@ -29,12 +32,16 @@ def create_system_router(
     codex_base_url: Callable[[], str],
     codex_cli_path: Callable[[], str],
     codex_job_home: Callable[[], object],
+    codex_configuration_probe: Callable[[], dict],
     codex_preflight: Callable[..., dict],
     ai_enabled: Callable[[], bool],
     app_profile: Callable[[], str],
     beta_mode: Callable[[], bool],
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["system"])
+    model_preflight_lock = Lock()
+    model_preflight_in_flight = False
+    model_preflight_available_at = 0.0
 
     @router.get("/health")
     def health() -> dict:
@@ -57,7 +64,7 @@ def create_system_router(
         }
 
     @router.get("/ai/preflight")
-    def ai_preflight(run_model: bool = False) -> dict:
+    def ai_preflight() -> dict:
         provider = ai_provider_name()
         if not ai_enabled():
             return {
@@ -70,7 +77,7 @@ def create_system_router(
                 "message": "AI features are disabled for this beta profile. Configure CS_LEARNING_AI_ENABLED=true only on a trusted local machine.",
             }
         if provider == "codex-cli":
-            return {"provider": provider, "enabled": True, **codex_preflight(run_model=run_model)}
+            return {"provider": provider, "enabled": True, **codex_configuration_probe()}
         return {
             "provider": provider,
             "enabled": True,
@@ -84,6 +91,41 @@ def create_system_router(
                 else "OPENAI_API_KEY is not configured for the local API process."
             ),
         }
+
+    @router.post("/ai/model-preflight")
+    def ai_model_preflight(
+        x_cs_local_action: Optional[List[str]] = Header(default=None, alias="X-CS-Local-Action"),
+    ) -> dict:
+        nonlocal model_preflight_in_flight, model_preflight_available_at
+
+        if x_cs_local_action != ["1"]:
+            raise HTTPException(status_code=403, detail="Model preflight requires X-CS-Local-Action: 1.")
+
+        with model_preflight_lock:
+            now = monotonic()
+            if model_preflight_in_flight or now < model_preflight_available_at:
+                raise HTTPException(status_code=429, detail="Model preflight is already running or cooling down.")
+            model_preflight_in_flight = True
+
+        try:
+            provider = ai_provider_name()
+            if not ai_enabled():
+                return {
+                    "provider": provider,
+                    "ok": False,
+                    "enabled": False,
+                    "checks": {"ai_enabled": False},
+                    "model": codex_model_name() if provider == "codex-cli" else openai_model_name(),
+                    "ran_model": False,
+                    "message": "AI features are disabled for this beta profile. Configure CS_LEARNING_AI_ENABLED=true only on a trusted local machine.",
+                }
+            if provider != "codex-cli":
+                raise HTTPException(status_code=409, detail="Model preflight is available only for the Codex CLI provider.")
+            return {"provider": provider, "enabled": True, **codex_preflight(run_model=True)}
+        finally:
+            with model_preflight_lock:
+                model_preflight_in_flight = False
+                model_preflight_available_at = monotonic() + MODEL_PREFLIGHT_COOLDOWN_SECONDS
 
     @router.get("/system/metrics")
     def system_metrics(background_tasks: BackgroundTasks, refresh: bool = Query(False)) -> dict:
