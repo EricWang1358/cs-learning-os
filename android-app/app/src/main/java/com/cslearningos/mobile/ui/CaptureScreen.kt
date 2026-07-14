@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -34,8 +30,7 @@ private data class CaptureScreenState(
     val topicHint: String,
     val sourceLabel: String,
     val type: CaptureSlipType,
-    val captureSlips: List<CaptureSlipEntity>,
-    val archivedCaptureSlips: List<CaptureSlipEntity>
+    val captureSlips: List<CaptureSlipEntity>
 )
 
 @Composable
@@ -49,7 +44,6 @@ fun CaptureScreen(state: LearningUiState, viewModel: LearningViewModel) {
         )
         CaptureComposer(state = screenState, viewModel = viewModel)
         CaptureInbox(state = screenState, viewModel = viewModel)
-        CaptureArchive(state = screenState, viewModel = viewModel)
     }
 }
 
@@ -128,59 +122,15 @@ private fun CaptureInbox(state: CaptureScreenState, viewModel: LearningViewModel
 }
 
 @Composable
-private fun CaptureArchive(state: CaptureScreenState, viewModel: LearningViewModel) {
-    var deleteForeverSlipId by rememberSaveable { mutableStateOf<String?>(null) }
-    WorkbenchCard {
-        Eyebrow(stringResource(R.string.capture_archived_eyebrow))
-        Text(
-            text = stringResource(R.string.capture_archived_title, state.archivedCaptureSlips.size),
-            color = WorkbenchColors.InkStrong,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-        if (state.archivedCaptureSlips.isEmpty()) {
-            Text(
-                text = stringResource(R.string.capture_archived_empty_body),
-                color = WorkbenchColors.Muted,
-                fontSize = 14.sp,
-                lineHeight = 21.sp
-            )
-            return@WorkbenchCard
-        }
-        state.archivedCaptureSlips.take(8).forEach { slip ->
-            CaptureSlipCard(
-                slip = slip,
-                viewModel = viewModel,
-                onDeleteForeverRequest = { deleteForeverSlipId = it.id }
-            )
-        }
-    }
-    state.archivedCaptureSlips.firstOrNull { it.id == deleteForeverSlipId }?.let { slip ->
-        ConfirmDestructiveDialog(
-            title = stringResource(R.string.capture_delete_forever_confirm_title),
-            body = stringResource(R.string.capture_delete_forever_confirm_body, captureSlipLabel(slip)),
-            confirmLabel = stringResource(R.string.common_delete_forever),
-            onDismiss = { deleteForeverSlipId = null },
-            onConfirm = {
-                deleteForeverSlipId = null
-                viewModel.permanentlyDeleteCaptureSlip(slip)
-            }
-        )
-    }
-}
-
-@Composable
 private fun CaptureSlipCard(
     slip: CaptureSlipEntity,
-    viewModel: LearningViewModel,
-    onDeleteForeverRequest: ((CaptureSlipEntity) -> Unit)? = null
+    viewModel: LearningViewModel
 ) {
     val context = LocalContext.current
     val workflow = buildCaptureSlipWorkflow(
         context = context,
         slip = slip
     )
-    val actions = captureSlipActions(slip)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -208,41 +158,10 @@ private fun CaptureSlipCard(
             fontSize = 13.sp,
             lineHeight = 19.sp
         )
-        if (actions.isNotEmpty()) {
-            ToolbarRow {
-                actions.forEach { action ->
-                    when (action) {
-                        CaptureSlipAction.MakeNode -> WorkbenchButton(
-                            text = stringResource(R.string.capture_make_node),
-                            onClick = { viewModel.promoteCaptureSlipToNode(slip) },
-                            primary = true
-                        )
-
-                        CaptureSlipAction.ImproveWithAi -> WorkbenchButton(
-                            text = stringResource(R.string.assistant_improve_object),
-                            onClick = { viewModel.assistantActions.reviseCapture(slip) },
-                            primary = actions.size == 1
-                        )
-
-                        CaptureSlipAction.Archive -> WorkbenchButton(
-                            text = stringResource(R.string.capture_archive),
-                            onClick = { viewModel.archiveCaptureSlip(slip) }
-                        )
-
-                        CaptureSlipAction.Restore -> WorkbenchButton(
-                            text = stringResource(R.string.common_restore),
-                            onClick = { viewModel.restoreCaptureSlip(slip) },
-                            primary = true
-                        )
-
-                        CaptureSlipAction.DeleteForever -> WorkbenchButton(
-                            text = stringResource(R.string.common_delete_forever),
-                            onClick = { onDeleteForeverRequest?.invoke(slip) },
-                            danger = true
-                        )
-                    }
-                }
-            }
+        ToolbarRow {
+            WorkbenchButton(stringResource(R.string.capture_make_node), { viewModel.promoteCaptureSlipToNode(slip) }, primary = true)
+            WorkbenchButton(stringResource(R.string.assistant_improve_object), { viewModel.assistantActions.reviseCapture(slip) })
+            WorkbenchButton(stringResource(R.string.capture_archive), { viewModel.archiveCaptureSlip(slip) })
         }
     }
 }
@@ -263,11 +182,5 @@ private fun LearningUiState.toCaptureScreenState(): CaptureScreenState =
         topicHint = captureTopicHint,
         sourceLabel = captureSourceLabel,
         type = captureType,
-        captureSlips = captureSlips,
-        archivedCaptureSlips = archivedCaptureSlips
+        captureSlips = captureSlips
     )
-
-private fun captureSlipLabel(slip: CaptureSlipEntity): String =
-    slip.topicHint
-        ?.takeIf { it.isNotBlank() }
-        ?: slip.body.lineSequence().firstOrNull { it.isNotBlank() }?.take(32).orEmpty()

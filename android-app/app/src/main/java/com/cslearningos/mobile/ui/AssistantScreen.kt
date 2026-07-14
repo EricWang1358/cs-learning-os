@@ -337,12 +337,6 @@ private fun AssistantMessageBubble(
                     primary = true
                 )
 
-                is AssistantMessageAction.OpenNewQuizDraft -> WorkbenchButton(
-                    text = stringResource(R.string.assistant_open_draft),
-                    onClick = onOpenQuizDraft,
-                    primary = true
-                )
-
                 is AssistantMessageAction.OpenEditableCaptureDraft -> WorkbenchButton(
                     text = stringResource(R.string.assistant_open_draft),
                     onClick = onOpenCaptureDraft,
