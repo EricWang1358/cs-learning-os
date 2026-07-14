@@ -12,7 +12,7 @@ The documentation refresh covers:
 
 1. A root `docs/client-android-parity-plan.md` execution plan.
 2. Current Android information in `README.md`.
-3. Removal of Android execution documents that direct contributors to the retired WebView and cleartext emulator route.
+3. Cleanup of active Android execution documents that still direct contributors to the retired WebView and cleartext emulator route.
 4. A clear status convention for current, planned, and historical Android documents.
 
 ## Source Of Truth
@@ -27,7 +27,7 @@ The plan must not claim desktop/mobile sync, replication transport, semantic sea
 
 `docs/client-android-parity-plan.md` is the actionable Web-client parity roadmap. It will contain a capability matrix with Android status, Web status, backend dependency, priority, and acceptance evidence. Work is ordered by shared safety and local-data contracts before UI equivalence, then optional AI workflows, and finally deferred cross-device capabilities.
 
-Date-stamped specifications and completed plans remain historical decision records unless they contain retired instructions that someone could execute. The WebView migration specification and matching implementation plan are exceptions: they prescribe a removed activity, cleartext traffic, and emulator WebView loading. They will be deleted rather than retained as authoritative documentation.
+Date-stamped specifications and completed plans remain historical decision records unless they contain retired instructions that someone could still execute by mistake. Historical architecture and migration documents should stay in place for traceability, but they must not be presented as the current operating guide. If a document contains direct WebView, `http://10.0.2.2:5173`, or cleartext emulator instructions, that executable guidance must be removed, deleted, or explicitly relabeled as retired.
 
 ## Client Parity Stages
 

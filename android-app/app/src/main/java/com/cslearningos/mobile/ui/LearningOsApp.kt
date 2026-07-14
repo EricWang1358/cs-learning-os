@@ -895,7 +895,7 @@ private fun ReviewScreen(state: LearningUiState, viewModel: LearningViewModel) {
         val summaries = remember(state.areas, state.dueQuizzes, state.quizzes) {
             buildReviewAreaSummaries(state.areas, state.dueQuizzes, state.quizzes)
         }
-        var expandedAreaKey by remember { mutableStateOf<String?>(ReviewAllAreasKey) }
+        var expandedAreaKey by remember { mutableStateOf<String?>(null) }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.review_select_area_title), color = WorkbenchColors.InkStrong, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)

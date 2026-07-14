@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Publish an accurate React-client parity roadmap, keep README Android facts current, and remove retired Android WebView execution guidance.
+**Goal:** Publish an accurate React-client parity roadmap, keep README Android facts current, and clean active Android WebView-era execution guidance without deleting useful historical records.
 
-**Architecture:** Android implementation and verified tests define the current mobile baseline. The new root plan compares that baseline with the existing React/FastAPI client without claiming parity prematurely. README is the concise entry point; dated specs/plans remain historical unless they actively prescribe a retired, insecure workflow.
+**Architecture:** Android implementation and verified tests define the current mobile baseline. The new root plan compares that baseline with the existing React/FastAPI client without claiming parity prematurely. README is the concise entry point; dated specs/plans remain historical unless they actively prescribe a retired, insecure workflow that a contributor could still follow.
 
 **Tech Stack:** Markdown, repository search, Git link/diff checks.
 
@@ -33,18 +33,17 @@
 - [ ] Render/inspect Markdown text and run an encoding scan for Unicode replacement characters or mojibake markers; run `git diff --check`.
 - [ ] Commit as `docs: refresh android usage guidance`.
 
-### Task 3: Remove Retired Android Execution Instructions
+### Task 3: Clean Retired Android Execution Instructions
 
 **Files:**
-- Delete: `docs/superpowers/specs/2026-07-01-android-migration-workflow-design.md`
-- Delete: `docs/superpowers/plans/2026-07-01-android-migration-workflow.md`
-- Modify: `docs/android-migration.md`
+- Modify only the current document or runbook that still exposes retired Android WebView, `http://10.0.2.2:5173`, or cleartext execution steps.
+- Preserve date-stamped architecture and migration records when they are historical context rather than active instructions.
 
-- [ ] Delete only the two dated documents that prescribe a removed Java WebView entrypoint, `http://10.0.2.2:5173`, and cleartext emulator workflow.
-- [ ] Add a short current-document index to `docs/android-migration.md`, pointing engineering readers to `android-app/docs/architecture.md`, `android-app/docs/data-recovery.md`, `docs/android-workflow.md`, the Android usage guide, and the parity plan. Mark sync as deferred.
-- [ ] Verify no current README, Android workflow, or active runbook links to either deleted path. Search for retired execution strings (`MainActivity.java`, `WebView shell entry`, `10.0.2.2:5173`) outside preserved historical discussion; remove or relabel any active instruction found.
+- [ ] Search active README, workflow, and runbook documents for retired execution strings such as `MainActivity.java`, `WebView shell entry`, `10.0.2.2:5173`, or broad cleartext allowances.
+- [ ] If a current document still presents those steps as executable guidance, remove the instruction or relabel it as retired history. Do not delete historical specs/plans solely because they are dated.
+- [ ] When a historical document is retained, ensure any reader can distinguish historical rationale from current operating guidance.
 - [ ] Run `git diff --check` and inspect `git status --short` to confirm only intended documentation files changed.
-- [ ] Commit as `docs: remove retired android webview guidance`.
+- [ ] Commit as `docs: clean retired android webview guidance`.
 
 ### Task 4: Verify Documentation Contract
 
