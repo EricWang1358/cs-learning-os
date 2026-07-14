@@ -223,7 +223,7 @@ fun assistantEditAction(proposal: AssistantEditProposal): AssistantMessageAction
         markdown = proposal.markdown,
         areaId = proposal.areaId,
         nodeId = proposal.target.id,
-        expectedRevision = proposal.target.revision,
+        expectedRevision = proposal.target.id?.let { proposal.target.revision },
         placementReason = proposal.placementReason
     )
 

@@ -165,6 +165,29 @@ class AssistantActionClaimsTest {
     }
 
     @Test
+    fun newNodeProposalDoesNotPassItsPlaceholderRevisionToTheEditor() {
+        val proposal = AssistantEditProposal.Node(
+            target = AssistantEditTarget.Node(
+                id = null,
+                revision = 0L,
+                titleHint = "Create a graph note",
+                markdown = "",
+                areaId = "algorithms"
+            ),
+            titleHint = "Graph traversal",
+            markdown = "# Graph traversal",
+            areaId = "algorithms",
+            placementReason = null,
+            captureSuggestion = null
+        )
+
+        val action = assistantEditAction(proposal) as AssistantMessageAction.OpenEditableDraft
+
+        assertNull(action.nodeId)
+        assertNull(action.expectedRevision)
+    }
+
+    @Test
     fun newDraftWithNoAvailableAreaDoesNotExposeAnOpenDraftAction() {
         val decision = assistantReplyDecision(
             mode = AssistantRequestMode.Draft,

@@ -98,6 +98,23 @@ class NodeSavePendingStateTest {
     }
 
     @Test
+    fun newEditorWithAnUnexpectedRevisionIsRejectedWithoutConstructingAnInvalidCommand() {
+        val state = LearningUiState(
+            screen = AppScreen.Editor,
+            editorNodeId = null,
+            editorExpectedRevision = 0L,
+            editorAreaId = "systems",
+            editorTitle = "AI draft",
+            editorBody = "# AI draft"
+        )
+
+        val result = state.withPendingNodeSave()
+
+        assertNull(result.pendingNodeSave)
+        assertNotNull(result.message)
+    }
+
+    @Test
     fun capturePromotionAndAiDraftReplacementClearPendingIdentity() {
         val pending = LearningUiState(
             pendingNodeSave = PendingNodeSave("command", "node", "fingerprint")
