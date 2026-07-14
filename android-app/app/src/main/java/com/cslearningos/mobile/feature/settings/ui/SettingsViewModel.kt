@@ -79,16 +79,20 @@ class SettingsViewModel(
     }
 
     fun save() {
-        persistCurrentSnapshot()
+        val failure = persistCurrentSnapshot()
         _uiState.update { current ->
-            current.copy(
-                aiServiceStatus = AiServiceStatus(
-                    kind = AiServiceStatusKind.Success,
-                    title = uiText(R.string.ai_status_settings_saved_title),
-                    body = uiText(R.string.ai_status_settings_saved_body)
-                ),
-                message = uiText(R.string.message_ai_settings_saved_locally)
-            )
+            if (failure == null) {
+                current.copy(
+                    aiServiceStatus = AiServiceStatus(
+                        kind = AiServiceStatusKind.Success,
+                        title = uiText(R.string.ai_status_settings_saved_title),
+                        body = uiText(R.string.ai_status_settings_saved_body)
+                    ),
+                    message = uiText(R.string.message_ai_settings_saved_locally)
+                )
+            } else {
+                current.withSaveFailure(failure)
+            }
         }
     }
 
@@ -266,14 +270,25 @@ class SettingsViewModel(
         _uiState.update { current ->
             val updated = transform(current)
             val validated = updated.copy(validation = validateState(updated))
-            store.saveSettings(validated.toSnapshot())
-            validated
+            runCatching { store.saveSettings(validated.toSnapshot()) }
+                .exceptionOrNull()
+                ?.let { failure -> validated.withSaveFailure(failure) }
+                ?: validated
         }
     }
 
-    private fun persistCurrentSnapshot() {
-        store.saveSettings(uiState.value.toSnapshot())
-    }
+    private fun persistCurrentSnapshot(): Throwable? =
+        runCatching { store.saveSettings(uiState.value.toSnapshot()) }.exceptionOrNull()
+
+    private fun SettingsUiState.withSaveFailure(failure: Throwable): SettingsUiState =
+        copy(
+            aiServiceStatus = AiServiceStatus(
+                kind = AiServiceStatusKind.Error,
+                title = uiText(R.string.ai_status_settings_save_failed_title),
+                body = UiText.Dynamic(failure.safeAiError())
+            ),
+            message = uiText(R.string.message_ai_settings_save_failed)
+        )
 
     private fun validateState(state: SettingsUiState): AiSettingsValidationResult =
         validateAiSettings(

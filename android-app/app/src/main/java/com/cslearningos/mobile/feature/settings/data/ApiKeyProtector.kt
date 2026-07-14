@@ -4,7 +4,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -20,10 +19,11 @@ class AndroidKeystoreApiKeyProtector(
     private val secretKeyProvider: (() -> SecretKey)? = null
 ) : ApiKeyProtector {
     override fun encrypt(plainText: String): String {
-        val iv = ByteArray(IV_LENGTH_BYTES).also(SecureRandom()::nextBytes)
         val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION).apply {
-            init(Cipher.ENCRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+            init(Cipher.ENCRYPT_MODE, secretKey())
         }
+        val iv = cipher.iv
+        require(iv.size == IV_LENGTH_BYTES)
         val cipherText = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
         val payload = byteArrayOf(ENVELOPE_VERSION) + iv + cipherText
         return Base64.encodeToString(payload, Base64.NO_WRAP)
