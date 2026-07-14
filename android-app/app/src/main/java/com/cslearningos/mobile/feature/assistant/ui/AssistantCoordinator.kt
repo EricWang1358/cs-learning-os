@@ -222,52 +222,43 @@ class AssistantCoordinator(
         }
     }
 
-    fun send(settings: AiProviderSettings): Boolean {
+    fun send(
+        settings: AiProviderSettings,
+        forcePendingDraftReply: Boolean = false
+    ): Boolean {
         val snapshot = mutableState.value
         val input = snapshot.input.trim()
         if (input.isBlank() || snapshot.isBusy) return false
 
-        val mode = when (snapshot.reviewSession) {
-            AssistantReviewSession.AwaitingTopic -> AssistantRequestMode.ReviewQuestion
-            is AssistantReviewSession.AwaitingAnswer -> AssistantRequestMode.ReviewEvaluation
-            is AssistantReviewSession.Evaluated -> AssistantRequestMode.Answer
-            null -> if (snapshot.editTarget != null) AssistantRequestMode.Draft else if (snapshot.pendingDraftRequest != null) AssistantRequestMode.Draft else assistantRequestModeFor(input)
-        }
-        val userMessage = AssistantMessage(
-            id = messageId("user"),
-            role = AssistantMessageRole.User,
-            body = input
-        )
+        val mode = snapshot.requestModeFor(input, forcePendingDraftReply)
+        val userMessageId = messageId("user")
         val responseMessageId = messageId("assistant")
         val requestConversationId = conversationId
         activeReplyMessageId = responseMessageId
         mutableState.update { current ->
-            current.copy(
-                input = "",
-                messages = current.messages + userMessage + AssistantMessage(
-                    id = responseMessageId,
-                    role = AssistantMessageRole.Assistant,
-                    body = "",
-                    isStreaming = true
-                ),
-                isBusy = true,
-                lastRequestMode = mode
+            current.queueAssistantTurn(
+                input = input,
+                mode = mode,
+                userMessageId = userMessageId,
+                responseMessageId = responseMessageId
             )
         }
-        if (mode == AssistantRequestMode.Draft && snapshot.editTarget == null && !input.isAssistantDraftApproval() && snapshot.pendingDraftRequest == null) {
-            updateMessage(responseMessageId) { message ->
-                message.copy(
-                    body = string(R.string.assistant_draft_confirm_body),
-                    action = AssistantMessageAction.AgentInteraction(input.toDraftChecklistInteraction(string)),
-                    isStreaming = false
+        if (snapshot.shouldShowDraftChecklist(input, mode)) {
+            mutableState.update {
+                it.showDraftChecklist(
+                    responseMessageId = responseMessageId,
+                    request = input,
+                    interaction = input.toDraftChecklistInteraction(string),
+                    body = string(R.string.assistant_draft_confirm_body)
                 )
             }
-            mutableState.update { it.copy(isBusy = false, pendingDraftRequest = input) }
             scope.launch { persistConversation(requestConversationId) }
             return true
         }
         replyJob = scope.launch {
             try {
+                val userMessage = mutableState.value.messages.firstOrNull { it.id == userMessageId }
+                    ?: AssistantMessage(id = userMessageId, role = AssistantMessageRole.User, body = input)
                 val localContext = session.findLocalContext(input)
                 val areas = session.availableAreas()
                 val requestEditTarget = snapshot.editTarget ?: if (mode == AssistantRequestMode.Draft) {
@@ -350,10 +341,9 @@ class AssistantCoordinator(
                     AssistantRequestMode.ReviewEvaluation -> {
                         val review = snapshot.reviewSession as? AssistantReviewSession.AwaitingAnswer
                         val evaluation = parseAssistantReviewEvaluation(replyForDecision)
-                        val quiz = review?.let { session ->
+                        action = review?.let { session ->
                             evaluation.dailyReviewAnswer?.let { answer ->
-                                repository.saveManualQuiz(
-                                    nodeId = null,
+                                AssistantMessageAction.OpenNewQuizDraft(
                                     prompt = session.question,
                                     answer = answer,
                                     explanation = evaluation.feedback
@@ -361,12 +351,11 @@ class AssistantCoordinator(
                             }
                         }
                         visibleBody = evaluation.feedback
-                        action = quiz?.let { AssistantMessageAction.OpenDailyReview }
                         nextReviewSession = review?.let { session ->
                             AssistantReviewSession.Evaluated(
                                 topic = session.topic,
                                 question = session.question,
-                                quizId = quiz?.id
+                                quizId = null
                             )
                         }
                     }
@@ -411,18 +400,14 @@ class AssistantCoordinator(
                     captureSuggestion = null
                     nextEditTarget = snapshot.editTarget
                 }
-                updateMessage(responseMessageId) { message ->
-                    message.copy(
-                        body = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
+                mutableState.update {
+                    it.completeAssistantTurn(
+                        responseMessageId = responseMessageId,
+                        visibleBody = visibleBody.ifBlank { string(R.string.assistant_local_empty) },
                         action = action,
                         captureSuggestion = captureSuggestion,
-                        isStreaming = false
-                    )
-                }
-                mutableState.update {
-                    it.copy(
-                        editTarget = nextEditTarget,
-                        reviewSession = nextReviewSession
+                        nextEditTarget = nextEditTarget,
+                        nextReviewSession = nextReviewSession
                     )
                 }
                 persistConversation(requestConversationId)
@@ -457,8 +442,9 @@ class AssistantCoordinator(
     }
 
     fun sendAgentActionReply(reply: String, settings: AiProviderSettings): Boolean {
+        val shouldForcePendingDraftReply = mutableState.value.pendingDraftRequest != null
         setInput(reply)
-        return send(settings)
+        return send(settings, forcePendingDraftReply = shouldForcePendingDraftReply)
     }
 
     suspend fun confirmAreaMove(interaction: AssistantAgentInteraction.MoveNodeArea): Boolean {
