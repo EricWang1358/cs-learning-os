@@ -28,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -398,7 +399,9 @@ class AssistantCoordinator(
                         }
                     }
                 }
-                agentInteraction.interaction?.let { interaction ->
+                agentInteraction.interaction?.takeIf { interaction ->
+                    interaction !is AssistantAgentInteraction.MoveNodeArea || areas.any { it.id == interaction.targetAreaId }
+                }?.let { interaction ->
                     action = AssistantMessageAction.AgentInteraction(interaction)
                     captureSuggestion = null
                     nextEditTarget = snapshot.editTarget
@@ -451,6 +454,29 @@ class AssistantCoordinator(
             settings = settings,
             forcePendingDraftReply = shouldForcePendingDraftReply
         )
+    }
+
+    suspend fun confirmAreaMove(interaction: AssistantAgentInteraction.MoveNodeArea): Boolean {
+        val node = repository.getNode(interaction.nodeId)
+            ?.takeIf { it.deletedAt == null && it.revision == interaction.expectedRevision }
+            ?: return false
+        val targetAreaExists = repository.areas.first().any { area ->
+            area.id == interaction.targetAreaId && area.deletedAt == null
+        }
+        if (!targetAreaExists || node.areaId == interaction.targetAreaId) return false
+
+        repository.moveNodeToArea(node.id, interaction.targetAreaId)
+        mutableState.update { state ->
+            state.copy(messages = state.messages.map { message ->
+                if ((message.action as? AssistantMessageAction.AgentInteraction)?.interaction == interaction) {
+                    message.copy(action = null)
+                } else {
+                    message
+                }
+            })
+        }
+        persistConversation(conversationId)
+        return true
     }
 
     fun retry(messageId: String, settings: AiProviderSettings): Boolean {

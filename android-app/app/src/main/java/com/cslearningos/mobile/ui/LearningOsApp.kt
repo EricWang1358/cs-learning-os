@@ -804,6 +804,7 @@ private fun EditorScreen(state: LearningUiState, viewModel: LearningViewModel) {
             label = stringResource(R.string.editor_body_field),
             minLines = 16
         )
+        StatusBanner(state.message)
         ToolbarRow {
             WorkbenchButton(stringResource(R.string.editor_save_markdown), viewModel::saveNode, primary = true)
             WorkbenchButton(stringResource(R.string.assistant_improve_object), viewModel::reviseEditorDraftWithAssistant)

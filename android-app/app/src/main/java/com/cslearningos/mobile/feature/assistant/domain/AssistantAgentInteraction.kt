@@ -18,6 +18,13 @@ sealed interface AssistantAgentInteraction {
         val items: List<SelectContextItem>,
         val confirmReplyPrefix: String
     ) : AssistantAgentInteraction
+
+    data class MoveNodeArea(
+        val nodeId: String,
+        val expectedRevision: Long,
+        val targetAreaId: String,
+        val reason: String
+    ) : AssistantAgentInteraction
 }
 
 data class SelectContextItem(
@@ -84,6 +91,13 @@ fun AssistantAgentInteraction.toJson(): JSONObject =
                     )
                 }
             })
+
+        is AssistantAgentInteraction.MoveNodeArea -> JSONObject()
+            .put("kind", "move_node_area")
+            .put("nodeId", nodeId)
+            .put("expectedRevision", expectedRevision)
+            .put("targetAreaId", targetAreaId)
+            .put("reason", reason)
     }
 
 fun JSONObject.toAgentInteraction(): AssistantAgentInteraction? =
@@ -123,6 +137,18 @@ fun JSONObject.toAgentInteraction(): AssistantAgentInteraction? =
                     items = items,
                     confirmReplyPrefix = optString("confirmReplyPrefix").takeIf { it.isNotBlank() } ?: "Please organize these selected items:"
                 )
+            }
+        }
+
+        "move_node_area" -> {
+            val nodeId = optString("nodeId").trim()
+            val targetAreaId = optString("targetAreaId").trim()
+            val reason = optString("reason").trim()
+            val expectedRevision = optLong("expectedRevision", -1L)
+            if (nodeId.isBlank() || targetAreaId.isBlank() || reason.isBlank() || expectedRevision < 0L) {
+                null
+            } else {
+                AssistantAgentInteraction.MoveNodeArea(nodeId, expectedRevision, targetAreaId, reason)
             }
         }
 

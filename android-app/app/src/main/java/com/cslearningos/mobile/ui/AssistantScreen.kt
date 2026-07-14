@@ -96,6 +96,7 @@ fun AssistantScreen(
                         onOpenDailyReview = viewModel.assistantActions::openDailyReview,
                         onConfigureAi = viewModel::showAiServiceSettings,
                         onAgentActionReply = viewModel.assistantActions::replyToAgentAction,
+                        onConfirmAreaMove = viewModel.assistantActions::confirmAreaMove,
                         areas = state.areas
                     )
                 }
@@ -234,6 +235,7 @@ private fun AssistantMessageBubble(
     onOpenDailyReview: () -> Unit,
     onConfigureAi: () -> Unit,
     onAgentActionReply: (String) -> Unit,
+    onConfirmAreaMove: (com.cslearningos.mobile.feature.assistant.domain.AssistantAgentInteraction.MoveNodeArea) -> Unit,
     areas: List<com.cslearningos.mobile.data.AreaEntity>
 ) {
     val isUser = message.role == AssistantMessageRole.User
@@ -268,7 +270,7 @@ private fun AssistantMessageBubble(
             verticalArrangement = Arrangement.spacedBy(AssistantUiTokens.MessageItemSpacing)
         ) {
             if (!isUser && !message.isStreaming && message.body.isNotBlank()) {
-                MarkdownRenderer(markdown = message.body, card = false)
+                AssistantMessageBody(markdown = message.body)
             } else {
                 Text(
                     text = message.body.ifBlank { stringResource(R.string.assistant_streaming) },
@@ -322,7 +324,8 @@ private fun AssistantMessageBubble(
             when (message.action) {
                 is AssistantMessageAction.AgentInteraction -> AssistantAgentInteractionCard(
                     interaction = message.action.interaction,
-                    onReply = onAgentActionReply
+                    onReply = onAgentActionReply,
+                    onConfirmAreaMove = onConfirmAreaMove
                 )
 
                 is AssistantMessageAction.OpenEditableDraft -> WorkbenchButton(
