@@ -398,6 +398,7 @@
     <string name="message_ai_validation_succeeded">AI 校验成功。</string>
     <string name="message_ai_validation_failed">AI 校验失败。</string>
     <string name="message_ai_settings_saved_locally">AI 设置已保存在本机。</string>
+    <string name="message_ai_settings_save_failed">此设备无法安全保存 AI 设置。</string>
     <string name="message_pulling_ai_models">正在拉取 AI 模型列表……</string>
     <string name="message_no_model_ids">没有返回模型 ID。</string>
     <string name="message_ai_models_pulled">AI 模型已拉取完成。</string>
@@ -439,6 +440,7 @@
     <string name="ai_status_validation_failed_title">AI 校验失败</string>
     <string name="ai_status_settings_saved_title">AI 设置已保存</string>
     <string name="ai_status_settings_saved_body">供应商、API key、Base URL、模型和 thinking 偏好都已保存在本机。</string>
+    <string name="ai_status_settings_save_failed_title">AI 设置未保存</string>
     <string name="ai_status_pull_unavailable_title">暂时还不能拉取模型</string>
     <string name="ai_status_pull_title">正在拉取模型列表</string>
     <string name="ai_status_pull_body">正在调用 %1$s。如果你的供应商不支持列出模型，也可以手动输入模型名。</string>

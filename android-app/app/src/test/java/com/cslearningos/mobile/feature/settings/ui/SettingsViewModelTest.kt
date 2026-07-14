@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -134,6 +135,37 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun apiKeyEntryKeepsDraftAndReportsErrorWhenCredentialStorageFails() {
+        val viewModel = SettingsViewModel(
+            store = FailingSettingsStore(),
+            aiDraftService = FakeAiDraftService(),
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
+        )
+
+        val failure = runCatching { viewModel.setApiKey("sk-reentered") }.exceptionOrNull()
+
+        assertNull(failure)
+        assertEquals("sk-reentered", viewModel.uiState.value.apiKey)
+        assertEquals(AiServiceStatusKind.Error, viewModel.uiState.value.aiServiceStatus.kind)
+    }
+
+    @Test
+    fun explicitSaveReportsErrorWhenCredentialStorageFails() {
+        val viewModel = SettingsViewModel(
+            store = FailingSettingsStore(),
+            aiDraftService = FakeAiDraftService(),
+            validateAiSettings = ValidateAiSettingsUseCase(),
+            scope = CoroutineScope(dispatcher)
+        )
+
+        val failure = runCatching { viewModel.save() }.exceptionOrNull()
+
+        assertNull(failure)
+        assertEquals(AiServiceStatusKind.Error, viewModel.uiState.value.aiServiceStatus.kind)
+    }
+
+    @Test
     fun validateCurrentSettingsReflectsEditedFields() {
         val viewModel = SettingsViewModel(
             store = FakeSettingsStore(),
@@ -236,6 +268,16 @@ class SettingsViewModelTest {
         override fun clearApiKey() {
             clearApiKeyCalls += 1
         }
+    }
+
+    private class FailingSettingsStore : SettingsStore {
+        override fun loadSettings(): SettingsSnapshot = SettingsSnapshot()
+
+        override fun saveSettings(snapshot: SettingsSnapshot) {
+            error("Keystore unavailable")
+        }
+
+        override fun clearApiKey() = Unit
     }
 
     private class FakeAiDraftService(
