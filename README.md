@@ -26,6 +26,12 @@ cd android-app
 
 Install `android-app/app/build/outputs/apk/debug/app-debug.apk`. Android build details and checks are in [android-app/README.md](android-app/README.md).
 
+The first public Android prerelease is distributed through GitHub Releases. It
+is a beta APK, not a Play Store listing. Verify the published SHA-256 before
+installing; configure an external AI provider only if you choose to use AI.
+Local notes, review data, backups, and provider settings stay on the device by
+default.
+
 Android documentation:
 
 - [User guide (Chinese)](android-app/docs/android-app-usage.md)
@@ -60,6 +66,14 @@ The supported `scripts/dev.ps1` launcher binds the API to loopback only. Direct 
 - `data/`, `var/`, and generated build files are ignored; `content-demo/` is the only tracked sample library.
 
 Recovery steps and backup limits are documented in [docs/data-recovery.md](docs/data-recovery.md).
+
+## Community and Security
+
+- [License](LICENSE)
+- [Contributing](CONTRIBUTING.md)
+- [Security reporting](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
 
 ## Repository map
 
