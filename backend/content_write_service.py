@@ -10,6 +10,23 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+try:
+    from .sync_envelope import (
+        ENTITY_NODE,
+        ENTITY_QUIZ,
+        ENTITY_READER_QUESTION,
+        bump_revision_and_log,
+        record_change,
+    )
+except ImportError:  # pragma: no cover - script execution
+    from sync_envelope import (
+        ENTITY_NODE,
+        ENTITY_QUIZ,
+        ENTITY_READER_QUESTION,
+        bump_revision_and_log,
+        record_change,
+    )
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -69,6 +86,15 @@ def update_node_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: s
         ).fetchall()
     ]
     conn.execute("UPDATE nodes SET body = ?, updated_at = ? WHERE slug = ?", (body, now, slug))
+    bump_revision_and_log(
+        conn,
+        "nodes",
+        "slug",
+        ENTITY_NODE,
+        slug,
+        body,
+        trashed=row["visibility"] == "trash",
+    )
     conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
     conn.execute("DELETE FROM graph_cache")
     conn.execute(
@@ -91,6 +117,15 @@ def update_quiz_body_in_conn(conn: sqlite3.Connection, row: sqlite3.Row, body: s
         ).fetchall()
     ]
     conn.execute("UPDATE quizzes SET body = ?, updated_at = ? WHERE id = ?", (body, now, quiz_id))
+    bump_revision_and_log(
+        conn,
+        "quizzes",
+        "id",
+        ENTITY_QUIZ,
+        quiz_id,
+        body,
+        trashed=row["visibility"] == "trash",
+    )
     conn.execute("DELETE FROM quiz_fts WHERE id = ?", (quiz_id,))
     conn.execute("DELETE FROM graph_cache")
     conn.execute(
@@ -188,6 +223,10 @@ def apply_ai_job_body(
         question_ids = json.loads(job_row["question_ids"] or "[]")
         if question_ids:
             placeholders = ",".join("?" for _ in question_ids)
+            resolved_rows = conn.execute(
+                f"SELECT id, client_id FROM reader_questions WHERE id IN ({placeholders})",
+                question_ids,
+            ).fetchall()
             conn.execute(
                 f"""
                 UPDATE reader_questions
@@ -198,6 +237,12 @@ def apply_ai_job_body(
                 """,
                 [now, "Resolved by applied AI job", *question_ids],
             )
+            for resolved in resolved_rows:
+                record_change(
+                    conn,
+                    ENTITY_READER_QUESTION,
+                    resolved["client_id"] or f"db-{resolved['id']}",
+                )
         conn.execute(
             """
             UPDATE ai_jobs

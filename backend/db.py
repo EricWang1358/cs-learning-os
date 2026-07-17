@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 PACKAGE_FORMAT_VERSION = "1"
 
 
@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     summary TEXT NOT NULL,
     body TEXT NOT NULL,
     path TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -71,7 +72,9 @@ CREATE TABLE IF NOT EXISTS quizzes (
     body TEXT NOT NULL,
     path TEXT NOT NULL,
     weight INTEGER NOT NULL DEFAULT 1,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS quiz_tags (
@@ -105,6 +108,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS quiz_fts USING fts5(
 
 CREATE TABLE IF NOT EXISTS reader_questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT UNIQUE,
     target_type TEXT NOT NULL CHECK(target_type IN ('node', 'quiz')),
     target_id TEXT NOT NULL,
     question TEXT NOT NULL,
@@ -191,11 +195,35 @@ CREATE TABLE IF NOT EXISTS review_queue (
 
 CREATE TABLE IF NOT EXISTS quiz_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_attempt_id TEXT UNIQUE,
     quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     grade TEXT NOT NULL CHECK(grade IN ('again', 'hard', 'good', 'easy')),
     answered_at TEXT NOT NULL,
     elapsed_ms INTEGER NOT NULL DEFAULT 0,
     note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS capture_slips (
+    id TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    type TEXT NOT NULL,
+    topic_hint TEXT NOT NULL DEFAULT '',
+    source_label TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'inbox',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sync_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('node', 'quiz', 'capture_slip', 'reader_question', 'review_attempt')),
+    entity_id TEXT NOT NULL,
+    revision INTEGER,
+    content_hash TEXT,
+    tombstone INTEGER NOT NULL DEFAULT 0,
+    changed_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS bite_cards (
@@ -233,6 +261,12 @@ ON quiz_attempts(quiz_id, answered_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_bite_cards_status_updated
 ON bite_cards(status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_sync_changes_entity
+ON sync_changes(entity_type, entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_sync_changes_seq
+ON sync_changes(seq);
 """
 
 
@@ -259,6 +293,33 @@ def initialize(conn: sqlite3.Connection) -> None:
     }
     if "display_order" not in quiz_columns:
         conn.execute("ALTER TABLE quizzes ADD COLUMN display_order INTEGER NOT NULL DEFAULT 1000")
+    if "revision" not in quiz_columns:
+        conn.execute("ALTER TABLE quizzes ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+    if "deleted_at" not in quiz_columns:
+        conn.execute("ALTER TABLE quizzes ADD COLUMN deleted_at TEXT")
+
+    if "revision" not in existing_columns:
+        conn.execute("ALTER TABLE nodes ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+
+    attempt_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(quiz_attempts)").fetchall()
+    }
+    if "client_attempt_id" not in attempt_columns:
+        conn.execute("ALTER TABLE quiz_attempts ADD COLUMN client_attempt_id TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_attempts_client_id "
+            "ON quiz_attempts(client_attempt_id) WHERE client_attempt_id IS NOT NULL"
+        )
+
+    question_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(reader_questions)").fetchall()
+    }
+    if "client_id" not in question_columns:
+        conn.execute("ALTER TABLE reader_questions ADD COLUMN client_id TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_reader_questions_client_id "
+            "ON reader_questions(client_id) WHERE client_id IS NOT NULL"
+        )
 
     bite_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(bite_cards)").fetchall()

@@ -5,6 +5,11 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
+try:
+    from .sync_envelope import ENTITY_READER_QUESTION, new_client_id, record_change
+except ImportError:  # pragma: no cover - script execution
+    from sync_envelope import ENTITY_READER_QUESTION, new_client_id, record_change
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -190,13 +195,15 @@ def create_ai_job(
     persisted_question_ids = list(dict.fromkeys(question_ids))
     clean_question = question.strip()
     if clean_question:
+        question_client_id = new_client_id()
         cursor = conn.execute(
             """
-            INSERT INTO reader_questions (target_type, target_id, question, status, created_at)
-            VALUES (?, ?, ?, 'queued', ?)
+            INSERT INTO reader_questions (client_id, target_type, target_id, question, status, created_at)
+            VALUES (?, ?, ?, ?, 'queued', ?)
             """,
-            (target_type, target_id, clean_question, now),
+            (question_client_id, target_type, target_id, clean_question, now),
         )
+        record_change(conn, ENTITY_READER_QUESTION, question_client_id)
         persisted_question_ids.append(cursor.lastrowid)
 
     cursor = conn.execute(

@@ -5,6 +5,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
+try:
+    from .sync_envelope import ENTITY_REVIEW_ATTEMPT, new_client_id, record_change
+except ImportError:  # pragma: no cover - script execution
+    from sync_envelope import ENTITY_REVIEW_ATTEMPT, new_client_id, record_change
+
 
 GRADE_INTERVALS = {
     "again": 0.01,
@@ -73,9 +78,11 @@ def record_quiz_attempt(
     grade: str,
     elapsed_ms: int = 0,
     note: str = "",
+    client_attempt_id: str | None = None,
 ) -> dict:
     get_quiz_or_404(conn, quiz_id)
     answered_at = utc_now()
+    client_attempt_id = client_attempt_id or new_client_id()
     existing = conn.execute(
         "SELECT * FROM review_queue WHERE target_type = 'quiz' AND target_id = ?",
         (quiz_id,),
@@ -83,11 +90,12 @@ def record_quiz_attempt(
     review = next_review_state(existing, grade, answered_at)
     cursor = conn.execute(
         """
-        INSERT INTO quiz_attempts (quiz_id, grade, answered_at, elapsed_ms, note)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO quiz_attempts (client_attempt_id, quiz_id, grade, answered_at, elapsed_ms, note)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (quiz_id, grade, answered_at, max(0, elapsed_ms), note.strip()),
+        (client_attempt_id, quiz_id, grade, answered_at, max(0, elapsed_ms), note.strip()),
     )
+    record_change(conn, ENTITY_REVIEW_ATTEMPT, client_attempt_id)
     conn.execute(
         """
         INSERT INTO review_queue (
@@ -116,7 +124,7 @@ def record_quiz_attempt(
         "SELECT * FROM review_queue WHERE target_type = 'quiz' AND target_id = ?",
         (quiz_id,),
     ).fetchone()
-    return {"attempt_id": cursor.lastrowid, "review": dict(queue_row)}
+    return {"attempt_id": cursor.lastrowid, "client_attempt_id": client_attempt_id, "review": dict(queue_row)}
 
 
 def due_reviews(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:

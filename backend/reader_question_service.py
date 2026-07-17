@@ -5,6 +5,21 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
+try:
+    from .sync_envelope import (
+        ENTITY_READER_QUESTION,
+        log_permanent_delete,
+        new_client_id,
+        record_change,
+    )
+except ImportError:  # pragma: no cover - script execution
+    from sync_envelope import (
+        ENTITY_READER_QUESTION,
+        log_permanent_delete,
+        new_client_id,
+        record_change,
+    )
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -51,19 +66,22 @@ def create_reader_question(
     target_type: str,
     target_id: str,
     question: str,
+    client_id: str | None = None,
 ) -> sqlite3.Row:
     question = question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="question cannot be empty")
     ensure_target_exists(conn, target_type, target_id)
     now = utc_now()
+    client_id = client_id or new_client_id()
     cursor = conn.execute(
         """
-        INSERT INTO reader_questions (target_type, target_id, question, status, created_at)
-        VALUES (?, ?, ?, 'open', ?)
+        INSERT INTO reader_questions (client_id, target_type, target_id, question, status, created_at)
+        VALUES (?, ?, ?, ?, 'open', ?)
         """,
-        (target_type, target_id, question, now),
+        (client_id, target_type, target_id, question, now),
     )
+    record_change(conn, ENTITY_READER_QUESTION, client_id)
     conn.commit()
     return conn.execute("SELECT * FROM reader_questions WHERE id = ?", (cursor.lastrowid,)).fetchone()
 
@@ -81,7 +99,7 @@ def set_reader_question_status(
     status: str,
     resolution_note: str,
 ) -> sqlite3.Row:
-    get_reader_question_or_404(conn, question_id)
+    existing = get_reader_question_or_404(conn, question_id)
     now = utc_now()
     conn.execute(
         """
@@ -93,11 +111,13 @@ def set_reader_question_status(
         """,
         (status, now, resolution_note, question_id),
     )
+    record_change(conn, ENTITY_READER_QUESTION, existing["client_id"] or f"db-{question_id}")
     conn.commit()
     return get_reader_question_or_404(conn, question_id)
 
 
 def delete_reader_question(conn: sqlite3.Connection, question_id: int) -> None:
-    get_reader_question_or_404(conn, question_id)
+    existing = get_reader_question_or_404(conn, question_id)
     conn.execute("DELETE FROM reader_questions WHERE id = ?", (question_id,))
+    log_permanent_delete(conn, ENTITY_READER_QUESTION, existing["client_id"] or f"db-{question_id}", None)
     conn.commit()

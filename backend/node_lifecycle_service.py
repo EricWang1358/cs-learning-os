@@ -9,6 +9,19 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+try:
+    from .sync_envelope import (
+        ENTITY_NODE,
+        bump_revision_and_log,
+        log_permanent_delete,
+    )
+except ImportError:  # pragma: no cover - script execution
+    from sync_envelope import (
+        ENTITY_NODE,
+        bump_revision_and_log,
+        log_permanent_delete,
+    )
+
 
 SAFE_SLUG_RE = re.compile(r"[^a-z0-9-]+")
 
@@ -237,6 +250,15 @@ def upsert_node_file_in_conn(conn: sqlite3.Connection, content_root: Path, path:
             now,
         ),
     )
+    bump_revision_and_log(
+        conn,
+        "nodes",
+        "slug",
+        ENTITY_NODE,
+        slug,
+        normalized_body,
+        trashed=visibility == "trash",
+    )
     conn.execute("DELETE FROM node_tags WHERE node_slug = ?", (slug,))
     conn.execute("DELETE FROM links WHERE source_slug = ?", (slug,))
     conn.execute("DELETE FROM sources WHERE node_slug = ?", (slug,))
@@ -392,6 +414,7 @@ def permanently_delete_node(conn: sqlite3.Connection, content_root: Path, slug: 
     with stage_file_delete(content_root, content_path):
         conn.execute("DELETE FROM links WHERE target_slug = ?", (slug,))
         conn.execute("DELETE FROM nodes WHERE slug = ?", (slug,))
+        log_permanent_delete(conn, ENTITY_NODE, slug, row["revision"])
         conn.execute("DELETE FROM node_fts WHERE slug = ?", (slug,))
         conn.execute("DELETE FROM content_files WHERE path = ?", (row["path"],))
         conn.execute("DELETE FROM graph_cache")

@@ -10,8 +10,20 @@ from typing import Any
 
 try:
     from .db import connect, initialize
+    from .sync_envelope import (
+        ENTITY_NODE,
+        ENTITY_QUIZ,
+        content_hash,
+        record_change,
+    )
 except ImportError:
     from db import connect, initialize
+    from sync_envelope import (
+        ENTITY_NODE,
+        ENTITY_QUIZ,
+        content_hash,
+        record_change,
+    )
 
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
@@ -252,6 +264,26 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 """
             )
         }
+        # Sync lineage: keep revisions stable across a full rebuild so the
+        # change cursor stays meaningful, and preserve the append-only
+        # attempt log that the quizzes cascade would otherwise wipe.
+        preserved_node_revisions = {
+            row["slug"]: {"revision": row["revision"], "body": row["body"]}
+            for row in conn.execute("SELECT slug, revision, body FROM nodes")
+        }
+        preserved_quiz_revisions = {
+            row["id"]: {"revision": row["revision"], "body": row["body"]}
+            for row in conn.execute("SELECT id, revision, body FROM quizzes")
+        }
+        preserved_attempts = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, client_attempt_id, quiz_id, grade, answered_at, elapsed_ms, note
+                FROM quiz_attempts
+                """
+            )
+        ]
 
         conn.execute("DELETE FROM quiz_fts")
         conn.execute("DELETE FROM quiz_sources")
@@ -401,6 +433,79 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 (quiz.id, quiz.title, quiz.summary, quiz.body, " ".join(quiz.tags)),
             )
             record_content_file(conn, content_root, content_root / quiz.path, "quiz", quiz.id)
+
+        current_node_slugs = set()
+        for node in nodes:
+            current_node_slugs.add(node.slug)
+            previous = preserved_node_revisions.get(node.slug)
+            if previous is None:
+                conn.execute("UPDATE nodes SET revision = 1 WHERE slug = ?", (node.slug,))
+                record_change(conn, ENTITY_NODE, node.slug, 1, content_hash(node.body))
+            elif content_hash(previous["body"]) == content_hash(node.body):
+                conn.execute(
+                    "UPDATE nodes SET revision = ? WHERE slug = ?",
+                    (previous["revision"], node.slug),
+                )
+            else:
+                revision = int(previous["revision"] or 0) + 1
+                conn.execute("UPDATE nodes SET revision = ? WHERE slug = ?", (revision, node.slug))
+                record_change(conn, ENTITY_NODE, node.slug, revision, content_hash(node.body))
+        for slug, previous in preserved_node_revisions.items():
+            if slug not in current_node_slugs:
+                record_change(
+                    conn,
+                    ENTITY_NODE,
+                    slug,
+                    int(previous["revision"] or 0) + 1,
+                    None,
+                    tombstone=True,
+                )
+
+        current_quiz_ids = set()
+        for quiz in quizzes:
+            current_quiz_ids.add(quiz.id)
+            previous = preserved_quiz_revisions.get(quiz.id)
+            if previous is None:
+                conn.execute("UPDATE quizzes SET revision = 1 WHERE id = ?", (quiz.id,))
+                record_change(conn, ENTITY_QUIZ, quiz.id, 1, content_hash(quiz.body))
+            elif content_hash(previous["body"]) == content_hash(quiz.body):
+                conn.execute(
+                    "UPDATE quizzes SET revision = ? WHERE id = ?",
+                    (previous["revision"], quiz.id),
+                )
+            else:
+                revision = int(previous["revision"] or 0) + 1
+                conn.execute("UPDATE quizzes SET revision = ? WHERE id = ?", (revision, quiz.id))
+                record_change(conn, ENTITY_QUIZ, quiz.id, revision, content_hash(quiz.body))
+        for quiz_id, previous in preserved_quiz_revisions.items():
+            if quiz_id not in current_quiz_ids:
+                record_change(
+                    conn,
+                    ENTITY_QUIZ,
+                    quiz_id,
+                    int(previous["revision"] or 0) + 1,
+                    None,
+                    tombstone=True,
+                )
+
+        for attempt in preserved_attempts:
+            if attempt["quiz_id"] not in current_quiz_ids:
+                continue
+            conn.execute(
+                """
+                INSERT INTO quiz_attempts (id, client_attempt_id, quiz_id, grade, answered_at, elapsed_ms, note)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    attempt["id"],
+                    attempt["client_attempt_id"],
+                    attempt["quiz_id"],
+                    attempt["grade"],
+                    attempt["answered_at"],
+                    attempt["elapsed_ms"],
+                    attempt["note"],
+                ),
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         for key, value in {
