@@ -396,6 +396,11 @@ export type ApiAiPreflightResponse = {
   message: string
 }
 
+export type ApiSystemRepairRunResponse = {
+  report: Record<string, unknown>
+  remaining: ApiSystemRepairResponse
+}
+
 export type SystemMetrics = {
   counts: {
     nodes: number

@@ -7,10 +7,7 @@ from typing import Callable
 
 from fastapi import APIRouter, Query
 
-try:
-    from . import maintenance_service
-except ImportError:
-    import maintenance_service
+from backend import maintenance_service
 
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
@@ -50,6 +47,13 @@ def create_productization_router(
     def system_repair_report() -> dict:
         with get_conn() as conn:
             return maintenance_service.repair_report(conn, runtime.content_root)
+
+    @router.post("/system/repair")
+    def system_repair_run() -> dict:
+        with get_conn() as conn:
+            report = maintenance_service.run_repair(conn, runtime.content_root)
+            remaining = maintenance_service.repair_report(conn, runtime.content_root)
+            return {"report": report, "remaining": remaining}
 
     @router.get("/package/export")
     def package_export_manifest(write: bool = Query(False)) -> dict:

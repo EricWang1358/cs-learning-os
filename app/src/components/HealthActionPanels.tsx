@@ -77,6 +77,8 @@ export type HealthActionPanelsProps = {
   onRunAiPreflight?: () => void
   onRefreshSchemaMetadata?: () => void
   onRefreshContentIndex?: () => void
+  onRunRepair?: () => void
+  isRepairing?: boolean
 }
 
 function formatCount(value: number) {
@@ -145,6 +147,8 @@ export function HealthActionPanels({
   onRefreshSchemaMetadata,
   onRepairIssue,
   onRunAiPreflight,
+  onRunRepair,
+  isRepairing = false,
   packageManifest = [],
   repairIssues = [],
   schemaMetadata = [],
@@ -193,7 +197,19 @@ export function HealthActionPanels({
       </section>
 
       <section className="detail-section" aria-label="Repair issues">
-        <h3>Repair issues</h3>
+        <div className="detail-toolbar">
+          <h3>Repair issues</h3>
+          {onRunRepair && (
+            <button
+              type="button"
+              className="focus-toggle ai-action"
+              disabled={isRepairing || repairIssues.length === 0}
+              onClick={onRunRepair}
+            >
+              {isRepairing ? 'Running repair...' : 'Run repair'}
+            </button>
+          )}
+        </div>
         {renderIssueList({
           emptyText: 'No repair issues queued.',
           issues: repairIssues,

@@ -317,3 +317,94 @@ def repair_report(conn: sqlite3.Connection, content_root: Path) -> dict:
 def write_manifest(path: Path, manifest: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _slug_to_title(slug: str) -> str:
+    return " ".join(part.capitalize() for part in slug.split("-"))
+
+
+def repair_broken_links(conn: sqlite3.Connection, content_root: Path) -> dict:
+    """Create stub nodes for every link target that does not exist yet."""
+    rows = conn.execute(
+        """
+        SELECT DISTINCT target_slug
+        FROM links
+        WHERE target_slug NOT IN (SELECT slug FROM nodes)
+        ORDER BY target_slug
+        """
+    ).fetchall()
+
+    stub_area = "stubs"
+    stub_track = "general"
+    stub_status = "stub"
+    stub_visibility = "support"
+    stub_dir = content_root / "nodes" / stub_area
+    stub_dir.mkdir(parents=True, exist_ok=True)
+
+    created: list[str] = []
+    errors: list[str] = []
+    now = utc_now()
+
+    for row in rows:
+        slug = row["target_slug"]
+        title = _slug_to_title(slug)
+        path = stub_dir / f"{slug}.md"
+        relative_path = path.relative_to(content_root).as_posix()
+        summary = "Stub node auto-created to repair a broken link. Expand this note when you are ready to write it."
+        body = ""
+
+        frontmatter = f"""---
+slug: "{slug}"
+title: "{title}"
+area: "{stub_area}"
+track: "{stub_track}"
+status: "{stub_status}"
+visibility: "{stub_visibility}"
+summary: "{summary}"
+---
+"""
+        try:
+            path.write_text(frontmatter + body, encoding="utf-8")
+            conn.execute(
+                """
+                INSERT INTO nodes (
+                    slug, title, area, track, display_order, status, visibility, summary, body, path, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    slug,
+                    title,
+                    stub_area,
+                    stub_track,
+                    1000,
+                    stub_status,
+                    stub_visibility,
+                    summary,
+                    body,
+                    relative_path,
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO node_fts (slug, title, summary, body, tags) VALUES (?, ?, ?, ?, ?)",
+                (slug, title, summary, body, ""),
+            )
+            created.append(slug)
+        except Exception as exc:  # pragma: no cover - filesystem edge cases
+            errors.append(f"{slug}: {exc}")
+
+    return {
+        "repaired_kind": "broken_node_link",
+        "created": created,
+        "created_count": len(created),
+        "error_count": len(errors),
+        "errors": errors,
+    }
+
+
+def run_repair(conn: sqlite3.Connection, content_root: Path) -> dict:
+    """Run the full repair workflow and return a report."""
+    report: dict = {}
+    with conn:
+        report["broken_node_link"] = repair_broken_links(conn, content_root)
+    return report

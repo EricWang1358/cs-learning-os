@@ -46,6 +46,7 @@ import type {
   ApiReaderQuestionResponse,
   ApiReaderQuestionsResponse,
   ApiSystemRepairResponse,
+  ApiSystemRepairRunResponse,
   ApiSystemSchemaResponse,
   ApiSystemMetricsResponse,
   ApiTracksResponse,
@@ -509,6 +510,7 @@ function App() {
   const [isReviewQuizLoading, setIsReviewQuizLoading] = useState(false)
   const [isReviewRating, setIsReviewRating] = useState(false)
   const [healthActionNotice, setHealthActionNotice] = useState('')
+  const [isRepairing, setIsRepairing] = useState(false)
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
@@ -2128,6 +2130,26 @@ function App() {
     setAiPreflight(preflightData)
   }
 
+  const runSystemRepair = async () => {
+    try {
+      setIsRepairing(true)
+      setHealthActionNotice('Running system repair...')
+      const data = await postJson<ApiSystemRepairRunResponse>('/api/system/repair', {})
+      const remainingCount = data.remaining.issue_count
+      const created = (data.report?.broken_node_link as { created_count?: number } | undefined)?.created_count ?? 0
+      setSystemRepair(data.remaining)
+      setHealthActionNotice(
+        remainingCount
+          ? `Repair created ${created} stub(s). ${remainingCount} issue(s) still need manual review.`
+          : `Repair created ${created} stub(s). All issues resolved.`
+      )
+    } catch (repairError) {
+      setHealthActionNotice(repairError instanceof Error ? repairError.message : 'Unable to run system repair')
+    } finally {
+      setIsRepairing(false)
+    }
+  }
+
   const exportPackageManifest = async () => {
     try {
       const data = await fetchJson<ApiPackageExportResponse>('/api/package/export?write=true')
@@ -2974,6 +2996,8 @@ function App() {
                   }}
                   onInspectIssue={(issue) => setHealthActionNotice(issue.summary || issue.title)}
                   onRepairIssue={(issue) => setHealthActionNotice(`Manual repair required: ${issue.title}`)}
+                  onRunRepair={runSystemRepair}
+                  isRepairing={isRepairing}
                 />
               </>
             ) : (

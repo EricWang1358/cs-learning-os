@@ -42,12 +42,19 @@ class SystemMetricsService:
         if not path.exists():
             return 0
         if path.is_file():
-            return path.stat().st_size
+            try:
+                return path.stat().st_size
+            except OSError:
+                return 0
+        if not path.is_dir():
+            return 0
         total = 0
-        for item in path.rglob("*"):
-            if item.is_file():
+        for root, _dirs, files in os.walk(str(path), onerror=lambda _err: None):
+            for name in files:
+                file_path = Path(root) / name
                 try:
-                    total += item.stat().st_size
+                    if file_path.is_file():
+                        total += file_path.stat().st_size
                 except OSError:
                     continue
         return total
@@ -204,7 +211,21 @@ class SystemMetricsService:
         started = time.perf_counter()
         github_size = self.github_repo_size()
         db_bytes = self.db_path.stat().st_size if self.db_path.exists() else 0
-        project_related_bytes = self.unique_directory_size([self.project_root, self.content_root, self.db_path.parent, self.generated_dir])
+        content_bytes = self.directory_size(self.content_root)
+        generated_bytes = self.directory_size(self.generated_dir)
+        project_total_bytes = self.directory_size(self.project_root)
+        # Make top-level partitions mutually exclusive: app-repo is project root
+        # minus content, generated, and db, which are listed separately.
+        app_repo_bytes = max(
+            0,
+            project_total_bytes
+            - content_bytes
+            - generated_bytes
+            - db_bytes,
+        )
+        project_related_bytes = self.unique_directory_size(
+            [self.project_root, self.content_root, self.db_path.parent, self.generated_dir]
+        )
         exclusive_partitions = self.exclusive_storage_partitions()
         explained_project_bytes = sum(partition["bytes"] for partition in exclusive_partitions)
         if project_related_bytes > explained_project_bytes:
@@ -243,8 +264,22 @@ class SystemMetricsService:
                 "summary": "Local files currently tracked by Git. This approximates what is uploaded, excluding ignored private data.",
                 "kind": "source",
             },
-            self.storage_partition("app-repo", "App repository", self.project_root, "React app, FastAPI backend, docs, scripts, demo content, and Git metadata.", "code"),
-            self.storage_partition("content", "Content data", self.content_root, "Private or demo Markdown knowledge files that back nodes, quizzes, links, and sources.", "knowledge"),
+            {
+                "key": "app-repo",
+                "label": "App repository",
+                "bytes": app_repo_bytes,
+                "path": str(self.project_root),
+                "summary": "React app, FastAPI backend, docs, scripts, Git metadata, and other project files excluding content, generated artifacts, and the SQLite database.",
+                "kind": "code",
+            },
+            {
+                "key": "content",
+                "label": "Content data",
+                "bytes": content_bytes,
+                "path": str(self.content_root),
+                "summary": "Private or demo Markdown knowledge files that back nodes, quizzes, links, and sources.",
+                "kind": "knowledge",
+            },
             {
                 "key": "sqlite-db",
                 "label": "SQLite DB",
@@ -253,13 +288,20 @@ class SystemMetricsService:
                 "summary": "Local query/index database with nodes, quizzes, FTS search tables, questions, jobs, graph cache, and reading activity.",
                 "kind": "database",
             },
-            self.storage_partition("generated", "Generated artifacts", self.generated_dir, "Development logs, screenshots, smoke-test evidence, temporary Codex home, and other rebuildable artifacts.", "generated"),
+            {
+                "key": "generated",
+                "label": "Generated artifacts",
+                "bytes": generated_bytes,
+                "path": str(self.generated_dir),
+                "summary": "Development logs, screenshots, smoke-test evidence, temporary Codex home, and other rebuildable artifacts.",
+                "kind": "generated",
+            },
         ]
         return {
             "storage": {
-                "content_bytes": self.directory_size(self.content_root),
+                "content_bytes": content_bytes,
                 "db_bytes": db_bytes,
-                "generated_bytes": self.directory_size(self.generated_dir),
+                "generated_bytes": generated_bytes,
                 "project_related_bytes": project_related_bytes,
                 "github_repo_bytes": github_size["bytes"],
                 "github_repo_fallback_tracked_bytes": github_size["fallback_tracked_bytes"],
@@ -415,7 +457,7 @@ class SystemMetricsService:
 
     def exclusive_storage_partitions(self) -> list[dict]:
         roots = [self.project_root]
-        candidates = [self.content_root, self.db_path.parent]
+        candidates = [self.content_root, self.db_path.parent, self.generated_dir]
         for candidate in candidates:
             try:
                 resolved = candidate.resolve()
