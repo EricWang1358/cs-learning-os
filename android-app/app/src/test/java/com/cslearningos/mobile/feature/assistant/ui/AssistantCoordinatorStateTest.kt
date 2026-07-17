@@ -147,6 +147,43 @@ class AssistantCoordinatorStateTest {
     }
 
     @Test
+    fun clearAssistModesResetsReviewSessionAndEditTarget() = runTest {
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(noopDao()),
+            service = NoopAssistantService,
+            string = { it.toString() },
+            scope = backgroundScope
+        )
+        coordinator.startInterviewReview()
+        assertTrue(coordinator.state.value.reviewSession != null)
+
+        coordinator.clearAssistModes()
+
+        assertNull(coordinator.state.value.reviewSession)
+        assertNull(coordinator.state.value.editTarget)
+        assertNull(coordinator.state.value.pendingDraftRequest)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun clearAssistModesDropsPendingDraftChecklist() = runTest {
+        val coordinator = AssistantCoordinator(
+            repository = LearningRepository(assistantDao(node = null)),
+            service = CountingAssistantService(),
+            string = { it.toString() },
+            scope = this
+        )
+        coordinator.setInput("create note about Codex workflow")
+        assertTrue(coordinator.send(AiProviderSettings(baseUrl = "https://example.test", apiKey = "key", model = "model")))
+        advanceUntilIdle()
+        assertEquals("create note about Codex workflow", coordinator.state.value.pendingDraftRequest)
+
+        coordinator.clearAssistModes()
+
+        assertNull(coordinator.state.value.pendingDraftRequest)
+    }
+
+    @Test
     fun startingInterviewReviewClearsTypedEditTarget() = runTest {
         val coordinator = AssistantCoordinator(
             repository = LearningRepository(noopDao()),

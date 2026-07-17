@@ -19,8 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -272,11 +270,11 @@ private fun LibraryRootScreen(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Brush.horizontalGradient(listOf(Color(0xFFB9F1DE), Color(0xFFD9F4C5))),
-                RoundedCornerShape(16.dp)
+                WorkbenchColors.AccentContainer,
+                RoundedCornerShape(20.dp)
             )
     ) {
-        Text(stringResource(R.string.library_create_area_button), color = WorkbenchColors.InkStrong)
+        Text(stringResource(R.string.library_create_area_button), color = WorkbenchColors.OnAccentContainer)
     }
 
     var trashExpanded by rememberSaveable { mutableStateOf(false) }

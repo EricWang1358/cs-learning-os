@@ -37,11 +37,21 @@
     <string name="assistant_history_delete">Delete conversation</string>
     <string name="assistant_send">Send</string>
     <string name="assistant_stop">Stop</string>
+    <string name="assistant_send_description">Send message</string>
+    <string name="assistant_stop_description">Stop generating</string>
     <string name="assistant_input_label">Ask about your learning library</string>
     <string name="assistant_empty_title">Where should we start?</string>
+    <string name="assistant_empty_body">Ask anything — answers cite your local notes.</string>
     <string name="assistant_quick_explain">Explain a concept</string>
     <string name="assistant_quick_draft">Create a note</string>
-    <string name="assistant_quick_review">Plan review</string>
+    <string name="assistant_quick_review">Quiz me</string>
+    <string name="assistant_quick_explain_body">Plain-language answers grounded in your notes</string>
+    <string name="assistant_quick_draft_body">Editable note drafts with review cards included</string>
+    <string name="assistant_quick_review_body">Interview-style quizzing that becomes review cards</string>
+    <string name="assistant_mode_review_topic">Review mode · name a topic and I’ll quiz you</string>
+    <string name="assistant_mode_review_answer">Review mode · answer and I’ll evaluate</string>
+    <string name="assistant_mode_draft">Draft mode · send to keep improving the draft</string>
+    <string name="assistant_mode_exit">Exit current mode</string>
     <string name="assistant_sources">Local sources</string>
     <string name="assistant_placement">Suggested Area: %1$s</string>
     <string name="assistant_placement_reason">Why: %1$s</string>
@@ -330,6 +340,22 @@
     <string name="dashboard_action_capture_body">Catch unclear points fast.</string>
     <string name="dashboard_action_create_body">Write structured Markdown.</string>
     <string name="dashboard_action_review_body">Reveal, rate, repeat.</string>
+
+    <string name="dashboard_greeting_morning">Good morning</string>
+    <string name="dashboard_greeting_afternoon">Good afternoon</string>
+    <string name="dashboard_greeting_evening">Good evening</string>
+    <string name="dashboard_date_pattern">EEEE, MMM d</string>
+    <string name="dashboard_greeting_due_subtitle">%1$d review cards due today. Keep the streak going.</string>
+    <string name="dashboard_greeting_clear_subtitle">All caught up. Capture something new today.</string>
+    <string name="dashboard_assistant_entry_title">Ask the knowledge assistant…</string>
+    <string name="dashboard_assistant_entry_body">Ask questions, draft notes, and review with quizzes.</string>
+    <string name="dashboard_section_continue">Continue learning</string>
+    <string name="dashboard_section_actions">Quick actions</string>
+    <string name="dashboard_review_card_title">Review due</string>
+    <string name="dashboard_review_card_body">%1$d cards waiting</string>
+    <string name="dashboard_start_node_title">Start your first node</string>
+    <string name="dashboard_start_node_body">Create a Markdown node and it will show up here next time.</string>
+    <string name="dashboard_open_assistant">Open knowledge assistant</string>
 
     <string name="capture_eyebrow">quick capture</string>
     <string name="capture_title">Capture slip inbox</string>

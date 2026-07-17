@@ -92,6 +92,8 @@ class AssistantAppBridge(
 
     fun startInterviewReview() = coordinator.startInterviewReview()
 
+    fun clearAssistModes() = coordinator.clearAssistModes()
+
     fun sendMessage() = coordinator.send(currentSettings())
 
     fun replyToAgentAction(reply: String) = coordinator.sendAgentActionReply(reply, currentSettings())

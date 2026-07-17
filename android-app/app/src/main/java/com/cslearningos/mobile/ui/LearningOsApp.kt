@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -196,13 +197,8 @@ private fun PortraitWorkbench(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
-                        if (useCompactPortraitBrand(route.toAppScreen())) {
+                        if (route != AppRoute.Home) {
                             CompactBrandBlock(route = route, state = state)
-                        } else {
-                            BrandBlock(
-                                state = state,
-                                onAssistantClick = viewModel::showAssistant
-                            )
                         }
                     }
                     if (!hideGlobalStatusBanner(route, state) && shellState.message != null) {
@@ -451,9 +447,8 @@ private fun MobileBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.96f))
-            .border(BorderStroke(1.dp, WorkbenchColors.LineStrong), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.97f))
             .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -479,13 +474,13 @@ private fun BottomNavTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (selected) WorkbenchColors.Accent.copy(alpha = 0.16f) else WorkbenchColors.Surface.copy(alpha = 0.18f),
+    val indicatorColor by animateColorAsState(
+        targetValue = if (selected) WorkbenchColors.AccentContainer else WorkbenchColors.Surface.copy(alpha = 0f),
         animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
-        label = "bottom-nav-background"
+        label = "bottom-nav-indicator"
     )
     val iconColor by animateColorAsState(
-        targetValue = if (selected) WorkbenchColors.Accent else WorkbenchColors.Muted,
+        targetValue = if (selected) WorkbenchColors.OnAccentContainer else WorkbenchColors.Muted,
         animationSpec = tween(WorkbenchMotion.StateMillis, easing = FastOutSlowInEasing),
         label = "bottom-nav-icon"
     )
@@ -498,27 +493,35 @@ private fun BottomNavTab(
         modifier = modifier
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(backgroundColor)
             .clickable(role = Role.Tab, onClick = onClick)
             .semantics { this.selected = selected }
-            .padding(horizontal = 4.dp, vertical = 7.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box {
-            Icon(
-                imageVector = item.icon(),
-                contentDescription = stringResource(item.contentDescriptionResId),
-                tint = iconColor,
-                modifier = Modifier.height(22.dp)
-            )
-            if (item.screen == AppScreen.Review && dueCount > 0) {
-                Badge(
-                    containerColor = WorkbenchColors.Danger,
-                    contentColor = WorkbenchColors.InkStrong,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Text(dueCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Box(
+            modifier = Modifier
+                .height(30.dp)
+                .widthIn(min = 52.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(indicatorColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Box {
+                Icon(
+                    imageVector = item.icon(),
+                    contentDescription = stringResource(item.contentDescriptionResId),
+                    tint = iconColor,
+                    modifier = Modifier.height(21.dp)
+                )
+                if (item.screen == AppScreen.Review && dueCount > 0) {
+                    Badge(
+                        containerColor = WorkbenchColors.Danger,
+                        contentColor = WorkbenchColors.Surface,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Text(dueCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

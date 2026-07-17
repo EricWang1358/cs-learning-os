@@ -194,6 +194,16 @@ class AssistantCoordinator(
         }
     }
 
+    fun clearAssistModes() {
+        mutableState.update {
+            it.copy(
+                reviewSession = null,
+                editTarget = null,
+                pendingDraftRequest = null
+            )
+        }
+    }
+
     fun startInterviewReview() {
         if (mutableState.value.isBusy) return
         val requestConversationId = conversationId

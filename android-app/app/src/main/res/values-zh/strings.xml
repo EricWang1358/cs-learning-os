@@ -237,6 +237,22 @@
     <string name="dashboard_action_create_body">写结构化 Markdown。</string>
     <string name="dashboard_action_review_body">显示、评分、重复巩固。</string>
 
+    <string name="dashboard_greeting_morning">早上好</string>
+    <string name="dashboard_greeting_afternoon">下午好</string>
+    <string name="dashboard_greeting_evening">晚上好</string>
+    <string name="dashboard_date_pattern">M月d日 EEEE</string>
+    <string name="dashboard_greeting_due_subtitle">今天有 %1$d 张卡片待复习，继续保持。</string>
+    <string name="dashboard_greeting_clear_subtitle">今日复习已清空，去捕捉点新东西吧。</string>
+    <string name="dashboard_assistant_entry_title">问知识助理…</string>
+    <string name="dashboard_assistant_entry_body">问答、智能创建笔记、面试式复习</string>
+    <string name="dashboard_section_continue">继续学习</string>
+    <string name="dashboard_section_actions">快捷操作</string>
+    <string name="dashboard_review_card_title">待复习</string>
+    <string name="dashboard_review_card_body">%1$d 张卡片到期</string>
+    <string name="dashboard_start_node_title">创建第一个节点</string>
+    <string name="dashboard_start_node_body">新建一篇 Markdown 笔记，下次会出现在这里。</string>
+    <string name="dashboard_open_assistant">打开知识助理</string>
+
     <string name="capture_eyebrow">快速捕捉</string>
     <string name="capture_title">随手记收件箱</string>
     <string name="capture_body">先记下最小但有用的碎片，再决定整理成 Markdown、测验，或交给 AI 扩写草稿。</string>
@@ -528,11 +544,21 @@
     <string name="assistant_history_delete">删除对话</string>
     <string name="assistant_send">发送</string>
     <string name="assistant_stop">停止</string>
+    <string name="assistant_send_description">发送消息</string>
+    <string name="assistant_stop_description">停止生成</string>
     <string name="assistant_input_label">问问你的学习资料</string>
     <string name="assistant_empty_title">从哪里开始？</string>
+    <string name="assistant_empty_body">随便问——回答会引用你的本地笔记。</string>
     <string name="assistant_quick_explain">解释一个概念</string>
     <string name="assistant_quick_draft">创建笔记</string>
-    <string name="assistant_quick_review">规划复习</string>
+    <string name="assistant_quick_review">面试复习</string>
+    <string name="assistant_quick_explain_body">基于你的本地笔记通俗讲解</string>
+    <string name="assistant_quick_draft_body">生成可编辑笔记草稿，顺手沉淀复习卡</string>
+    <string name="assistant_quick_review_body">面试式提问、点评并生成复习卡</string>
+    <string name="assistant_mode_review_topic">复习模式 · 说一个主题，我来出题</string>
+    <string name="assistant_mode_review_answer">复习模式 · 回答问题，我来点评</string>
+    <string name="assistant_mode_draft">草稿优化模式 · 发送以继续改进草稿</string>
+    <string name="assistant_mode_exit">退出当前模式</string>
     <string name="assistant_sources">本地资料</string>
     <string name="assistant_placement">建议放入：%1$s</string>
     <string name="assistant_placement_reason">依据：%1$s</string>

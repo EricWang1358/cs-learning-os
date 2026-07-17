@@ -4,14 +4,18 @@ import android.app.Activity
 import android.os.Build
 import android.view.View
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -30,44 +34,107 @@ data class WorkbenchPalette(
     val lineStrong: Color,
     val accent: Color,
     val accentStrong: Color,
+    val onAccent: Color,
+    val accentContainer: Color,
+    val onAccentContainer: Color,
     val success: Color,
     val danger: Color
 )
 
-private val NightPalette = WorkbenchPalette(
-    surface = Color(0xFF0B0E11),
-    surfaceSoft = Color(0xFF181A20),
-    surfaceCard = Color(0xFF1E2329),
-    surfaceElevated = Color(0xFF2B3139),
-    ink = Color(0xFFEAECEF),
-    inkStrong = Color.White,
-    muted = Color(0xFF929AA5),
-    line = Color(0xFF2B3139),
-    lineStrong = Color(0xFF3F4854),
-    accent = Color(0xFFFCD535),
-    accentStrong = Color(0xFFF0B90B),
-    success = Color(0xFF0ECB81),
-    danger = Color(0xFFF6465D)
+/**
+ * Branded Material 3 schemes used when wallpaper-based dynamic color is
+ * unavailable (API < 31). The seed is the original workbench gold.
+ */
+private val BrandLightScheme = lightColorScheme(
+    primary = Color(0xFF785A00),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFDF9E),
+    onPrimaryContainer = Color(0xFF261A00),
+    secondary = Color(0xFF6B5D3F),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFF5E0BB),
+    onSecondaryContainer = Color(0xFF241A04),
+    tertiary = Color(0xFF4C6543),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFCEEBC0),
+    onTertiaryContainer = Color(0xFF0A2006),
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = Color(0xFFFFF8F1),
+    onBackground = Color(0xFF1F1B13),
+    surface = Color(0xFFFFF8F1),
+    onSurface = Color(0xFF1F1B13),
+    surfaceVariant = Color(0xFFEDE1CF),
+    onSurfaceVariant = Color(0xFF4D4639),
+    outline = Color(0xFF7F7667),
+    outlineVariant = Color(0xFFD0C5B4),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFAF3E8),
+    surfaceContainer = Color(0xFFF4EDDE),
+    surfaceContainerHigh = Color(0xFFEFE8D8),
+    surfaceContainerHighest = Color(0xFFE9E2D3)
 )
 
-private val DayPalette = WorkbenchPalette(
-    surface = Color(0xFFF5F1E7),
-    surfaceSoft = Color(0xFFFFFBF0),
-    surfaceCard = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFE8DDC4),
-    ink = Color(0xFF25220C),
-    inkStrong = Color(0xFF101008),
-    muted = Color(0xFF756F5D),
-    line = Color(0xFFD8CDAF),
-    lineStrong = Color(0xFFC3B48E),
-    accent = Color(0xFFB98700),
-    accentStrong = Color(0xFF996500),
-    success = Color(0xFF087D54),
-    danger = Color(0xFFC33145)
+private val BrandDarkScheme = darkColorScheme(
+    primary = Color(0xFFFCD535),
+    onPrimary = Color(0xFF3A3000),
+    primaryContainer = Color(0xFF544600),
+    onPrimaryContainer = Color(0xFFFFE98A),
+    secondary = Color(0xFFD8C58D),
+    onSecondary = Color(0xFF3B2F05),
+    secondaryContainer = Color(0xFF534619),
+    onSecondaryContainer = Color(0xFFF5E0BB),
+    tertiary = Color(0xFFB2CFA5),
+    onTertiary = Color(0xFF1F361A),
+    tertiaryContainer = Color(0xFF354D2F),
+    onTertiaryContainer = Color(0xFFCEEBC0),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = Color(0xFF16130B),
+    onBackground = Color(0xFFEAE2D4),
+    surface = Color(0xFF16130B),
+    onSurface = Color(0xFFEAE2D4),
+    surfaceVariant = Color(0xFF4C4639),
+    onSurfaceVariant = Color(0xFFCFC5B4),
+    outline = Color(0xFF989080),
+    outlineVariant = Color(0xFF4C4639),
+    surfaceContainerLowest = Color(0xFF110E07),
+    surfaceContainerLow = Color(0xFF1F1B13),
+    surfaceContainer = Color(0xFF231F17),
+    surfaceContainerHigh = Color(0xFF2D2921),
+    surfaceContainerHighest = Color(0xFF38342B)
 )
+
+/** Static semantic colors that dynamic schemes do not provide. */
+private fun successColor(darkTheme: Boolean): Color =
+    if (darkTheme) Color(0xFF6BD79B) else Color(0xFF2E7D52)
+
+private fun ColorScheme.toWorkbenchPalette(darkTheme: Boolean): WorkbenchPalette =
+    WorkbenchPalette(
+        surface = surfaceContainerLowest,
+        surfaceSoft = surfaceContainerLow,
+        surfaceCard = surfaceContainer,
+        surfaceElevated = surfaceContainerHighest,
+        ink = onSurface,
+        inkStrong = onSurface,
+        muted = onSurfaceVariant,
+        line = outlineVariant,
+        lineStrong = outline,
+        accent = primary,
+        accentStrong = primary,
+        onAccent = onPrimary,
+        accentContainer = primaryContainer,
+        onAccentContainer = onPrimaryContainer,
+        success = successColor(darkTheme),
+        danger = error
+    )
 
 object WorkbenchColors {
-    private var current: WorkbenchPalette = NightPalette
+    private var current: WorkbenchPalette = BrandDarkScheme.toWorkbenchPalette(darkTheme = true)
 
     fun use(palette: WorkbenchPalette) {
         current = palette
@@ -84,6 +151,9 @@ object WorkbenchColors {
     val LineStrong: Color get() = current.lineStrong
     val Accent: Color get() = current.accent
     val AccentStrong: Color get() = current.accentStrong
+    val OnAccent: Color get() = current.onAccent
+    val AccentContainer: Color get() = current.accentContainer
+    val OnAccentContainer: Color get() = current.onAccentContainer
     val Success: Color get() = current.success
     val Danger: Color get() = current.danger
 }
@@ -138,39 +208,21 @@ private val WorkbenchTypography = Typography(
 @Composable
 fun WorkbenchTheme(
     appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val darkTheme = appearanceMode.usesDarkTheme(isSystemInDarkTheme())
-    val palette = if (darkTheme) NightPalette else DayPalette
+    val dynamicColorAvailable = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val context = LocalContext.current
+    val scheme = when {
+        dynamicColorAvailable && darkTheme -> dynamicDarkColorScheme(context)
+        dynamicColorAvailable -> dynamicLightColorScheme(context)
+        darkTheme -> BrandDarkScheme
+        else -> BrandLightScheme
+    }
+    val palette = scheme.toWorkbenchPalette(darkTheme)
     WorkbenchColors.use(palette)
     SyncSystemBars(palette = palette, darkTheme = darkTheme)
-    val scheme = if (!darkTheme) {
-        lightColorScheme(
-            background = palette.surface,
-            surface = palette.surfaceSoft,
-            surfaceVariant = palette.surfaceCard,
-            primary = palette.accent,
-            onPrimary = palette.inkStrong,
-            secondary = palette.success,
-            error = palette.danger,
-            onBackground = palette.ink,
-            onSurface = palette.ink,
-            onSurfaceVariant = palette.muted
-        )
-    } else {
-        darkColorScheme(
-            background = palette.surface,
-            surface = palette.surfaceSoft,
-            surfaceVariant = palette.surfaceCard,
-            primary = palette.accent,
-            onPrimary = palette.surfaceSoft,
-            secondary = palette.success,
-            error = palette.danger,
-            onBackground = palette.ink,
-            onSurface = palette.ink,
-            onSurfaceVariant = palette.muted
-        )
-    }
 
     MaterialTheme(
         colorScheme = scheme,

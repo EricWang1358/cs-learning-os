@@ -67,14 +67,14 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val PanelShape = RoundedCornerShape(16.dp)
-private val CardShape = RoundedCornerShape(16.dp)
+private val PanelShape = RoundedCornerShape(20.dp)
+private val CardShape = RoundedCornerShape(20.dp)
 
 private object WorkbenchActionTokens {
     val Gap = 8.dp
     val MinHeight = 44.dp
-    val HorizontalPadding = 12.dp
-    val CornerRadius = 12.dp
+    val HorizontalPadding = 16.dp
+    val CornerRadius = 999.dp
     val FontSize = 13.sp
     const val MenuLabelMaxLines = 2
 }
@@ -153,10 +153,10 @@ fun WorkbenchCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (accent) 6.dp else 2.dp,
+                elevation = if (accent) 2.dp else 0.dp,
                 shape = CardShape,
-                ambientColor = Color.Black.copy(alpha = 0.25f),
-                spotColor = Color.Black.copy(alpha = 0.35f)
+                ambientColor = Color.Black.copy(alpha = 0.18f),
+                spotColor = Color.Black.copy(alpha = 0.24f)
             ),
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
@@ -253,11 +253,11 @@ fun WorkbenchButton(
 ) {
     val container = when {
         primary -> WorkbenchColors.Accent
-        danger -> WorkbenchColors.SurfaceCard
-        else -> WorkbenchColors.SurfaceCard
+        danger -> WorkbenchColors.Danger.copy(alpha = 0.12f)
+        else -> WorkbenchColors.SurfaceElevated
     }
     val content = when {
-        primary -> WorkbenchColors.SurfaceSoft
+        primary -> WorkbenchColors.OnAccent
         danger -> WorkbenchColors.Danger
         else -> WorkbenchColors.AccentStrong
     }
@@ -266,12 +266,11 @@ fun WorkbenchButton(
         enabled = enabled,
         modifier = modifier.heightIn(min = WorkbenchActionTokens.MinHeight),
         shape = RoundedCornerShape(WorkbenchActionTokens.CornerRadius),
-        border = BorderStroke(1.dp, if (danger) WorkbenchColors.Danger.copy(alpha = 0.58f) else WorkbenchColors.LineStrong),
         contentPadding = PaddingValues(horizontal = WorkbenchActionTokens.HorizontalPadding),
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
             contentColor = content,
-            disabledContainerColor = WorkbenchColors.SurfaceCard.copy(alpha = 0.44f),
+            disabledContainerColor = WorkbenchColors.SurfaceElevated.copy(alpha = 0.44f),
             disabledContentColor = WorkbenchColors.Muted
         )
     ) {
