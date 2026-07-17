@@ -89,26 +89,30 @@ class LibraryRepository(
 
     suspend fun moveNodeToTrash(nodeId: String, now: Long = System.currentTimeMillis()) {
         val node = dao.getNode(nodeId) ?: return
-        dao.upsertNode(
-            node.copy(
+        val updated = node.copy(
+            updatedAt = now,
+            revision = node.revision + RevisionStep,
+            syncStatus = SyncStatus.dirty,
+            visibility = TrashVisibility
+        )
+        val updatedQuizzes = dao.getActiveQuizzesForNode(nodeId).map { quiz ->
+            quiz.copy(
                 updatedAt = now,
-                revision = node.revision + RevisionStep,
+                revision = quiz.revision + RevisionStep,
                 syncStatus = SyncStatus.dirty,
                 visibility = TrashVisibility
             )
-        )
-        dao.deleteNodeFts(node.id)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + RevisionStep,
-                    syncStatus = SyncStatus.dirty,
-                    visibility = TrashVisibility
-                )
-            )
-            dao.deleteQuizFts(quiz.id)
         }
+        dao.saveNodeAndQuizzesWithContentOutbox(
+            node = updated,
+            nodeFts = null,
+            nodeOutbox = nodeContentOutbox(previous = node, updated = updated, now = now),
+            quizzes = updatedQuizzes,
+            quizFts = emptyList(),
+            quizOutbox = updatedQuizzes.map { quiz ->
+                quizContentOutbox(previousRevision = quiz.revision - RevisionStep, updated = quiz, now = now)
+            }
+        )
     }
 
     suspend fun restoreNodeFromTrash(nodeId: String, now: Long = System.currentTimeMillis()) {
@@ -123,18 +127,24 @@ class LibraryRepository(
             areaId = area.id,
             visibility = if (node.isStarter) CoreVisibility else SupportVisibility
         )
-        dao.upsertNode(restored)
-        indexNode(restored)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            val restoredQuiz = quiz.copy(
+        val restoredQuizzes = dao.getActiveQuizzesForNode(nodeId).map { quiz ->
+            quiz.copy(
                 updatedAt = now,
                 revision = quiz.revision + RevisionStep,
                 syncStatus = SyncStatus.dirty,
                 visibility = PracticeVisibility
             )
-            dao.upsertQuiz(restoredQuiz)
-            indexQuiz(restoredQuiz)
         }
+        dao.saveNodeAndQuizzesWithContentOutbox(
+            node = restored,
+            nodeFts = nodeFts(restored),
+            nodeOutbox = nodeContentOutbox(previous = node, updated = restored, now = now),
+            quizzes = restoredQuizzes,
+            quizFts = restoredQuizzes.mapNotNull(::quizFts),
+            quizOutbox = restoredQuizzes.map { quiz ->
+                quizContentOutbox(previousRevision = quiz.revision - RevisionStep, updated = quiz, now = now)
+            }
+        )
     }
 
     suspend fun permanentlyDeleteNode(nodeId: String, now: Long = System.currentTimeMillis()) {
@@ -265,7 +275,7 @@ class LibraryRepository(
                 area = area.slug
             )
         }
-        dao.saveMovedNodeWithContentOutbox(
+        dao.saveNodeAndQuizzesWithContentOutbox(
             node = updated,
             nodeFts = nodeFts(updated),
             nodeOutbox = nodeContentOutbox(previous = node, updated = updated, now = now),

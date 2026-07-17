@@ -866,6 +866,50 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun movingNodeToTrashCreatesSyncableOutboxChanges() = runTest {
+        val dao = FakeLearningDao().apply {
+            seedLifecycleAreaNodeAndQuiz(nodeVisibility = "support", quizVisibility = "practice")
+        }
+        val repository = repository(dao)
+
+        repository.moveNodeToTrash("node-1", now = 2_000L)
+
+        assertEquals("trash", dao.nodes.getValue("node-1").visibility)
+        assertEquals("trash", dao.quizzes.getValue("quiz-1").visibility)
+        assertEquals(2, dao.outbox.size)
+
+        val nodeChange = dao.outbox.values.first { it.aggregateType == "content.node" }
+        val quizChange = dao.outbox.values.first { it.aggregateType == "content.quiz" }
+        assertEquals("trash", ContentNodeCodec.decode(nodeChange.payloadJson).visibility)
+        assertEquals("trash", QuizOutboxCodec.decode(quizChange.payloadJson).visibility)
+    }
+
+    @Test
+    fun restoringNodeFromTrashCreatesSyncableOutboxChanges() = runTest {
+        val dao = FakeLearningDao().apply {
+            seedLifecycleAreaNodeAndQuiz(
+                areaDeletedAt = 2_000L,
+                nodeVisibility = "trash",
+                quizVisibility = "trash"
+            )
+        }
+        val repository = repository(dao)
+
+        repository.restoreNodeFromTrash("node-1", now = 3_000L)
+
+        assertNull(dao.areas.getValue("systems").deletedAt)
+        assertEquals("support", dao.nodes.getValue("node-1").visibility)
+        assertEquals("practice", dao.quizzes.getValue("quiz-1").visibility)
+        assertEquals(2, dao.outbox.size)
+
+        val nodeChange = dao.outbox.values.first { it.aggregateType == "content.node" }
+        val quizChange = dao.outbox.values.first { it.aggregateType == "content.quiz" }
+        assertEquals("support", ContentNodeCodec.decode(nodeChange.payloadJson).visibility)
+        assertEquals("systems", ContentNodeCodec.decode(nodeChange.payloadJson).area.id)
+        assertEquals("practice", QuizOutboxCodec.decode(quizChange.payloadJson).visibility)
+    }
+
+    @Test
     fun restoreNodeFromTrashRevivesDeletedAreaInsteadOfLeavingNodeOrphaned() = runTest {
         val dao = FakeLearningDao()
         val repository = repository(dao)
@@ -1085,6 +1129,58 @@ private fun repository(dao: LearningDao): LearningRepository = LearningRepositor
     dao = dao,
     contentCommands = ContentCommandPort { error("Node saves are outside this repository policy test.") }
 )
+
+private fun FakeLearningDao.seedLifecycleAreaNodeAndQuiz(
+    areaDeletedAt: Long? = null,
+    nodeVisibility: String,
+    quizVisibility: String
+) {
+    areas["systems"] = AreaEntity(
+        id = "systems",
+        slug = "systems",
+        name = "Systems",
+        order = 20,
+        createdAt = 1_000L,
+        updatedAt = 1_000L,
+        deletedAt = areaDeletedAt
+    )
+    nodes["node-1"] = LearningNodeEntity(
+        id = "node-1",
+        title = "Paging",
+        markdownBody = "# Paging",
+        createdAt = 1_000L,
+        updatedAt = 1_000L,
+        lastReadAt = null,
+        revision = 1L,
+        syncStatus = SyncStatus.clean,
+        deletedAt = null,
+        area = "systems",
+        areaId = "systems",
+        track = "virtual-memory",
+        order = 20,
+        summary = "Summary",
+        visibility = nodeVisibility,
+        isStarter = false
+    )
+    quizzes["quiz-1"] = QuizItemEntity(
+        id = "quiz-1",
+        nodeId = "node-1",
+        prompt = "What does paging translate?",
+        answer = "Virtual pages to frames.",
+        explanation = "The page table maps addresses.",
+        source = QuizSource.manual,
+        sourceAnchor = null,
+        createdAt = 1_000L,
+        updatedAt = 1_000L,
+        revision = 1L,
+        syncStatus = SyncStatus.clean,
+        deletedAt = null,
+        area = "systems",
+        track = "virtual-memory",
+        visibility = quizVisibility,
+        isStarter = false
+    )
+}
 
 private class FakeLearningDao : LearningDao {
     val areas = linkedMapOf<String, AreaEntity>()

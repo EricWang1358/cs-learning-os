@@ -322,7 +322,7 @@ interface LearningDao {
     }
 
     @Transaction
-    suspend fun saveMovedNodeWithContentOutbox(
+    suspend fun saveNodeAndQuizzesWithContentOutbox(
         node: LearningNodeEntity,
         nodeFts: NodeFtsEntity?,
         nodeOutbox: ReplicationOutboxEntity,
