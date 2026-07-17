@@ -124,6 +124,8 @@ private class FakeReviewLearningDao(
     override suspend fun upsertQuizFts(entity: QuizFtsEntity) = unsupported()
     override suspend fun deleteNodeFts(nodeId: String) = unsupported()
     override suspend fun deleteQuizFts(quizId: String) = unsupported()
+    override suspend fun markNodeSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long) = unsupported()
+    override suspend fun markQuizSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long) = unsupported()
     override suspend fun deleteAllAreas() = unsupported()
     override suspend fun deleteAllNodes() = unsupported()
     override suspend fun deleteAllQuizzes() = unsupported()

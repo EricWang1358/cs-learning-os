@@ -59,7 +59,8 @@ data class LearningNodeEntity(
     val summary: String = "",
     val visibility: String = "support",
     @ColumnInfo(name = "is_starter") val isStarter: Boolean = false,
-    @ColumnInfo(name = "is_checked") val isChecked: Boolean = false
+    @ColumnInfo(name = "is_checked") val isChecked: Boolean = false,
+    @ColumnInfo(name = "base_revision") val baseRevision: Long = 0
 )
 
 fun LearningNodeEntity.withReadTrace(now: Long): LearningNodeEntity =
@@ -109,7 +110,8 @@ data class QuizItemEntity(
     val area: String = "questions",
     val track: String = "general",
     val visibility: String = "practice",
-    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false
+    @ColumnInfo(name = "is_starter") val isStarter: Boolean = false,
+    @ColumnInfo(name = "base_revision") val baseRevision: Long = 0
 )
 
 @Entity(tableName = "review_states", primaryKeys = ["quiz_id"])

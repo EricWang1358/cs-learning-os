@@ -206,35 +206,39 @@ Tests prove: expired/reused/unknown pairing tokens rejected (401); non-loopback 
 
 ### Phase 2: Pull (Desktop Manifest + Android Merge)
 
-**Desktop:** add to `sync_router.py`:
+**Status: implemented 2026-07-17.** Desktop: `backend/sync_service.py` + manifest/pull routes (`backend/test_sync_pull.py` 7 tests). Android: `feature/sync/` package (10 orchestration + 10 policy/parsing tests), Room v8.
+
+**Desktop:** `sync_router.py` gained:
 
 ```text
-POST /api/sync/v1/manifest    -- { cursor, scope } -> { protocolVersion, serverId, cursor, changes[] }
-POST /api/sync/v1/pull        -- { entityType, ids[] } -> typed records
+POST /api/sync/v1/manifest    -- { cursor, serverId?, scope } -> { reset, protocolVersion, serverId, cursor, changes[], hasMore }
+POST /api/sync/v1/pull        -- { entityType, ids[], scope } -> typed records (scope enforced)
 ```
 
 - `scope`: `{ "areas": ["algorithms", ...], "includeDueReviews": true, "pinnedNodeIds": [...] }` — `areas` are **labels** (audit finding).
-- Manifest rows carry `{ type, id, revision, hash, tombstone }` only — never bodies or credentials.
-- Cursor = last seen `sync_changes.seq`. `serverId` or `protocolVersion` mismatch → `cursor_reset` response; the phone re-baselines instead of applying partial deltas.
+- Manifest rows carry `{ type, id, revision, hash, tombstone, area }` only — never bodies or credentials.
+- **Delta rows are deliberately NOT scope-filtered**: area labels travel with each change so the client can drop local copies of entities that left its subset (move-out detection). Scope is enforced where content is served: baseline synthesis (cursor = 0) and the pull endpoint.
+- Cursor = last seen `sync_changes.seq`; high-water returned per response. `serverId` mismatch → `{ reset: true, cursor: 0 }` and the client re-baselines. Changing the scope fingerprint also re-baselines (cursor is only valid for one scope).
+- `cursor = 0` synthesizes baseline entries for live entities with no change rows (legacy databases upgraded to schema v5).
+- Review-attempt and reader-question records use the client-stable IDs (`client_attempt_id`, `client_id`, legacy `db-<pk>` fallback).
 
-**Android:** new `feature/sync/` package (no UI yet):
+**Android:** `feature/sync/`:
 
 ```text
-SyncTransport       OkHttp calls, bearer credential, TLS fingerprint pinning from pairing
-SyncRepository      cursor + scope persistence (DataStore), pull orchestration
-SyncManifest        org.json DTOs (project already uses org.json in BackupCodec)
-SyncMergePolicy     typed conflict decisions + import report
+SyncTransport / OkHttpSyncTransport   bearer credential, JSON POSTs, SyncException on non-2xx
+SyncRepository                        health -> manifest pages -> batch pull -> merge -> Room batch apply
+SyncMergePolicy                       pure decision function (APPLY / APPLY_WITH_CONFLICT / SOFT_DELETE / KEEP_LOCAL / SKIP)
+SyncModels                            org.json DTOs, SyncScope fingerprint, SyncReport
+SyncStateStore                        pairing state in app-private SharedPreferences (Keystore hardening later)
+DesktopQuizMarkdown                   desktop ## Prompt/## Answer/## Explanation -> Android quiz fields
 ```
 
-Room v7→v8 migration adds sync lineage to `nodes` and `quizzes`: `baseRevision` (desktop revision at last merge) — conflict detection = remote revision advanced **and** local `syncStatus == dirty`.
+- Room v7→v8 adds `base_revision` to `learning_nodes` and `quiz_items` (0 = pre-sync baseline); `LearningDao.applySyncBatch` applies one manifest page in a single transaction; `markNodeSyncedDeleted`/`markQuizSyncedDeleted` handle tombstones without repository detours.
+- Merge rules as planned: clean local + remote change → accept (`baseRevision = remote revision`); dirty local + remote change → accept remote AND park local text as a conflict draft (nodes become a `conflict-<uuid>` sibling node, quizzes become a conflict capture slip); remote tombstone + clean → soft-delete; remote tombstone + dirty → keep local, mark `conflicted`; replay of an applied change is a no-op (`baseRevision >= remote revision`).
+- Pulled nodes keep desktop slugs as Android IDs; pulled area labels get an `AreaEntity` on demand (id = slug = label). Quiz records parse into prompt/answer/explanation; unparseable bodies are skipped and counted.
+- **Deferred within Phase 2 (explicit):** review-attempt application (desktop `again/hard/good/easy` → Android 3-grade scheduler mapping is designed in Phase 3); sync UI (Phase 4).
 
-Apply rules:
-
-- Pull applied in one Room transaction; failure leaves DB and cursor untouched.
-- Clean local record + remote change → accept remote, `syncStatus = clean`, `baseRevision = remote revision`.
-- Dirty local record + remote change → accept remote into the canonical row **and** park the local text as a conflict draft (new capture slip of a `conflict` type, or a sibling node marked `syncStatus = conflicted`), surfaced in the sync report.
-- Remote tombstone + clean local → soft-delete locally. Remote tombstone + dirty local → conflict report, never silent delete.
-- Replaying the same pull is idempotent (test).
+Contract coverage: baseline scoping, idle deltas, incremental changes, area move-out rows, server reset, pull scope enforcement, attempt/question record shapes, auth rejection (desktop); baseline apply, idempotent replay, dirty-conflict drafts, tombstone soft-delete vs keep-local, move-out removal, serverId re-baseline, quiz conversion, attempt skipping (Android).
 
 ### Phase 3: Push Append-Only Learning Events
 

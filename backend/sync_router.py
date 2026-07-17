@@ -14,11 +14,12 @@ from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 try:
-    from .api_models import SyncPairRequest
-    from . import sync_auth
+    from .api_models import SyncManifestRequest, SyncPairRequest, SyncPullRequest
+    from . import sync_auth, sync_service
 except ImportError:  # pragma: no cover - script execution
-    from api_models import SyncPairRequest
+    from api_models import SyncManifestRequest, SyncPairRequest, SyncPullRequest
     import sync_auth
+    import sync_service
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
 
@@ -95,6 +96,55 @@ def create_sync_router(
         with get_conn() as conn:
             sync_auth.ensure_sync_auth_schema(conn)
             return {"devices": sync_auth.list_devices(conn)}
+
+    @router.post("/manifest")
+    def manifest(
+        payload: SyncManifestRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_READ)),
+    ) -> dict:
+        with get_conn() as conn:
+            sync_auth.ensure_sync_auth_schema(conn)
+            current_server = sync_auth.server_id(conn)
+            if payload.serverId and payload.serverId != current_server:
+                return {
+                    "reset": True,
+                    "protocolVersion": sync_auth.SYNC_PROTOCOL_VERSION,
+                    "serverId": current_server,
+                    "cursor": 0,
+                    "changes": [],
+                    "hasMore": False,
+                }
+            scope = sync_service.SyncScope.from_payload(payload.scope)
+            result = sync_service.manifest_changes(
+                conn,
+                payload.cursor,
+                scope,
+                now=sync_auth.iso(sync_auth.utc_now()),
+            )
+            return {
+                "reset": False,
+                "protocolVersion": sync_auth.SYNC_PROTOCOL_VERSION,
+                "serverId": current_server,
+                **result,
+            }
+
+    @router.post("/pull")
+    def pull(
+        payload: SyncPullRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_READ)),
+    ) -> dict:
+        if payload.entityType not in sync_service.ENTITY_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported entity type: {payload.entityType}")
+        with get_conn() as conn:
+            scope = sync_service.SyncScope.from_payload(payload.scope)
+            records = sync_service.pull_records(
+                conn,
+                payload.entityType,
+                payload.ids,
+                scope,
+                now=sync_auth.iso(sync_auth.utc_now()),
+            )
+            return {"records": records}
 
     @router.post("/devices/{device_id}/revoke")
     def revoke(

@@ -232,6 +232,37 @@ interface LearningDao {
     @Query("DELETE FROM replication_outbox")
     suspend fun deleteAllOutboxItems()
 
+    @Query("UPDATE learning_nodes SET deleted_at = :deletedAt, sync_status = 'clean', updated_at = :updatedAt WHERE id = :id")
+    suspend fun markNodeSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long)
+
+    @Query("UPDATE quiz_items SET deleted_at = :deletedAt, sync_status = 'clean', updated_at = :updatedAt WHERE id = :id")
+    suspend fun markQuizSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long)
+
+    @Transaction
+    suspend fun applySyncBatch(
+        areas: List<AreaEntity>,
+        nodes: List<LearningNodeEntity>,
+        quizzes: List<QuizItemEntity>,
+        questions: List<ReaderQuestionEntity>,
+        captureSlips: List<CaptureSlipEntity>,
+        attempts: List<ReviewAttemptEntity>,
+        nodeFts: List<NodeFtsEntity>,
+        quizFts: List<QuizFtsEntity>,
+        deletedNodeFtsIds: List<String>,
+        deletedQuizFtsIds: List<String>
+    ) {
+        upsertAreas(areas)
+        upsertNodes(nodes)
+        upsertQuizzes(quizzes)
+        upsertReaderQuestions(questions)
+        upsertCaptureSlips(captureSlips)
+        insertAttempts(attempts)
+        deletedNodeFtsIds.forEach { deleteNodeFts(it) }
+        deletedQuizFtsIds.forEach { deleteQuizFts(it) }
+        nodeFts.forEach { upsertNodeFts(it) }
+        quizFts.forEach { upsertQuizFts(it) }
+    }
+
     @Query(
         """
         SELECT 'node' AS type, node_id AS id, title, snippet(node_fts, 3, '[', ']', '...', 12) AS snippet

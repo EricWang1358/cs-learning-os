@@ -72,6 +72,18 @@ class SyncPairRequest(BaseModel):
     device_name: str = Field(default="android-device", max_length=120)
 
 
+class SyncManifestRequest(BaseModel):
+    cursor: int = Field(default=0, ge=0)
+    serverId: str = ""
+    scope: dict = Field(default_factory=dict)
+
+
+class SyncPullRequest(BaseModel):
+    entityType: str = Field(min_length=1)
+    ids: list[str] = Field(default_factory=list, max_length=200)
+    scope: dict = Field(default_factory=dict)
+
+
 class BiteCardCreate(BaseModel):
     source_type: str = Field(pattern="^(node|quiz)$")
     source_id: str = Field(min_length=1)

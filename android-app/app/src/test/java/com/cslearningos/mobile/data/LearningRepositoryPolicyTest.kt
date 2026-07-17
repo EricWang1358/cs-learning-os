@@ -1107,6 +1107,8 @@ private class FakeLearningDao : LearningDao {
     override suspend fun deleteQuizFts(quizId: String) {
         deletedQuizFtsIds += quizId
     }
+    override suspend fun markNodeSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long) = unsupported()
+    override suspend fun markQuizSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long) = unsupported()
     override suspend fun deleteAllNodes() = unsupported()
     override suspend fun deleteAllQuizzes() = unsupported()
     override suspend fun deleteAllReviewStates() = unsupported()

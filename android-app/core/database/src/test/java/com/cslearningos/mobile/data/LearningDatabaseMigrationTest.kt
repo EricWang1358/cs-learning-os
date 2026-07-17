@@ -54,6 +54,31 @@ class LearningDatabaseMigrationTest {
     }
 
     @Test
+    fun migration7To8AddsBaseRevisionWithZeroBaseline() {
+        helper.createDatabase("sync-migration", 7).apply {
+            execSQL("INSERT INTO learning_nodes(id,title,markdown_body,created_at,updated_at,last_read_at,revision,sync_status,deleted_at,area,area_id,track,`order`,summary,visibility,is_starter,is_checked) VALUES('node-1','Paging','# Paging',1000,1000,NULL,4,'clean',NULL,'systems','systems','memory',1,'Paging','support',0,0)")
+            execSQL("INSERT INTO quiz_items(id,node_id,prompt,answer,explanation,source,source_anchor,created_at,updated_at,revision,sync_status,deleted_at,area,track,visibility,is_starter) VALUES('quiz-1',NULL,'Q','A','E','manual',NULL,1000,1000,2,'clean',NULL,'systems','memory','practice',0)")
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            "sync-migration",
+            8,
+            true,
+            LearningDatabase.Migration7To8
+        ).use { db ->
+            db.query("SELECT base_revision FROM learning_nodes WHERE id='node-1'").use {
+                assertTrue(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            db.query("SELECT base_revision FROM quiz_items WHERE id='quiz-1'").use {
+                assertTrue(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
+    @Test
     fun restoreBackupReplacesCanonicalDataAndClearsV7OperationalRecords() = runBlocking {
         val database = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(),

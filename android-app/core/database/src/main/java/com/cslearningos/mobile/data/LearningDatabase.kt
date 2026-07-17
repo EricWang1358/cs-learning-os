@@ -24,7 +24,7 @@ import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntit
         ProcessedCommandEntity::class,
         ReplicationOutboxEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -184,6 +184,13 @@ abstract class LearningDatabase : RoomDatabase() {
             }
         }
 
+        internal val Migration7To8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `learning_nodes` ADD COLUMN `base_revision` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `quiz_items` ADD COLUMN `base_revision` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -196,7 +203,8 @@ abstract class LearningDatabase : RoomDatabase() {
                     Migration3To4,
                     Migration4To5,
                     Migration5To6,
-                    Migration6To7
+                    Migration6To7,
+                    Migration7To8
                 )
                 .build()
     }
