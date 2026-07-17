@@ -14,6 +14,7 @@ class SyncException(val statusCode: Int, message: String) : Exception(message)
 
 interface SyncTransport {
     suspend fun health(): SyncHealth
+    suspend fun devicePolicy(): SyncDevicePolicy
     suspend fun manifest(cursor: Long, serverId: String, scope: SyncScope): SyncManifest
     suspend fun pull(entityType: String, ids: List<String>, scope: SyncScope): List<SyncRecord>
     suspend fun pushAttempts(items: List<JSONObject>): List<SyncReceipt>
@@ -32,6 +33,9 @@ class OkHttpSyncTransport(
 
     override suspend fun health(): SyncHealth =
         parseSyncHealth(get("/api/sync/v1/health"))
+
+    override suspend fun devicePolicy(): SyncDevicePolicy =
+        parseSyncDevicePolicy(get("/api/sync/v1/device"))
 
     override suspend fun manifest(cursor: Long, serverId: String, scope: SyncScope): SyncManifest =
         parseSyncManifest(

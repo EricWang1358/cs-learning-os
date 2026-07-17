@@ -45,6 +45,13 @@ data class SyncHealth(
     val pairedDevices: Int
 )
 
+data class SyncDevicePolicy(
+    val id: String,
+    val name: String,
+    val scopes: Set<String>,
+    val revokedAt: String?
+)
+
 sealed interface SyncRecord {
     val type: String
     val id: String
@@ -188,6 +195,21 @@ fun parseSyncHealth(json: JSONObject): SyncHealth =
         serverId = json.getString("serverId"),
         pairedDevices = json.optInt("pairedDevices", 0)
     )
+
+fun parseSyncDevicePolicy(json: JSONObject): SyncDevicePolicy {
+    val scopesJson = json.optJSONArray("scopes") ?: JSONArray()
+    val scopes = buildSet {
+        for (index in 0 until scopesJson.length()) {
+            scopesJson.optString(index).takeIf { it.isNotBlank() }?.let(::add)
+        }
+    }
+    return SyncDevicePolicy(
+        id = json.getString("id"),
+        name = json.optString("name"),
+        scopes = scopes,
+        revokedAt = json.optString("revokedAt").takeIf { it.isNotBlank() && it != "null" }
+    )
+}
 
 fun parseSyncManifest(json: JSONObject): SyncManifest {
     val changesJson = json.optJSONArray("changes") ?: JSONArray()

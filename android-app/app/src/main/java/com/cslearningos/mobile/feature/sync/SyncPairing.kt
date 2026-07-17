@@ -1,6 +1,8 @@
 package com.cslearningos.mobile.feature.sync
 
 import org.json.JSONObject
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 /** Parses the desktop pairing QR payload and drives the /pair exchange. */
 object SyncPairing {
@@ -45,7 +47,7 @@ object SyncPairing {
             .mapNotNull { part ->
                 val key = part.substringBefore('=', "")
                 val value = part.substringAfter('=', "")
-                if (key.isBlank() || value.isBlank()) null else key to value
+                if (key.isBlank() || value.isBlank()) null else key to decodeQueryValue(value)
             }
             .toMap()
         val endpoint = params["endpoint"].orEmpty()
@@ -53,6 +55,9 @@ object SyncPairing {
         if (endpoint.isBlank() || token.isBlank()) return null
         return PairingInput(endpoint = endpoint.trimEnd('/'), token = token)
     }
+
+    private fun decodeQueryValue(value: String): String =
+        runCatching { URLDecoder.decode(value, StandardCharsets.UTF_8.name()) }.getOrDefault(value)
 
     fun parsePairResponse(json: JSONObject): PairResult =
         PairResult(

@@ -19,6 +19,16 @@ class SyncPairingTest {
     }
 
     @Test
+    fun decodesUrlEncodedEndpointFromDesktopPayload() {
+        val payload = "csos-sync://pair?endpoint=http%3A%2F%2F192.168.0.101%3A8000&token=tok123&server=srv"
+
+        val input = SyncPairing.parsePayload(payload)
+
+        checkNotNull(input)
+        assertEquals("http://192.168.0.101:8000", input.endpoint)
+    }
+
+    @Test
     fun acceptsSeparateEndpointAndToken() {
         val input = SyncPairing.resolvePairingInput("http://desktop:8000/", "abc")
         checkNotNull(input)

@@ -9,7 +9,9 @@ data class SyncStatusSnapshot(
     val serverId: String,
     val lastSyncAt: Long,
     val scopeAreas: Set<String>,
-    val includeDueReviews: Boolean
+    val includeDueReviews: Boolean,
+    val serverScopes: Set<String> = emptySet(),
+    val isServerConfirmed: Boolean = false
 )
 
 /**
@@ -47,6 +49,11 @@ class DefaultSyncGateway(
         store.deviceId = result.deviceId
         store.cursor = 0L
         store.lastAttemptUploadAt = 0L
+        runCatching { refreshServerPolicy() }
+            .onFailure {
+                store.clearPairing()
+                throw it
+            }
         return snapshot()
     }
 
@@ -55,11 +62,21 @@ class DefaultSyncGateway(
     }
 
     override suspend fun pull(): SyncReport {
+        val policy = refreshServerPolicy()
+        if (SyncReadScope !in policy.scopes) {
+            throw SyncException(401, "sync_read_not_allowed")
+        }
         val scope = currentScope()
         return repository().pullAndApply(scope)
     }
 
-    override suspend fun push(): SyncPushReport = repository().pushLocalChanges()
+    override suspend fun push(): SyncPushReport {
+        val policy = refreshServerPolicy()
+        if (SyncPushScope !in policy.scopes) {
+            throw SyncException(401, "sync_push_not_allowed")
+        }
+        return repository().pushLocalChanges()
+    }
 
     override fun updateScope(areas: Set<String>, includeDueReviews: Boolean) {
         store.scopeAreas = areas
@@ -82,6 +99,14 @@ class DefaultSyncGateway(
             pinnedNodeIds = emptyList()
         )
 
+    private suspend fun refreshServerPolicy(): SyncDevicePolicy {
+        check(store.isPaired) { "Sync is not paired" }
+        val policy = OkHttpSyncTransport(endpoint = store.endpoint, credential = store.credential).devicePolicy()
+        store.deviceId = policy.id
+        store.serverScopes = policy.scopes
+        return policy
+    }
+
     private fun snapshot(): SyncStatusSnapshot =
         SyncStatusSnapshot(
             isPaired = store.isPaired,
@@ -89,6 +114,13 @@ class DefaultSyncGateway(
             serverId = store.serverId,
             lastSyncAt = store.lastSyncAt,
             scopeAreas = store.scopeAreas,
-            includeDueReviews = store.includeDueReviews
+            includeDueReviews = store.includeDueReviews,
+            serverScopes = store.serverScopes,
+            isServerConfirmed = store.serverScopes.isNotEmpty()
         )
+
+    private companion object {
+        const val SyncReadScope = "sync:read"
+        const val SyncPushScope = "sync:push"
+    }
 }

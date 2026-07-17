@@ -30,7 +30,7 @@ try:
     from .productization_router import create_productization_router
     from .quiz_router import create_quiz_router
     from .reader_question_router import create_reader_question_router
-    from .runtime_config import ai_enabled, app_profile, beta_mode
+    from .runtime_config import ai_enabled, app_profile, beta_mode, sync_advertised_base_url
     from .system_metrics_service import SystemMetricsService
     from .system_router import create_system_router
     from .sync_router import create_sync_router
@@ -56,7 +56,7 @@ except ImportError:
     from productization_router import create_productization_router
     from quiz_router import create_quiz_router
     from reader_question_router import create_reader_question_router
-    from runtime_config import ai_enabled, app_profile, beta_mode
+    from runtime_config import ai_enabled, app_profile, beta_mode, sync_advertised_base_url
     from system_metrics_service import SystemMetricsService
     from system_router import create_system_router
     from sync_router import create_sync_router
@@ -143,7 +143,14 @@ app.include_router(create_quiz_router(get_conn, CONTENT_ROOT))
 app.include_router(create_bite_router(get_conn))
 app.include_router(create_graph_router(get_conn))
 app.include_router(create_reader_question_router(get_conn))
-app.include_router(create_sync_router(get_conn, export_root=EXPORT_ROOT, content_root=CONTENT_ROOT))
+app.include_router(
+    create_sync_router(
+        get_conn,
+        export_root=EXPORT_ROOT,
+        content_root=CONTENT_ROOT,
+        advertised_base_url=sync_advertised_base_url(),
+    )
+)
 
 
 @app.on_event("startup")

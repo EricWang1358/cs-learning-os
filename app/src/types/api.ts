@@ -502,6 +502,45 @@ export type ApiErrorBody = {
   detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health'
+export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync'
+
+export type SyncDevice = {
+  id: string
+  name: string
+  scopes: string[]
+  createdAt: string
+  lastSeenAt: string
+  revokedAt?: string
+}
+
+export type SyncHealth = {
+  protocolVersion: number
+  serverId: string
+  pairedDevices: number
+  advertisedBaseUrl?: string
+}
+
+export type SyncPairingToken = {
+  token: string
+  expiresAt: string
+  endpoint: string
+  pairingPayload: string
+}
+
+export type ApiSyncHealthResponse = SyncHealth
+
+export type ApiSyncPairingTokenResponse = SyncPairingToken
+
+export type ApiSyncDevicesResponse = {
+  devices: SyncDevice[]
+}
+
+export type ApiSyncDeviceScopesResponse = {
+  device: SyncDevice
+}
+
+export type ApiSyncRevokeResponse = {
+  revoked: string
+}
 
 export type AiDraftScope = 'question' | 'selected' | 'page'

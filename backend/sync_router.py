@@ -12,11 +12,13 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 try:
     from .api_models import (
+        SyncDeviceScopesUpdate,
         SyncManifestRequest,
         SyncPairRequest,
         SyncPullRequest,
@@ -29,6 +31,7 @@ try:
     from . import sync_auth, sync_package, sync_service
 except ImportError:  # pragma: no cover - script execution
     from api_models import (
+        SyncDeviceScopesUpdate,
         SyncManifestRequest,
         SyncPairRequest,
         SyncPullRequest,
@@ -57,6 +60,7 @@ def create_sync_router(
     is_loopback: Callable[[Request], bool] = default_loopback_check,
     export_root: Path | None = None,
     content_root: Path | None = None,
+    advertised_base_url: str | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/sync/v1", tags=["sync"])
 
@@ -75,6 +79,30 @@ def create_sync_router(
 
         return dependency
 
+    def credential_from_request(request: Request) -> str:
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            return authorization[len("Bearer "):].strip()
+        return ""
+
+    def require_credential(request: Request) -> dict:
+        credential = credential_from_request(request)
+        with get_conn() as conn:
+            sync_auth.ensure_sync_auth_schema(conn)
+            device = sync_auth.verify_device_credential(conn, credential)
+        if device is None:
+            raise HTTPException(status_code=401, detail="Invalid or missing sync credential")
+        return device
+
+    def require_device_management(request: Request) -> sqlite3.Row | None:
+        if is_loopback(request):
+            return None
+        return require_scope(sync_auth.SCOPE_READ)(request)
+
+    def require_desktop_management(request: Request) -> None:
+        if not is_loopback(request):
+            raise HTTPException(status_code=403, detail="Device permissions can only be managed from the desktop")
+
     @router.get("/health")
     def health() -> dict:
         with get_conn() as conn:
@@ -83,6 +111,7 @@ def create_sync_router(
                 "protocolVersion": sync_auth.SYNC_PROTOCOL_VERSION,
                 "serverId": sync_auth.server_id(conn),
                 "pairedDevices": sync_auth.paired_device_count(conn),
+                "advertisedBaseUrl": advertised_base_url,
             }
 
     @router.post("/pairing-tokens")
@@ -93,11 +122,15 @@ def create_sync_router(
             sync_auth.ensure_sync_auth_schema(conn)
             token, expires_at = sync_auth.create_pairing_token(conn)
             server = sync_auth.server_id(conn)
-        base_url = str(request.base_url).rstrip("/")
+        base_url = advertised_base_url or str(request.base_url).rstrip("/")
+        pairing_payload = "csos-sync://pair?" + urlencode(
+            {"endpoint": base_url, "token": token, "server": server}
+        )
         return {
             "token": token,
             "expiresAt": expires_at,
-            "pairingPayload": f"csos-sync://pair?endpoint={base_url}&token={token}&server={server}",
+            "endpoint": base_url,
+            "pairingPayload": pairing_payload,
         }
 
     @router.post("/pair")
@@ -115,10 +148,32 @@ def create_sync_router(
             }
 
     @router.get("/devices")
-    def devices(device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_READ))) -> dict:
+    def devices(device=Depends(require_device_management)) -> dict:
         with get_conn() as conn:
             sync_auth.ensure_sync_auth_schema(conn)
             return {"devices": sync_auth.list_devices(conn)}
+
+    @router.get("/device")
+    def current_device(device=Depends(require_credential)) -> dict:
+        return {
+            "id": device["id"],
+            "name": device["name"],
+            "scopes": device["scopes"],
+            "revokedAt": device["revokedAt"],
+        }
+
+    @router.put("/devices/{device_id}/scopes")
+    def update_device_scopes(
+        device_id: str,
+        payload: SyncDeviceScopesUpdate,
+        desktop=Depends(require_desktop_management),
+    ) -> dict:
+        with get_conn() as conn:
+            sync_auth.ensure_sync_auth_schema(conn)
+            device = sync_auth.update_device_scopes(conn, device_id, payload.scopes)
+        if device is None:
+            raise HTTPException(status_code=404, detail="Device not found or already revoked")
+        return {"device": device}
 
     @router.post("/push/attempts")
     def push_attempts(
@@ -247,7 +302,7 @@ def create_sync_router(
     @router.post("/devices/{device_id}/revoke")
     def revoke(
         device_id: str,
-        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_READ)),
+        device=Depends(require_device_management),
     ) -> dict:
         with get_conn() as conn:
             sync_auth.ensure_sync_auth_schema(conn)

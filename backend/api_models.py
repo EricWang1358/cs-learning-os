@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ReaderQuestionCreate(BaseModel):
@@ -70,6 +70,18 @@ class QuizAttemptCreate(BaseModel):
 class SyncPairRequest(BaseModel):
     token: str = Field(min_length=1)
     device_name: str = Field(default="android-device", max_length=120)
+
+
+class SyncDeviceScopesUpdate(BaseModel):
+    scopes: list[Literal["sync:read", "sync:push"]] = Field(min_length=1, max_length=2)
+
+    @field_validator("scopes")
+    @classmethod
+    def scopes_must_be_unique(cls, value: list[str]) -> list[str]:
+        ordered = [scope for scope in ("sync:read", "sync:push") if scope in value]
+        if len(ordered) != len(value):
+            raise ValueError("scopes must be unique")
+        return ordered
 
 
 class SyncManifestRequest(BaseModel):

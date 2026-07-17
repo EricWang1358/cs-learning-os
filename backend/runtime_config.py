@@ -29,8 +29,18 @@ def sync_bind_host() -> str:
     return os.environ.get("CS_LEARNING_HOST", "127.0.0.1").strip() or "127.0.0.1"
 
 
+def sync_advertised_base_url() -> str | None:
+    """Optional phone-reachable base URL advertised in pairing payloads.
+
+    This is intentionally separate from the request Host header: the desktop
+    UI talks to the API through loopback even when the API also listens on a
+    LAN interface.
+    """
+    value = os.environ.get("CS_LEARNING_SYNC_PUBLIC_URL", "").strip().rstrip("/")
+    return value or None
+
+
 def default_data_root(root: Path) -> Path:
     if os.environ.get("CS_LEARNING_DATA_ROOT"):
         return Path(os.environ["CS_LEARNING_DATA_ROOT"]).expanduser().resolve()
     return (Path.home() / "CSLearningOS").resolve()
-

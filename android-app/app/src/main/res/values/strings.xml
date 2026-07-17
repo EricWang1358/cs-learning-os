@@ -434,7 +434,13 @@
     <string name="sync_value_unpaired">Not paired</string>
     <string name="sync_value_paired">Paired</string>
     <string name="sync_pair_title">Pair desktop</string>
-    <string name="sync_pair_hint">Create a pairing token on the desktop (POST /api/sync/v1/pairing-tokens), then paste the endpoint and token or the full csos-sync:// payload.</string>
+    <string name="sync_pair_hint">Open CS Learning OS on your computer, go to Sync, and click “Generate pairing token”. Then paste the endpoint and token below.</string>
+    <string name="sync_tutorial_title">How to pair</string>
+    <string name="sync_tutorial_step_1">1. Keep this app open and make sure your phone is on the same Wi-Fi network as your computer (or reachable via Tailscale).</string>
+    <string name="sync_tutorial_step_2">2. On your computer, open CS Learning OS and click “Sync” in the left sidebar.</string>
+    <string name="sync_tutorial_step_3">3. Click “Generate pairing token”. The token is valid for 10 minutes and can only be created on the desktop itself.</string>
+    <string name="sync_tutorial_step_4">4. Copy the Endpoint and Token shown on the desktop, then paste them into the fields below and tap Pair.</string>
+    <string name="sync_tutorial_tip">Tip: start the desktop with .\scripts\dev.ps1 -EnableLanSync. The desktop will display a Wi-Fi address such as http://192.168.1.x:8001; do not use 127.0.0.1 on your phone.</string>
     <string name="sync_endpoint_label">Desktop endpoint</string>
     <string name="sync_token_label">Pairing token</string>
     <string name="sync_pair_action">Pair</string>
@@ -443,6 +449,13 @@
     <string name="sync_unpair_action">Unpair</string>
     <string name="sync_status_last_sync">Last sync: %1$s</string>
     <string name="sync_status_never">Never</string>
+    <string name="sync_readiness_unpaired">Not paired</string>
+    <string name="sync_readiness_pending">Waiting for server policy</string>
+    <string name="sync_readiness_ready">Sync ready</string>
+    <string name="sync_readiness_read_only">Read-only sync</string>
+    <string name="sync_readiness_upload_only">Upload-only sync</string>
+    <string name="sync_server_policy_line">Server policy: %1$s</string>
+    <string name="sync_server_policy_pending">not confirmed</string>
     <string name="sync_pull_now">Pull now</string>
     <string name="sync_upload_now">Upload learning events</string>
     <string name="sync_pull_success">Pull complete: %1$d updates, %2$d conflicts.</string>
@@ -451,6 +464,7 @@
     <string name="sync_scope_due">Include due reviews</string>
     <string name="sync_error_unreachable">Cannot reach the desktop. Check the endpoint and network.</string>
     <string name="sync_error_pairing_failed">Pairing failed: the token is invalid or expired.</string>
+    <string name="sync_error_permission_changed">The desktop changed this device sync permission. Check Sync on your computer.</string>
     <string name="sync_error_server">The desktop rejected the sync request.</string>
     <string name="sync_busy">Syncing…</string>
     <string name="sync_report_pull_line">Last pull: %1$d nodes, %2$d quizzes, %3$d conflicts</string>

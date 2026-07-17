@@ -630,6 +630,14 @@ class SyncRepositoryTest {
 
         override suspend fun health(): SyncHealth = SyncHealth(1, healthServerId, 1)
 
+        override suspend fun devicePolicy(): SyncDevicePolicy =
+            SyncDevicePolicy(
+                id = "device-test",
+                name = "test",
+                scopes = setOf("sync:read", "sync:push"),
+                revokedAt = null
+            )
+
         override suspend fun manifest(cursor: Long, serverId: String, scope: SyncScope): SyncManifest {
             manifestCursors += cursor
             return manifests.removeFirst()

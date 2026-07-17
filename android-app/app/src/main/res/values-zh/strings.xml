@@ -474,7 +474,13 @@
     <string name="sync_value_unpaired">未配对</string>
     <string name="sync_value_paired">已配对</string>
     <string name="sync_pair_title">配对桌面端</string>
-    <string name="sync_pair_hint">在桌面端生成配对令牌（POST /api/sync/v1/pairing-tokens），粘贴地址与令牌，或直接粘贴完整 csos-sync:// 配对串。</string>
+    <string name="sync_pair_hint">在电脑上打开 CS Learning OS，进入 Sync 页面，点击“生成配对令牌”，然后把地址和令牌粘贴到下方。</string>
+    <string name="sync_tutorial_title">配对步骤</string>
+    <string name="sync_tutorial_step_1">1. 保持本 App 开启，并确保手机与电脑在同一 Wi-Fi 网络（或通过 Tailscale 可达）。</string>
+    <string name="sync_tutorial_step_2">2. 在电脑上打开 CS Learning OS，点击左侧边栏的“同步”。</string>
+    <string name="sync_tutorial_step_3">3. 点击“生成配对令牌”。该令牌 10 分钟内有效，且只能在电脑本机生成。</string>
+    <string name="sync_tutorial_step_4">4. 复制桌面上显示的 Endpoint（地址）和 Token（令牌），粘贴到下方输入框，然后点击“配对”。</string>
+    <string name="sync_tutorial_tip">提示：请在电脑上使用 .\scripts\dev.ps1 -EnableLanSync 启动。桌面会显示类似 http://192.168.1.x:8001 的 Wi-Fi 地址；手机端不要使用 127.0.0.1。</string>
     <string name="sync_endpoint_label">桌面端地址</string>
     <string name="sync_token_label">配对令牌</string>
     <string name="sync_pair_action">配对</string>
@@ -483,6 +489,13 @@
     <string name="sync_unpair_action">解除配对</string>
     <string name="sync_status_last_sync">上次同步：%1$s</string>
     <string name="sync_status_never">从未</string>
+    <string name="sync_readiness_unpaired">未配对</string>
+    <string name="sync_readiness_pending">等待服务端策略确认</string>
+    <string name="sync_readiness_ready">同步已就绪</string>
+    <string name="sync_readiness_read_only">只读同步</string>
+    <string name="sync_readiness_upload_only">仅上传同步</string>
+    <string name="sync_server_policy_line">服务端策略：%1$s</string>
+    <string name="sync_server_policy_pending">尚未确认</string>
     <string name="sync_pull_now">立即拉取</string>
     <string name="sync_upload_now">上传学习事件</string>
     <string name="sync_pull_success">拉取完成：%1$d 项更新，%2$d 个冲突。</string>
@@ -491,6 +504,7 @@
     <string name="sync_scope_due">包含到期复习</string>
     <string name="sync_error_unreachable">无法连接桌面端，请检查地址与网络。</string>
     <string name="sync_error_pairing_failed">配对失败：令牌无效或已过期。</string>
+    <string name="sync_error_permission_changed">桌面端已调整这台设备的同步权限，请在电脑端 Sync 中检查。</string>
     <string name="sync_error_server">桌面端拒绝了同步请求。</string>
     <string name="sync_busy">同步中…</string>
     <string name="sync_report_pull_line">上次拉取：%1$d 节点 / %2$d 复习卡，%3$d 冲突</string>

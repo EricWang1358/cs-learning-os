@@ -18,22 +18,25 @@ export function routeFromLocation(pathname: string, search: string) {
   const isBite = pathname === '/bite'
   const isGraph = pathname === '/graph' || pathname.startsWith('/graph/')
   const isHealth = pathname === '/health'
+  const isSync = pathname === '/sync'
 
   const query = params.get('q') || ''
   return {
     viewMode: isGraph
       ? 'graph' as ViewMode
-      : isHealth
-        ? 'health' as ViewMode
-        : isBite
-          ? 'bite' as ViewMode
-          : isReview
-            ? 'review' as ViewMode
-            : isQueue
-              ? 'question-queue' as ViewMode
-              : quizMatch || isQuizList
-                ? 'quizzes' as ViewMode
-                : 'nodes' as ViewMode,
+      : isSync
+        ? 'sync' as ViewMode
+        : isHealth
+          ? 'health' as ViewMode
+          : isBite
+            ? 'bite' as ViewMode
+            : isReview
+              ? 'review' as ViewMode
+              : isQueue
+                ? 'question-queue' as ViewMode
+                : quizMatch || isQuizList
+                  ? 'quizzes' as ViewMode
+                  : 'nodes' as ViewMode,
     selectedSlug: nodeMatch ? decodeURIComponent(nodeMatch[1]) : '',
     selectedQuizId: quizMatch ? decodeURIComponent(quizMatch[1]) : '',
     activeArea: params.get('area') || 'all',

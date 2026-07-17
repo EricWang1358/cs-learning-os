@@ -180,4 +180,12 @@ def test_development_launcher_keeps_the_api_bound_to_loopback() -> None:
 
     assert '$ApiHost = "127.0.0.1"' in launcher
     assert '"--host", "$ApiHost"' in launcher
-    assert "0.0.0.0" not in launcher
+
+
+def test_lan_sync_launcher_exposes_only_the_dedicated_sync_server() -> None:
+    launcher = (ROOT / "scripts" / "dev.ps1").read_text(encoding="utf-8")
+
+    assert "[switch]$EnableLanSync" in launcher
+    assert "[int]$SyncPort = 8001" in launcher
+    assert '"backend.sync_api:app"' in launcher
+    assert '$env:CS_LEARNING_SYNC_PUBLIC_URL = "http://${LanSyncAddress}:$SyncPort"' in launcher

@@ -222,6 +222,8 @@ class LearningViewModel private constructor(
                     lastSyncAt = snapshot?.lastSyncAt ?: 0L,
                     scopeAreas = snapshot?.scopeAreas ?: emptySet(),
                     includeDueReviews = snapshot?.includeDueReviews ?: false,
+                    serverScopes = snapshot?.serverScopes ?: emptySet(),
+                    serverPolicyConfirmed = snapshot?.isServerConfirmed ?: false,
                     busy = busy ?: false,
                     error = error?.let { resId -> localizedAppContext().getString(resId) }
                 )
@@ -231,7 +233,13 @@ class LearningViewModel private constructor(
 
     private fun syncErrorResId(error: Throwable): Int = when (error) {
         is com.cslearningos.mobile.feature.sync.SyncException ->
-            if (error.statusCode == 401) R.string.sync_error_pairing_failed else R.string.sync_error_server
+            if (error.statusCode == 401 && error.message?.contains("not_allowed") == true) {
+                R.string.sync_error_permission_changed
+            } else if (error.statusCode == 401) {
+                R.string.sync_error_pairing_failed
+            } else {
+                R.string.sync_error_server
+            }
         else -> R.string.sync_error_unreachable
     }
 

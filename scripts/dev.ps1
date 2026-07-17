@@ -1,15 +1,113 @@
 param(
     [int]$ApiPort = 8000,
+    [int]$SyncPort = 8001,
     [int]$FrontendPort = 5173,
     [string]$ContentDir = "",
     [string]$DbPath = "",
     [string]$ApiHost = "127.0.0.1",
+    [switch]$EnableLanSync,
     [switch]$NoIngest,
     [switch]$NoBrowser,
     [switch]$Detached
 )
 
+# Interactive launcher: when no arguments are supplied, offer a 2-second
+# choice between daily mode (LAN sync enabled) and a debug configuration menu.
+if ($PSBoundParameters.Count -eq 0) {
+    Write-Host ""
+    Write-Host "=============================================="
+    Write-Host "  CS Learning OS Launcher"
+    Write-Host "=============================================="
+    Write-Host "  Daily mode: LAN sync enabled, browser opened"
+    Write-Host "  Debug mode: choose host, ports, ingest, detached"
+    Write-Host "=============================================="
+    Write-Host ""
+    Write-Host "Press D for debug menu, or wait 2 seconds for daily mode..."
+
+    $pressedD = $false
+    $timeout = [DateTime]::Now.AddSeconds(2)
+    while ([DateTime]::Now -lt $timeout) {
+        try {
+            if ([System.Console]::KeyAvailable) {
+                $key = [System.Console]::ReadKey($true).KeyChar
+                if ($key -eq 'D' -or $key -eq 'd') {
+                    $pressedD = $true
+                }
+                break
+            }
+        }
+        catch {
+            # Non-interactive host (e.g. background task): fall through to daily mode.
+            break
+        }
+        Start-Sleep -Milliseconds 100
+    }
+
+    if ($pressedD) {
+        Write-Host ""
+        Write-Host "--- Debug menu ---"
+
+        $hostInput = Read-Host "API host [127.0.0.1]"
+        if (-not [string]::IsNullOrWhiteSpace($hostInput)) { $ApiHost = $hostInput }
+
+        $lanInput = Read-Host "Enable LAN sync for phone pairing? (Y/n)"
+        if (-not [string]::IsNullOrWhiteSpace($lanInput) -and $lanInput.Trim().ToLower() -eq 'n') {
+            $EnableLanSync = $false
+        } else {
+            $EnableLanSync = $true
+        }
+
+        $portInput = Read-Host "API port [8000]"
+        if (-not [string]::IsNullOrWhiteSpace($portInput)) { $ApiPort = [int]$portInput }
+
+        $syncPortInput = Read-Host "Sync LAN port [8001]"
+        if (-not [string]::IsNullOrWhiteSpace($syncPortInput)) { $SyncPort = [int]$syncPortInput }
+
+        $frontendPortInput = Read-Host "Frontend port [5173]"
+        if (-not [string]::IsNullOrWhiteSpace($frontendPortInput)) { $FrontendPort = [int]$frontendPortInput }
+
+        $ingestInput = Read-Host "Skip initial ingest? (y/N)"
+        if (-not [string]::IsNullOrWhiteSpace($ingestInput) -and $ingestInput.Trim().ToLower() -eq 'y') { $NoIngest = $true }
+
+        $browserInput = Read-Host "Skip opening browser? (y/N)"
+        if (-not [string]::IsNullOrWhiteSpace($browserInput) -and $browserInput.Trim().ToLower() -eq 'y') { $NoBrowser = $true }
+
+        $detachedInput = Read-Host "Detached mode? (y/N)"
+        if (-not [string]::IsNullOrWhiteSpace($detachedInput) -and $detachedInput.Trim().ToLower() -eq 'y') { $Detached = $true }
+
+        Write-Host ""
+        Write-Host "Starting with debug options..."
+    } else {
+        Write-Host ""
+        Write-Host "Starting daily mode with LAN sync enabled..."
+        $EnableLanSync = $true
+    }
+}
+
 $ErrorActionPreference = "Stop"
+
+function Get-PreferredLanAddress {
+    $route = Get-NetRoute -AddressFamily IPv4 -DestinationPrefix "0.0.0.0/0" |
+        Where-Object { $_.NextHop -ne "0.0.0.0" } |
+        Sort-Object -Property RouteMetric, InterfaceMetric |
+        Select-Object -First 1
+    if ($null -eq $route) {
+        throw "Could not identify the active IPv4 network route for LAN sync. Use -ApiHost with your Wi-Fi IPv4 address."
+    }
+    $address = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.InterfaceIndex |
+        Where-Object { $_.IPAddress -notmatch '^(127\\.|169\\.254\\.)' } |
+        Select-Object -First 1
+    if ($null -eq $address) {
+        throw "Could not identify a LAN IPv4 address for the active network route."
+    }
+    return $address.IPAddress
+}
+
+$LanSyncAddress = ""
+if ($EnableLanSync) {
+    $LanSyncAddress = Get-PreferredLanAddress
+    if ($SyncPort -eq $ApiPort) { throw "SyncPort must differ from ApiPort." }
+}
 
 $Root = Split-Path -Parent $PSScriptRoot
 $AppDir = Join-Path $Root "app"
@@ -33,6 +131,8 @@ $GeneratedRoot = if ($env:CS_LEARNING_GENERATED_ROOT) { $env:CS_LEARNING_GENERAT
 $GeneratedDir = Join-Path $GeneratedRoot "dev"
 $ApiOutLog = Join-Path $GeneratedDir "api-$ApiPort.out.log"
 $ApiErrLog = Join-Path $GeneratedDir "api-$ApiPort.err.log"
+$SyncOutLog = Join-Path $GeneratedDir "sync-$SyncPort.out.log"
+$SyncErrLog = Join-Path $GeneratedDir "sync-$SyncPort.err.log"
 $FrontendOutLog = Join-Path $GeneratedDir "frontend-$FrontendPort.out.log"
 $FrontendErrLog = Join-Path $GeneratedDir "frontend-$FrontendPort.err.log"
 
@@ -92,6 +192,7 @@ New-Item -ItemType Directory -Force -Path $GeneratedDir | Out-Null
 
 Stop-PortOwner -Port $ApiPort
 Stop-PortOwner -Port $FrontendPort
+if ($EnableLanSync) { Stop-PortOwner -Port $SyncPort }
 
 if (-not $NoIngest) {
     Write-Host "Rebuilding SQLite index..."
@@ -102,9 +203,13 @@ Write-Host "Starting API on http://${ApiHost}:$ApiPort"
 $PreviousContentEnv = $env:CS_LEARNING_CONTENT
 $PreviousDbEnv = $env:CS_LEARNING_DB
 $PreviousHostEnv = $env:CS_LEARNING_HOST
+$PreviousSyncPublicUrlEnv = $env:CS_LEARNING_SYNC_PUBLIC_URL
 $env:CS_LEARNING_CONTENT = $ResolvedContentDir
 $env:CS_LEARNING_DB = $ResolvedDbPath
 $env:CS_LEARNING_HOST = $ApiHost
+if ($EnableLanSync) {
+    $env:CS_LEARNING_SYNC_PUBLIC_URL = "http://${LanSyncAddress}:$SyncPort"
+}
 $api = Start-Process `
     -WindowStyle Hidden `
     -FilePath $Python `
@@ -116,6 +221,25 @@ $api = Start-Process `
 $env:CS_LEARNING_CONTENT = $PreviousContentEnv
 $env:CS_LEARNING_DB = $PreviousDbEnv
 $env:CS_LEARNING_HOST = $PreviousHostEnv
+$env:CS_LEARNING_SYNC_PUBLIC_URL = $PreviousSyncPublicUrlEnv
+
+$syncApi = $null
+if ($EnableLanSync) {
+    $env:CS_LEARNING_CONTENT = $ResolvedContentDir
+    $env:CS_LEARNING_DB = $ResolvedDbPath
+    $env:CS_LEARNING_SYNC_PUBLIC_URL = "http://${LanSyncAddress}:$SyncPort"
+    $syncApi = Start-Process `
+        -WindowStyle Hidden `
+        -FilePath $Python `
+        -ArgumentList @("-m", "uvicorn", "backend.sync_api:app", "--host", "0.0.0.0", "--port", "$SyncPort") `
+        -WorkingDirectory $Root `
+        -RedirectStandardOutput $SyncOutLog `
+        -RedirectStandardError $SyncErrLog `
+        -PassThru
+    $env:CS_LEARNING_CONTENT = $PreviousContentEnv
+    $env:CS_LEARNING_DB = $PreviousDbEnv
+    $env:CS_LEARNING_SYNC_PUBLIC_URL = $PreviousSyncPublicUrlEnv
+}
 
 Start-Sleep -Seconds 2
 
@@ -141,9 +265,10 @@ Write-Host "  UI logs:  $FrontendOutLog"
 Write-Host "            $FrontendErrLog"
 Write-Host "  API PID:  $($api.Id)"
 Write-Host "  UI PID:   $($frontend.Id)"
-if ($ApiHost -ne "127.0.0.1" -and $ApiHost -ne "localhost" -and $ApiHost -ne "::1") {
+if ($EnableLanSync) {
     Write-Host ""
-    Write-Warning "API is exposed on $ApiHost. Sync endpoints require paired-device credentials; pairing tokens can only be created from this machine."
+    Write-Host "  Sync LAN: http://${LanSyncAddress}:$SyncPort"
+    Write-Host "  Sync PID: $($syncApi.Id)"
 }
 
 if (-not $NoBrowser) {
@@ -167,6 +292,7 @@ try {
         Start-Sleep -Seconds 1
         $api.Refresh()
         $frontend.Refresh()
+        if ($null -ne $syncApi) { $syncApi.Refresh() }
 
         if ($api.HasExited) {
             $exitReason = "API process exited with code $($api.ExitCode). Check $ApiErrLog"
@@ -176,10 +302,15 @@ try {
             $exitReason = "Frontend process exited with code $($frontend.ExitCode). Check $FrontendErrLog"
             break
         }
+        if ($null -ne $syncApi -and $syncApi.HasExited) {
+            $exitReason = "Sync gateway process exited with code $($syncApi.ExitCode). Check $SyncErrLog"
+            break
+        }
     }
 }
 finally {
     Stop-StartedProcess -Process $frontend -Name "frontend"
+    Stop-StartedProcess -Process $syncApi -Name "sync gateway"
     Stop-StartedProcess -Process $api -Name "API"
 }
 

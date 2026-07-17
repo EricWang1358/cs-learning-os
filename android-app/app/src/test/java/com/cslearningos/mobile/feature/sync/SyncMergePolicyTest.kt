@@ -142,6 +142,27 @@ class SyncModelsTest {
         assertEquals(2L, record.revision)
         assertEquals("core", record.visibility)
     }
+
+    @Test
+    fun parsesDevicePolicyScopes() {
+        val policy = parseSyncDevicePolicy(
+            JSONObject(
+                """
+                {
+                  "id": "dev-1",
+                  "name": "Pixel",
+                  "scopes": ["sync:read", "sync:push"],
+                  "revokedAt": null
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals("dev-1", policy.id)
+        assertEquals("Pixel", policy.name)
+        assertEquals(setOf("sync:read", "sync:push"), policy.scopes)
+        assertNull(policy.revokedAt)
+    }
 }
 
 class DesktopQuizMarkdownTest {

@@ -80,6 +80,106 @@ def test_full_pairing_flow_and_device_listing(tmp_path: Path) -> None:
     assert health["pairedDevices"] == 1
 
 
+def test_desktop_loopback_can_list_devices_without_a_phone_credential(tmp_path: Path) -> None:
+    client = build_client(tmp_path / "knowledge.db")
+
+    response = client.get("/api/sync/v1/devices")
+
+    assert response.status_code == 200
+    assert response.json() == {"devices": []}
+
+
+def test_desktop_loopback_can_update_device_scopes(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    device = pair_device(build_client(db_path))
+    client = build_client(db_path)
+
+    response = client.put(
+        f"/api/sync/v1/devices/{device['deviceId']}/scopes",
+        json={"scopes": [sync_auth.SCOPE_READ]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["device"]["scopes"] == [sync_auth.SCOPE_READ]
+    listed = client.get("/api/sync/v1/devices").json()["devices"]
+    assert listed[0]["scopes"] == [sync_auth.SCOPE_READ]
+
+
+def test_lan_device_cannot_update_device_scopes(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    device = pair_device(build_client(db_path))
+    client = build_client(db_path, loopback=False)
+
+    response = client.put(
+        f"/api/sync/v1/devices/{device['deviceId']}/scopes",
+        headers={"Authorization": f"Bearer {device['credential']}"},
+        json={"scopes": [sync_auth.SCOPE_READ]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_current_device_policy_is_available_with_valid_credential(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    device = pair_device(build_client(db_path))
+    desktop = build_client(db_path)
+    desktop.put(
+        f"/api/sync/v1/devices/{device['deviceId']}/scopes",
+        json={"scopes": [sync_auth.SCOPE_PUSH]},
+    )
+    lan = build_client(db_path, loopback=False)
+
+    response = lan.get(
+        "/api/sync/v1/device",
+        headers={"Authorization": f"Bearer {device['credential']}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": device["deviceId"],
+        "name": "pixel-test",
+        "scopes": [sync_auth.SCOPE_PUSH],
+        "revokedAt": None,
+    }
+
+
+def test_invalid_device_scopes_are_rejected(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    device = pair_device(build_client(db_path))
+    client = build_client(db_path)
+
+    response = client.put(
+        f"/api/sync/v1/devices/{device['deviceId']}/scopes",
+        json={"scopes": ["sync:admin"]},
+    )
+
+    assert response.status_code == 422
+
+
+def test_pairing_token_uses_configured_lan_endpoint(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+
+    def get_conn():
+        conn = connect(db_path)
+        initialize(conn)
+        return conn
+
+    app = FastAPI()
+    app.include_router(
+        create_sync_router(
+            get_conn,
+            is_loopback=lambda request: True,
+            advertised_base_url="http://192.168.0.101:8000",
+        )
+    )
+    client = TestClient(app)
+
+    payload = client.post("/api/sync/v1/pairing-tokens").json()
+
+    assert payload["endpoint"] == "http://192.168.0.101:8000"
+    assert "endpoint=http%3A%2F%2F192.168.0.101%3A8000" in payload["pairingPayload"]
+
+
 def test_pairing_token_is_single_use(tmp_path: Path) -> None:
     client = build_client(tmp_path / "knowledge.db")
     token = client.post("/api/sync/v1/pairing-tokens").json()["token"]
@@ -106,7 +206,7 @@ def test_expired_pairing_token_is_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_token_and_bad_credential_are_rejected(tmp_path: Path) -> None:
-    client = build_client(tmp_path / "knowledge.db")
+    client = build_client(tmp_path / "knowledge.db", loopback=False)
     response = client.post("/api/sync/v1/pair", json={"token": "nonsense", "device_name": "ghost"})
     assert response.status_code == 401
     missing = client.get("/api/sync/v1/devices")
@@ -116,8 +216,9 @@ def test_unknown_token_and_bad_credential_are_rejected(tmp_path: Path) -> None:
 
 
 def test_revoked_device_credential_stops_working(tmp_path: Path) -> None:
-    client = build_client(tmp_path / "knowledge.db")
-    device = pair_device(client)
+    db_path = tmp_path / "knowledge.db"
+    device = pair_device(build_client(db_path))
+    client = build_client(db_path, loopback=False)
     headers = {"Authorization": f"Bearer {device['credential']}"}
 
     revoke = client.post(f"/api/sync/v1/devices/{device['deviceId']}/revoke", headers=headers)

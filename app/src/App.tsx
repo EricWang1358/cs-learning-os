@@ -4,6 +4,7 @@ import './App.css'
 import { DailyBitePanel } from './components/DailyBitePanel'
 import { DailyReviewPanel, type DailyReviewRating } from './components/DailyReviewPanel'
 import { HealthActionPanels } from './components/HealthActionPanels'
+import { SyncPanel } from './components/SyncPanel'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
@@ -48,6 +49,11 @@ import type {
   ApiSystemRepairResponse,
   ApiSystemRepairRunResponse,
   ApiSystemSchemaResponse,
+  ApiSyncDeviceScopesResponse,
+  ApiSyncDevicesResponse,
+  ApiSyncHealthResponse,
+  ApiSyncPairingTokenResponse,
+  ApiSyncRevokeResponse,
   ApiSystemMetricsResponse,
   ApiTracksResponse,
   AreaSummary,
@@ -511,6 +517,12 @@ function App() {
   const [isReviewRating, setIsReviewRating] = useState(false)
   const [healthActionNotice, setHealthActionNotice] = useState('')
   const [isRepairing, setIsRepairing] = useState(false)
+  const [syncHealth, setSyncHealth] = useState<ApiSyncHealthResponse | null>(null)
+  const [syncDevices, setSyncDevices] = useState<ApiSyncDevicesResponse['devices']>([])
+  const [syncToken, setSyncToken] = useState<ApiSyncPairingTokenResponse | null>(null)
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncTokenLoading, setSyncTokenLoading] = useState(false)
+  const [syncError, setSyncError] = useState('')
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
@@ -705,6 +717,19 @@ function App() {
             setSystemSchema(schemaData)
             setPackageExport(manifestData)
             setAiPreflight(preflightData)
+          })
+        } else if (viewMode === 'sync') {
+          const [healthData, devicesData] = await Promise.all([
+            fetchJson<ApiSyncHealthResponse>('/api/sync/v1/health'),
+            fetchJson<ApiSyncDevicesResponse>('/api/sync/v1/devices'),
+          ])
+
+          if (!isActive) return
+
+          startTransition(() => {
+            setSyncHealth(healthData)
+            setSyncDevices(devicesData.devices)
+            setSyncError('')
           })
         } else {
           const data = deferredQuery.trim()
@@ -1301,6 +1326,7 @@ function App() {
     if (viewMode === 'question-queue') return queueItems.length
     if (viewMode === 'graph') return graphPayload?.children.length ?? 0
     if (viewMode === 'health') return storagePartitions.length
+    if (viewMode === 'sync') return syncDevices.filter((device) => !device.revokedAt).length
     if (viewMode === 'review') return reviewQueue.length
     if (viewMode === 'bite') return 1
     if (viewMode === 'quizzes') return filteredQuizzes.length
@@ -1310,6 +1336,7 @@ function App() {
     if (viewMode === 'question-queue') return totalQueueItems
     if (viewMode === 'graph') return graphPayload?.pagination.total ?? 0
     if (viewMode === 'health') return storagePartitions.length
+    if (viewMode === 'sync') return syncDevices.length
     if (viewMode === 'review') return reviewQueue.length
     if (viewMode === 'bite') return 1
     if (viewMode === 'quizzes') return quizzes.length
@@ -2150,6 +2177,66 @@ function App() {
     }
   }
 
+  const refreshSyncData = async () => {
+    try {
+      setSyncLoading(true)
+      setSyncError('')
+      const [healthData, devicesData] = await Promise.all([
+        fetchJson<ApiSyncHealthResponse>('/api/sync/v1/health'),
+        fetchJson<ApiSyncDevicesResponse>('/api/sync/v1/devices'),
+      ])
+      setSyncHealth(healthData)
+      setSyncDevices(devicesData.devices)
+    } catch (syncLoadError) {
+      setSyncError(syncLoadError instanceof Error ? syncLoadError.message : 'Unable to load sync status')
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
+  const generateSyncPairingToken = async () => {
+    try {
+      setSyncTokenLoading(true)
+      setSyncError('')
+      const data = await postJson<ApiSyncPairingTokenResponse>('/api/sync/v1/pairing-tokens', {})
+      setSyncToken(data)
+      await refreshSyncData()
+    } catch (tokenError) {
+      setSyncError(tokenError instanceof Error ? tokenError.message : 'Unable to generate pairing token')
+    } finally {
+      setSyncTokenLoading(false)
+    }
+  }
+
+  const revokeSyncDevice = async (deviceId: string) => {
+    if (!window.confirm('Revoke this device? It will no longer be able to sync.')) return
+    try {
+      setSyncLoading(true)
+      await postJson<ApiSyncRevokeResponse>(`/api/sync/v1/devices/${encodeURIComponent(deviceId)}/revoke`, {})
+      await refreshSyncData()
+    } catch (revokeError) {
+      setSyncError(revokeError instanceof Error ? revokeError.message : 'Unable to revoke device')
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
+  const updateSyncDeviceScopes = async (deviceId: string, scopes: string[]) => {
+    try {
+      setSyncLoading(true)
+      setSyncError('')
+      await putJson<ApiSyncDeviceScopesResponse>(
+        `/api/sync/v1/devices/${encodeURIComponent(deviceId)}/scopes`,
+        { scopes },
+      )
+      await refreshSyncData()
+    } catch (scopeError) {
+      setSyncError(scopeError instanceof Error ? scopeError.message : 'Unable to update device permissions')
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
   const exportPackageManifest = async () => {
     try {
       const data = await fetchJson<ApiPackageExportResponse>('/api/package/export?write=true')
@@ -2347,6 +2434,16 @@ function App() {
           >
             System health
           </button>
+          <button
+            type="button"
+            className={viewMode === 'sync' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigate('/sync')
+            }}
+          >
+            Sync
+          </button>
         </section>
       </aside>
 
@@ -2377,6 +2474,12 @@ function App() {
                 ? 'Loading health metrics...'
                 : `${visibleCount} size partitions, sorted by local footprint.`}
             </p>
+          </header>
+        ) : viewMode === 'sync' ? (
+          <header className="search-header cockpit-header">
+            <p className="eyebrow">Desktop ↔ mobile</p>
+            <h2>Sync</h2>
+            <p>Pair phones, manage trusted devices, and monitor sync status.</p>
           </header>
         ) : viewMode === 'bite' ? (
           <header className="search-header cockpit-header">
@@ -2899,6 +3002,20 @@ function App() {
             onRejectAiJob={rejectAiJob}
             onRetryAiJob={retryAiJob}
             onReviewAiJob={reviewAiJob}
+          />
+        ) : viewMode === 'sync' ? (
+          <SyncPanel
+            health={syncHealth}
+            devices={syncDevices}
+            token={syncToken}
+            isLoading={syncLoading}
+            isGeneratingToken={syncTokenLoading}
+            error={syncError}
+            onGenerateToken={generateSyncPairingToken}
+            onRevoke={revokeSyncDevice}
+            onUpdateScopes={updateSyncDeviceScopes}
+            onRefresh={refreshSyncData}
+            serverBaseUrl={syncToken?.endpoint || syncHealth?.advertisedBaseUrl || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '')}
           />
         ) : viewMode === 'health' ? (
           <div className="health-detail">

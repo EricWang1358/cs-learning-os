@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.ui
 
 import androidx.test.core.app.ApplicationProvider
+import com.cslearningos.mobile.R
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningRepository
 import com.cslearningos.mobile.feature.sync.SyncGateway
@@ -119,9 +120,44 @@ class LearningViewModelSyncTest {
         assertTrue(vm.state.value.sync.includeDueReviews)
     }
 
+    @Test
+    fun serverReadOnlyPolicyMarksSyncReadOnly() = runTest {
+        val gateway = FakeSyncGateway(
+            paired = true,
+            serverScopes = setOf("sync:read")
+        )
+        val vm = viewModel(gateway)
+
+        val sync = vm.state.value.sync
+
+        assertTrue(sync.serverPolicyConfirmed)
+        assertEquals(setOf("sync:read"), sync.serverScopes)
+        assertEquals(SyncReadiness.ReadOnly, sync.readiness)
+    }
+
+    @Test
+    fun serverPermissionDenialShowsPolicyError() = runTest {
+        val gateway = FakeSyncGateway(
+            paired = true,
+            failOnPushWithPermission = true
+        )
+        val vm = viewModel(gateway)
+
+        vm.uploadSyncNow()
+        advanceUntilIdle()
+
+        assertEquals(
+            ApplicationProvider.getApplicationContext<android.app.Application>()
+                .getString(R.string.sync_error_permission_changed),
+            vm.state.value.sync.error
+        )
+    }
+
     private class FakeSyncGateway(
         paired: Boolean = false,
-        private val failOnPair: Boolean = false
+        private val failOnPair: Boolean = false,
+        private val failOnPushWithPermission: Boolean = false,
+        serverScopes: Set<String> = if (paired) setOf("sync:read", "sync:push") else emptySet()
     ) : SyncGateway {
         var snapshot = SyncStatusSnapshot(
             isPaired = paired,
@@ -129,7 +165,9 @@ class LearningViewModelSyncTest {
             serverId = if (paired) "srv" else "",
             lastSyncAt = 0L,
             scopeAreas = emptySet(),
-            includeDueReviews = false
+            includeDueReviews = false,
+            serverScopes = serverScopes,
+            isServerConfirmed = serverScopes.isNotEmpty()
         )
         var lastPairEndpoint: String? = null
         var pullCalled = false
@@ -154,8 +192,12 @@ class LearningViewModelSyncTest {
             return SyncReport(pulledNodes = 2, pulledQuizzes = 1, cursor = 9, serverId = "srv")
         }
 
-        override suspend fun push(): SyncPushReport =
-            SyncPushReport(uploadedAttempts = 2)
+        override suspend fun push(): SyncPushReport {
+            if (failOnPushWithPermission) {
+                throw com.cslearningos.mobile.feature.sync.SyncException(401, "sync_push_not_allowed")
+            }
+            return SyncPushReport(uploadedAttempts = 2)
+        }
 
         override fun updateScope(areas: Set<String>, includeDueReviews: Boolean) {
             snapshot = snapshot.copy(scopeAreas = areas, includeDueReviews = includeDueReviews)

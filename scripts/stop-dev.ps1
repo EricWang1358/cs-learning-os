@@ -1,11 +1,11 @@
 param(
-    [int[]]$Ports = @(8000, 5173)
+    [int[]]$Ports = @(8000, 8001, 5173)
 )
 
 $ErrorActionPreference = "Stop"
 
 foreach ($port in $Ports) {
-    $lines = netstat -ano | Select-String "127\.0\.0\.1:$port\s"
+    $lines = netstat -ano | Select-String ":$port\s"
     $pids = @()
 
     foreach ($line in $lines) {

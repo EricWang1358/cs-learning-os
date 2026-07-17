@@ -19,6 +19,7 @@ SYNC_PROTOCOL_VERSION = 1
 SCOPE_READ = "sync:read"
 SCOPE_PUSH = "sync:push"
 DEFAULT_SCOPES = (SCOPE_READ, SCOPE_PUSH)
+VALID_SCOPES = frozenset(DEFAULT_SCOPES)
 PAIRING_TOKEN_TTL_MINUTES = 10
 
 SCHEMA = """
@@ -152,6 +153,38 @@ def verify_credential(
     return row
 
 
+def device_from_row(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "scopes": row["scopes"].split(),
+        "createdAt": row["created_at"],
+        "lastSeenAt": row["last_seen_at"],
+        "revokedAt": row["revoked_at"],
+    }
+
+
+def verify_device_credential(conn: sqlite3.Connection, credential: str) -> dict | None:
+    if not credential:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, name, scopes, created_at, last_seen_at, revoked_at
+        FROM sync_devices
+        WHERE credential_hash = ? AND revoked_at IS NULL
+        """,
+        (hash_secret(credential),),
+    ).fetchone()
+    if not row:
+        return None
+    conn.execute(
+        "UPDATE sync_devices SET last_seen_at = ? WHERE id = ?",
+        (iso(utc_now()), row["id"]),
+    )
+    conn.commit()
+    return device_from_row(row)
+
+
 def list_devices(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
@@ -161,16 +194,35 @@ def list_devices(conn: sqlite3.Connection) -> list[dict]:
         """
     ).fetchall()
     return [
-        {
-            "id": row["id"],
-            "name": row["name"],
-            "scopes": row["scopes"].split(),
-            "createdAt": row["created_at"],
-            "lastSeenAt": row["last_seen_at"],
-            "revokedAt": row["revoked_at"],
-        }
+        device_from_row(row)
         for row in rows
     ]
+
+
+def update_device_scopes(conn: sqlite3.Connection, device_id: str, scopes: list[str]) -> dict | None:
+    ordered = [scope for scope in DEFAULT_SCOPES if scope in set(scopes)]
+    if len(ordered) != len(scopes):
+        raise ValueError("unknown or duplicate sync scope")
+    cursor = conn.execute(
+        """
+        UPDATE sync_devices
+        SET scopes = ?
+        WHERE id = ? AND revoked_at IS NULL
+        """,
+        (" ".join(ordered), device_id),
+    )
+    conn.commit()
+    if cursor.rowcount == 0:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, name, scopes, created_at, last_seen_at, revoked_at
+        FROM sync_devices
+        WHERE id = ?
+        """,
+        (device_id,),
+    ).fetchone()
+    return device_from_row(row) if row else None
 
 
 def revoke_device(conn: sqlite3.Connection, device_id: str) -> bool:

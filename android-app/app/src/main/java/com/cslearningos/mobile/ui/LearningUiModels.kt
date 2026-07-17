@@ -53,6 +53,14 @@ data class PendingNodeSave(
     val fingerprint: String
 )
 
+enum class SyncReadiness {
+    Unpaired,
+    PendingServerPolicy,
+    Ready,
+    ReadOnly,
+    UploadOnly
+}
+
 data class SyncUiState(
     val isPaired: Boolean = false,
     val endpoint: String = "",
@@ -60,11 +68,23 @@ data class SyncUiState(
     val lastSyncAt: Long = 0,
     val scopeAreas: Set<String> = emptySet(),
     val includeDueReviews: Boolean = false,
+    val serverScopes: Set<String> = emptySet(),
+    val serverPolicyConfirmed: Boolean = false,
     val lastPullReport: SyncReport? = null,
     val lastPushReport: SyncPushReport? = null,
     val busy: Boolean = false,
     val error: String? = null
-)
+) {
+    val readiness: SyncReadiness
+        get() = when {
+            !isPaired -> SyncReadiness.Unpaired
+            !serverPolicyConfirmed -> SyncReadiness.PendingServerPolicy
+            "sync:read" in serverScopes && "sync:push" in serverScopes -> SyncReadiness.Ready
+            "sync:read" in serverScopes -> SyncReadiness.ReadOnly
+            "sync:push" in serverScopes -> SyncReadiness.UploadOnly
+            else -> SyncReadiness.PendingServerPolicy
+        }
+}
 
 data class PackageImportUiState(
     val nodeCount: Int,

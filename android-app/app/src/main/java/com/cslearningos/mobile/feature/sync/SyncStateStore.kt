@@ -50,6 +50,10 @@ class SyncStateStore(context: Context) {
         get() = prefs.getStringSet(KEY_SCOPE_AREAS, emptySet()).orEmpty()
         set(value) = prefs.edit().putStringSet(KEY_SCOPE_AREAS, value).apply()
 
+    var serverScopes: Set<String>
+        get() = prefs.getStringSet(KEY_SERVER_SCOPES, emptySet()).orEmpty()
+        set(value) = prefs.edit().putStringSet(KEY_SERVER_SCOPES, value).apply()
+
     var includeDueReviews: Boolean
         get() = prefs.getBoolean(KEY_INCLUDE_DUE, false)
         set(value) = prefs.edit().putBoolean(KEY_INCLUDE_DUE, value).apply()
@@ -67,6 +71,7 @@ class SyncStateStore(context: Context) {
             .remove(KEY_LAST_ATTEMPT_UPLOAD_AT)
             .remove(KEY_DEVICE_ID)
             .remove(KEY_SCOPE_AREAS)
+            .remove(KEY_SERVER_SCOPES)
             .remove(KEY_INCLUDE_DUE)
             .apply()
     }
@@ -82,6 +87,7 @@ class SyncStateStore(context: Context) {
         const val KEY_LAST_ATTEMPT_UPLOAD_AT = "last_attempt_upload_at"
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_SCOPE_AREAS = "scope_areas"
+        const val KEY_SERVER_SCOPES = "server_scopes"
         const val KEY_INCLUDE_DUE = "include_due_reviews"
     }
 }
