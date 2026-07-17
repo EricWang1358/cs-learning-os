@@ -19,6 +19,7 @@ interface SyncTransport {
     suspend fun pushAttempts(items: List<JSONObject>): List<SyncReceipt>
     suspend fun pushCaptures(items: List<JSONObject>): List<SyncReceipt>
     suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt>
+    suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult
 }
 
 class OkHttpSyncTransport(
@@ -66,6 +67,18 @@ class OkHttpSyncTransport(
     override suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt> =
         pushEvents("/api/sync/v1/push/reader-questions", items)
 
+    override suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult =
+        SyncPairing.parsePairResponse(
+            postTo(
+                endpoint = endpoint,
+                path = "/api/sync/v1/pair",
+                body = JSONObject()
+                    .put("token", token)
+                    .put("device_name", deviceName),
+                authenticated = false
+            )
+        )
+
     private suspend fun pushEvents(path: String, items: List<JSONObject>): List<SyncReceipt> {
         if (items.isEmpty()) return emptyList()
         val payload = JSONObject().put("items", JSONArray(items))
@@ -88,6 +101,21 @@ class OkHttpSyncTransport(
             .header("Authorization", "Bearer $credential")
             .build()
         execute(request)
+    }
+
+    private suspend fun postTo(
+        endpoint: String,
+        path: String,
+        body: JSONObject,
+        authenticated: Boolean
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val builder = Request.Builder()
+            .url("${endpoint.trimEnd('/')}$path")
+            .post(body.toString().toRequestBody(JsonMediaType))
+        if (authenticated && credential.isNotBlank()) {
+            builder.header("Authorization", "Bearer $credential")
+        }
+        execute(builder.build())
     }
 
     private fun execute(request: Request): JSONObject {

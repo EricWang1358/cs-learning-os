@@ -82,6 +82,7 @@ private fun MoreSettingsList(
                 when (section.id) {
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel)
+                    MoreSectionId.Sync -> SyncSectionContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Guide -> GuideContent(viewModel = viewModel)
                 }

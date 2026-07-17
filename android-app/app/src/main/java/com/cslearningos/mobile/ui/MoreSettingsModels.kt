@@ -15,6 +15,7 @@ enum class AppearanceMode(val label: String) {
 enum class MoreSectionId {
     System,
     Service,
+    Sync,
     Data,
     Guide
 }
@@ -27,6 +28,7 @@ fun orderedMoreSectionIds(): List<MoreSectionId> =
     listOf(
         MoreSectionId.System,
         MoreSectionId.Service,
+        MoreSectionId.Sync,
         MoreSectionId.Data,
         MoreSectionId.Guide
     )

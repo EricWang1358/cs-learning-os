@@ -56,7 +56,8 @@ class LearningViewModel private constructor(
     private val database: LearningDatabase?,
     private val repository: LearningRepository,
     initialState: LearningUiState,
-    private val startInitialObservers: Boolean
+    private val startInitialObservers: Boolean,
+    private val syncGateway: com.cslearningos.mobile.feature.sync.SyncGateway?
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, LearningDatabase.create(application))
 
@@ -68,19 +69,26 @@ class LearningViewModel private constructor(
             contentCommands = RoomContentCommandAdapter(database)
         ),
         initialState = LearningUiState(),
-        startInitialObservers = true
+        startInitialObservers = true,
+        syncGateway = com.cslearningos.mobile.feature.sync.DefaultSyncGateway(
+            context = application,
+            dao = database.learningDao(),
+            deviceName = android.os.Build.MODEL ?: "android"
+        )
     )
 
     internal constructor(
         application: Application,
         repository: LearningRepository,
-        initialState: LearningUiState
+        initialState: LearningUiState,
+        syncGateway: com.cslearningos.mobile.feature.sync.SyncGateway? = null
     ) : this(
         application = application,
         database = null,
         repository = repository,
         initialState = initialState,
-        startInitialObservers = false
+        startInitialObservers = false,
+        syncGateway = syncGateway
     )
 
     private val _state = MutableStateFlow(initialState)
@@ -125,8 +133,109 @@ class LearningViewModel private constructor(
     )
 
     init {
+        refreshSyncState()
         if (startInitialObservers) startInitialObservers()
     }
+
+    fun pairSync(endpoint: String, token: String) {
+        val gateway = syncGateway ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(sync = it.sync.copy(busy = true, error = null)) }
+            runCatching { gateway.pair(endpoint, token, deviceName()) }
+                .onSuccess {
+                    refreshSyncState(busy = false)
+                    _state.update { it.copy(message = uiText(R.string.sync_pair_success)) }
+                }
+                .onFailure { error ->
+                    refreshSyncState(busy = false, error = syncErrorResId(error))
+                }
+        }
+    }
+
+    fun unpairSync() {
+        val gateway = syncGateway ?: return
+        viewModelScope.launch {
+            runCatching { gateway.unpair() }
+            _state.update {
+                it.copy(
+                    sync = SyncUiState(),
+                    message = uiText(R.string.sync_unpaired)
+                )
+            }
+        }
+    }
+
+    fun pullSyncNow() {
+        val gateway = syncGateway ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(sync = it.sync.copy(busy = true, error = null)) }
+            runCatching { gateway.pull() }
+                .onSuccess { report ->
+                    refreshSyncState(busy = false)
+                    _state.update {
+                        it.copy(
+                            sync = it.sync.copy(lastPullReport = report),
+                            message = uiText(R.string.sync_pull_success, report.totalApplied, report.conflicts)
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    refreshSyncState(busy = false, error = syncErrorResId(error))
+                }
+        }
+    }
+
+    fun uploadSyncNow() {
+        val gateway = syncGateway ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(sync = it.sync.copy(busy = true, error = null)) }
+            runCatching { gateway.push() }
+                .onSuccess { report ->
+                    refreshSyncState(busy = false)
+                    _state.update {
+                        it.copy(
+                            sync = it.sync.copy(lastPushReport = report),
+                            message = uiText(R.string.sync_push_success, report.totalUploaded, report.rejected)
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    refreshSyncState(busy = false, error = syncErrorResId(error))
+                }
+        }
+    }
+
+    fun updateSyncScope(areas: Set<String>, includeDueReviews: Boolean) {
+        val gateway = syncGateway ?: return
+        gateway.updateScope(areas, includeDueReviews)
+        refreshSyncState()
+    }
+
+    private fun refreshSyncState(busy: Boolean? = null, error: Int? = null) {
+        val snapshot = syncGateway?.statusSnapshot()
+        _state.update { current ->
+            current.copy(
+                sync = current.sync.copy(
+                    isPaired = snapshot?.isPaired ?: false,
+                    endpoint = snapshot?.endpoint.orEmpty(),
+                    serverId = snapshot?.serverId.orEmpty(),
+                    lastSyncAt = snapshot?.lastSyncAt ?: 0L,
+                    scopeAreas = snapshot?.scopeAreas ?: emptySet(),
+                    includeDueReviews = snapshot?.includeDueReviews ?: false,
+                    busy = busy ?: false,
+                    error = error?.let { resId -> localizedAppContext().getString(resId) }
+                )
+            )
+        }
+    }
+
+    private fun syncErrorResId(error: Throwable): Int = when (error) {
+        is com.cslearningos.mobile.feature.sync.SyncException ->
+            if (error.statusCode == 401) R.string.sync_error_pairing_failed else R.string.sync_error_server
+        else -> R.string.sync_error_unreachable
+    }
+
+    private fun deviceName(): String = android.os.Build.MODEL ?: "android"
 
     private fun startInitialObservers() {
         viewModelScope.launch {

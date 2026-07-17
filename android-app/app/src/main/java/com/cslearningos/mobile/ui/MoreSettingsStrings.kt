@@ -36,6 +36,15 @@ fun moreSectionSummaries(state: LearningUiState): List<MoreSectionSummary> =
                 value = stringResource(R.string.more_value_local_first)
             )
 
+            MoreSectionId.Sync -> MoreSectionSummary(
+                id = sectionId,
+                title = stringResource(R.string.more_section_sync_title),
+                body = stringResource(R.string.more_section_sync_body),
+                value = stringResource(
+                    if (state.sync.isPaired) R.string.sync_value_paired else R.string.sync_value_unpaired
+                )
+            )
+
             MoreSectionId.Guide -> MoreSectionSummary(
                 id = sectionId,
                 title = stringResource(R.string.more_section_guide_title),

@@ -458,6 +458,14 @@ class SyncRepositoryTest {
                 items.map { SyncReceipt(it.getString("clientId"), SyncReceipt.STATUS_ACCEPTED, null) }
             }
         }
+
+        override suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult =
+            SyncPairing.PairResult(
+                deviceId = "device-test",
+                credential = "css_test",
+                serverId = healthServerId,
+                protocolVersion = 1
+            )
     }
 
     private class FakeDao {

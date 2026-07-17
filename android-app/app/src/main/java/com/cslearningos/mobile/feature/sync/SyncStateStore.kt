@@ -42,6 +42,18 @@ class SyncStateStore(context: Context) {
         get() = prefs.getLong(KEY_LAST_ATTEMPT_UPLOAD_AT, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_ATTEMPT_UPLOAD_AT, value).apply()
 
+    var deviceId: String
+        get() = prefs.getString(KEY_DEVICE_ID, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_DEVICE_ID, value).apply()
+
+    var scopeAreas: Set<String>
+        get() = prefs.getStringSet(KEY_SCOPE_AREAS, emptySet()).orEmpty()
+        set(value) = prefs.edit().putStringSet(KEY_SCOPE_AREAS, value).apply()
+
+    var includeDueReviews: Boolean
+        get() = prefs.getBoolean(KEY_INCLUDE_DUE, false)
+        set(value) = prefs.edit().putBoolean(KEY_INCLUDE_DUE, value).apply()
+
     val isPaired: Boolean
         get() = endpoint.isNotBlank() && credential.isNotBlank()
 
@@ -53,6 +65,9 @@ class SyncStateStore(context: Context) {
             .remove(KEY_SCOPE_FINGERPRINT)
             .remove(KEY_LAST_SYNC_AT)
             .remove(KEY_LAST_ATTEMPT_UPLOAD_AT)
+            .remove(KEY_DEVICE_ID)
+            .remove(KEY_SCOPE_AREAS)
+            .remove(KEY_INCLUDE_DUE)
             .apply()
     }
 
@@ -65,5 +80,8 @@ class SyncStateStore(context: Context) {
         const val KEY_SCOPE_FINGERPRINT = "scope_fingerprint"
         const val KEY_LAST_SYNC_AT = "last_sync_at"
         const val KEY_LAST_ATTEMPT_UPLOAD_AT = "last_attempt_upload_at"
+        const val KEY_DEVICE_ID = "device_id"
+        const val KEY_SCOPE_AREAS = "scope_areas"
+        const val KEY_INCLUDE_DUE = "include_due_reviews"
     }
 }

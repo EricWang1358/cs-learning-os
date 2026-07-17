@@ -264,22 +264,22 @@ Android behavior:
 
 ### Phase 4: Explicit Sync UI And Network Policy
 
-Add a compact More section showing:
+**Status: implemented 2026-07-17 (Android).** `SyncGateway` boundary + More > Sync section; `SyncPairingTest` + `LearningViewModelSyncTest` (11 tests).
 
-- paired desktop name and trust fingerprint, with unpair/revoke
-- selected areas and estimated mobile subset size
-- last successful sync time and per-entity report (pulled, updated, conflicts, uploaded)
-- manual `Pull now` and `Upload learning events` actions
-- connection mode: local URL, Tailscale hostname, or advanced custom URL
-- conflict drafts inbox entry (review phone-side text vs accepted desktop version)
+The More screen gained a Sync section showing:
 
-Network behavior:
+- **Unpaired:** endpoint + token inputs (accepts the raw `csos-sync://pair?...` payload pasted into either field), pair action with inline errors. Desktop token minting: `POST /api/sync/v1/pairing-tokens` from the desktop machine (loopback-only by design).
+- **Paired:** endpoint, last sync time, last pull/push report lines, manual `Pull now` / `Upload learning events` actions, unpair.
+- **Scope editor:** per-area toggles plus an "include due reviews" switch, persisted to the pairing store (scope changes re-baseline the cursor via the fingerprint mechanism from Phase 2).
 
-- Never sync automatically on cellular in the first release.
-- Permit optional Wi-Fi-only periodic sync only after manual sync succeeds.
-- Use foreground user action for large pulls and show cancellation/progress.
-- Treat unreachable desktop as normal offline state, not an error dialog loop.
-- Backup restore wipes sync lineage: after `restoreBackup`, require re-pair or explicit full re-baseline (import already clears operational tables — see audit).
+Architecture and network behavior:
+
+- `SyncGateway` interface decouples the ViewModel from transport/storage (tests substitute a fake); `DefaultSyncGateway` wraps `SyncRepository` + `OkHttpSyncTransport` + `SyncStateStore`.
+- Pairing stores `deviceId`, credential, and resets cursors; unpair wipes all pairing state including scope and upload high-water.
+- **Manual actions only in v1** — no background or cellular auto-sync. Failures degrade to an inline status message (unreachable / pairing failed / server rejected), never a dialog loop; the app stays fully usable offline.
+- `SyncStateStore` keeps credential + cursor + scope + `lastAttemptUploadAt` in the app-private sandbox (Keystore hardening before untrusted networks).
+
+Deferred within Phase 4 (explicit): Wi-Fi-only periodic sync (gated on manual success), QR camera scanning (payload paste works), a desktop React pairing panel (API + command documented instead), a dedicated conflict-drafts inbox (conflicted rows are visible in the Library).
 
 ### Phase 5: Portable File Handoff
 

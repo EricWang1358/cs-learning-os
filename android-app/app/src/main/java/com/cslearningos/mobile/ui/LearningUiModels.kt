@@ -10,6 +10,8 @@ import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.core.common.AndroidArchitectureConstants
 import com.cslearningos.mobile.assistant.domain.isValidProviderEndpoint
 import com.cslearningos.mobile.feature.assistant.ui.AssistantUiState
+import com.cslearningos.mobile.feature.sync.SyncPushReport
+import com.cslearningos.mobile.feature.sync.SyncReport
 
 enum class AppScreen {
     Home,
@@ -49,6 +51,19 @@ data class PendingNodeSave(
     val commandId: String,
     val nodeId: String,
     val fingerprint: String
+)
+
+data class SyncUiState(
+    val isPaired: Boolean = false,
+    val endpoint: String = "",
+    val serverId: String = "",
+    val lastSyncAt: Long = 0,
+    val scopeAreas: Set<String> = emptySet(),
+    val includeDueReviews: Boolean = false,
+    val lastPullReport: SyncReport? = null,
+    val lastPushReport: SyncPushReport? = null,
+    val busy: Boolean = false,
+    val error: String? = null
 )
 
 data class LearningUiState(
@@ -103,6 +118,7 @@ data class LearningUiState(
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
     val expandedMoreSection: MoreSectionId? = null,
     val quizAnswerVisible: Boolean = false,
+    val sync: SyncUiState = SyncUiState(),
     val message: UiText? = null
 )
 
