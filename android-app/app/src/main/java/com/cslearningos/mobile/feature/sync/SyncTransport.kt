@@ -16,6 +16,9 @@ interface SyncTransport {
     suspend fun health(): SyncHealth
     suspend fun manifest(cursor: Long, serverId: String, scope: SyncScope): SyncManifest
     suspend fun pull(entityType: String, ids: List<String>, scope: SyncScope): List<SyncRecord>
+    suspend fun pushAttempts(items: List<JSONObject>): List<SyncReceipt>
+    suspend fun pushCaptures(items: List<JSONObject>): List<SyncReceipt>
+    suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt>
 }
 
 class OkHttpSyncTransport(
@@ -52,6 +55,21 @@ class OkHttpSyncTransport(
                 parseSyncRecord(records.getJSONObject(index))?.let(::add)
             }
         }
+    }
+
+    override suspend fun pushAttempts(items: List<JSONObject>): List<SyncReceipt> =
+        pushEvents("/api/sync/v1/push/attempts", items)
+
+    override suspend fun pushCaptures(items: List<JSONObject>): List<SyncReceipt> =
+        pushEvents("/api/sync/v1/push/captures", items)
+
+    override suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt> =
+        pushEvents("/api/sync/v1/push/reader-questions", items)
+
+    private suspend fun pushEvents(path: String, items: List<JSONObject>): List<SyncReceipt> {
+        if (items.isEmpty()) return emptyList()
+        val payload = JSONObject().put("items", JSONArray(items))
+        return parseSyncReceipts(post(path, payload))
     }
 
     private suspend fun get(path: String): JSONObject = withContext(Dispatchers.IO) {

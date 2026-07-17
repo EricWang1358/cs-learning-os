@@ -3,16 +3,23 @@ package com.cslearningos.mobile.feature.sync
 import androidx.test.core.app.ApplicationProvider
 import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
+import com.cslearningos.mobile.data.CaptureSlipStatus
+import com.cslearningos.mobile.data.CaptureSlipType
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.NodeFtsEntity
 import com.cslearningos.mobile.data.QuizFtsEntity
 import com.cslearningos.mobile.data.QuizItemEntity
+import com.cslearningos.mobile.data.QuizSource
 import com.cslearningos.mobile.data.ReaderQuestionEntity
+import com.cslearningos.mobile.data.ReviewAttemptEntity
+import com.cslearningos.mobile.data.ReviewResult
+import com.cslearningos.mobile.data.ReviewStateEntity
 import com.cslearningos.mobile.data.SyncStatus
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -261,7 +268,49 @@ class SyncRepositoryTest {
     }
 
     @Test
-    fun reviewAttemptChangesAreCountedAsSkipped() = runTest {
+    fun reviewAttemptFromDesktopAppliesIdempotentlyAndRebuildsState() = runTest {
+        val dao = FakeDao()
+        dao.quizzes["q1"] = localQuiz("q1")
+        val attemptRecord = SyncRecord.ReviewAttempt(
+            id = "att-1",
+            quizId = "q1",
+            grade = "easy",
+            answeredAt = "2026-07-16T09:30:00+00:00",
+            elapsedMs = 0,
+            note = ""
+        )
+        fun transport() = FakeTransport(
+            manifests = ArrayDeque(
+                listOf(
+                    SyncManifest(
+                        false, 1, "srv", 4, false,
+                        listOf(SyncChange("review_attempt", "att-1", null, null, false, null))
+                    )
+                )
+            ),
+            records = mapOf("review_attempt" to listOf(attemptRecord))
+        )
+        val repository = SyncRepository(dao.proxy(), transport(), store) { 100L
+        }
+
+        val report = repository.pullAndApply(scope)
+
+        assertEquals(1, report.appliedAttempts)
+        val attempt = dao.attempts.getValue("att-1")
+        assertEquals(ReviewResult.good, attempt.result) // desktop easy collapses to good
+        assertTrue(attempt.scheduledDueAt > attempt.answeredAt)
+        val state = dao.reviewStates.getValue("q1")
+        assertEquals(1, state.attemptCount)
+        assertEquals(1, state.intervalDays)
+
+        val second = SyncRepository(dao.proxy(), transport(), store) { 200L }
+        val replay = second.pullAndApply(scope)
+        assertEquals(0, replay.appliedAttempts)
+        assertEquals(1, dao.attempts.size)
+    }
+
+    @Test
+    fun reviewAttemptForUnknownQuizIsSkipped() = runTest {
         val dao = FakeDao()
         val transport = FakeTransport(
             manifests = ArrayDeque(
@@ -272,15 +321,99 @@ class SyncRepositoryTest {
                     )
                 )
             ),
-            records = emptyMap()
+            records = mapOf(
+                "review_attempt" to listOf(
+                    SyncRecord.ReviewAttempt("att-1", "ghost-quiz", "good", "2026-07-16T09:30:00+00:00", 0, "")
+                )
+            )
         )
         val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
 
         val report = repository.pullAndApply(scope)
 
         assertEquals(1, report.skippedAttempts)
-        assertEquals(0, report.totalApplied)
+        assertEquals(0, report.appliedAttempts)
     }
+
+    @Test
+    fun pushLocalChangesUploadsAttemptsCapturesAndQuestions() = runTest {
+        val dao = FakeDao()
+        dao.attempts["att-old"] = ReviewAttemptEntity("att-old", "q1", ReviewResult.good, 10L, 11L)
+        dao.attempts["att-new"] = ReviewAttemptEntity("att-new", "q1", ReviewResult.hard, 20L, 22L)
+        store.lastAttemptUploadAt = 15L
+        dao.slips["slip-1"] = dirtySlip("slip-1")
+        dao.questions["rq-1"] = dirtyQuestion("rq-1")
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(1, report.uploadedAttempts)
+        assertEquals(listOf("att-new"), transport.pushedAttempts.map { it.getString("clientAttemptId") })
+        assertEquals(20L, store.lastAttemptUploadAt)
+        assertEquals(1, report.uploadedCaptures)
+        assertEquals(SyncStatus.clean, dao.slips.getValue("slip-1").syncStatus)
+        assertEquals(1, report.uploadedQuestions)
+        assertEquals(SyncStatus.clean, dao.questions.getValue("rq-1").syncStatus)
+        assertEquals(0, report.rejected)
+    }
+
+    @Test
+    fun pushHighWaterStaysWhenServerRejects() = runTest {
+        val dao = FakeDao()
+        dao.attempts["att-1"] = ReviewAttemptEntity("att-1", "q1", ReviewResult.good, 20L, 22L)
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        transport.attemptsReceipts = listOf(SyncReceipt("att-1", SyncReceipt.STATUS_REJECTED, "unknown_quiz"))
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(1, report.rejected)
+        assertEquals(0, report.uploadedAttempts)
+        assertEquals(0L, store.lastAttemptUploadAt)
+    }
+
+    private fun localQuiz(id: String) = QuizItemEntity(
+        id = id,
+        nodeId = null,
+        prompt = "Q",
+        answer = "A",
+        explanation = "E",
+        source = QuizSource.markdown,
+        sourceAnchor = null,
+        createdAt = 1L,
+        updatedAt = 1L,
+        revision = 1,
+        syncStatus = SyncStatus.clean,
+        deletedAt = null,
+        area = "algorithms",
+        baseRevision = 1
+    )
+
+    private fun dirtySlip(id: String) = CaptureSlipEntity(
+        id = id,
+        body = "TLB 是页表缓存",
+        type = CaptureSlipType.concept_seed,
+        topicHint = "TLB",
+        sourceLabel = "phone",
+        linkedNodeId = null,
+        status = CaptureSlipStatus.inbox,
+        createdAt = 10L,
+        updatedAt = 10L,
+        revision = 1,
+        syncStatus = SyncStatus.dirty,
+        deletedAt = null
+    )
+
+    private fun dirtyQuestion(id: String) = ReaderQuestionEntity(
+        id = id,
+        nodeId = "n1",
+        body = "为什么？",
+        createdAt = 10L,
+        resolvedAt = null,
+        syncStatus = SyncStatus.dirty,
+        deletedAt = null
+    )
 
     private class FakeTransport(
         private val healthServerId: String = "srv",
@@ -288,6 +421,12 @@ class SyncRepositoryTest {
         private val records: Map<String, List<SyncRecord>>
     ) : SyncTransport {
         val manifestCursors = mutableListOf<Long>()
+        val pushedAttempts = mutableListOf<JSONObject>()
+        val pushedCaptures = mutableListOf<JSONObject>()
+        val pushedQuestions = mutableListOf<JSONObject>()
+        var attemptsReceipts: List<SyncReceipt> = emptyList()
+        var capturesReceipts: List<SyncReceipt> = emptyList()
+        var questionsReceipts: List<SyncReceipt> = emptyList()
 
         override suspend fun health(): SyncHealth = SyncHealth(1, healthServerId, 1)
 
@@ -298,6 +437,27 @@ class SyncRepositoryTest {
 
         override suspend fun pull(entityType: String, ids: List<String>, scope: SyncScope): List<SyncRecord> =
             (records[entityType] ?: emptyList()).filter { it.id in ids }
+
+        override suspend fun pushAttempts(items: List<JSONObject>): List<SyncReceipt> {
+            pushedAttempts += items
+            return attemptsReceipts.ifEmpty {
+                items.map { SyncReceipt(it.getString("clientAttemptId"), SyncReceipt.STATUS_ACCEPTED, null) }
+            }
+        }
+
+        override suspend fun pushCaptures(items: List<JSONObject>): List<SyncReceipt> {
+            pushedCaptures += items
+            return capturesReceipts.ifEmpty {
+                items.map { SyncReceipt(it.getString("id"), SyncReceipt.STATUS_ACCEPTED, null) }
+            }
+        }
+
+        override suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt> {
+            pushedQuestions += items
+            return questionsReceipts.ifEmpty {
+                items.map { SyncReceipt(it.getString("clientId"), SyncReceipt.STATUS_ACCEPTED, null) }
+            }
+        }
     }
 
     private class FakeDao {
@@ -306,6 +466,8 @@ class SyncRepositoryTest {
         val areas = linkedMapOf<String, AreaEntity>()
         val questions = linkedMapOf<String, ReaderQuestionEntity>()
         val slips = linkedMapOf<String, CaptureSlipEntity>()
+        val attempts = linkedMapOf<String, ReviewAttemptEntity>()
+        val reviewStates = linkedMapOf<String, ReviewStateEntity>()
         val nodeFts = mutableListOf<NodeFtsEntity>()
         val quizFts = mutableListOf<QuizFtsEntity>()
         val deletedNodeFts = mutableListOf<String>()
@@ -324,6 +486,24 @@ class SyncRepositoryTest {
                     "getAreaBySlug" -> areas.values.firstOrNull { it.slug == args[0] }
                     "getReaderQuestion" -> questions[args[0]]
                     "getCaptureSlip" -> slips[args[0]]
+                    "getAllAttempts" -> attempts.values.toList()
+                    "getAllCaptureSlips" -> slips.values.toList()
+                    "getAllReaderQuestions" -> questions.values.toList()
+                    "upsertCaptureSlip" -> {
+                        val slip = args[0] as CaptureSlipEntity
+                        slips[slip.id] = slip
+                        Unit
+                    }
+                    "upsertReaderQuestion" -> {
+                        val question = args[0] as ReaderQuestionEntity
+                        questions[question.id] = question
+                        Unit
+                    }
+                    "upsertReviewState" -> {
+                        val state = args[0] as ReviewStateEntity
+                        reviewStates[state.quizId] = state
+                        Unit
+                    }
                     "markNodeSyncedDeleted" -> {
                         nodes.computeIfPresent(args[0] as String) { _, node ->
                             node.copy(
@@ -358,10 +538,12 @@ class SyncRepositoryTest {
                         (args[2] as List<QuizItemEntity>).forEach { quizzes[it.id] = it }
                         (args[3] as List<ReaderQuestionEntity>).forEach { questions[it.id] = it }
                         (args[4] as List<CaptureSlipEntity>).forEach { slips[it.id] = it }
-                        nodeFts += args[6] as List<NodeFtsEntity>
-                        quizFts += args[7] as List<QuizFtsEntity>
-                        deletedNodeFts += args[8] as List<String>
-                        deletedQuizFts += args[9] as List<String>
+                        (args[5] as List<ReviewAttemptEntity>).forEach { attempts[it.id] = it }
+                        (args[6] as List<ReviewStateEntity>).forEach { reviewStates[it.quizId] = it }
+                        nodeFts += args[7] as List<NodeFtsEntity>
+                        quizFts += args[8] as List<QuizFtsEntity>
+                        deletedNodeFts += args[9] as List<String>
+                        deletedQuizFts += args[10] as List<String>
                         Unit
                     }
                     else -> when {

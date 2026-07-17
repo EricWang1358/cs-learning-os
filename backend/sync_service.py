@@ -3,7 +3,8 @@
 The manifest endpoint serves scoped deltas from ``sync_changes``; the pull
 endpoint returns full typed records for requested IDs. Scope is a set of
 area labels (the desktop has no Area entity), optionally extended by due
-reviews and pinned nodes.
+reviews and pinned nodes. Push endpoints (Phase 3) accept append-only
+learning events with client-stable IDs and per-record receipts.
 """
 
 from __future__ import annotations
@@ -12,9 +13,23 @@ import sqlite3
 from dataclasses import dataclass, field
 
 try:
-    from .sync_envelope import content_hash
+    from .learning_service import parse_time, record_quiz_attempt
+    from .sync_envelope import (
+        ENTITY_CAPTURE_SLIP,
+        ENTITY_READER_QUESTION,
+        content_hash,
+        record_change,
+        utc_now,
+    )
 except ImportError:  # pragma: no cover - script execution
-    from sync_envelope import content_hash
+    from learning_service import parse_time, record_quiz_attempt
+    from sync_envelope import (
+        ENTITY_CAPTURE_SLIP,
+        ENTITY_READER_QUESTION,
+        content_hash,
+        record_change,
+        utc_now,
+    )
 
 MANIFEST_PAGE_LIMIT = 500
 PULL_ID_LIMIT = 200
@@ -331,3 +346,132 @@ def _record_for(conn: sqlite3.Connection, entity_type: str, entity_id: str) -> d
             "updatedAt": row["updated_at"],
         }
     return None
+
+
+# ---------------------------------------------------------------------------
+# Push (Phase 3): append-only learning events with per-record receipts.
+# ---------------------------------------------------------------------------
+
+RECEIPT_ACCEPTED = "accepted"
+RECEIPT_DUPLICATE = "duplicate"
+RECEIPT_REJECTED = "rejected"
+
+CAPTURE_SLIP_TYPES = {"unclear", "mistake", "video_note", "concept_seed", "question"}
+
+
+def _receipt(record_id: str, status: str, reason: str = "") -> dict:
+    receipt = {"id": record_id, "status": status}
+    if reason:
+        receipt["reason"] = reason
+    return receipt
+
+
+def push_attempts(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
+    """Accept review attempts by client ID. Duplicates and unknown quizzes
+    are reported per record; accepted attempts flow through the desktop
+    scheduler exactly like locally recorded ones."""
+    receipts: list[dict] = []
+    for item in items:
+        client_id = item["clientAttemptId"]
+        existing = conn.execute(
+            "SELECT 1 FROM quiz_attempts WHERE client_attempt_id = ?",
+            (client_id,),
+        ).fetchone()
+        if existing:
+            receipts.append(_receipt(client_id, RECEIPT_DUPLICATE))
+            continue
+        quiz = conn.execute(
+            "SELECT 1 FROM quizzes WHERE id = ? AND deleted_at IS NULL",
+            (item["quizId"],),
+        ).fetchone()
+        if not quiz:
+            receipts.append(_receipt(client_id, RECEIPT_REJECTED, "unknown_quiz"))
+            continue
+        answered_at = (item.get("answeredAt") or "").strip() or None
+        if answered_at:
+            try:
+                parse_time(answered_at.replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                receipts.append(_receipt(client_id, RECEIPT_REJECTED, "invalid_answered_at"))
+                continue
+        record_quiz_attempt(
+            conn,
+            item["quizId"],
+            item["grade"],
+            elapsed_ms=item.get("elapsedMs", 0),
+            note=item.get("note", ""),
+            client_attempt_id=client_id,
+            answered_at=answered_at,
+        )
+        receipts.append(_receipt(client_id, RECEIPT_ACCEPTED))
+    return receipts
+
+
+def push_captures(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
+    receipts: list[dict] = []
+    for item in items:
+        slip_id = item["id"]
+        existing = conn.execute(
+            "SELECT 1 FROM capture_slips WHERE id = ?",
+            (slip_id,),
+        ).fetchone()
+        if existing:
+            receipts.append(_receipt(slip_id, RECEIPT_DUPLICATE))
+            continue
+        slip_type = item.get("type") or "concept_seed"
+        if slip_type not in CAPTURE_SLIP_TYPES:
+            receipts.append(_receipt(slip_id, RECEIPT_REJECTED, "unknown_type"))
+            continue
+        now = utc_now()
+        created_at = (item.get("createdAt") or "").strip() or now
+        conn.execute(
+            """
+            INSERT INTO capture_slips (id, body, type, topic_hint, source_label, status, created_at, updated_at, revision)
+            VALUES (?, ?, ?, ?, ?, 'inbox', ?, ?, 1)
+            """,
+            (
+                slip_id,
+                item["body"],
+                slip_type,
+                (item.get("topicHint") or "").strip(),
+                (item.get("sourceLabel") or "").strip(),
+                created_at,
+                now,
+            ),
+        )
+        record_change(conn, ENTITY_CAPTURE_SLIP, slip_id, 1, content_hash(item["body"]))
+        receipts.append(_receipt(slip_id, RECEIPT_ACCEPTED))
+    conn.commit()
+    return receipts
+
+
+def push_reader_questions(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
+    receipts: list[dict] = []
+    for item in items:
+        client_id = item["clientId"]
+        existing = conn.execute(
+            "SELECT 1 FROM reader_questions WHERE client_id = ?",
+            (client_id,),
+        ).fetchone()
+        if existing:
+            receipts.append(_receipt(client_id, RECEIPT_DUPLICATE))
+            continue
+        target = conn.execute(
+            "SELECT 1 FROM nodes WHERE slug = ?",
+            (item["nodeId"],),
+        ).fetchone()
+        if not target:
+            receipts.append(_receipt(client_id, RECEIPT_REJECTED, "unknown_target"))
+            continue
+        now = utc_now()
+        conn.execute(
+            """
+            INSERT INTO reader_questions (client_id, target_type, target_id, question, status, created_at)
+            VALUES (?, 'node', ?, ?, 'open', ?)
+            """,
+            (client_id, item["nodeId"], item["question"], (item.get("createdAt") or "").strip() or now),
+        )
+        record_change(conn, ENTITY_READER_QUESTION, client_id)
+        receipts.append(_receipt(client_id, RECEIPT_ACCEPTED))
+    conn.commit()
+    return receipts

@@ -242,7 +242,7 @@ Contract coverage: baseline scoping, idle deltas, incremental changes, area move
 
 ### Phase 3: Push Append-Only Learning Events
 
-Only after pull is stable. Add batched upload endpoints:
+**Status: implemented 2026-07-17.** Desktop: push routes in `sync_router.py` + `sync_service.push_*` (`backend/test_sync_push.py` 5 tests). Android: `SyncRepository.pushLocalChanges` + bidirectional attempt application (5 new tests).
 
 ```text
 POST /api/sync/v1/push/attempts          -- [{ clientAttemptId, quizId, grade, answeredAt, elapsedMs, note }]
@@ -250,10 +250,17 @@ POST /api/sync/v1/push/captures          -- [{ id, body, type, topicHint, source
 POST /api/sync/v1/push/reader-questions  -- [{ clientId, nodeId, question, createdAt }]
 ```
 
-- Dedupe by client IDs (Phase 0 `UNIQUE` columns); response returns per-record receipts `{ id, status: accepted | duplicate | rejected }` plus a high-water cursor.
-- Android upload source: rows with `syncStatus = dirty` (already maintained by every repository write). On `accepted` receipts only, reset to `clean` — one DAO update per entity.
-- **Review progress convergence:** desktop processes accepted attempts through its existing scheduler (`learning_service.py:70-119`) so `review_queue` catches up; desktop-originated attempts flow back down in the next pull (manifest type `review_attempt`), and Android applies them through `ReviewScheduler` idempotently by attempt ID. Neither side ever sends scheduling state.
-- Mobile Markdown/quiz content upload stays **off** in this phase; conflict drafts wait for the desktop review workflow.
+Desktop behavior:
+
+- Dedupe by client IDs (Phase 0 `UNIQUE` columns); per-record receipts `{ id, status: accepted | duplicate | rejected, reason? }` (`unknown_quiz`, `unknown_target`, `unknown_type`, `invalid_answered_at`).
+- Accepted attempts preserve the **client `answered_at`** and flow through the exact desktop scheduler path (`record_quiz_attempt`), so `review_queue` and the change envelope stay consistent.
+- Push requires the `sync:push` scope (read-only credentials get 401).
+
+Android behavior:
+
+- `pushLocalChanges()`: attempts upload incrementally by an `answeredAt` high-water mark (advanced only when a batch has zero rejections); dirty capture slips and reader questions upload and reset to `clean` per accepted receipt. No new DAO surface — existing getters and upserts suffice.
+- Desktop-originated attempts now apply on pull: idempotent by attempt ID, desktop 4-grade scale collapses onto the Android scheduler (`easy → good`), and each affected quiz's `ReviewStateEntity` is **rebuilt by replaying the merged attempt log** through `ReviewScheduler` — neither side ever transfers scheduling state (research question 6 answered: bidirectional in v1).
+- Mobile Markdown/quiz content upload stays **off**; conflict drafts wait for the desktop review workflow.
 
 ### Phase 4: Explicit Sync UI And Network Policy
 

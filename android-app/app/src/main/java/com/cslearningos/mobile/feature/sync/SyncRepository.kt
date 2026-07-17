@@ -11,7 +11,15 @@ import com.cslearningos.mobile.data.QuizFtsEntity
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
 import com.cslearningos.mobile.data.ReaderQuestionEntity
+import com.cslearningos.mobile.data.ReviewAttemptEntity
+import com.cslearningos.mobile.data.ReviewResult
+import com.cslearningos.mobile.data.ReviewStateEntity
 import com.cslearningos.mobile.data.SyncStatus
+import com.cslearningos.mobile.domain.ReviewRating
+import com.cslearningos.mobile.domain.ReviewScheduleInput
+import com.cslearningos.mobile.domain.ReviewScheduler
+import org.json.JSONObject
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -42,6 +50,7 @@ class SyncRepository(
         var pulledQuizzes = 0
         var pulledQuestions = 0
         var pulledCaptureSlips = 0
+        var appliedAttempts = 0
         var skippedAttempts = 0
         var skippedRecords = 0
         var removed = 0
@@ -64,6 +73,7 @@ class SyncRepository(
             pulledQuizzes += outcome.pulledQuizzes
             pulledQuestions += outcome.pulledQuestions
             pulledCaptureSlips += outcome.pulledCaptureSlips
+            appliedAttempts += outcome.appliedAttempts
             skippedAttempts += outcome.skippedAttempts
             skippedRecords += outcome.skippedRecords
             removed += outcome.removed
@@ -82,6 +92,7 @@ class SyncRepository(
             pulledQuizzes = pulledQuizzes,
             pulledQuestions = pulledQuestions,
             pulledCaptureSlips = pulledCaptureSlips,
+            appliedAttempts = appliedAttempts,
             skippedAttempts = skippedAttempts,
             skippedRecords = skippedRecords,
             removed = removed,
@@ -91,11 +102,107 @@ class SyncRepository(
         )
     }
 
+    /**
+     * Uploads append-only local learning events: dirty capture slips and
+     * reader questions (syncStatus reset on receipt), plus review attempts
+     * newer than the upload high-water mark. Server dedupes by client IDs,
+     * so retries are always safe.
+     */
+    suspend fun pushLocalChanges(): SyncPushReport {
+        var uploadedAttempts = 0
+        var uploadedCaptures = 0
+        var uploadedQuestions = 0
+        var rejected = 0
+
+        val pendingAttempts = dao.getAllAttempts()
+            .filter { it.answeredAt > store.lastAttemptUploadAt }
+            .sortedBy { it.answeredAt }
+        if (pendingAttempts.isNotEmpty()) {
+            val receipts = transport.pushAttempts(
+                pendingAttempts.map { attempt ->
+                    JSONObject()
+                        .put("clientAttemptId", attempt.id)
+                        .put("quizId", attempt.quizId)
+                        .put("grade", attempt.result.name)
+                        .put("answeredAt", isoOfMillis(attempt.answeredAt))
+                        .put("elapsedMs", 0)
+                        .put("note", "")
+                }
+            )
+            val acceptedIds = receipts.filter { it.accepted }.mapTo(HashSet()) { it.id }
+            val rejectedCount = receipts.count { !it.accepted }
+            rejected += rejectedCount
+            uploadedAttempts += acceptedIds.size
+            if (rejectedCount == 0) {
+                pendingAttempts
+                    .filter { it.id in acceptedIds }
+                    .maxOfOrNull { it.answeredAt }
+                    ?.let { store.lastAttemptUploadAt = maxOf(store.lastAttemptUploadAt, it) }
+            }
+        }
+
+        val dirtySlips = dao.getAllCaptureSlips()
+            .filter { it.syncStatus == SyncStatus.dirty && it.deletedAt == null }
+        if (dirtySlips.isNotEmpty()) {
+            val receipts = transport.pushCaptures(
+                dirtySlips.map { slip ->
+                    JSONObject()
+                        .put("id", slip.id)
+                        .put("body", slip.body)
+                        .put("type", slip.type.name)
+                        .put("topicHint", slip.topicHint.orEmpty())
+                        .put("sourceLabel", slip.sourceLabel.orEmpty())
+                        .put("createdAt", isoOfMillis(slip.createdAt))
+                }
+            )
+            receipts.forEach { receipt ->
+                val slip = dirtySlips.firstOrNull { it.id == receipt.id }
+                if (receipt.accepted && slip != null) {
+                    dao.upsertCaptureSlip(slip.copy(syncStatus = SyncStatus.clean))
+                    uploadedCaptures += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+
+        val dirtyQuestions = dao.getAllReaderQuestions()
+            .filter { it.syncStatus == SyncStatus.dirty && it.deletedAt == null }
+        if (dirtyQuestions.isNotEmpty()) {
+            val receipts = transport.pushReaderQuestions(
+                dirtyQuestions.map { question ->
+                    JSONObject()
+                        .put("clientId", question.id)
+                        .put("nodeId", question.nodeId)
+                        .put("question", question.body)
+                        .put("createdAt", isoOfMillis(question.createdAt))
+                }
+            )
+            receipts.forEach { receipt ->
+                val question = dirtyQuestions.firstOrNull { it.id == receipt.id }
+                if (receipt.accepted && question != null) {
+                    dao.upsertReaderQuestion(question.copy(syncStatus = SyncStatus.clean))
+                    uploadedQuestions += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+
+        return SyncPushReport(
+            uploadedAttempts = uploadedAttempts,
+            uploadedCaptures = uploadedCaptures,
+            uploadedQuestions = uploadedQuestions,
+            rejected = rejected
+        )
+    }
+
     private data class PageOutcome(
         val pulledNodes: Int,
         val pulledQuizzes: Int,
         val pulledQuestions: Int,
         val pulledCaptureSlips: Int,
+        val appliedAttempts: Int,
         val skippedAttempts: Int,
         val skippedRecords: Int,
         val removed: Int,
@@ -107,6 +214,7 @@ class SyncRepository(
         var pulledQuizzes = 0
         var pulledQuestions = 0
         var pulledCaptureSlips = 0
+        var appliedAttempts = 0
         var skippedAttempts = 0
         var skippedRecords = 0
         var removed = 0
@@ -143,10 +251,11 @@ class SyncRepository(
         val quizIdsToPull = mutableListOf<String>()
         val questionIdsToPull = mutableListOf<String>()
         val slipIdsToPull = mutableListOf<String>()
+        val attemptIdsToPull = linkedSetOf<String>()
 
         for (change in manifest.changes) {
             when (change.type) {
-                SyncRecord.ReviewAttempt.TYPE -> skippedAttempts += 1
+                SyncRecord.ReviewAttempt.TYPE -> if (!change.tombstone) attemptIdsToPull += change.id
 
                 SyncRecord.Node.TYPE -> {
                     if (change.tombstone) {
@@ -281,13 +390,60 @@ class SyncRepository(
                 }
             }
 
+        // Desktop-originated attempts: idempotent by client attempt ID; each
+        // affected quiz's scheduling state is rebuilt from the merged log.
+        val reviewStates = mutableListOf<ReviewStateEntity>()
+        val attemptsToInsert = mutableListOf<ReviewAttemptEntity>()
+        if (attemptIdsToPull.isNotEmpty()) {
+            val knownAttemptIds = dao.getAllAttempts().mapTo(HashSet()) { it.id }
+            val newAttempts = mutableListOf<ReviewAttemptEntity>()
+            transport.pull(SyncRecord.ReviewAttempt.TYPE, attemptIdsToPull.toList(), scope)
+                .filterIsInstance<SyncRecord.ReviewAttempt>()
+                .forEach { record ->
+                    if (record.id in knownAttemptIds) return@forEach
+                    val result = DesktopGradeToReviewResult[record.grade]
+                    if (result == null) {
+                        skippedAttempts += 1
+                        return@forEach
+                    }
+                    if (dao.getQuiz(record.quizId) == null) {
+                        skippedAttempts += 1
+                        return@forEach
+                    }
+                    newAttempts += ReviewAttemptEntity(
+                        id = record.id,
+                        quizId = record.quizId,
+                        result = result,
+                        answeredAt = parseIsoMillis(record.answeredAt) ?: now(),
+                        scheduledDueAt = 0L
+                    )
+                }
+            if (newAttempts.isNotEmpty()) {
+                val mergedAttempts = dao.getAllAttempts() + newAttempts
+                val dueByAttemptId = mutableMapOf<String, Long>()
+                newAttempts
+                    .mapTo(linkedSetOf()) { it.quizId }
+                    .forEach { quizId ->
+                        val rebuilt = rebuildReviewState(quizId, mergedAttempts, dueByAttemptId)
+                        reviewStates += rebuilt
+                    }
+                newAttempts.forEach { attempt ->
+                    attemptsToInsert += attempt.copy(
+                        scheduledDueAt = dueByAttemptId[attempt.id] ?: attempt.answeredAt
+                    )
+                }
+                appliedAttempts += newAttempts.size
+            }
+        }
+
         dao.applySyncBatch(
             areas = areasToEnsure.values.toList(),
             nodes = nodes,
             quizzes = quizzes,
             questions = questions,
             captureSlips = slips,
-            attempts = emptyList(),
+            attempts = attemptsToInsert,
+            reviewStates = reviewStates,
             nodeFts = nodeFts,
             quizFts = quizFts,
             deletedNodeFtsIds = deletedNodeFts,
@@ -299,6 +455,7 @@ class SyncRepository(
             pulledQuizzes = pulledQuizzes,
             pulledQuestions = pulledQuestions,
             pulledCaptureSlips = pulledCaptureSlips,
+            appliedAttempts = appliedAttempts,
             skippedAttempts = skippedAttempts,
             skippedRecords = skippedRecords,
             removed = removed,
@@ -446,8 +603,60 @@ class SyncRepository(
             OffsetDateTime.parse(value).toInstant().toEpochMilli()
         }.getOrNull()
 
+    private fun isoOfMillis(millis: Long): String =
+        Instant.ofEpochMilli(millis).toString()
+
     private fun isDirty(status: SyncStatus): Boolean =
         status == SyncStatus.dirty || status == SyncStatus.conflicted
+
+    /**
+     * Rebuilds one quiz's scheduling state by replaying the merged attempt
+     * log (local + pulled) through the scheduler in answeredAt order. Also
+     * records each attempt's scheduled due time for storage.
+     */
+    private fun rebuildReviewState(
+        quizId: String,
+        allAttempts: List<ReviewAttemptEntity>,
+        dueByAttemptId: MutableMap<String, Long>
+    ): ReviewStateEntity {
+        var ease = DefaultReviewEase
+        var interval = 0
+        var dueAt = now()
+        var lastResult = ReviewResult.again
+        val quizAttempts = allAttempts
+            .filter { it.quizId == quizId }
+            .sortedBy { it.answeredAt }
+        quizAttempts.forEach { attempt ->
+            val rating = when (attempt.result) {
+                ReviewResult.again -> ReviewRating.Again
+                ReviewResult.hard -> ReviewRating.Hard
+                ReviewResult.good -> ReviewRating.Good
+            }
+            val result = ReviewScheduler.next(
+                ReviewScheduleInput(
+                    ease = ease,
+                    intervalDays = interval,
+                    attemptCount = 0,
+                    answeredAt = Instant.ofEpochMilli(attempt.answeredAt)
+                ),
+                rating
+            )
+            ease = result.ease
+            interval = result.intervalDays
+            dueAt = result.dueAt.toEpochMilli()
+            lastResult = attempt.result
+            dueByAttemptId[attempt.id] = dueAt
+        }
+        return ReviewStateEntity(
+            quizId = quizId,
+            ease = ease,
+            intervalDays = interval,
+            dueAt = dueAt,
+            lastResult = lastResult,
+            attemptCount = quizAttempts.size,
+            updatedAt = now()
+        )
+    }
 
     private fun stableRowId(id: String): Int =
         id.hashCode().let { if (it == Int.MIN_VALUE) 1 else kotlin.math.abs(it) }.coerceAtLeast(1)
@@ -455,5 +664,14 @@ class SyncRepository(
     private companion object {
         const val MaxManifestPages = 40
         const val DefaultAreaOrder = 1000
+        const val DefaultReviewEase = 2.5
+
+        /** Desktop's 4-grade scale collapses onto the Android 3-grade scheduler. */
+        val DesktopGradeToReviewResult = mapOf(
+            "again" to ReviewResult.again,
+            "hard" to ReviewResult.hard,
+            "good" to ReviewResult.good,
+            "easy" to ReviewResult.good
+        )
     }
 }

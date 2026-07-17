@@ -246,6 +246,7 @@ interface LearningDao {
         questions: List<ReaderQuestionEntity>,
         captureSlips: List<CaptureSlipEntity>,
         attempts: List<ReviewAttemptEntity>,
+        reviewStates: List<ReviewStateEntity>,
         nodeFts: List<NodeFtsEntity>,
         quizFts: List<QuizFtsEntity>,
         deletedNodeFtsIds: List<String>,
@@ -257,6 +258,7 @@ interface LearningDao {
         upsertReaderQuestions(questions)
         upsertCaptureSlips(captureSlips)
         insertAttempts(attempts)
+        upsertReviewStates(reviewStates)
         deletedNodeFtsIds.forEach { deleteNodeFts(it) }
         deletedQuizFtsIds.forEach { deleteQuizFts(it) }
         nodeFts.forEach { upsertNodeFts(it) }

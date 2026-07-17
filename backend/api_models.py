@@ -84,6 +84,43 @@ class SyncPullRequest(BaseModel):
     scope: dict = Field(default_factory=dict)
 
 
+class SyncPushAttemptItem(BaseModel):
+    clientAttemptId: str = Field(min_length=1, max_length=64)
+    quizId: str = Field(min_length=1)
+    grade: str = Field(pattern="^(again|hard|good|easy)$")
+    answeredAt: str = ""
+    elapsedMs: int = Field(default=0, ge=0)
+    note: str = ""
+
+
+class SyncPushAttemptsRequest(BaseModel):
+    items: list[SyncPushAttemptItem] = Field(default_factory=list, max_length=500)
+
+
+class SyncPushCaptureItem(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    body: str = Field(min_length=1)
+    type: str = "concept_seed"
+    topicHint: str = ""
+    sourceLabel: str = ""
+    createdAt: str = ""
+
+
+class SyncPushCapturesRequest(BaseModel):
+    items: list[SyncPushCaptureItem] = Field(default_factory=list, max_length=500)
+
+
+class SyncPushQuestionItem(BaseModel):
+    clientId: str = Field(min_length=1, max_length=64)
+    nodeId: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    createdAt: str = ""
+
+
+class SyncPushQuestionsRequest(BaseModel):
+    items: list[SyncPushQuestionItem] = Field(default_factory=list, max_length=500)
+
+
 class BiteCardCreate(BaseModel):
     source_type: str = Field(pattern="^(node|quiz)$")
     source_id: str = Field(min_length=1)

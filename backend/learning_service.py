@@ -79,9 +79,16 @@ def record_quiz_attempt(
     elapsed_ms: int = 0,
     note: str = "",
     client_attempt_id: str | None = None,
+    answered_at: str | None = None,
 ) -> dict:
     get_quiz_or_404(conn, quiz_id)
-    answered_at = utc_now()
+    if answered_at:
+        # Preserve the client timestamp: scheduling order across devices
+        # depends on when the attempt actually happened.
+        parse_time(answered_at)
+        answered_at = answered_at.replace("Z", "+00:00")
+    else:
+        answered_at = utc_now()
     client_attempt_id = client_attempt_id or new_client_id()
     existing = conn.execute(
         "SELECT * FROM review_queue WHERE target_type = 'quiz' AND target_id = ?",

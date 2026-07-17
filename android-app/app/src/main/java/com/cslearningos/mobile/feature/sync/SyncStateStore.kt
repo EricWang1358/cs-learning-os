@@ -38,6 +38,10 @@ class SyncStateStore(context: Context) {
         get() = prefs.getLong(KEY_LAST_SYNC_AT, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SYNC_AT, value).apply()
 
+    var lastAttemptUploadAt: Long
+        get() = prefs.getLong(KEY_LAST_ATTEMPT_UPLOAD_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_ATTEMPT_UPLOAD_AT, value).apply()
+
     val isPaired: Boolean
         get() = endpoint.isNotBlank() && credential.isNotBlank()
 
@@ -48,6 +52,7 @@ class SyncStateStore(context: Context) {
             .remove(KEY_CURSOR)
             .remove(KEY_SCOPE_FINGERPRINT)
             .remove(KEY_LAST_SYNC_AT)
+            .remove(KEY_LAST_ATTEMPT_UPLOAD_AT)
             .apply()
     }
 
@@ -59,5 +64,6 @@ class SyncStateStore(context: Context) {
         const val KEY_CURSOR = "cursor"
         const val KEY_SCOPE_FINGERPRINT = "scope_fingerprint"
         const val KEY_LAST_SYNC_AT = "last_sync_at"
+        const val KEY_LAST_ATTEMPT_UPLOAD_AT = "last_attempt_upload_at"
     }
 }

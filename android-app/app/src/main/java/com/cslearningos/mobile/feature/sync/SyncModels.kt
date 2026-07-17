@@ -128,6 +128,7 @@ data class SyncReport(
     val pulledQuizzes: Int = 0,
     val pulledQuestions: Int = 0,
     val pulledCaptureSlips: Int = 0,
+    val appliedAttempts: Int = 0,
     val skippedAttempts: Int = 0,
     val skippedRecords: Int = 0,
     val removed: Int = 0,
@@ -136,6 +137,45 @@ data class SyncReport(
     val serverId: String = ""
 ) {
     val totalApplied: Int get() = pulledNodes + pulledQuizzes + pulledQuestions + pulledCaptureSlips
+}
+
+data class SyncReceipt(
+    val id: String,
+    val status: String,
+    val reason: String?
+) {
+    val accepted: Boolean get() = status == STATUS_ACCEPTED || status == STATUS_DUPLICATE
+
+    companion object {
+        const val STATUS_ACCEPTED = "accepted"
+        const val STATUS_DUPLICATE = "duplicate"
+        const val STATUS_REJECTED = "rejected"
+    }
+}
+
+data class SyncPushReport(
+    val uploadedAttempts: Int = 0,
+    val uploadedCaptures: Int = 0,
+    val uploadedQuestions: Int = 0,
+    val rejected: Int = 0
+) {
+    val totalUploaded: Int get() = uploadedAttempts + uploadedCaptures + uploadedQuestions
+}
+
+fun parseSyncReceipts(json: JSONObject): List<SyncReceipt> {
+    val receipts = json.optJSONArray("receipts") ?: return emptyList()
+    return buildList {
+        for (index in 0 until receipts.length()) {
+            val item = receipts.getJSONObject(index)
+            add(
+                SyncReceipt(
+                    id = item.getString("id"),
+                    status = item.getString("status"),
+                    reason = item.optString("reason").takeIf { it.isNotBlank() }
+                )
+            )
+        }
+    }
 }
 
 fun parseSyncHealth(json: JSONObject): SyncHealth =

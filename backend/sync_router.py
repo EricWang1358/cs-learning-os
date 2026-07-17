@@ -14,10 +14,24 @@ from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 try:
-    from .api_models import SyncManifestRequest, SyncPairRequest, SyncPullRequest
+    from .api_models import (
+        SyncManifestRequest,
+        SyncPairRequest,
+        SyncPullRequest,
+        SyncPushAttemptsRequest,
+        SyncPushCapturesRequest,
+        SyncPushQuestionsRequest,
+    )
     from . import sync_auth, sync_service
 except ImportError:  # pragma: no cover - script execution
-    from api_models import SyncManifestRequest, SyncPairRequest, SyncPullRequest
+    from api_models import (
+        SyncManifestRequest,
+        SyncPairRequest,
+        SyncPullRequest,
+        SyncPushAttemptsRequest,
+        SyncPushCapturesRequest,
+        SyncPushQuestionsRequest,
+    )
     import sync_auth
     import sync_service
 
@@ -96,6 +110,33 @@ def create_sync_router(
         with get_conn() as conn:
             sync_auth.ensure_sync_auth_schema(conn)
             return {"devices": sync_auth.list_devices(conn)}
+
+    @router.post("/push/attempts")
+    def push_attempts(
+        payload: SyncPushAttemptsRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        with get_conn() as conn:
+            receipts = sync_service.push_attempts(conn, [item.model_dump() for item in payload.items])
+            return {"receipts": receipts}
+
+    @router.post("/push/captures")
+    def push_captures(
+        payload: SyncPushCapturesRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        with get_conn() as conn:
+            receipts = sync_service.push_captures(conn, [item.model_dump() for item in payload.items])
+            return {"receipts": receipts}
+
+    @router.post("/push/reader-questions")
+    def push_reader_questions(
+        payload: SyncPushQuestionsRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        with get_conn() as conn:
+            receipts = sync_service.push_reader_questions(conn, [item.model_dump() for item in payload.items])
+            return {"receipts": receipts}
 
     @router.post("/manifest")
     def manifest(
