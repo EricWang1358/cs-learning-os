@@ -190,26 +190,34 @@ class LibraryRepository(
 
     suspend fun clearStarterContent(now: Long = System.currentTimeMillis()) {
         dao.getStarterNodes().forEach { node ->
-            dao.upsertNode(
-                node.copy(
-                    updatedAt = now,
-                    revision = node.revision + RevisionStep,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
+            val deletedNode = node.copy(
+                updatedAt = now,
+                revision = node.revision + RevisionStep,
+                syncStatus = SyncStatus.deleted,
+                deletedAt = now
             )
-            dao.deleteNodeFts(node.id)
+            dao.saveNodeAndQuizzesWithContentOutbox(
+                node = deletedNode,
+                nodeFts = null,
+                nodeOutbox = nodeContentOutbox(previous = node, updated = deletedNode, now = now),
+                quizzes = emptyList(),
+                quizFts = emptyList(),
+                quizOutbox = emptyList()
+            )
         }
         dao.getStarterQuizzes().forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + RevisionStep,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
+            val deletedQuiz = quiz.copy(
+                updatedAt = now,
+                revision = quiz.revision + RevisionStep,
+                syncStatus = SyncStatus.deleted,
+                deletedAt = now
             )
-            dao.deleteQuizFts(quiz.id)
+            dao.saveManualQuizWithOutbox(
+                quiz = deletedQuiz,
+                initialReviewState = null,
+                fts = null,
+                outbox = quizContentOutbox(previousRevision = quiz.revision, updated = deletedQuiz, now = now)
+            )
             deleteReviewDataForQuiz(quiz.id)
         }
     }

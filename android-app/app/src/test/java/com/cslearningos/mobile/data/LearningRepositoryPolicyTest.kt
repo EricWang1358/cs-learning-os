@@ -1061,6 +1061,11 @@ class LearningRepositoryPolicyTest {
         assertEquals(2_000L, dao.nodes.getValue("starter").deletedAt)
         assertNull(dao.nodes.getValue("user").deletedAt)
         assertEquals(2_000L, dao.quizzes.getValue("starter-quiz").deletedAt)
+        assertEquals(2, dao.outbox.size)
+        val nodeChange = dao.outbox.values.first { it.aggregateType == "content.node" }
+        val quizChange = dao.outbox.values.first { it.aggregateType == "content.quiz" }
+        assertEquals(2_000L, ContentNodeCodec.decode(nodeChange.payloadJson).deletedAt)
+        assertEquals("starter-quiz", QuizOutboxCodec.decode(quizChange.payloadJson).id)
         assertTrue("Starter review state should not remain in backup data", "starter-quiz" !in dao.reviewStates)
         assertTrue("Starter review attempts should not remain in backup data", dao.reviewAttempts.values.none { it.quizId == "starter-quiz" })
     }
