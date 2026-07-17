@@ -322,6 +322,27 @@ interface LearningDao {
     }
 
     @Transaction
+    suspend fun saveMovedNodeWithContentOutbox(
+        node: LearningNodeEntity,
+        nodeFts: NodeFtsEntity?,
+        nodeOutbox: ReplicationOutboxEntity,
+        quizzes: List<QuizItemEntity>,
+        quizFts: List<QuizFtsEntity>,
+        quizOutbox: List<ReplicationOutboxEntity>
+    ) {
+        upsertNode(node)
+        deleteNodeFts(node.id)
+        if (nodeFts != null) upsertNodeFts(nodeFts)
+        insertOutbox(nodeOutbox)
+        quizzes.forEach { quiz ->
+            upsertQuiz(quiz)
+            deleteQuizFts(quiz.id)
+        }
+        quizFts.forEach { upsertQuizFts(it) }
+        quizOutbox.forEach { insertOutbox(it) }
+    }
+
+    @Transaction
     suspend fun applySyncBatch(
         areas: List<AreaEntity>,
         nodes: List<LearningNodeEntity>,

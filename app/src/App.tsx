@@ -2301,7 +2301,7 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'sync' ? 'sync-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -3018,8 +3018,8 @@ function App() {
             serverBaseUrl={syncToken?.endpoint || syncHealth?.advertisedBaseUrl || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '')}
           />
         ) : viewMode === 'health' ? (
-          <div className="health-detail">
-            <section className="detail-heading health-heading">
+          <div className="health-detail cockpit-detail-shell health-cockpit-shell">
+            <section className="detail-heading health-heading cockpit-hero health-cockpit-hero">
               <p className="eyebrow">Program health</p>
               <h2>System Health</h2>
               <p>

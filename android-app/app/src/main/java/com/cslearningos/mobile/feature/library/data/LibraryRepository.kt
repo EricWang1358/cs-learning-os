@@ -7,6 +7,7 @@ import com.cslearningos.mobile.content.application.ContentCommandResult
 import com.cslearningos.mobile.content.application.NodeSaveMode
 import com.cslearningos.mobile.content.application.SaveNodeCommand
 import com.cslearningos.mobile.content.domain.NodeId
+import com.cslearningos.mobile.content.room.ContentNodeCodec
 import com.cslearningos.mobile.content.room.NodeRoomMapper
 import com.cslearningos.mobile.core.kernel.CommandId
 import com.cslearningos.mobile.core.kernel.EntityRevision
@@ -16,11 +17,13 @@ import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.NodeFtsEntity
 import com.cslearningos.mobile.data.QuizFtsEntity
 import com.cslearningos.mobile.data.QuizItemEntity
+import com.cslearningos.mobile.data.ReplicationOutboxEntity
 import com.cslearningos.mobile.data.ReaderQuestionEntity
 import com.cslearningos.mobile.data.SearchResultEntity
 import com.cslearningos.mobile.data.StarterContentPackage
 import com.cslearningos.mobile.data.SyncStatus
 import com.cslearningos.mobile.data.withReadTrace
+import com.cslearningos.mobile.feature.review.data.QuizOutboxCodec
 import kotlinx.coroutines.flow.Flow
 import java.text.Normalizer
 import java.util.UUID
@@ -254,18 +257,24 @@ class LibraryRepository(
             area = area.slug,
             areaId = area.id
         )
-        dao.upsertNode(updated)
-        indexNode(updated)
-        dao.getActiveQuizzesForNode(nodeId).forEach { quiz ->
-            val updatedQuiz = quiz.copy(
+        val updatedQuizzes = dao.getActiveQuizzesForNode(nodeId).map { quiz ->
+            quiz.copy(
                 updatedAt = now,
                 revision = quiz.revision + RevisionStep,
                 syncStatus = SyncStatus.dirty,
                 area = area.slug
             )
-            dao.upsertQuiz(updatedQuiz)
-            indexQuiz(updatedQuiz)
         }
+        dao.saveMovedNodeWithContentOutbox(
+            node = updated,
+            nodeFts = nodeFts(updated),
+            nodeOutbox = nodeContentOutbox(previous = node, updated = updated, now = now),
+            quizzes = updatedQuizzes,
+            quizFts = updatedQuizzes.mapNotNull(::quizFts),
+            quizOutbox = updatedQuizzes.map { quiz ->
+                quizContentOutbox(previousRevision = quiz.revision - RevisionStep, updated = quiz, now = now)
+            }
+        )
     }
 
     suspend fun toggleNodeChecked(nodeId: String, now: Long = System.currentTimeMillis()) {
@@ -292,35 +301,91 @@ class LibraryRepository(
 
     private suspend fun indexNode(node: LearningNodeEntity) {
         dao.deleteNodeFts(node.id)
-        if (node.deletedAt == null && node.visibility != TrashVisibility) {
-            dao.upsertNodeFts(
-                NodeFtsEntity(
-                    rowId = stableRowId(node.id),
-                    nodeId = node.id,
-                    title = node.title,
-                    body = node.markdownBody
-                )
-            )
+        val fts = nodeFts(node)
+        if (fts != null) {
+            dao.upsertNodeFts(fts)
         }
     }
 
     private suspend fun indexQuiz(quiz: QuizItemEntity) {
         dao.deleteQuizFts(quiz.id)
-        if (quiz.deletedAt == null && quiz.visibility != TrashVisibility) {
-            dao.upsertQuizFts(
-                QuizFtsEntity(
-                    rowId = stableRowId(quiz.id),
-                    quizId = quiz.id,
-                    prompt = quiz.prompt,
-                    answer = quiz.answer
-                )
-            )
+        val fts = quizFts(quiz)
+        if (fts != null) {
+            dao.upsertQuizFts(fts)
         }
     }
 
     private suspend fun deleteReviewDataForQuiz(quizId: String) {
         dao.deleteReviewStateForQuiz(quizId)
         dao.deleteReviewAttemptsForQuiz(quizId)
+    }
+
+    private fun nodeFts(node: LearningNodeEntity): NodeFtsEntity? =
+        if (node.deletedAt == null && node.visibility != TrashVisibility) {
+            NodeFtsEntity(
+                rowId = stableRowId(node.id),
+                nodeId = node.id,
+                title = node.title,
+                body = node.markdownBody
+            )
+        } else {
+            null
+        }
+
+    private fun quizFts(quiz: QuizItemEntity): QuizFtsEntity? =
+        if (quiz.deletedAt == null && quiz.visibility != TrashVisibility) {
+            QuizFtsEntity(
+                rowId = stableRowId(quiz.id),
+                quizId = quiz.id,
+                prompt = quiz.prompt,
+                answer = quiz.answer
+            )
+        } else {
+            null
+        }
+
+    private fun nodeContentOutbox(
+        previous: LearningNodeEntity,
+        updated: LearningNodeEntity,
+        now: Long
+    ): ReplicationOutboxEntity {
+        val payload = ContentNodeCodec.encode(NodeRoomMapper.toDomain(updated))
+        return ReplicationOutboxEntity(
+            changeId = UUID.randomUUID().toString(),
+            commandId = UUID.randomUUID().toString(),
+            aggregateType = ContentNodeAggregateType,
+            aggregateId = updated.id,
+            operation = UpdateOperation,
+            baseRevision = previous.revision,
+            newRevision = updated.revision,
+            domainSchemaVersion = ContentNodeCodec.SchemaVersion,
+            payloadJson = payload,
+            payloadHash = ContentNodeCodec.sha256Hex(payload),
+            state = PendingOutboxState,
+            createdAt = now
+        )
+    }
+
+    private fun quizContentOutbox(
+        previousRevision: Long,
+        updated: QuizItemEntity,
+        now: Long
+    ): ReplicationOutboxEntity {
+        val payload = QuizOutboxCodec.encode(updated)
+        return ReplicationOutboxEntity(
+            changeId = UUID.randomUUID().toString(),
+            commandId = UUID.randomUUID().toString(),
+            aggregateType = QuizAggregateType,
+            aggregateId = updated.id,
+            operation = UpdateOperation,
+            baseRevision = previousRevision,
+            newRevision = updated.revision,
+            domainSchemaVersion = QuizOutboxCodec.SchemaVersion,
+            payloadJson = payload,
+            payloadHash = QuizOutboxCodec.sha256Hex(payload),
+            state = PendingOutboxState,
+            createdAt = now
+        )
     }
 
     private fun stableRowId(id: String): Int = id.hashCode().absoluteValue.coerceAtLeast(MinimumStableRowId)
@@ -391,14 +456,18 @@ class LibraryRepository(
             .trim('-')
 
     private companion object {
+        const val ContentNodeAggregateType = "content.node"
         const val CoreVisibility = "core"
         const val DefaultAreaSlug = "questions"
         const val InitialSlugSuffix = 2
         const val MinimumStableRowId = 1
         const val NewAreaName = "New Area"
+        const val PendingOutboxState = "pending"
         const val PracticeVisibility = "practice"
+        const val QuizAggregateType = "content.quiz"
         const val RevisionStep = 1L
         const val SupportVisibility = "support"
         const val TrashVisibility = "trash"
+        const val UpdateOperation = "update"
     }
 }

@@ -45,8 +45,8 @@ export function GraphNavigator({
   const { center, children, pagination, path, actions } = payload
 
   return (
-    <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">
-      <header className="graph-control-bar">
+    <section className="graph-navigator-shell cockpit-detail-shell graph-cockpit-shell" aria-label="Knowledge graph navigator">
+      <header className="graph-control-bar cockpit-hero">
         <button type="button" className="focus-toggle" onClick={() => onNavigate('/graph')}>
           Workbench
         </button>

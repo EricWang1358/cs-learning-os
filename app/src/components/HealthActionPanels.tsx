@@ -159,8 +159,8 @@ export function HealthActionPanels({
     : 0
 
   return (
-    <div className="health-detail">
-      <section className="health-grid" aria-label="Health action summary">
+    <div className="health-detail cockpit-detail-shell health-panels-shell">
+      <section className="health-grid cockpit-summary-grid" aria-label="Health action summary">
         <article className="health-card">
           <p className="eyebrow">Integrity</p>
           <h3>{formatCount(integrityIssues.length)}</h3>

@@ -1,9 +1,11 @@
 package com.cslearningos.mobile.data
 
 import com.cslearningos.mobile.content.application.ContentCommandPort
+import com.cslearningos.mobile.content.room.ContentNodeCodec
+import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
+import com.cslearningos.mobile.feature.review.data.QuizOutboxCodec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -788,6 +790,79 @@ class LearningRepositoryPolicyTest {
 
         assertEquals(true, repository.deleteAreaIfEmpty(created.id, now = 8_000L))
         assertEquals(8_000L, dao.areas.getValue(created.id).deletedAt)
+    }
+
+    @Test
+    fun movingNodeToAreaUpdatesLinkedQuizAndCreatesSyncableOutboxChanges() = runTest {
+        val dao = FakeLearningDao()
+        val repository = repository(dao)
+        dao.areas["systems"] = AreaEntity(
+            id = "systems",
+            slug = "systems",
+            name = "Systems",
+            order = 20,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+        dao.areas["algorithms"] = AreaEntity(
+            id = "algorithms",
+            slug = "algorithms",
+            name = "Algorithms",
+            order = 30,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            deletedAt = null
+        )
+        dao.nodes["node-1"] = LearningNodeEntity(
+            id = "node-1",
+            title = "Paging",
+            markdownBody = "# Paging",
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            lastReadAt = null,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            areaId = "systems",
+            track = "virtual-memory",
+            order = 20,
+            summary = "Summary",
+            visibility = "support",
+            isStarter = false
+        )
+        dao.quizzes["quiz-1"] = QuizItemEntity(
+            id = "quiz-1",
+            nodeId = "node-1",
+            prompt = "What does paging translate?",
+            answer = "Virtual pages to frames.",
+            explanation = "The page table maps addresses.",
+            source = QuizSource.manual,
+            sourceAnchor = null,
+            createdAt = 1_000L,
+            updatedAt = 1_000L,
+            revision = 1L,
+            syncStatus = SyncStatus.clean,
+            deletedAt = null,
+            area = "systems",
+            track = "virtual-memory",
+            visibility = "practice",
+            isStarter = false
+        )
+
+        repository.moveNodeToArea(nodeId = "node-1", targetAreaId = "algorithms", now = 5_000L)
+
+        assertEquals("algorithms", dao.nodes.getValue("node-1").areaId)
+        assertEquals("algorithms", dao.nodes.getValue("node-1").area)
+        assertEquals("algorithms", dao.quizzes.getValue("quiz-1").area)
+        assertEquals(2, dao.outbox.size)
+
+        val nodeChange = dao.outbox.values.first { it.aggregateType == "content.node" }
+        val quizChange = dao.outbox.values.first { it.aggregateType == "content.quiz" }
+        assertEquals("algorithms", ContentNodeCodec.decode(nodeChange.payloadJson).area.id)
+        assertEquals("algorithms", ContentNodeCodec.decode(nodeChange.payloadJson).area.slug)
+        assertEquals("algorithms", QuizOutboxCodec.decode(quizChange.payloadJson).area)
     }
 
     @Test

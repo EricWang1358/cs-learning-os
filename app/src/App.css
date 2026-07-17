@@ -28,18 +28,25 @@
   display: none;
 }
 
+.workspace-shell.sync-mode,
 .workspace-shell.health-mode {
-  grid-template-columns: 280px minmax(420px, 0.92fr) minmax(520px, 0.98fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
 }
 
+.workspace-shell.sync-mode .sidebar,
+.workspace-shell.sync-mode .detail-panel,
 .workspace-shell.health-mode .sidebar,
-.workspace-shell.health-mode .node-column,
 .workspace-shell.health-mode .detail-panel {
   max-height: 100vh;
   overflow: auto;
+}
+
+.workspace-shell.sync-mode .node-column,
+.workspace-shell.health-mode .node-column {
+  display: none;
 }
 
 .workspace-shell.bite-widget-mode {
@@ -491,6 +498,14 @@
 .workspace-shell.health-mode .detail-panel {
   border-left: 1px solid var(--line);
   border-right: 0;
+}
+
+.workspace-shell.sync-mode .detail-panel,
+.workspace-shell.health-mode .detail-panel {
+  padding: 32px clamp(20px, 4vw, 40px);
+  background:
+    radial-gradient(circle at top right, rgba(252, 213, 53, 0.08), transparent 28%),
+    rgba(11, 14, 17, 0.9);
 }
 
 .error-banner {
@@ -1476,6 +1491,58 @@
   max-width: 980px;
 }
 
+.cockpit-detail-shell {
+  gap: 22px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.cockpit-hero {
+  border: 1px solid rgba(252, 213, 53, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(252, 213, 53, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(252, 213, 53, 0.08), transparent 54%),
+    rgba(24, 26, 32, 0.94);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
+  padding: 24px;
+}
+
+.cockpit-hero-copy {
+  align-items: flex-start;
+}
+
+.cockpit-hero-copy h2 {
+  margin: 8px 0 10px;
+  color: var(--ink-strong);
+  font-size: clamp(30px, 3.6vw, 44px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.cockpit-hero-copy p:last-child {
+  max-width: 720px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.cockpit-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cockpit-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.cockpit-stack {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
 .health-heading {
   border: 1px solid rgba(252, 213, 53, 0.2);
   border-radius: 18px;
@@ -1484,6 +1551,26 @@
     linear-gradient(135deg, rgba(252, 213, 53, 0.07), transparent 52%),
     var(--surface-card);
   padding: 24px;
+}
+
+.sync-cockpit-shell,
+.health-cockpit-shell,
+.graph-cockpit-shell {
+  max-width: 1320px;
+}
+
+.sync-cockpit-shell .detail-section,
+.health-panels-shell .detail-section,
+.health-cockpit-shell .health-pie-panel {
+  border: 1px solid rgba(252, 213, 53, 0.18);
+  border-radius: 20px;
+  background: rgba(24, 26, 32, 0.92);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+}
+
+.sync-cockpit-shell .detail-section,
+.health-panels-shell .detail-section {
+  padding: 22px;
 }
 
 .graph-navigator-shell {
@@ -2090,8 +2177,14 @@
     grid-template-columns: 230px minmax(320px, 1fr);
   }
 
+  .workspace-shell.sync-mode,
   .workspace-shell.health-mode {
-    grid-template-columns: 230px minmax(360px, 1fr);
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+
+  .cockpit-summary-grid,
+  .cockpit-columns {
+    grid-template-columns: 1fr;
   }
 
   .workspace-shell.focus-mode {
@@ -2122,6 +2215,13 @@
 @media (max-width: 760px) {
   .workspace-shell {
     display: block;
+  }
+
+  .workspace-shell.sync-mode,
+  .workspace-shell.health-mode {
+    display: block;
+    height: auto;
+    overflow: visible;
   }
 
   .sidebar,
@@ -2163,6 +2263,14 @@
   .detail-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .cockpit-hero-copy h2 {
+    font-size: 28px;
+  }
+
+  .cockpit-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .reader-question-panel {
