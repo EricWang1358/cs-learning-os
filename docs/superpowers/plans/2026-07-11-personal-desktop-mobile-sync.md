@@ -182,21 +182,27 @@ Acceptance criteria (all proven by `backend/test_sync_envelope.py`):
 
 ### Phase 1: Pairing, Bind Policy, And Auth
 
-**Desktop files:** new `backend/sync_router.py` + `backend/sync_auth.py`; `backend/api.py` registers; `scripts/dev.ps1` gains `-ApiHost`; `backend/runtime_config.py` reads `CS_LEARNING_HOST`.
+**Status: implemented 2026-07-17** (`backend/sync_auth.py`, `backend/sync_router.py`, registered in `backend/api.py`; `backend/test_sync_auth.py` 8 tests).
+
+**Desktop files:** `backend/sync_router.py` + `backend/sync_auth.py`; `backend/api.py` registers; `scripts/dev.ps1` gained `-ApiHost`; `backend/runtime_config.py` reads `CS_LEARNING_HOST`.
 
 Endpoints:
 
 ```text
-GET  /api/sync/v1/health      -- protocol version, server ID, no auth required
-POST /api/sync/v1/pair        -- one-time pairing token -> device_id + scoped bearer credential
+GET  /api/sync/v1/health          -- protocol version, server ID, paired count; no auth
+POST /api/sync/v1/pairing-tokens  -- loopback only; mints one-time token + csos-sync:// QR payload
+POST /api/sync/v1/pair            -- one-time pairing token -> device_id + scoped bearer credential
+GET  /api/sync/v1/devices         -- paired device list (read scope); never exposes hashes
+POST /api/sync/v1/devices/{id}/revoke
 ```
 
-- Default bind stays `127.0.0.1`. LAN/Tailscale serving requires explicit `-ApiHost` / `CS_LEARNING_HOST` **and** refuses to expose `/api/sync/v1/*` without pairing credentials configured.
-- Pairing token: desktop-generated, single-use, expires in 10 minutes, shown in the desktop UI as text + QR payload (`endpoint`, `token`, `server cert fingerprint`).
-- Credential: random 256-bit bearer, stored **SHA-256 hashed** on the desktop, scoped (`sync:read`, `sync:push`), revocable from a desktop device list.
-- All other desktop routers stay localhost-only; the sync router enforces its own bearer middleware.
+- Default bind stays `127.0.0.1` (`CS_LEARNING_HOST` / `-ApiHost` opts into LAN/Tailscale; `dev.ps1` warns on non-loopback binds).
+- Security is structural: pairing tokens are single-use, 10-minute TTL, and **only mintable from loopback**; every endpoint beyond `/health` and `/pair` requires a bearer credential, so a non-loopback bind exposes nothing unauthenticated.
+- Credential: 256-bit bearer (`css_…`), stored **SHA-256 hashed** in `sync_devices`, scoped (`sync:read`, `sync:push`), revocable; `last_seen_at` tracked per request.
+- `serverId` is a stable UUID in `schema_meta`; a fresh database means a fresh identity, which is how clients detect server reset and re-baseline (Phase 2 contract).
+- All other desktop routers stay unchanged; the sync router enforces its own bearer middleware via a FastAPI scope dependency.
 
-Tests must prove: expired/reused pairing tokens rejected; credential hash never returned by any endpoint; unpaired devices get 401 on every sync route; loopback-only mode unchanged by default.
+Tests prove: expired/reused/unknown pairing tokens rejected (401); non-loopback token minting rejected (403); missing/wrong credential rejected (401); revoked device credential stops working; credential and hash never appear in any response; health works unauthenticated with a stable server ID.
 
 ### Phase 2: Pull (Desktop Manifest + Android Merge)
 

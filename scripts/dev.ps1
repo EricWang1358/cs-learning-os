@@ -3,6 +3,7 @@ param(
     [int]$FrontendPort = 5173,
     [string]$ContentDir = "",
     [string]$DbPath = "",
+    [string]$ApiHost = "127.0.0.1",
     [switch]$NoIngest,
     [switch]$NoBrowser,
     [switch]$Detached
@@ -34,17 +35,16 @@ $ApiOutLog = Join-Path $GeneratedDir "api-$ApiPort.out.log"
 $ApiErrLog = Join-Path $GeneratedDir "api-$ApiPort.err.log"
 $FrontendOutLog = Join-Path $GeneratedDir "frontend-$FrontendPort.out.log"
 $FrontendErrLog = Join-Path $GeneratedDir "frontend-$FrontendPort.err.log"
-$ApiHost = "127.0.0.1"
 
 function Stop-PortOwner {
     param([int]$Port)
 
-    $lines = netstat -ano | Select-String "127\.0\.0\.1:$Port\s"
+    $lines = netstat -ano | Select-String ":$Port\s"
     $pids = @()
 
     foreach ($line in $lines) {
         $parts = ($line.ToString() -split "\s+") | Where-Object { $_ }
-        if ($parts.Length -ge 5 -and $parts[3] -eq "LISTENING") {
+        if ($parts.Length -ge 5 -and $parts[1] -like "*:$Port" -and $parts[3] -eq "LISTENING") {
             $pids += [int]$parts[4]
         }
     }
@@ -101,8 +101,10 @@ if (-not $NoIngest) {
 Write-Host "Starting API on http://${ApiHost}:$ApiPort"
 $PreviousContentEnv = $env:CS_LEARNING_CONTENT
 $PreviousDbEnv = $env:CS_LEARNING_DB
+$PreviousHostEnv = $env:CS_LEARNING_HOST
 $env:CS_LEARNING_CONTENT = $ResolvedContentDir
 $env:CS_LEARNING_DB = $ResolvedDbPath
+$env:CS_LEARNING_HOST = $ApiHost
 $api = Start-Process `
     -WindowStyle Hidden `
     -FilePath $Python `
@@ -113,6 +115,7 @@ $api = Start-Process `
     -PassThru
 $env:CS_LEARNING_CONTENT = $PreviousContentEnv
 $env:CS_LEARNING_DB = $PreviousDbEnv
+$env:CS_LEARNING_HOST = $PreviousHostEnv
 
 Start-Sleep -Seconds 2
 
@@ -138,6 +141,9 @@ Write-Host "  UI logs:  $FrontendOutLog"
 Write-Host "            $FrontendErrLog"
 Write-Host "  API PID:  $($api.Id)"
 Write-Host "  UI PID:   $($frontend.Id)"
+if ($ApiHost -ne "127.0.0.1" -and $ApiHost -ne "localhost" -and $ApiHost -ne "::1") {
+    Write-Host ""
+    Write-Warning "API is exposed on $ApiHost. Sync endpoints require paired-device credentials; pairing tokens can only be created from this machine."
 
 if (-not $NoBrowser) {
     Start-Process "http://127.0.0.1:$FrontendPort"

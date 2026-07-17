@@ -67,6 +67,11 @@ class QuizAttemptCreate(BaseModel):
     note: str = ""
 
 
+class SyncPairRequest(BaseModel):
+    token: str = Field(min_length=1)
+    device_name: str = Field(default="android-device", max_length=120)
+
+
 class BiteCardCreate(BaseModel):
     source_type: str = Field(pattern="^(node|quiz)$")
     source_id: str = Field(min_length=1)

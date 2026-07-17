@@ -33,6 +33,7 @@ try:
     from .runtime_config import ai_enabled, app_profile, beta_mode
     from .system_metrics_service import SystemMetricsService
     from .system_router import create_system_router
+    from .sync_router import create_sync_router
 except ImportError:
     import ai_job_service
     import ai_revision_service
@@ -58,6 +59,7 @@ except ImportError:
     from runtime_config import ai_enabled, app_profile, beta_mode
     from system_metrics_service import SystemMetricsService
     from system_router import create_system_router
+    from sync_router import create_sync_router
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -141,6 +143,7 @@ app.include_router(create_quiz_router(get_conn, CONTENT_ROOT))
 app.include_router(create_bite_router(get_conn))
 app.include_router(create_graph_router(get_conn))
 app.include_router(create_reader_question_router(get_conn))
+app.include_router(create_sync_router(get_conn))
 
 
 @app.on_event("startup")

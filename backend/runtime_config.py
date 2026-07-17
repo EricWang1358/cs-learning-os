@@ -23,6 +23,12 @@ def beta_mode() -> bool:
     return app_profile() in {"beta", "friend-beta"} or env_flag("CS_LEARNING_BETA", False)
 
 
+def sync_bind_host() -> str:
+    """Interface the API binds to. Defaults to loopback; set CS_LEARNING_HOST
+    (or scripts/dev.ps1 -ApiHost) to a LAN/Tailscale address to serve sync."""
+    return os.environ.get("CS_LEARNING_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+
 def default_data_root(root: Path) -> Path:
     if os.environ.get("CS_LEARNING_DATA_ROOT"):
         return Path(os.environ["CS_LEARNING_DATA_ROOT"]).expanduser().resolve()
