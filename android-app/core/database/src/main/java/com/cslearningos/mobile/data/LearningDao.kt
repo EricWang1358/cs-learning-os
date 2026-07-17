@@ -136,6 +136,53 @@ interface LearningDao {
     @Query("SELECT * FROM replication_outbox WHERE command_id = :commandId LIMIT 1")
     suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity?
 
+    @Query(
+        """
+        SELECT * FROM replication_outbox
+        WHERE aggregate_type = 'content.node' AND state = 'pending'
+        ORDER BY created_at ASC, change_id ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun getPendingNodeOutbox(limit: Int): List<ReplicationOutboxEntity>
+
+    @Query(
+        """
+        SELECT * FROM replication_outbox
+        WHERE aggregate_type = 'content.quiz' AND state = 'pending'
+        ORDER BY created_at ASC, change_id ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun getPendingQuizOutbox(limit: Int): List<ReplicationOutboxEntity>
+
+    @Query(
+        """
+        UPDATE learning_nodes
+        SET sync_status = 'clean', base_revision = :serverRevision
+        WHERE id = :nodeId
+          AND revision = :localRevision
+          AND sync_status = 'dirty'
+          AND deleted_at IS NULL
+        """
+    )
+    suspend fun markNodeContentSynced(nodeId: String, localRevision: Long, serverRevision: Long)
+
+    @Query(
+        """
+        UPDATE quiz_items
+        SET sync_status = 'clean', base_revision = :serverRevision
+        WHERE id = :quizId
+          AND revision = :localRevision
+          AND sync_status = 'dirty'
+          AND deleted_at IS NULL
+        """
+    )
+    suspend fun markQuizContentSynced(quizId: String, localRevision: Long, serverRevision: Long)
+
+    @Query("DELETE FROM replication_outbox WHERE change_id = :changeId")
+    suspend fun deleteOutboxItem(changeId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertArea(area: AreaEntity)
 
@@ -193,6 +240,20 @@ interface LearningDao {
     @Query("DELETE FROM quiz_fts WHERE quiz_id = :quizId")
     suspend fun deleteQuizFts(quizId: String)
 
+    @Transaction
+    suspend fun saveManualQuizWithOutbox(
+        quiz: QuizItemEntity,
+        initialReviewState: ReviewStateEntity?,
+        fts: QuizFtsEntity?,
+        outbox: ReplicationOutboxEntity
+    ) {
+        upsertQuiz(quiz)
+        if (initialReviewState != null) upsertReviewState(initialReviewState)
+        deleteQuizFts(quiz.id)
+        if (fts != null) upsertQuizFts(fts)
+        insertOutbox(outbox)
+    }
+
     @Query("DELETE FROM areas")
     suspend fun deleteAllAreas()
 
@@ -237,6 +298,28 @@ interface LearningDao {
 
     @Query("UPDATE quiz_items SET deleted_at = :deletedAt, sync_status = 'clean', updated_at = :updatedAt WHERE id = :id")
     suspend fun markQuizSyncedDeleted(id: String, deletedAt: Long, updatedAt: Long)
+
+    @Transaction
+    suspend fun acknowledgeNodeContentPush(
+        changeId: String,
+        nodeId: String,
+        localRevision: Long,
+        serverRevision: Long
+    ) {
+        markNodeContentSynced(nodeId, localRevision, serverRevision)
+        deleteOutboxItem(changeId)
+    }
+
+    @Transaction
+    suspend fun acknowledgeQuizContentPush(
+        changeId: String,
+        quizId: String,
+        localRevision: Long,
+        serverRevision: Long
+    ) {
+        markQuizContentSynced(quizId, localRevision, serverRevision)
+        deleteOutboxItem(changeId)
+    }
 
     @Transaction
     suspend fun applySyncBatch(

@@ -66,25 +66,24 @@ Area handling deserves special attention: the desktop has no Area entity, only a
 | Entity | Desktop → Phone | Phone → Desktop | Conflict policy |
 |---|---|---|---|
 | Areas (labels) | as node/quiz attributes | — | desktop label wins; phone remaps local references |
-| Nodes (Markdown) | pull, scope-filtered | **no auto-upload in v1** | both changed → keep desktop version, park phone text as conflict draft |
-| Quizzes (content) | pull, scope-filtered | **no auto-upload in v1** | same as nodes |
+| Nodes (Markdown) | pull, scope-filtered | push, revision-gated (`push/nodes`) | stale push rejected with current revision; pull-side dirty edit still parks a conflict draft |
+| Quizzes (content) | pull, scope-filtered | push, revision-gated (`push/quizzes`) | same as nodes |
 | Review attempts | pull (dedupe by attempt ID) | push, append-only, client IDs | none — log union; each side derives scheduling state |
 | Review scheduling state | **never synced** | **never synced** | derived from the attempt log on each side |
 | Capture slips | (desktop display only) | push, create-only, client ID as PK | none — phone is the only creator in v1 |
 | Reader questions | status pulled back | push, create-only with `client_id` | status is desktop-owned |
 | Assistant conversations | — | — | **non-goal v1** (device-local) |
 | Media/assets | — | — | **non-goal v1** (text only; lazy-fetch later) |
-| Deletions | tombstones in manifest | **not propagated in v1** | never silently delete phone-local changes |
+| Deletions | tombstones in manifest | **not propagated in v1** (`tombstone_unsupported` on push) | never silently delete phone-local changes |
 
 ### Non-Goals For The First Release
 
 - No multi-user accounts, team sharing, billing, or hosted SaaS.
-- No CRDT editor or automatic last-writer-wins Markdown overwrite.
+- No CRDT editor or automatic last-writer-wins Markdown overwrite — mobile content upload is **revision-gated** instead: a push whose `baseRevision` no longer matches the desktop is rejected, never silently applied.
 - No background polling that drains battery or assumes the desktop is always online.
 - No deletion propagation from phone to desktop until restore, conflict, and audit reports are proven.
 - No media/asset transfer; Markdown text only.
 - No assistant-conversation sync.
-- No dependence on the `replication_outbox` table; it stays reserved for future command-level replication.
 
 ## Design Gates Before Coding
 
@@ -113,6 +112,7 @@ The sync endpoints must **refuse to start on a non-loopback bind without pairing
 Adopt field-specific behavior before implementing automatic upload:
 
 - Markdown node changed on both devices: keep the desktop version and create a clearly named Android conflict draft containing the mobile text (`SyncStatus.conflicted` exists for exactly this). Never discard either text.
+- Mobile content push is **revision-gated**: the phone declares the desktop revision it based its edit on (`baseRevision`); the desktop applies only when that still matches, and otherwise returns `stale_revision` with the current revision so the phone can re-pull and re-base. Nothing is force-overwritten.
 - Review attempts: append-only and idempotent by stable client attempt ID; scheduling is recomputed, never merged.
 - Capture slips and reader questions: create-only upload; server assigns receipt metadata but preserves client ID.
 - Area rename: arrives as ordinary content updates; Android remaps `areaId` references by label and shows a sync report.
@@ -260,7 +260,25 @@ Android behavior:
 
 - `pushLocalChanges()`: attempts upload incrementally by an `answeredAt` high-water mark (advanced only when a batch has zero rejections); dirty capture slips and reader questions upload and reset to `clean` per accepted receipt. No new DAO surface — existing getters and upserts suffice.
 - Desktop-originated attempts now apply on pull: idempotent by attempt ID, desktop 4-grade scale collapses onto the Android scheduler (`easy → good`), and each affected quiz's `ReviewStateEntity` is **rebuilt by replaying the merged attempt log** through `ReviewScheduler` — neither side ever transfers scheduling state (research question 6 answered: bidirectional in v1).
-- Mobile Markdown/quiz content upload stays **off**; conflict drafts wait for the desktop review workflow.
+
+### Phase 3b: Mobile Content Upload (Revision-Gated)
+
+**Status: implemented 2026-07-17.** Desktop: `push_nodes` / `push_quizzes` in `sync_service.py` + routes (7 new tests). Android: production `replication_outbox` drain in `pushLocalChanges()` (new DAO ack methods, `QuizOutboxCodec`, `saveManualQuizWithOutbox`; 6 new tests).
+
+```text
+POST /api/sync/v1/push/nodes    -- [{ changeId, id, title, area, track, summary, body, visibility, baseRevision?, revision, tombstone }]
+POST /api/sync/v1/push/quizzes  -- [{ changeId, id, title?, area, difficulty?, summary?, body, visibility, baseRevision?, revision, tombstone }]
+```
+
+Protocol rules (both entity types):
+
+- **Idempotency by `changeId`:** `sync_push_receipts(device_id, change_id)` stores the first outcome; replays return the stored receipt without re-applying (mirrors the Android processed-command pattern).
+- **Revision gating:** for an existing entity, `baseRevision` must equal the current desktop revision and `revision` must be `current + 1`, else `stale_revision` / `invalid_revision` with the current revision attached. Creates are accepted only with `revision = 1` and no `baseRevision` (`missing_node` / `missing_quiz` otherwise). Tombstones are rejected (`tombstone_unsupported`) — deletions stay desktop-only in v1.
+- **Accepted receipts carry the new desktop revision**; the phone stores it as the entity's `baseRevision` (guarded: only when the local row is still dirty at that exact local revision and not deleted), clears `syncStatus` to `clean`, and deletes the outbox record — all in one Room transaction (`acknowledgeNodeContentPush` / `acknowledgeQuizContentPush`).
+- **Desktop-only frontmatter is preserved:** the push merges synced keys (title/area/track/visibility/summary) into the existing Markdown document and leaves unowned keys (tags, prerequisites, sources, order, status) untouched. New nodes land at `nodes/<area>/<id>.md`; new quizzes at `quizzes/<area>/<id>.md`. Nodes reuse the standard ingest upsert (FTS + revision + change envelope); quizzes use a dedicated upsert with the same guarantees. IDs must be slug-safe and visibility values are validated.
+- **Android outbox discipline:** node saves flow from the Phase 2A command adapter (`aggregate_type = content.node`); manual quiz saves write `content.quiz` records via `saveManualQuizWithOutbox`. Each push round sends only the **oldest pending change per entity** — a newer edit stays queued until the desktop receipts the base it was built on. Pulling content also batches by 200 IDs per request.
+
+Also fixed here: the manifest cursor previously jumped to the change-table high-water even when a page was truncated, silently skipping every later page. It now advances only through the rows actually returned (`hasMore` drives continuation), covered by a 501-row paging test.
 
 ### Phase 4: Explicit Sync UI And Network Policy
 
@@ -283,13 +301,25 @@ Deferred within Phase 4 (explicit): Wi-Fi-only periodic sync (gated on manual su
 
 ### Phase 5: Portable File Handoff
 
-File import remains the zero-server fallback and must become phone-friendly.
+**Status: implemented 2026-07-17.** Desktop: `backend/sync_package.py` + `POST /api/sync/v1/export/package` (read scope, writes `cs-learning-os-package-<timestamp>.zip` under `generated/exports/`, returns path + counts). Android: `SyncPackageImporter` + `ACTION_SEND` receive + Backup-screen confirmation card.
 
-**Package instead of bare long text.** Desktop export gains `cs-learning-os-package-<timestamp>.zip` (manifest, JSON records, Markdown projections, optional media with hashes) alongside the existing manifest exports. The package record schema **is** the sync manifest record schema — an offline transport, not a second data model. Android `.txt` backup (`BackupCodec` v1) stays the phone-native format; cross-import documents the field mapping (desktop `slug` ↔ Android `id`, area label ↔ `AreaEntity`).
+**Package format** (ZIP, shared with the pull record schema):
 
-**Receive shared files directly.** Android `ACTION_SEND` handler for `text/plain`, `application/json`, and package ZIP MIME types. Receiving a file from QQ, WeChat, or Files opens an import confirmation screen, validates it, shows added/updated/conflicted counts, and requires explicit apply.
+```text
+manifest.json          format marker, formatVersion=1, protocolVersion, serverId, exportedAt, counts
+records/nodes.json     pull-shaped node records (id=slug, revision, hash)
+records/quizzes.json   pull-shaped quiz records
+records/capture_slips.json
+markdown/nodes|quizzes/<area>/<id>.md   readable projections (media stays out of v1)
+```
 
-Tests must prove malformed, oversized, wrong-version, and duplicate packages leave user data untouched.
+**Android import path:**
+
+- `MainActivity` handles `ACTION_SEND` for zip/json/plain/octet-stream MIME types; bytes are read with a 25 MB cap and routed to the package importer (`.txt` backup restore keeps its existing full-replace path).
+- `SyncPackageImporter.parse` validates: ZIP integrity, safe entry names, manifest format marker, `formatVersion == 1`, per-type record caps (2,000) — malformed/oversized/wrong-version input throws `SyncPackageException` and touches nothing.
+- Import preview classifies every record: **added** (new ID), **updated** (known, local clean), **conflicted** (local dirty — never overwritten), **skipped** (unparseable quiz body). The Backup screen shows the counts with an explicit **Apply import / Cancel** choice; apply writes entities + FTS via `applySyncBatch` in one transaction with `baseRevision` set from the package revision.
+
+Tests: desktop ZIP readability/counts/auth (2); Android well-formed parse, malformed/wrong-version/type-mismatch rejection, plan classification, apply with FTS + area creation (4).
 
 ## Deployment Profiles
 
@@ -315,5 +345,6 @@ Tests must prove malformed, oversized, wrong-version, and duplicate packages lea
 2. Which areas should seed the phone subset automatically, and should due review override the subset boundary?
 3. Should mobile capture slips upload immediately when connected, or only with an explicit sync button in the first release?
 4. Is end-to-end encryption for package relay required before considering WebDAV/S3, or is Tailscale-only sufficient for the first remote phase?
-5. Conflict draft representation: capture slip with a new `conflict` type (reuses the existing inbox UI) or a sibling node row with `syncStatus = conflicted`? Prototype both against the existing conflict-review UX before Phase 2 lands.
-6. Should desktop-originated review attempts flow back to the phone in v1 (full bidirectional attempt log), or is phone→desktop upload enough for the first release? Bidirectional is more correct for multi-device reviewing but doubles merge-policy test surface.
+5. ~~Conflict draft representation~~ — **resolved 2026-07-17:** pull-side dirty conflicts become sibling nodes (`conflict-<uuid>`, `syncStatus = conflicted`) or conflict capture slips for quizzes; push-side conflicts never materialize because `baseRevision` gating rejects stale uploads outright.
+6. ~~Should desktop-originated review attempts flow back to the phone in v1~~ — **resolved 2026-07-17:** yes, bidirectional; each side rebuilds scheduling state from the merged attempt log (desktop `easy → good` collapse on Android).
+7. New: with mobile content upload live, when should pushed nodes/quizzes on the desktop surface for user review (inbox of recent device edits) versus landing silently in the corpus?

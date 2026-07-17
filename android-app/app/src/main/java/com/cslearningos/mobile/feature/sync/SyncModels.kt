@@ -142,7 +142,8 @@ data class SyncReport(
 data class SyncReceipt(
     val id: String,
     val status: String,
-    val reason: String?
+    val reason: String?,
+    val revision: Long? = null
 ) {
     val accepted: Boolean get() = status == STATUS_ACCEPTED || status == STATUS_DUPLICATE
 
@@ -157,9 +158,11 @@ data class SyncPushReport(
     val uploadedAttempts: Int = 0,
     val uploadedCaptures: Int = 0,
     val uploadedQuestions: Int = 0,
+    val uploadedNodes: Int = 0,
+    val uploadedQuizzes: Int = 0,
     val rejected: Int = 0
 ) {
-    val totalUploaded: Int get() = uploadedAttempts + uploadedCaptures + uploadedQuestions
+    val totalUploaded: Int get() = uploadedAttempts + uploadedCaptures + uploadedQuestions + uploadedNodes + uploadedQuizzes
 }
 
 fun parseSyncReceipts(json: JSONObject): List<SyncReceipt> {
@@ -171,7 +174,8 @@ fun parseSyncReceipts(json: JSONObject): List<SyncReceipt> {
                 SyncReceipt(
                     id = item.getString("id"),
                     status = item.getString("status"),
-                    reason = item.optString("reason").takeIf { it.isNotBlank() }
+                    reason = item.optString("reason").takeIf { it.isNotBlank() },
+                    revision = if (item.isNull("revision")) null else item.optLong("revision")
                 )
             )
         }

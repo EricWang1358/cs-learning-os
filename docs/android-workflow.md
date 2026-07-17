@@ -35,7 +35,7 @@ If a step cannot run locally, do not fake success. Write down the missing toolch
 | A0 Native Offline MVP | Compose app supports local Markdown nodes, quiz/review, search, and explicit backup. | Doctor, unit tests, and debug APK build pass. |
 | A1 Mobile UX Hardening | Reading, editing, review, search, and backup flows are comfortable on a phone. | Manual phone/emulator smoke covers create, edit, read, quiz, review, search, export, restore. |
 | A2 Sync Boundary | Local entities expose stable ids, revisions, tombstones, and conflict hooks. | Sync can be added as a repository adapter without replacing Room/domain models. |
-| A3 Desktop Sync | Phone can exchange user-approved data with the desktop app. | Local transport/import-export story exists before hosted sync. |
+| A3 Desktop Sync | Phone can exchange user-approved data with the desktop app. | Local transport/import-export story exists before hosted sync. **Status 2026-07-17: implemented** — pairing + scoped pull/push + revision-gated content upload + ZIP handoff per `docs/superpowers/plans/2026-07-11-personal-desktop-mobile-sync.md`. |
 | A4 Productization | Signed build, release checklist, privacy policy, backup UX, and diagnostics exist. | Release candidate can be installed and tested by a non-developer. |
 
 ## Architecture Rules

@@ -121,6 +121,42 @@ class SyncPushQuestionsRequest(BaseModel):
     items: list[SyncPushQuestionItem] = Field(default_factory=list, max_length=500)
 
 
+class SyncPushNodeItem(BaseModel):
+    changeId: str = Field(min_length=1, max_length=64)
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=300)
+    area: str = Field(min_length=1, max_length=80)
+    track: str = Field(min_length=1, max_length=80)
+    summary: str = ""
+    body: str = Field(min_length=1)
+    visibility: str = Field(pattern="^(core|support|draft|archive)$")
+    baseRevision: Optional[int] = Field(default=None, ge=0)
+    revision: int = Field(ge=1)
+    tombstone: bool = False
+
+
+class SyncPushNodesRequest(BaseModel):
+    items: list[SyncPushNodeItem] = Field(default_factory=list, max_length=200)
+
+
+class SyncPushQuizItem(BaseModel):
+    changeId: str = Field(min_length=1, max_length=64)
+    id: str = Field(min_length=1, max_length=64)
+    title: Optional[str] = Field(default=None, max_length=300)
+    area: str = Field(min_length=1, max_length=80)
+    difficulty: str = Field(default="", max_length=40)
+    summary: Optional[str] = None
+    body: str = Field(min_length=1)
+    visibility: str = Field(pattern="^(practice|support|draft|archive)$")
+    baseRevision: Optional[int] = Field(default=None, ge=0)
+    revision: int = Field(ge=1)
+    tombstone: bool = False
+
+
+class SyncPushQuizzesRequest(BaseModel):
+    items: list[SyncPushQuizItem] = Field(default_factory=list, max_length=200)
+
+
 class BiteCardCreate(BaseModel):
     source_type: str = Field(pattern="^(node|quiz)$")
     source_id: str = Field(min_length=1)

@@ -127,11 +127,38 @@ private fun findAreaByReviewKey(areas: List<com.cslearningos.mobile.data.AreaEnt
 @Composable
 fun LearningOsApp(
     shellViewModel: AppShellViewModel = viewModel(),
-    learningViewModel: LearningViewModel = viewModel()
+    learningViewModel: LearningViewModel = viewModel(),
+    sharedPackageUri: android.net.Uri? = null,
+    onSharedPackageConsumed: () -> Unit = {}
 ) {
     val learningState by learningViewModel.state.collectAsStateWithLifecycle()
     val shellState by shellViewModel.state.collectAsStateWithLifecycle()
     val localizedContext = rememberLocalizedAppContext(learningState.systemLanguage)
+
+    LaunchedEffect(sharedPackageUri) {
+        if (sharedPackageUri == null) return@LaunchedEffect
+        val bytes = runCatching {
+            localizedContext.contentResolver.openInputStream(sharedPackageUri)?.use { input ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = input.read(chunk)
+                    if (read < 0) break
+                    total += read
+                    if (total > com.cslearningos.mobile.feature.sync.SyncPackageImporter.MaxPackageBytes) {
+                        throw com.cslearningos.mobile.feature.sync.SyncPackageException("package_too_large")
+                    }
+                    buffer.write(chunk, 0, read)
+                }
+                buffer.toByteArray()
+            }
+        }.getOrNull()
+        onSharedPackageConsumed()
+        if (bytes != null && bytes.isNotEmpty()) {
+            learningViewModel.onSharedPackage(bytes)
+        }
+    }
 
     LaunchedEffect(learningState.screen, learningState.message) {
         shellViewModel.syncFrom(learningState.toAppShellState())

@@ -470,6 +470,38 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun savingManualQuizWritesMatchingContentQuizOutboxChange() = runTest {
+        val dao = FakeLearningDao()
+        val repository = repository(dao)
+        dao.areas["algorithms"] = AreaEntity(
+            id = "algorithms",
+            slug = "algorithms",
+            name = "Algorithms",
+            order = 10,
+            createdAt = 1L,
+            updatedAt = 1L,
+            deletedAt = null
+        )
+
+        val saved = repository.saveManualQuiz(
+            nodeId = null,
+            areaId = "algorithms",
+            prompt = "What is a TLB?",
+            answer = "A translation cache.",
+            explanation = "It caches address translations.",
+            now = 2L
+        )
+
+        assertEquals(1, dao.outbox.size)
+        val change = dao.outbox.values.single()
+        assertEquals("content.quiz", change.aggregateType)
+        assertEquals(saved.id, change.aggregateId)
+        assertEquals(null, change.baseRevision)
+        assertEquals(saved.revision, change.newRevision)
+        assertEquals("pending", change.state)
+    }
+
+    @Test
     fun savingStandaloneQuizWithMissingExplicitAreaFailsWithoutCreatingQuiz() = runTest {
         val dao = FakeLearningDao()
         val repository = repository(dao)
@@ -1055,6 +1087,29 @@ private class FakeLearningDao : LearningDao {
     }
     override suspend fun getOutboxForCommand(commandId: String): ReplicationOutboxEntity? =
         outbox.values.firstOrNull { it.commandId == commandId }
+    override suspend fun getPendingNodeOutbox(limit: Int): List<ReplicationOutboxEntity> =
+        outbox.values
+            .filter { it.aggregateType == "content.node" && it.state == "pending" }
+            .take(limit)
+    override suspend fun getPendingQuizOutbox(limit: Int): List<ReplicationOutboxEntity> =
+        outbox.values
+            .filter { it.aggregateType == "content.quiz" && it.state == "pending" }
+            .take(limit)
+    override suspend fun markNodeContentSynced(nodeId: String, localRevision: Long, serverRevision: Long) {
+        val node = nodes[nodeId] ?: return
+        if (node.revision == localRevision && node.syncStatus == SyncStatus.dirty && node.deletedAt == null) {
+            nodes[nodeId] = node.copy(syncStatus = SyncStatus.clean, baseRevision = serverRevision)
+        }
+    }
+    override suspend fun markQuizContentSynced(quizId: String, localRevision: Long, serverRevision: Long) {
+        val quiz = quizzes[quizId] ?: return
+        if (quiz.revision == localRevision && quiz.syncStatus == SyncStatus.dirty && quiz.deletedAt == null) {
+            quizzes[quizId] = quiz.copy(syncStatus = SyncStatus.clean, baseRevision = serverRevision)
+        }
+    }
+    override suspend fun deleteOutboxItem(changeId: String) {
+        outbox.remove(changeId)
+    }
     override suspend fun upsertArea(area: AreaEntity) {
         areas[area.id] = area
     }

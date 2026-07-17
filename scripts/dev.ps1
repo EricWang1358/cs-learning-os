@@ -144,6 +144,7 @@ Write-Host "  UI PID:   $($frontend.Id)"
 if ($ApiHost -ne "127.0.0.1" -and $ApiHost -ne "localhost" -and $ApiHost -ne "::1") {
     Write-Host ""
     Write-Warning "API is exposed on $ApiHost. Sync endpoints require paired-device credentials; pairing tokens can only be created from this machine."
+}
 
 if (-not $NoBrowser) {
     Start-Process "http://127.0.0.1:$FrontendPort"

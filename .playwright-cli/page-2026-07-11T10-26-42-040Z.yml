@@ -1,0 +1,31 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - heading "知识库" [level=1] [ref=e4]
+    - generic [ref=e5]: 4 个区域 · 18 个节点
+  - region "知识库文件夹列表" [ref=e6]:
+    - button "▣ 算法搜索、图、动态规划 6 项" [expanded] [ref=e7] [cursor=pointer]:
+      - generic [ref=e8]: ▣
+      - generic [ref=e9]: 算法搜索、图、动态规划
+      - generic [ref=e10]: 6 项
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - button "新建节点" [ref=e13] [cursor=pointer]
+        - button "编辑区域" [ref=e14] [cursor=pointer]
+        - button "删除区域" [ref=e15] [cursor=pointer]
+      - button "□ 图遍历Algorithms · 已标记 · 2 个待复习 今天" [ref=e17] [cursor=pointer]:
+        - generic [ref=e18]: □
+        - generic [ref=e19]: 图遍历Algorithms · 已标记 · 2 个待复习
+        - generic [ref=e20]: 今天
+      - button "□ 二分搜索Algorithms · 1 个待复习 昨天" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: □
+        - generic [ref=e24]: 二分搜索Algorithms · 1 个待复习
+        - generic [ref=e25]: 昨天
+    - button "▣ CS 基础内存、网络、数据库 8 项" [ref=e26] [cursor=pointer]:
+      - generic [ref=e27]: ▣
+      - generic [ref=e28]: CS 基础内存、网络、数据库
+      - generic [ref=e29]: 8 项
+    - button "▣ 项目实践与复盘 3 项" [ref=e30] [cursor=pointer]:
+      - generic [ref=e31]: ▣
+      - generic [ref=e32]: 项目实践与复盘
+      - generic [ref=e33]: 3 项
+  - paragraph [ref=e34]: 整行点击展开或收起。区域展开后显示管理命令；节点展开后显示摘要和阅读入口。

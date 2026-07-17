@@ -495,6 +495,16 @@
     <string name="sync_busy">同步中…</string>
     <string name="sync_report_pull_line">上次拉取：%1$d 节点 / %2$d 复习卡，%3$d 冲突</string>
     <string name="sync_report_push_line">上次上传：%1$d 条事件，%2$d 条被拒</string>
+    <string name="sync_package_import_title">导入同步包</string>
+    <string name="sync_package_summary">%1$d 节点 · %2$d 复习卡 · %3$d 随手记（导出于 %4$s）</string>
+    <string name="sync_package_counts">新增 %1$d · 更新 %2$d · 冲突跳过 %3$d · 格式跳过 %4$d</string>
+    <string name="sync_package_apply">应用导入</string>
+    <string name="sync_package_cancel">取消</string>
+    <string name="sync_package_confirm_hint">冲突的本地修改不会被覆盖；它们保持原样并计入冲突跳过。</string>
+    <string name="sync_package_applied">已导入 %1$d 条记录。</string>
+    <string name="sync_package_error_invalid">同步包无效或已损坏。</string>
+    <string name="sync_package_error_too_large">同步包过大，无法导入。</string>
+    <string name="sync_package_error_wrong_version">同步包版本不受支持。</string>
     <string name="more_section_guide_title">教程</string>
     <string name="more_section_guide_body">内置当前本地优先手机工作流的使用说明。</string>
     <string name="more_value_start_here">先看这里</string>

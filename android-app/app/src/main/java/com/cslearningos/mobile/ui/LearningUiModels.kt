@@ -66,6 +66,17 @@ data class SyncUiState(
     val error: String? = null
 )
 
+data class PackageImportUiState(
+    val nodeCount: Int,
+    val quizCount: Int,
+    val captureCount: Int,
+    val added: Int,
+    val updated: Int,
+    val conflicted: Int,
+    val skipped: Int,
+    val exportedAt: String
+)
+
 data class LearningUiState(
     val screen: AppScreen = AppScreen.Home,
     val assistant: AssistantUiState = AssistantUiState(),
@@ -119,6 +130,7 @@ data class LearningUiState(
     val expandedMoreSection: MoreSectionId? = null,
     val quizAnswerVisible: Boolean = false,
     val sync: SyncUiState = SyncUiState(),
+    val pendingPackageImport: PackageImportUiState? = null,
     val message: UiText? = null
 )
 

@@ -237,6 +237,87 @@ class LearningViewModel private constructor(
 
     private fun deviceName(): String = android.os.Build.MODEL ?: "android"
 
+    // ---- Sync package import (Phase 5) ----
+
+    private var pendingPackagePlan: com.cslearningos.mobile.feature.sync.SyncPackageImporter.ImportPlan? = null
+
+    fun onSharedPackage(bytes: ByteArray) {
+        val dao = database?.learningDao() ?: return
+        viewModelScope.launch {
+            runCatching {
+                val preview = com.cslearningos.mobile.feature.sync.SyncPackageImporter.parse(bytes)
+                com.cslearningos.mobile.feature.sync.SyncPackageImporter.planImport(
+                    dao,
+                    preview,
+                    System.currentTimeMillis()
+                )
+            }
+                .onSuccess { plan ->
+                    pendingPackagePlan = plan
+                    _state.update {
+                        it.copy(
+                            screen = AppScreen.Backup,
+                            pendingPackageImport = PackageImportUiState(
+                                nodeCount = plan.preview.nodes.size,
+                                quizCount = plan.preview.quizzes.size,
+                                captureCount = plan.preview.captureSlips.size,
+                                added = plan.added,
+                                updated = plan.updated,
+                                conflicted = plan.conflicted,
+                                skipped = plan.skipped,
+                                exportedAt = plan.preview.exportedAt
+                            ),
+                            message = null
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    pendingPackagePlan = null
+                    _state.update {
+                        it.copy(message = uiText(packageImportErrorResId(error)))
+                    }
+                }
+        }
+    }
+
+    fun confirmPackageImport() {
+        val dao = database?.learningDao() ?: return
+        val plan = pendingPackagePlan ?: return
+        viewModelScope.launch {
+            runCatching {
+                com.cslearningos.mobile.feature.sync.SyncPackageImporter.applyImport(dao, plan)
+            }
+                .onSuccess {
+                    pendingPackagePlan = null
+                    _state.update {
+                        it.copy(
+                            pendingPackageImport = null,
+                            message = uiText(R.string.sync_package_applied, plan.applicable)
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.update {
+                        it.copy(message = uiText(R.string.sync_package_error_invalid))
+                    }
+                }
+        }
+    }
+
+    fun dismissPackageImport() {
+        pendingPackagePlan = null
+        _state.update { it.copy(pendingPackageImport = null) }
+    }
+
+    private fun packageImportErrorResId(error: Throwable): Int = when (error) {
+        is com.cslearningos.mobile.feature.sync.SyncPackageException -> when (error.message) {
+            "package_too_large" -> R.string.sync_package_error_too_large
+            "version_unsupported" -> R.string.sync_package_error_wrong_version
+            else -> R.string.sync_package_error_invalid
+        }
+        else -> R.string.sync_package_error_invalid
+    }
+
     private fun startInitialObservers() {
         viewModelScope.launch {
             settingsViewModel.uiState.collect { settingsState ->

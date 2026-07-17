@@ -9,6 +9,8 @@ requests, so the router is safe to expose on LAN/Tailscale interfaces.
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,9 +22,11 @@ try:
         SyncPullRequest,
         SyncPushAttemptsRequest,
         SyncPushCapturesRequest,
+        SyncPushNodesRequest,
+        SyncPushQuizzesRequest,
         SyncPushQuestionsRequest,
     )
-    from . import sync_auth, sync_service
+    from . import sync_auth, sync_package, sync_service
 except ImportError:  # pragma: no cover - script execution
     from api_models import (
         SyncManifestRequest,
@@ -30,10 +34,13 @@ except ImportError:  # pragma: no cover - script execution
         SyncPullRequest,
         SyncPushAttemptsRequest,
         SyncPushCapturesRequest,
+        SyncPushNodesRequest,
+        SyncPushQuizzesRequest,
         SyncPushQuestionsRequest,
     )
     import sync_auth
     import sync_service
+    import sync_package
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
 
@@ -48,6 +55,8 @@ def default_loopback_check(request: Request) -> bool:
 def create_sync_router(
     get_conn: ConnectionFactory,
     is_loopback: Callable[[Request], bool] = default_loopback_check,
+    export_root: Path | None = None,
+    content_root: Path | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/sync/v1", tags=["sync"])
 
@@ -137,6 +146,54 @@ def create_sync_router(
         with get_conn() as conn:
             receipts = sync_service.push_reader_questions(conn, [item.model_dump() for item in payload.items])
             return {"receipts": receipts}
+
+    @router.post("/push/nodes")
+    def push_nodes(
+        payload: SyncPushNodesRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        if content_root is None:
+            raise HTTPException(status_code=400, detail="Node sync is not configured on this desktop")
+        with get_conn() as conn:
+            receipts = sync_service.push_nodes(
+                conn,
+                content_root,
+                device["id"],
+                [item.model_dump() for item in payload.items],
+            )
+            return {"receipts": receipts}
+
+    @router.post("/push/quizzes")
+    def push_quizzes(
+        payload: SyncPushQuizzesRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        if content_root is None:
+            raise HTTPException(status_code=400, detail="Quiz sync is not configured on this desktop")
+        with get_conn() as conn:
+            receipts = sync_service.push_quizzes(
+                conn,
+                content_root,
+                device["id"],
+                [item.model_dump() for item in payload.items],
+            )
+            return {"receipts": receipts}
+
+    @router.post("/export/package")
+    def export_package(
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_READ)),
+    ) -> dict:
+        if export_root is None:
+            raise HTTPException(status_code=400, detail="Package export is not configured on this desktop")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        out_path = export_root / f"cs-learning-os-package-{timestamp}.zip"
+        with get_conn() as conn:
+            manifest = sync_package.build_sync_package(conn, out_path)
+        return {
+            "fileName": out_path.name,
+            "path": str(out_path),
+            "counts": manifest["counts"],
+        }
 
     @router.post("/manifest")
     def manifest(

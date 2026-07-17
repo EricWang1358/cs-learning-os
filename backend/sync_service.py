@@ -9,23 +9,47 @@ learning events with client-stable IDs and per-record receipts.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
+from pathlib import Path
 
 try:
     from .learning_service import parse_time, record_quiz_attempt
+    from .node_lifecycle_service import (
+        markdown_frontmatter,
+        parse_frontmatter_block,
+        restore_file_on_failure,
+        slugify,
+        split_markdown_frontmatter,
+        upsert_node_file_in_conn,
+        yaml_scalar,
+    )
     from .sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
+        bump_revision_and_log,
         content_hash,
         record_change,
         utc_now,
     )
 except ImportError:  # pragma: no cover - script execution
     from learning_service import parse_time, record_quiz_attempt
+    from node_lifecycle_service import (
+        markdown_frontmatter,
+        parse_frontmatter_block,
+        restore_file_on_failure,
+        slugify,
+        split_markdown_frontmatter,
+        upsert_node_file_in_conn,
+        yaml_scalar,
+    )
     from sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
+        bump_revision_and_log,
         content_hash,
         record_change,
         utc_now,
@@ -151,9 +175,12 @@ def manifest_changes(
     due_quizzes = _due_quiz_ids(conn, now) if scope.include_due_reviews else set()
     due_nodes = _due_node_slugs(conn, now) if scope.include_due_reviews else set()
 
+    high_water = conn.execute(
+        "SELECT COALESCE(MAX(seq), 0) AS hw FROM sync_changes"
+    ).fetchone()["hw"]
     rows = conn.execute(
-        "SELECT * FROM sync_changes WHERE seq > ? ORDER BY seq LIMIT ?",
-        (max(0, cursor), limit + 1),
+        "SELECT * FROM sync_changes WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?",
+        (max(0, cursor), high_water, limit + 1),
     ).fetchall()
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -177,9 +204,9 @@ def manifest_changes(
         baseline = _baseline_changes(conn, scope, due_quizzes, due_nodes, seen)
         changes = baseline + changes
 
-    high_water = conn.execute("SELECT COALESCE(MAX(seq), 0) AS hw FROM sync_changes").fetchone()["hw"]
+    next_cursor = rows[-1]["seq"] if rows else high_water
     return {
-        "cursor": int(high_water),
+        "cursor": int(next_cursor),
         "changes": changes,
         "hasMore": has_more,
     }
@@ -475,3 +502,350 @@ def push_reader_questions(conn: sqlite3.Connection, items: list[dict]) -> list[d
         receipts.append(_receipt(client_id, RECEIPT_ACCEPTED))
     conn.commit()
     return receipts
+
+
+def push_nodes(
+    conn: sqlite3.Connection,
+    content_root: Path,
+    device_id: str,
+    items: list[dict],
+) -> list[dict]:
+    """Apply idempotent mobile updates to existing desktop Nodes.
+
+    The desktop content file remains the durable authoring representation, so
+    every accepted update writes a complete frontmatter/body document and
+    reuses the normal ingest path to refresh SQLite, FTS, and sync_changes.
+    """
+    _ensure_push_receipt_schema(conn)
+    receipts: list[dict] = []
+    for item in items:
+        change_id = str(item["changeId"])
+        replay = _load_push_receipt(conn, device_id, change_id)
+        if replay is not None:
+            receipts.append(replay)
+            continue
+
+        node_id = str(item["id"])
+        existing = conn.execute("SELECT * FROM nodes WHERE slug = ?", (node_id,)).fetchone()
+        if existing is None:
+            if item.get("baseRevision") is not None or int(item.get("revision", -1)) != 1:
+                receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "missing_node"))
+                continue
+        current_revision = int(existing["revision"]) if existing is not None else 0
+        if bool(item.get("tombstone")):
+            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "tombstone_unsupported", current_revision))
+            continue
+        if existing is not None and int(item.get("baseRevision", -1)) != current_revision:
+            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "stale_revision", current_revision))
+            continue
+        if int(item.get("revision", -1)) != current_revision + 1:
+            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "invalid_revision", current_revision))
+            continue
+        if slugify(node_id) != node_id:
+            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "invalid_node_id", current_revision))
+            continue
+
+        body = str(item.get("body") or "").strip()
+        title = str(item.get("title") or "").strip()
+        area = slugify(str(item.get("area") or ""))
+        track = slugify(str(item.get("track") or ""))
+        visibility = str(item.get("visibility") or "").strip()
+        if not body or not title or not area or not track or visibility not in {"core", "support", "draft", "archive"}:
+            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "invalid_node", current_revision))
+            continue
+
+        source_path = content_root / (existing["path"] if existing is not None else f"nodes/{area}/{node_id}.md")
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        synced_metadata = {
+            "title": title,
+            "area": area,
+            "track": track,
+            "visibility": visibility,
+            "summary": str(item.get("summary") or "").strip(),
+        }
+        if existing is None or not source_path.exists():
+            document = markdown_frontmatter(
+                {
+                    "slug": node_id,
+                    **synced_metadata,
+                    "order": existing["display_order"] if existing is not None else 1000,
+                    "status": existing["status"] if existing is not None else "draft",
+                    "tags": [],
+                }
+            ) + body + "\n"
+        else:
+            try:
+                document = _merged_frontmatter_document(source_path, synced_metadata, body)
+            except ValueError:
+                receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "invalid_source", current_revision))
+                continue
+        with restore_file_on_failure(source_path):
+            source_path.write_text(document, encoding="utf-8")
+            updated = upsert_node_file_in_conn(conn, content_root, source_path)
+            receipt = _content_receipt(node_id, RECEIPT_ACCEPTED, revision=int(updated["revision"]))
+            _save_push_receipt(conn, device_id, change_id, receipt)
+            conn.commit()
+        receipts.append(receipt)
+    return receipts
+
+
+def _merged_frontmatter_document(path: Path, fields: dict[str, str], body: str) -> str:
+    """Update synced fields while retaining unowned desktop frontmatter."""
+    frontmatter, _ = split_markdown_frontmatter(path.read_text(encoding="utf-8"))
+    if not frontmatter:
+        raise ValueError("Existing node source has no frontmatter")
+
+    lines = frontmatter.strip().splitlines()
+    seen: set[str] = set()
+    for index, line in enumerate(lines):
+        key, separator, _ = line.partition(":")
+        if separator and key in fields:
+            lines[index] = f"{key}: {yaml_scalar(fields[key])}"
+            seen.add(key)
+    for key, value in fields.items():
+        if key not in seen:
+            lines.insert(-1, f"{key}: {yaml_scalar(value)}")
+    return "\n".join(lines) + "\n\n" + body + "\n"
+
+
+def push_quizzes(
+    conn: sqlite3.Connection,
+    content_root: Path,
+    device_id: str,
+    items: list[dict],
+) -> list[dict]:
+    """Apply idempotent mobile Quiz changes to desktop Markdown and SQLite."""
+    _ensure_push_receipt_schema(conn)
+    receipts: list[dict] = []
+    for item in items:
+        change_id = str(item["changeId"])
+        replay = _load_push_receipt(conn, device_id, change_id)
+        if replay is not None:
+            receipts.append(replay)
+            continue
+
+        quiz_id = str(item["id"])
+        existing = conn.execute("SELECT * FROM quizzes WHERE id = ?", (quiz_id,)).fetchone()
+        if existing is None and (item.get("baseRevision") is not None or int(item.get("revision", -1)) != 1):
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "missing_quiz"))
+            continue
+        current_revision = int(existing["revision"]) if existing is not None else 0
+        if bool(item.get("tombstone")):
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "tombstone_unsupported", current_revision))
+            continue
+        if existing is not None and int(item.get("baseRevision", -1)) != current_revision:
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "stale_revision", current_revision))
+            continue
+        if int(item.get("revision", -1)) != current_revision + 1:
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "invalid_revision", current_revision))
+            continue
+        if slugify(quiz_id) != quiz_id:
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "invalid_quiz_id", current_revision))
+            continue
+
+        body = str(item.get("body") or "").strip()
+        requested_title = str(item.get("title") or "").strip()
+        title = requested_title or (str(existing["title"]) if existing is not None else _quiz_title_from_body(body))
+        area = slugify(str(item.get("area") or ""))
+        requested_difficulty = str(item.get("difficulty") or "").strip()
+        difficulty = requested_difficulty or (str(existing["difficulty"]) if existing is not None else "medium")
+        requested_summary = item.get("summary")
+        summary = str(requested_summary).strip() if requested_summary is not None else (
+            str(existing["summary"]) if existing is not None else ""
+        )
+        visibility = str(item.get("visibility") or "").strip()
+        if not body or not title or not area or visibility not in {"practice", "support", "draft", "archive"}:
+            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "invalid_quiz", current_revision))
+            continue
+
+        source_path = content_root / (existing["path"] if existing is not None else f"quizzes/{area}/{quiz_id}.md")
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        synced_metadata = {
+            "area": area,
+            "visibility": visibility,
+        }
+        if requested_title or existing is None:
+            synced_metadata["title"] = title
+        if requested_summary is not None or existing is None:
+            synced_metadata["summary"] = summary
+        if requested_difficulty or existing is None:
+            synced_metadata["difficulty"] = difficulty
+        if existing is None or not source_path.exists():
+            document = markdown_frontmatter(
+                {
+                    "id": quiz_id,
+                    **synced_metadata,
+                    "order": 1000,
+                    "status": "draft",
+                    "tags": [],
+                }
+            ) + body + "\n"
+        else:
+            try:
+                document = _merged_frontmatter_document(source_path, synced_metadata, body)
+            except ValueError:
+                receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "invalid_source", current_revision))
+                continue
+
+        with restore_file_on_failure(source_path):
+            source_path.write_text(document, encoding="utf-8")
+            _upsert_quiz_change_in_conn(
+                conn,
+                existing,
+                quiz_id,
+                title,
+                area,
+                difficulty,
+                summary,
+                visibility,
+                body,
+                source_path.relative_to(content_root).as_posix(),
+                _frontmatter_metadata(document),
+            )
+            updated = conn.execute("SELECT * FROM quizzes WHERE id = ?", (quiz_id,)).fetchone()
+            if updated is None:
+                raise RuntimeError("Quiz upsert failed")
+            receipt = _content_receipt(quiz_id, RECEIPT_ACCEPTED, revision=int(updated["revision"]))
+            _save_push_receipt(conn, device_id, change_id, receipt)
+            conn.commit()
+        receipts.append(receipt)
+    return receipts
+
+
+def _quiz_title_from_body(body: str) -> str:
+    lines = body.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().lower() != "## prompt":
+            continue
+        for candidate in lines[index + 1:]:
+            title = candidate.strip()
+            if title:
+                return title[:300]
+        break
+    return "Untitled Quiz"
+
+
+def _frontmatter_metadata(document: str) -> dict[str, str]:
+    frontmatter, _ = split_markdown_frontmatter(document)
+    return parse_frontmatter_block(frontmatter)
+
+
+def _upsert_quiz_change_in_conn(
+    conn: sqlite3.Connection,
+    existing: sqlite3.Row | None,
+    quiz_id: str,
+    title: str,
+    area: str,
+    difficulty: str,
+    summary: str,
+    visibility: str,
+    body: str,
+    relative_path: str,
+    metadata: dict[str, str],
+) -> None:
+    now = utc_now()
+    source_title = metadata.get("title") or title
+    source_area = metadata.get("area") or area
+    source_difficulty = metadata.get("difficulty") or difficulty
+    source_summary = metadata["summary"] if "summary" in metadata else summary
+    source_visibility = metadata.get("visibility") or visibility
+    source_order = int(metadata.get("order") or (existing["display_order"] if existing is not None else 1000))
+    source_status = metadata.get("status") or (existing["status"] if existing is not None else "draft")
+    if existing is None:
+        conn.execute(
+            """
+            INSERT INTO quizzes (
+                id, title, area, display_order, status, visibility, difficulty,
+                summary, body, path, weight, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                quiz_id,
+                source_title,
+                source_area,
+                source_order,
+                source_status,
+                source_visibility,
+                source_difficulty,
+                source_summary,
+                body,
+                relative_path,
+                1,
+                now,
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE quizzes
+            SET title = ?, area = ?, display_order = ?, status = ?, visibility = ?,
+                difficulty = ?, summary = ?, body = ?, path = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                source_title,
+                source_area,
+                source_order,
+                source_status,
+                source_visibility,
+                source_difficulty,
+                source_summary,
+                body,
+                relative_path,
+                now,
+                quiz_id,
+            ),
+        )
+    bump_revision_and_log(conn, "quizzes", "id", ENTITY_QUIZ, quiz_id, body)
+    tags = [
+        row["tag_name"]
+        for row in conn.execute(
+            "SELECT tag_name FROM quiz_tags WHERE quiz_id = ? ORDER BY tag_name",
+            (quiz_id,),
+        ).fetchall()
+    ]
+    conn.execute("DELETE FROM quiz_fts WHERE id = ?", (quiz_id,))
+    conn.execute("DELETE FROM graph_cache")
+    conn.execute(
+        "INSERT INTO quiz_fts (id, title, summary, body, tags) VALUES (?, ?, ?, ?, ?)",
+        (quiz_id, source_title, source_summary, body, " ".join(tags)),
+    )
+
+
+def _ensure_push_receipt_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sync_push_receipts (
+            device_id TEXT NOT NULL,
+            change_id TEXT NOT NULL,
+            receipt_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (device_id, change_id)
+        )
+        """
+    )
+
+
+def _load_push_receipt(conn: sqlite3.Connection, device_id: str, change_id: str) -> dict | None:
+    row = conn.execute(
+        "SELECT receipt_json FROM sync_push_receipts WHERE device_id = ? AND change_id = ?",
+        (device_id, change_id),
+    ).fetchone()
+    return json.loads(row["receipt_json"]) if row else None
+
+
+def _save_push_receipt(conn: sqlite3.Connection, device_id: str, change_id: str, receipt: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO sync_push_receipts (device_id, change_id, receipt_json, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (device_id, change_id, json.dumps(receipt, sort_keys=True), utc_now()),
+    )
+
+
+def _content_receipt(record_id: str, status: str, reason: str = "", revision: int | None = None) -> dict:
+    receipt = _receipt(record_id, status, reason)
+    if revision is not None:
+        receipt["revision"] = revision
+    return receipt

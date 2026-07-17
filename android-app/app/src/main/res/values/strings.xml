@@ -455,6 +455,16 @@
     <string name="sync_busy">Syncing…</string>
     <string name="sync_report_pull_line">Last pull: %1$d nodes, %2$d quizzes, %3$d conflicts</string>
     <string name="sync_report_push_line">Last upload: %1$d events, %2$d rejected</string>
+    <string name="sync_package_import_title">Import sync package</string>
+    <string name="sync_package_summary">%1$d nodes · %2$d quizzes · %3$d captures (exported %4$s)</string>
+    <string name="sync_package_counts">Add %1$d · Update %2$d · Skip conflicts %3$d · Skip invalid %4$d</string>
+    <string name="sync_package_apply">Apply import</string>
+    <string name="sync_package_cancel">Cancel</string>
+    <string name="sync_package_confirm_hint">Conflicting local edits are never overwritten; they stay untouched and count as skipped conflicts.</string>
+    <string name="sync_package_applied">Imported %1$d records.</string>
+    <string name="sync_package_error_invalid">The package is invalid or corrupted.</string>
+    <string name="sync_package_error_too_large">The package is too large to import.</string>
+    <string name="sync_package_error_wrong_version">This package version is not supported.</string>
     <string name="more_section_guide_title">Guide</string>
     <string name="more_section_guide_body">Built-in instructions for the current local-first phone workflow.</string>
     <string name="more_section_support_title">Support</string>

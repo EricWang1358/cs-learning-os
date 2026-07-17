@@ -106,6 +106,32 @@ def test_incremental_manifest_reports_only_new_changes(tmp_path: Path) -> None:
     assert delta["cursor"] > baseline["cursor"]
 
 
+def test_paged_manifest_cursor_advances_only_through_returned_rows(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    client = build_client(db_path)
+    headers = auth_headers(client)
+    with connect(db_path) as conn:
+        initialize(conn)
+        for index in range(501):
+            conn.execute(
+                """
+                INSERT INTO sync_changes (entity_type, entity_id, revision, content_hash, tombstone, changed_at)
+                VALUES ('capture_slip', ?, 1, 'hash', 0, '2026-07-17T00:00:00+00:00')
+                """,
+                (f"slip-{index}",),
+            )
+        conn.commit()
+
+    first = manifest(client, headers, cursor=0)
+    assert first["hasMore"] is True
+    assert len(first["changes"]) == 500
+    assert first["cursor"] == 500
+
+    second = manifest(client, headers, cursor=first["cursor"])
+    assert second["hasMore"] is False
+    assert [change["id"] for change in second["changes"]] == ["slip-500"]
+
+
 def test_manifest_rows_carry_area_for_move_out_detection(tmp_path: Path) -> None:
     db_path = tmp_path / "knowledge.db"
     client = build_client(db_path)

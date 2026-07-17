@@ -3,6 +3,7 @@ package com.cslearningos.mobile.feature.review.data
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.QuizItemEntity
 import com.cslearningos.mobile.data.QuizSource
+import com.cslearningos.mobile.data.ReplicationOutboxEntity
 import com.cslearningos.mobile.data.ReviewAttemptEntity
 import com.cslearningos.mobile.data.ReviewResult
 import com.cslearningos.mobile.data.ReviewStateEntity
@@ -16,7 +17,8 @@ import java.util.UUID
 import kotlin.math.absoluteValue
 
 class ReviewRepository(
-    private val dao: LearningDao
+    private val dao: LearningDao,
+    private val changeIdFactory: () -> String = { UUID.randomUUID().toString() }
 ) {
     val quizzes: Flow<List<QuizItemEntity>> = dao.observeQuizzes()
 
@@ -71,9 +73,27 @@ class ReviewRepository(
             visibility = existing?.visibility ?: PracticeVisibility,
             isStarter = existing?.isStarter ?: false
         )
-        dao.upsertQuiz(quiz)
-        if (existing == null) dao.upsertReviewState(defaultReviewState(quiz.id, now))
-        indexQuiz(quiz)
+        val payload = QuizOutboxCodec.encode(quiz)
+        val changeId = changeIdFactory()
+        dao.saveManualQuizWithOutbox(
+            quiz = quiz,
+            initialReviewState = if (existing == null) defaultReviewState(quiz.id, now) else null,
+            fts = quizFts(quiz),
+            outbox = ReplicationOutboxEntity(
+                changeId = changeId,
+                commandId = changeId,
+                aggregateType = QuizAggregateType,
+                aggregateId = quiz.id,
+                operation = if (existing == null) CreateOperation else UpdateOperation,
+                baseRevision = existing?.revision,
+                newRevision = quiz.revision,
+                domainSchemaVersion = QuizOutboxCodec.SchemaVersion,
+                payloadJson = payload,
+                payloadHash = QuizOutboxCodec.sha256Hex(payload),
+                state = PendingOutboxState,
+                createdAt = now
+            )
+        )
         return quiz
     }
 
@@ -113,19 +133,15 @@ class ReviewRepository(
         )
     }
 
-    private suspend fun indexQuiz(quiz: QuizItemEntity) {
-        dao.deleteQuizFts(quiz.id)
-        if (quiz.deletedAt == null && quiz.visibility != TrashVisibility) {
-            dao.upsertQuizFts(
-                com.cslearningos.mobile.data.QuizFtsEntity(
-                    rowId = quiz.id.hashCode().absoluteValue.coerceAtLeast(MinimumStableRowId),
-                    quizId = quiz.id,
-                    prompt = quiz.prompt,
-                    answer = quiz.answer
-                )
+    private fun quizFts(quiz: QuizItemEntity): com.cslearningos.mobile.data.QuizFtsEntity? =
+        if (quiz.deletedAt != null || quiz.visibility == TrashVisibility) null else {
+            com.cslearningos.mobile.data.QuizFtsEntity(
+                rowId = quiz.id.hashCode().absoluteValue.coerceAtLeast(MinimumStableRowId),
+                quizId = quiz.id,
+                prompt = quiz.prompt,
+                answer = quiz.answer
             )
         }
-    }
 
     private fun defaultReviewState(quizId: String, now: Long): ReviewStateEntity =
         ReviewStateEntity(
@@ -162,5 +178,9 @@ class ReviewRepository(
         const val MinimumStableRowId = 1
         const val PracticeVisibility = "practice"
         const val TrashVisibility = "trash"
+        const val QuizAggregateType = "content.quiz"
+        const val CreateOperation = "create"
+        const val UpdateOperation = "update"
+        const val PendingOutboxState = "pending"
     }
 }

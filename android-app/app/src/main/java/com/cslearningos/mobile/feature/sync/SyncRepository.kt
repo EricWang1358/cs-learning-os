@@ -1,5 +1,7 @@
 package com.cslearningos.mobile.feature.sync
 
+import com.cslearningos.mobile.content.room.ContentNodeCodec
+import com.cslearningos.mobile.feature.review.data.QuizOutboxCodec
 import com.cslearningos.mobile.data.AreaEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
@@ -112,6 +114,8 @@ class SyncRepository(
         var uploadedAttempts = 0
         var uploadedCaptures = 0
         var uploadedQuestions = 0
+        var uploadedNodes = 0
+        var uploadedQuizzes = 0
         var rejected = 0
 
         val pendingAttempts = dao.getAllAttempts()
@@ -189,10 +193,95 @@ class SyncRepository(
             }
         }
 
+        // A later local edit uses the prior revision as its base. Send only
+        // the oldest pending change per node until the desktop receipts it.
+        val pendingNodeChanges = dao.getPendingNodeOutbox(MaxNodePushChanges)
+            .groupBy { it.aggregateId }
+            .mapNotNull { (_, changes) -> changes.firstOrNull() }
+        val preparedNodeChanges = pendingNodeChanges.mapNotNull { change ->
+            val node = runCatching { ContentNodeCodec.decode(change.payloadJson) }.getOrNull()
+            if (node == null || node.id.value != change.aggregateId || node.revision.value != change.newRevision) {
+                rejected += 1
+                null
+            } else {
+                change to JSONObject()
+                    .put("changeId", change.changeId)
+                    .put("id", node.id.value)
+                    .put("title", node.title)
+                    .put("area", node.area.slug)
+                    .put("track", node.track)
+                    .put("summary", node.summary)
+                    .put("body", node.markdownBody)
+                    .put("visibility", node.visibility)
+                    .put("baseRevision", change.baseRevision ?: JSONObject.NULL)
+                    .put("revision", change.newRevision)
+                    .put("tombstone", node.deletedAt != null)
+            }
+        }
+        if (preparedNodeChanges.isNotEmpty()) {
+            val receiptsById = transport.pushNodes(preparedNodeChanges.map { it.second })
+                .associateBy { it.id }
+            preparedNodeChanges.forEach { (change, _) ->
+                val receipt = receiptsById[change.aggregateId]
+                if (receipt?.accepted == true && receipt.revision != null) {
+                    dao.acknowledgeNodeContentPush(
+                        changeId = change.changeId,
+                        nodeId = change.aggregateId,
+                        localRevision = change.newRevision,
+                        serverRevision = receipt.revision
+                    )
+                    uploadedNodes += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+
+        val pendingQuizChanges = dao.getPendingQuizOutbox(MaxQuizPushChanges)
+            .groupBy { it.aggregateId }
+            .mapNotNull { (_, changes) -> changes.firstOrNull() }
+        val preparedQuizChanges = pendingQuizChanges.mapNotNull { change ->
+            val quiz = runCatching { QuizOutboxCodec.decode(change.payloadJson) }.getOrNull()
+            if (quiz == null || quiz.id != change.aggregateId || quiz.revision != change.newRevision) {
+                rejected += 1
+                null
+            } else {
+                change to JSONObject()
+                    .put("changeId", change.changeId)
+                    .put("id", quiz.id)
+                    .put("area", quiz.area)
+                    .put("body", QuizOutboxCodec.desktopBody(quiz))
+                    .put("visibility", quiz.visibility)
+                    .put("baseRevision", change.baseRevision ?: JSONObject.NULL)
+                    .put("revision", change.newRevision)
+                    .put("tombstone", false)
+            }
+        }
+        if (preparedQuizChanges.isNotEmpty()) {
+            val receiptsById = transport.pushQuizzes(preparedQuizChanges.map { it.second })
+                .associateBy { it.id }
+            preparedQuizChanges.forEach { (change, _) ->
+                val receipt = receiptsById[change.aggregateId]
+                if (receipt?.accepted == true && receipt.revision != null) {
+                    dao.acknowledgeQuizContentPush(
+                        changeId = change.changeId,
+                        quizId = change.aggregateId,
+                        localRevision = change.newRevision,
+                        serverRevision = receipt.revision
+                    )
+                    uploadedQuizzes += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+
         return SyncPushReport(
             uploadedAttempts = uploadedAttempts,
             uploadedCaptures = uploadedCaptures,
             uploadedQuestions = uploadedQuestions,
+            uploadedNodes = uploadedNodes,
+            uploadedQuizzes = uploadedQuizzes,
             rejected = rejected
         )
     }
@@ -319,7 +408,7 @@ class SyncRepository(
             }
         }
 
-        transport.pull(SyncRecord.Node.TYPE, nodeIdsToPull, scope)
+        pullInBatches(SyncRecord.Node.TYPE, nodeIdsToPull, scope)
             .filterIsInstance<SyncRecord.Node>()
             .forEach { record ->
                 val local = dao.getNode(record.id)
@@ -341,7 +430,7 @@ class SyncRepository(
                 }
             }
 
-        transport.pull(SyncRecord.Quiz.TYPE, quizIdsToPull, scope)
+        pullInBatches(SyncRecord.Quiz.TYPE, quizIdsToPull, scope)
             .filterIsInstance<SyncRecord.Quiz>()
             .forEach { record ->
                 val local = dao.getQuiz(record.id)
@@ -366,7 +455,7 @@ class SyncRepository(
                 }
             }
 
-        transport.pull(SyncRecord.ReaderQuestion.TYPE, questionIdsToPull, scope)
+        pullInBatches(SyncRecord.ReaderQuestion.TYPE, questionIdsToPull, scope)
             .filterIsInstance<SyncRecord.ReaderQuestion>()
             .forEach { record ->
                 if (record.targetType != SyncRecord.Node.TYPE) {
@@ -380,7 +469,7 @@ class SyncRepository(
                 }
             }
 
-        transport.pull(SyncRecord.CaptureSlip.TYPE, slipIdsToPull, scope)
+        pullInBatches(SyncRecord.CaptureSlip.TYPE, slipIdsToPull, scope)
             .filterIsInstance<SyncRecord.CaptureSlip>()
             .forEach { record ->
                 val local = dao.getCaptureSlip(record.id)
@@ -397,7 +486,7 @@ class SyncRepository(
         if (attemptIdsToPull.isNotEmpty()) {
             val knownAttemptIds = dao.getAllAttempts().mapTo(HashSet()) { it.id }
             val newAttempts = mutableListOf<ReviewAttemptEntity>()
-            transport.pull(SyncRecord.ReviewAttempt.TYPE, attemptIdsToPull.toList(), scope)
+            pullInBatches(SyncRecord.ReviewAttempt.TYPE, attemptIdsToPull.toList(), scope)
                 .filterIsInstance<SyncRecord.ReviewAttempt>()
                 .forEach { record ->
                     if (record.id in knownAttemptIds) return@forEach
@@ -471,6 +560,16 @@ class SyncRepository(
         return true
     }
 
+    private suspend fun pullInBatches(
+        entityType: String,
+        ids: List<String>,
+        scope: SyncScope
+    ): List<SyncRecord> = buildList {
+        ids.chunked(MaxPullIds).forEach { batch ->
+            addAll(transport.pull(entityType, batch, scope))
+        }
+    }
+
     private suspend fun removeSyncedLocalQuizIfClean(id: String): Boolean {
         val local = dao.getQuiz(id) ?: return false
         if (local.baseRevision <= 0 || local.syncStatus != SyncStatus.clean || local.deletedAt != null) return false
@@ -507,101 +606,21 @@ class SyncRepository(
         )
     }
 
-    private fun nodeFtsOf(node: LearningNodeEntity): NodeFtsEntity =
-        NodeFtsEntity(
-            rowId = stableRowId(node.id),
-            nodeId = node.id,
-            title = node.title,
-            body = node.markdownBody
-        )
-
-    private fun quizFtsOf(quiz: QuizItemEntity): QuizFtsEntity =
-        QuizFtsEntity(
-            rowId = stableRowId(quiz.id),
-            quizId = quiz.id,
-            prompt = quiz.prompt,
-            answer = quiz.answer
-        )
-
     private fun SyncRecord.Node.toEntity(local: LearningNodeEntity?, areaId: String): LearningNodeEntity =
-        LearningNodeEntity(
-            id = id,
-            title = title,
-            markdownBody = body,
-            createdAt = local?.createdAt ?: now(),
-            updatedAt = parseIsoMillis(updatedAt) ?: now(),
-            lastReadAt = local?.lastReadAt,
-            revision = revision,
-            syncStatus = SyncStatus.clean,
-            deletedAt = null,
-            area = area,
-            areaId = areaId,
-            track = track,
-            order = local?.order ?: 1000,
-            summary = summary,
-            visibility = visibility,
-            isStarter = local?.isStarter ?: false,
-            isChecked = local?.isChecked ?: false,
-            baseRevision = revision
-        )
+        toNodeEntity(local, areaId, now())
 
     private fun SyncRecord.Quiz.toEntity(
         parsed: DesktopQuizMarkdown.ParsedDesktopQuiz,
         local: QuizItemEntity?,
         areaId: String
     ): QuizItemEntity =
-        QuizItemEntity(
-            id = id,
-            nodeId = local?.nodeId,
-            prompt = parsed.prompt,
-            answer = parsed.answer,
-            explanation = parsed.explanation,
-            source = QuizSource.markdown,
-            sourceAnchor = local?.sourceAnchor,
-            createdAt = local?.createdAt ?: now(),
-            updatedAt = parseIsoMillis(updatedAt) ?: now(),
-            revision = revision,
-            syncStatus = SyncStatus.clean,
-            deletedAt = null,
-            area = areaId,
-            track = local?.track ?: "general",
-            visibility = visibility,
-            isStarter = local?.isStarter ?: false,
-            baseRevision = revision
-        )
+        toQuizEntity(parsed, local, areaId, now())
 
     private fun SyncRecord.ReaderQuestion.toEntity(local: ReaderQuestionEntity?): ReaderQuestionEntity =
-        ReaderQuestionEntity(
-            id = id,
-            nodeId = targetId,
-            body = question,
-            createdAt = parseIsoMillis(createdAt) ?: local?.createdAt ?: now(),
-            resolvedAt = parseIsoMillis(resolvedAt),
-            syncStatus = SyncStatus.clean,
-            deletedAt = null
-        )
+        toQuestionEntity(local, now())
 
     private fun SyncRecord.CaptureSlip.toEntity(local: CaptureSlipEntity?): CaptureSlipEntity =
-        CaptureSlipEntity(
-            id = id,
-            body = body,
-            type = CaptureSlipType.entries.firstOrNull { it.name == slipType } ?: CaptureSlipType.concept_seed,
-            topicHint = topicHint.ifBlank { null },
-            sourceLabel = sourceLabel.ifBlank { null },
-            linkedNodeId = local?.linkedNodeId,
-            status = CaptureSlipStatus.entries.firstOrNull { it.name == status } ?: CaptureSlipStatus.inbox,
-            createdAt = parseIsoMillis(createdAt) ?: local?.createdAt ?: now(),
-            updatedAt = parseIsoMillis(updatedAt) ?: now(),
-            revision = revision,
-            syncStatus = SyncStatus.clean,
-            deletedAt = null
-        )
-
-    private fun parseIsoMillis(value: String): Long? =
-        runCatching {
-            if (value.isBlank()) return null
-            OffsetDateTime.parse(value).toInstant().toEpochMilli()
-        }.getOrNull()
+        toSlipEntity(local, now())
 
     private fun isoOfMillis(millis: Long): String =
         Instant.ofEpochMilli(millis).toString()
@@ -658,11 +677,11 @@ class SyncRepository(
         )
     }
 
-    private fun stableRowId(id: String): Int =
-        id.hashCode().let { if (it == Int.MIN_VALUE) 1 else kotlin.math.abs(it) }.coerceAtLeast(1)
-
     private companion object {
         const val MaxManifestPages = 40
+        const val MaxPullIds = 200
+        const val MaxNodePushChanges = 100
+        const val MaxQuizPushChanges = 100
         const val DefaultAreaOrder = 1000
         const val DefaultReviewEase = 2.5
 

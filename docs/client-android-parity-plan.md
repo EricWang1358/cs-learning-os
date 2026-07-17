@@ -23,6 +23,8 @@
 | 安全限制 | 已实现：`usesCleartextTraffic=false`；AI 上下文最多 3 条/1,200 字符、单摘录最多 420 字符；备份解码有有界校验。 | 部分实现：ReactMarkdown 默认不解析原始 HTML，AI job 有显式 apply/reject；但没有统一的 Web 内容大小、链接/图片协议或上下文传输上限。 | 所有写路由；AI 预检和 job 路由；未来导入路由。 | Stage 0 先写共享限制表和客户端校验，后端重复强制；为每一类上限编写拒绝路径测试，错误不泄露密钥或完整内容。 | 超限输入在请求前被阻止且服务端再次拒绝；日志/错误不含 API key；恶意 Markdown/备份不执行或改变数据。源码：`android-app/app/src/main/AndroidManifest.xml`、`android-app/app/src/main/java/com/cslearningos/mobile/feature/assistant/domain/AssistantSafetyPolicy.kt`、`backend/ai_router.py`。 |
 | 同步 | 未实现传输：本地 outbox 只是未来复制意图；没有网络传输、冲突解决、账号或同步 UI。 | 未实现：没有跨设备同步、身份或冲突 UI。 | 无同步路由。 | 延期：先稳定 id、revision、删除墓碑和导入/导出恢复合同；另立方案决定传输、身份、冲突与用户授权。 | 本阶段不得新增 sync 开关或“已同步”文案；未来实现需有断网、双端冲突和恢复测试。源码：`android-app/docs/architecture.md`、`docs/android-workflow.md`。 |
 
+> 状态更新（2026-07-17）：个人桌面-移动同步已按 `docs/superpowers/plans/2026-07-11-personal-desktop-mobile-sync.md` 落地 Phase 0–5——桌面 `sync_changes` 游标协议 + 配对/凭据 + scoped manifest/pull + append-only push（attempts/captures/questions）+ 修订门控内容上传（`push/nodes`/`push/quizzes`）+ Android More 页手动同步 UI + ZIP 文件交接。本行描述的是当时（2026-07-14）的状态。
+
 ## 分阶段执行
 
 ### Stage 0：安全与契约

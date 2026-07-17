@@ -12,6 +12,8 @@ CS Learning OS is a local-first personal learning app that can later support des
 
 Cross-device synchronization, accounts, remote transport, conflict resolution, and a computer-client sync path are deferred. The local outbox is preparation for a future adapter, not a working synchronization feature.
 
+> Status update (2026-07-17): the personal desktop sync adapter now exists — see `docs/superpowers/plans/2026-07-11-personal-desktop-mobile-sync.md`. The replication outbox drains through it for node and quiz content pushes (revision-gated); hosted/accounts sync remains deferred.
+
 ## Non-negotiables
 
 - Local-first: Markdown editing, reading, search, review, and study state do not require an account.

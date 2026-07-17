@@ -66,6 +66,53 @@ fun BackupScreen(state: LearningUiState, viewModel: LearningViewModel) {
             title = stringResource(R.string.backup_title),
             body = stringResource(R.string.backup_body)
         )
+        state.pendingPackageImport?.let { preview ->
+            WorkbenchCard(accent = true) {
+                Eyebrow(stringResource(R.string.sync_package_import_title))
+                Text(
+                    text = stringResource(
+                        R.string.sync_package_summary,
+                        preview.nodeCount,
+                        preview.quizCount,
+                        preview.captureCount,
+                        preview.exportedAt.take(10)
+                    ),
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(
+                        R.string.sync_package_counts,
+                        preview.added,
+                        preview.updated,
+                        preview.conflicted,
+                        preview.skipped
+                    ),
+                    color = WorkbenchColors.Muted,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
+                Text(
+                    text = stringResource(R.string.sync_package_confirm_hint),
+                    color = WorkbenchColors.Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+                ToolbarRow {
+                    WorkbenchButton(
+                        text = stringResource(R.string.sync_package_apply),
+                        primary = true,
+                        onClick = viewModel::confirmPackageImport
+                    )
+                    WorkbenchButton(
+                        text = stringResource(R.string.sync_package_cancel),
+                        onClick = viewModel::dismissPackageImport
+                    )
+                }
+            }
+        }
         WorkbenchCard(accent = true) {
             Eyebrow(stringResource(R.string.backup_restore_warning_title))
             Text(
