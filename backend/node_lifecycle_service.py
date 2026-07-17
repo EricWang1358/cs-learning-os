@@ -10,12 +10,14 @@ from pathlib import Path
 from fastapi import HTTPException
 
 try:
+    from .reader_question_service import delete_reader_questions_for_target
     from .sync_envelope import (
         ENTITY_NODE,
         bump_revision_and_log,
         log_permanent_delete,
     )
 except ImportError:  # pragma: no cover - script execution
+    from reader_question_service import delete_reader_questions_for_target
     from sync_envelope import (
         ENTITY_NODE,
         bump_revision_and_log,
@@ -412,6 +414,7 @@ def permanently_delete_node(conn: sqlite3.Connection, content_root: Path, slug: 
         raise HTTPException(status_code=400, detail="Move node to Trashbin before permanent delete")
     content_path = content_root / row["path"]
     with stage_file_delete(content_root, content_path):
+        delete_reader_questions_for_target(conn, "node", slug)
         conn.execute("DELETE FROM links WHERE target_slug = ?", (slug,))
         conn.execute("DELETE FROM nodes WHERE slug = ?", (slug,))
         log_permanent_delete(conn, ENTITY_NODE, slug, row["revision"])

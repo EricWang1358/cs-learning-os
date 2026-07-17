@@ -121,3 +121,26 @@ def delete_reader_question(conn: sqlite3.Connection, question_id: int) -> None:
     conn.execute("DELETE FROM reader_questions WHERE id = ?", (question_id,))
     log_permanent_delete(conn, ENTITY_READER_QUESTION, existing["client_id"] or f"db-{question_id}", None)
     conn.commit()
+
+
+def delete_reader_questions_for_target(
+    conn: sqlite3.Connection,
+    target_type: str,
+    target_id: str,
+) -> None:
+    rows = conn.execute(
+        """
+        SELECT id, client_id
+        FROM reader_questions
+        WHERE target_type = ? AND target_id = ?
+        """,
+        (target_type, target_id),
+    ).fetchall()
+    if not rows:
+        return
+    conn.execute(
+        "DELETE FROM reader_questions WHERE target_type = ? AND target_id = ?",
+        (target_type, target_id),
+    )
+    for row in rows:
+        log_permanent_delete(conn, ENTITY_READER_QUESTION, row["client_id"] or f"db-{row['id']}", None)

@@ -262,6 +262,59 @@ def test_push_node_tombstone_permanently_deletes_and_logs_sync_change(tmp_path: 
     assert [dict(change) for change in changes][-1] == {"revision": 2, "tombstone": 1}
 
 
+def test_push_node_tombstone_also_deletes_linked_reader_questions(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    content_root = tmp_path / "content"
+    seed_library(db_path)
+    node_path = content_root / "nodes" / "algorithms" / "n1.md"
+    node_path.parent.mkdir(parents=True, exist_ok=True)
+    node_path.write_text(
+        "---\nslug: \"n1\"\ntitle: \"Node\"\narea: \"algorithms\"\ntrack: \"general\"\nvisibility: \"trash\"\n---\n\nDeleted on phone.\n",
+        encoding="utf-8",
+    )
+    with connect(db_path) as conn:
+        initialize(conn)
+        conn.execute("UPDATE nodes SET revision = 1, visibility = 'trash' WHERE slug = 'n1'")
+        conn.execute(
+            """
+            INSERT INTO reader_questions (client_id, target_type, target_id, question, status, created_at)
+            VALUES ('rq-node-1', 'node', 'n1', 'Still attached?', 'open', '2026-07-17T10:00:00+00:00')
+            """
+        )
+        conn.commit()
+
+    with connect(db_path) as conn:
+        initialize(conn)
+        receipts = sync_service.push_nodes(
+            conn,
+            content_root,
+            "phone-a",
+            [
+                {
+                    "changeId": "node-delete-rq-1",
+                    "id": "n1",
+                    "title": "Node",
+                    "area": "algorithms",
+                    "track": "general",
+                    "summary": "",
+                    "body": "# Node\n\nDeleted on phone.",
+                    "visibility": "trash",
+                    "baseRevision": 1,
+                    "revision": 2,
+                    "tombstone": True,
+                }
+            ],
+        )
+        question = conn.execute("SELECT 1 FROM reader_questions WHERE client_id = 'rq-node-1'").fetchone()
+        question_changes = conn.execute(
+            "SELECT tombstone FROM sync_changes WHERE entity_type = 'reader_question' AND entity_id = 'rq-node-1' ORDER BY seq"
+        ).fetchall()
+
+    assert receipts == [{"id": "n1", "status": "accepted", "revision": 2}]
+    assert question is None
+    assert [row["tombstone"] for row in question_changes][-1] == 1
+
+
 def test_push_nodes_endpoint_applies_an_authenticated_mobile_edit(tmp_path: Path) -> None:
     db_path = tmp_path / "knowledge.db"
     content_root = tmp_path / "content"
@@ -461,6 +514,56 @@ def test_push_quiz_tombstone_permanently_deletes_and_logs_sync_change(tmp_path: 
     assert row is None
     assert not quiz_path.exists()
     assert [dict(change) for change in changes][-1] == {"revision": 2, "tombstone": 1}
+
+
+def test_push_quiz_tombstone_also_deletes_linked_reader_questions(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    content_root = tmp_path / "content"
+    seed_library(db_path)
+    quiz_path = content_root / "quizzes" / "algorithms" / "q1.md"
+    quiz_path.parent.mkdir(parents=True, exist_ok=True)
+    quiz_path.write_text(
+        "---\nid: \"q1\"\ntitle: \"Quiz\"\narea: \"algorithms\"\nvisibility: \"trash\"\n---\n\n## Prompt\n\nQ\n\n## Answer\n\nA\n",
+        encoding="utf-8",
+    )
+    with connect(db_path) as conn:
+        initialize(conn)
+        conn.execute("UPDATE quizzes SET revision = 1, visibility = 'trash' WHERE id = 'q1'")
+        conn.execute(
+            """
+            INSERT INTO reader_questions (client_id, target_type, target_id, question, status, created_at)
+            VALUES ('rq-quiz-1', 'quiz', 'q1', 'Still attached?', 'open', '2026-07-17T10:00:00+00:00')
+            """
+        )
+        conn.commit()
+
+    with connect(db_path) as conn:
+        initialize(conn)
+        receipts = sync_service.push_quizzes(
+            conn,
+            content_root,
+            "phone-a",
+            [
+                {
+                    "changeId": "quiz-delete-rq-1",
+                    "id": "q1",
+                    "area": "algorithms",
+                    "body": "## Prompt\n\nQ\n\n## Answer\n\nA",
+                    "visibility": "trash",
+                    "baseRevision": 1,
+                    "revision": 2,
+                    "tombstone": True,
+                }
+            ],
+        )
+        question = conn.execute("SELECT 1 FROM reader_questions WHERE client_id = 'rq-quiz-1'").fetchone()
+        question_changes = conn.execute(
+            "SELECT tombstone FROM sync_changes WHERE entity_type = 'reader_question' AND entity_id = 'rq-quiz-1' ORDER BY seq"
+        ).fetchall()
+
+    assert receipts == [{"id": "q1", "status": "accepted", "revision": 2}]
+    assert question is None
+    assert [row["tombstone"] for row in question_changes][-1] == 1
 
 
 def test_push_quizzes_endpoint_creates_a_new_mobile_quiz(tmp_path: Path) -> None:

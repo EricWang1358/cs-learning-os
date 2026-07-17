@@ -26,6 +26,7 @@ try:
         upsert_node_file_in_conn,
         yaml_scalar,
     )
+    from .reader_question_service import delete_reader_questions_for_target
     from .sync_envelope import (
         ENTITY_CAPTURE_SLIP,
         ENTITY_NODE,
@@ -49,6 +50,7 @@ except ImportError:  # pragma: no cover - script execution
         upsert_node_file_in_conn,
         yaml_scalar,
     )
+    from reader_question_service import delete_reader_questions_for_target
     from sync_envelope import (
         ENTITY_CAPTURE_SLIP,
         ENTITY_NODE,
@@ -629,6 +631,7 @@ def _apply_node_tombstone(
     current_revision = int(existing["revision"]) if existing["revision"] is not None else 0
     source_path = content_root / existing["path"]
     with stage_file_delete(content_root, source_path):
+        delete_reader_questions_for_target(conn, "node", existing["slug"])
         conn.execute("DELETE FROM links WHERE target_slug = ?", (existing["slug"],))
         conn.execute("DELETE FROM nodes WHERE slug = ?", (existing["slug"],))
         log_permanent_delete(conn, ENTITY_NODE, existing["slug"], current_revision)
@@ -646,6 +649,7 @@ def _apply_quiz_tombstone(
     current_revision = int(existing["revision"]) if existing["revision"] is not None else 0
     source_path = content_root / existing["path"]
     with stage_file_delete(content_root, source_path):
+        delete_reader_questions_for_target(conn, "quiz", existing["id"])
         conn.execute("DELETE FROM quizzes WHERE id = ?", (existing["id"],))
         log_permanent_delete(conn, ENTITY_QUIZ, existing["id"], current_revision)
         conn.execute("DELETE FROM quiz_fts WHERE id = ?", (existing["id"],))

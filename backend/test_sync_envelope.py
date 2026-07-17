@@ -179,6 +179,21 @@ def test_permanent_delete_logs_tombstone_with_bumped_revision(tmp_path: Path) ->
     assert rows[-1]["content_hash"] is None
 
 
+def test_permanent_delete_node_also_tombstones_linked_reader_questions(tmp_path: Path) -> None:
+    conn = fresh_conn(tmp_path)
+    content_root = tmp_path / "content"
+    slug = create_demo_node(conn, content_root)
+    question = create_reader_question(conn, "node", slug, "Will this become orphaned?")
+    move_node_to_trash(conn, content_root, slug)
+
+    permanently_delete_node(conn, content_root, slug)
+
+    assert conn.execute("SELECT 1 FROM reader_questions WHERE id = ?", (question["id"],)).fetchone() is None
+    rows = sync_rows(conn, "reader_question")
+    assert rows[-1]["entity_id"] == question["client_id"]
+    assert rows[-1]["tombstone"] == 1
+
+
 def test_quiz_attempt_gets_client_id_and_logs_review_attempt(tmp_path: Path) -> None:
     conn = fresh_conn(tmp_path)
     conn.execute(
