@@ -20,6 +20,7 @@ try:
         markdown_frontmatter,
         parse_frontmatter_block,
         restore_file_on_failure,
+        stage_file_delete,
         slugify,
         split_markdown_frontmatter,
         upsert_node_file_in_conn,
@@ -27,10 +28,12 @@ try:
     )
     from .sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_NODE,
         ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
         bump_revision_and_log,
         content_hash,
+        log_permanent_delete,
         record_change,
         utc_now,
     )
@@ -40,6 +43,7 @@ except ImportError:  # pragma: no cover - script execution
         markdown_frontmatter,
         parse_frontmatter_block,
         restore_file_on_failure,
+        stage_file_delete,
         slugify,
         split_markdown_frontmatter,
         upsert_node_file_in_conn,
@@ -47,10 +51,12 @@ except ImportError:  # pragma: no cover - script execution
     )
     from sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_NODE,
         ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
         bump_revision_and_log,
         content_hash,
+        log_permanent_delete,
         record_change,
         utc_now,
     )
@@ -532,9 +538,6 @@ def push_nodes(
                 receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "missing_node"))
                 continue
         current_revision = int(existing["revision"]) if existing is not None else 0
-        if bool(item.get("tombstone")):
-            receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "tombstone_unsupported", current_revision))
-            continue
         if existing is not None and int(item.get("baseRevision", -1)) != current_revision:
             receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "stale_revision", current_revision))
             continue
@@ -543,6 +546,16 @@ def push_nodes(
             continue
         if slugify(node_id) != node_id:
             receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "invalid_node_id", current_revision))
+            continue
+        if bool(item.get("tombstone")):
+            if existing is None:
+                receipts.append(_content_receipt(node_id, RECEIPT_REJECTED, "missing_node"))
+                continue
+            deleted_revision = _apply_node_tombstone(conn, content_root, existing)
+            receipt = _content_receipt(node_id, RECEIPT_ACCEPTED, revision=deleted_revision)
+            _save_push_receipt(conn, device_id, change_id, receipt)
+            conn.commit()
+            receipts.append(receipt)
             continue
 
         body = str(item.get("body") or "").strip()
@@ -608,6 +621,40 @@ def _merged_frontmatter_document(path: Path, fields: dict[str, str], body: str) 
     return "\n".join(lines) + "\n\n" + body + "\n"
 
 
+def _apply_node_tombstone(
+    conn: sqlite3.Connection,
+    content_root: Path,
+    existing: sqlite3.Row,
+) -> int:
+    current_revision = int(existing["revision"]) if existing["revision"] is not None else 0
+    source_path = content_root / existing["path"]
+    with stage_file_delete(content_root, source_path):
+        conn.execute("DELETE FROM links WHERE target_slug = ?", (existing["slug"],))
+        conn.execute("DELETE FROM nodes WHERE slug = ?", (existing["slug"],))
+        log_permanent_delete(conn, ENTITY_NODE, existing["slug"], current_revision)
+        conn.execute("DELETE FROM node_fts WHERE slug = ?", (existing["slug"],))
+        conn.execute("DELETE FROM content_files WHERE path = ?", (existing["path"],))
+        conn.execute("DELETE FROM graph_cache")
+        return current_revision + 1
+
+
+def _apply_quiz_tombstone(
+    conn: sqlite3.Connection,
+    content_root: Path,
+    existing: sqlite3.Row,
+) -> int:
+    current_revision = int(existing["revision"]) if existing["revision"] is not None else 0
+    source_path = content_root / existing["path"]
+    with stage_file_delete(content_root, source_path):
+        conn.execute("DELETE FROM quizzes WHERE id = ?", (existing["id"],))
+        log_permanent_delete(conn, ENTITY_QUIZ, existing["id"], current_revision)
+        conn.execute("DELETE FROM quiz_fts WHERE id = ?", (existing["id"],))
+        conn.execute("DELETE FROM content_files WHERE path = ?", (existing["path"],))
+        conn.execute("DELETE FROM review_queue WHERE target_type = 'quiz' AND target_id = ?", (existing["id"],))
+        conn.execute("DELETE FROM graph_cache")
+        return current_revision + 1
+
+
 def push_quizzes(
     conn: sqlite3.Connection,
     content_root: Path,
@@ -630,9 +677,6 @@ def push_quizzes(
             receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "missing_quiz"))
             continue
         current_revision = int(existing["revision"]) if existing is not None else 0
-        if bool(item.get("tombstone")):
-            receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "tombstone_unsupported", current_revision))
-            continue
         if existing is not None and int(item.get("baseRevision", -1)) != current_revision:
             receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "stale_revision", current_revision))
             continue
@@ -641,6 +685,16 @@ def push_quizzes(
             continue
         if slugify(quiz_id) != quiz_id:
             receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "invalid_quiz_id", current_revision))
+            continue
+        if bool(item.get("tombstone")):
+            if existing is None:
+                receipts.append(_content_receipt(quiz_id, RECEIPT_REJECTED, "missing_quiz"))
+                continue
+            deleted_revision = _apply_quiz_tombstone(conn, content_root, existing)
+            receipt = _content_receipt(quiz_id, RECEIPT_ACCEPTED, revision=deleted_revision)
+            _save_push_receipt(conn, device_id, change_id, receipt)
+            conn.commit()
+            receipts.append(receipt)
             continue
 
         body = str(item.get("body") or "").strip()

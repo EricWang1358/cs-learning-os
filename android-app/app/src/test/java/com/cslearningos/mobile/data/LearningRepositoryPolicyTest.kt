@@ -910,6 +910,28 @@ class LearningRepositoryPolicyTest {
     }
 
     @Test
+    fun permanentlyDeletingNodeCreatesSyncableTombstoneOutboxChanges() = runTest {
+        val dao = FakeLearningDao().apply {
+            seedLifecycleAreaNodeAndQuiz(
+                nodeVisibility = "trash",
+                quizVisibility = "trash"
+            )
+        }
+        val repository = repository(dao)
+
+        repository.permanentlyDeleteNode("node-1", now = 4_000L)
+
+        assertEquals(4_000L, dao.nodes.getValue("node-1").deletedAt)
+        assertEquals(4_000L, dao.quizzes.getValue("quiz-1").deletedAt)
+        assertEquals(2, dao.outbox.size)
+
+        val nodeChange = dao.outbox.values.first { it.aggregateType == "content.node" }
+        val quizChange = dao.outbox.values.first { it.aggregateType == "content.quiz" }
+        assertEquals(4_000L, ContentNodeCodec.decode(nodeChange.payloadJson).deletedAt)
+        assertEquals("quiz-1", QuizOutboxCodec.decode(quizChange.payloadJson).id)
+    }
+
+    @Test
     fun restoreNodeFromTrashRevivesDeletedAreaInsteadOfLeavingNodeOrphaned() = runTest {
         val dao = FakeLearningDao()
         val repository = repository(dao)

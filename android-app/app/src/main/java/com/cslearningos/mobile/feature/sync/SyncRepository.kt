@@ -242,6 +242,7 @@ class SyncRepository(
             .mapNotNull { (_, changes) -> changes.firstOrNull() }
         val preparedQuizChanges = pendingQuizChanges.mapNotNull { change ->
             val quiz = runCatching { QuizOutboxCodec.decode(change.payloadJson) }.getOrNull()
+            val localQuiz = dao.getQuiz(change.aggregateId)
             if (quiz == null || quiz.id != change.aggregateId || quiz.revision != change.newRevision) {
                 rejected += 1
                 null
@@ -254,7 +255,7 @@ class SyncRepository(
                     .put("visibility", quiz.visibility)
                     .put("baseRevision", change.baseRevision ?: JSONObject.NULL)
                     .put("revision", change.newRevision)
-                    .put("tombstone", false)
+                    .put("tombstone", localQuiz?.revision == change.newRevision && localQuiz.deletedAt != null)
             }
         }
         if (preparedQuizChanges.isNotEmpty()) {

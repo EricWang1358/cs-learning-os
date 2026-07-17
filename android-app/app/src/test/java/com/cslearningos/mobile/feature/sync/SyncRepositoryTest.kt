@@ -441,6 +441,33 @@ class SyncRepositoryTest {
     }
 
     @Test
+    fun deletedNodePushUsesTombstoneAndMarksLocalDeletionSynced() = runTest {
+        val dao = FakeDao()
+        dao.nodes["n1"] = localNode("n1", SyncStatus.deleted, baseRevision = 1, revision = 2).copy(
+            visibility = "trash",
+            deletedAt = 50L
+        )
+        dao.outbox["node-change-1"] = pendingNodeOutbox(
+            "node-change-1",
+            "n1",
+            baseRevision = 1,
+            revision = 2,
+            deletedAt = 50L,
+            visibility = "trash"
+        )
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(1, report.uploadedNodes)
+        assertEquals(0, report.rejected)
+        assertTrue(transport.pushedNodes.single().getBoolean("tombstone"))
+        assertEquals(SyncStatus.clean, dao.nodes.getValue("n1").syncStatus)
+        assertTrue(dao.outbox.isEmpty())
+    }
+
+    @Test
     fun acceptedQuizPushAcknowledgesOnlyTheMatchingCurrentRevision() = runTest {
         val dao = FakeDao()
         dao.quizzes["q1"] = localQuiz("q1").copy(
@@ -467,6 +494,29 @@ class SyncRepositoryTest {
         assertTrue(transport.pushedQuizzes.single().getString("body").contains("## Prompt"))
         assertEquals(SyncStatus.clean, dao.quizzes.getValue("q1").syncStatus)
         assertEquals(2L, dao.quizzes.getValue("q1").baseRevision)
+        assertTrue(dao.outbox.isEmpty())
+    }
+
+    @Test
+    fun deletedQuizPushUsesTombstoneAndMarksLocalDeletionSynced() = runTest {
+        val dao = FakeDao()
+        dao.quizzes["q1"] = localQuiz("q1").copy(
+            revision = 2,
+            baseRevision = 1,
+            syncStatus = SyncStatus.deleted,
+            visibility = "trash",
+            deletedAt = 60L
+        )
+        dao.outbox["quiz-change-1"] = pendingQuizOutbox("quiz-change-1", dao.quizzes.getValue("q1"), baseRevision = 1)
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(1, report.uploadedQuizzes)
+        assertEquals(0, report.rejected)
+        assertTrue(transport.pushedQuizzes.single().getBoolean("tombstone"))
+        assertEquals(SyncStatus.clean, dao.quizzes.getValue("q1").syncStatus)
         assertTrue(dao.outbox.isEmpty())
     }
 
@@ -558,7 +608,9 @@ class SyncRepositoryTest {
         changeId: String,
         nodeId: String,
         baseRevision: Long?,
-        revision: Long
+        revision: Long,
+        deletedAt: Long? = null,
+        visibility: String = "core"
     ) = ReplicationOutboxEntity(
         changeId = changeId,
         commandId = "command-$changeId",
@@ -576,13 +628,13 @@ class SyncRepositoryTest {
             .put("createdAt", 1)
             .put("updatedAt", 2)
             .put("revision", revision)
-            .put("deletedAt", JSONObject.NULL)
+            .put("deletedAt", deletedAt ?: JSONObject.NULL)
             .put("areaId", "algorithms")
             .put("areaSlug", "algorithms")
             .put("track", "general")
             .put("order", 1000)
             .put("summary", "phone summary")
-            .put("visibility", "core")
+            .put("visibility", visibility)
             .put("isStarter", false)
             .put("isChecked", false)
             .toString(),
@@ -748,7 +800,9 @@ class SyncRepositoryTest {
                         val localRevision = args[2] as Long
                         val serverRevision = args[3] as Long
                         nodes.computeIfPresent(nodeId) { _, node ->
-                            if (node.revision == localRevision && node.syncStatus == SyncStatus.dirty) {
+                            if (node.revision == localRevision && node.syncStatus == SyncStatus.deleted && node.deletedAt != null) {
+                                node.copy(syncStatus = SyncStatus.clean)
+                            } else if (node.revision == localRevision && node.syncStatus == SyncStatus.dirty) {
                                 node.copy(syncStatus = SyncStatus.clean, baseRevision = serverRevision)
                             } else {
                                 node
@@ -763,7 +817,9 @@ class SyncRepositoryTest {
                         val localRevision = args[2] as Long
                         val serverRevision = args[3] as Long
                         quizzes.computeIfPresent(quizId) { _, quiz ->
-                            if (quiz.revision == localRevision && quiz.syncStatus == SyncStatus.dirty) {
+                            if (quiz.revision == localRevision && quiz.syncStatus == SyncStatus.deleted && quiz.deletedAt != null) {
+                                quiz.copy(syncStatus = SyncStatus.clean)
+                            } else if (quiz.revision == localRevision && quiz.syncStatus == SyncStatus.dirty) {
                                 quiz.copy(syncStatus = SyncStatus.clean, baseRevision = serverRevision)
                             } else {
                                 quiz

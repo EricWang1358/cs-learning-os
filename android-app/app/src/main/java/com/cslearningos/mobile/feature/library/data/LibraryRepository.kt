@@ -155,19 +155,26 @@ class LibraryRepository(
             syncStatus = SyncStatus.deleted,
             deletedAt = now
         )
-        dao.upsertNode(deletedNode)
-        dao.deleteNodeFts(node.id)
-
-        dao.getActiveQuizzesForNode(node.id).forEach { quiz ->
-            dao.upsertQuiz(
-                quiz.copy(
-                    updatedAt = now,
-                    revision = quiz.revision + RevisionStep,
-                    syncStatus = SyncStatus.deleted,
-                    deletedAt = now
-                )
+        val deletedQuizzes = dao.getActiveQuizzesForNode(node.id).map { quiz ->
+            quiz.copy(
+                updatedAt = now,
+                revision = quiz.revision + RevisionStep,
+                syncStatus = SyncStatus.deleted,
+                deletedAt = now
             )
-            dao.deleteQuizFts(quiz.id)
+        }
+        dao.saveNodeAndQuizzesWithContentOutbox(
+            node = deletedNode,
+            nodeFts = null,
+            nodeOutbox = nodeContentOutbox(previous = node, updated = deletedNode, now = now),
+            quizzes = deletedQuizzes,
+            quizFts = emptyList(),
+            quizOutbox = deletedQuizzes.map { quiz ->
+                quizContentOutbox(previousRevision = quiz.revision - RevisionStep, updated = quiz, now = now)
+            }
+        )
+
+        deletedQuizzes.forEach { quiz ->
             deleteReviewDataForQuiz(quiz.id)
         }
 

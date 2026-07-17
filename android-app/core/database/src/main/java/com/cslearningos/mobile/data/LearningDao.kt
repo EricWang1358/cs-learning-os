@@ -306,7 +306,12 @@ interface LearningDao {
         localRevision: Long,
         serverRevision: Long
     ) {
-        markNodeContentSynced(nodeId, localRevision, serverRevision)
+        val node = getNode(nodeId)
+        if (node != null && node.revision == localRevision && node.syncStatus == SyncStatus.deleted && node.deletedAt != null) {
+            markNodeSyncedDeleted(nodeId, node.deletedAt, node.updatedAt)
+        } else {
+            markNodeContentSynced(nodeId, localRevision, serverRevision)
+        }
         deleteOutboxItem(changeId)
     }
 
@@ -317,7 +322,12 @@ interface LearningDao {
         localRevision: Long,
         serverRevision: Long
     ) {
-        markQuizContentSynced(quizId, localRevision, serverRevision)
+        val quiz = getQuiz(quizId)
+        if (quiz != null && quiz.revision == localRevision && quiz.syncStatus == SyncStatus.deleted && quiz.deletedAt != null) {
+            markQuizSyncedDeleted(quizId, quiz.deletedAt, quiz.updatedAt)
+        } else {
+            markQuizContentSynced(quizId, localRevision, serverRevision)
+        }
         deleteOutboxItem(changeId)
     }
 
