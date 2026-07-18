@@ -1195,7 +1195,7 @@ function App() {
   const libraryGroupEntries = Array.from(libraryGroups.entries())
   const libraryOrderIssueGroups = (() => {
     const activeNodes = (libraryIndexNodes.length ? libraryIndexNodes : nodes).filter(
-      (node) => !['archive', 'trash'].includes(node.visibility),
+      (node) => !['archive', 'trash'].includes(node.visibility) && node.status !== 'draft',
     )
     const buckets = new Map<string, NodeSummary[]>()
     for (const node of activeNodes) {
