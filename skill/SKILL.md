@@ -28,7 +28,7 @@ The LLM is responsible for judgment calls:
    - Treat `content/` as an ignored legacy local copy unless explicitly selected for migration.
    - If `data/nodes/` or `data/quizzes/` exists, treat it as orphaned root-level content caused by a bad content-root selection; do not add new material there.
 4. Read [references/architecture.md](references/architecture.md) before changing the structure.
-5. Read [references/node-schema.md](references/node-schema.md) before creating or editing a node.
+5. Read [references/node-schema.md](references/node-schema.md) before creating or editing a node. Pay special attention to **Frontmatter Integrity** (see section below): the backend will reject files that lack a trailing newline after the closing `---`.
 6. Read [references/knowledge-graph.md](references/knowledge-graph.md) before touching frontmatter links or anything tree-shaped. The system has two graph layers: frontmatter links power content navigation, while `kg_question`/`kg_edge`/`kg_mastery` form the explicit KnowledgeGraph DAG. They are related but not interchangeable.
 7. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
 8. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
@@ -78,6 +78,75 @@ Before creating or moving any prerequisite relationship:
 
 Do not write `mastery` into Markdown frontmatter. Mastery is dynamic graph data
 updated by verification events; use it to choose the next learning action.
+
+## Frontmatter Integrity Rule / 前置元数据完整性规则
+
+The app's backend reads node Markdown files by parsing frontmatter delimited by
+`---`. A broken frontmatter causes 400 errors ("Node source file has no
+frontmatter") on common operations such as "Move to trash", "Restore", or
+"Edit order".
+
+### Critical Format Rules
+
+Every `.md` node file must follow this exact pattern (note the trailing newline
+after the closing `---`):
+
+```text
+---↵
+title: "..."↵
+area: "..."↵
+...↵
+order: N↵
+---↵
+```
+
+1. **Opening `---`** must be the very first bytes — no blank line, no BOM, no
+   whitespace before it. The backend regex is `^(---\s*\n.*?\n---\s*\n)`.
+2. **Trailing newline:** The closing `---` MUST be followed by `\n`. Without it,
+   `split_markdown_frontmatter` returns empty → app throws 400 "no frontmatter".
+3. **Encoding:** UTF-8 **without BOM** (bytes `EF BB BF` at offset 0 break the
+   `^---` anchor). Verify with `xxd "$file" | head -1` — first three bytes must
+   be `2d 2d 2d` (---), NOT `ef bb bf`.
+4. **Line endings:** LF (Unix) or CRLF (Windows) both work — `\s*` in the regex
+   absorbs `\r`. Do not mix within one file.
+5. **Key-value format:** YAML `key: value`. Quoted strings (`"..."`) recommended
+   for values with colons, brackets, or special characters.
+
+### Common Breakage Patterns
+
+| Mistake | Symptom | Detective Tool |
+|---------|---------|---------------|
+| No `\n` after closing `---` | `split_markdown_frontmatter` → `("", text)` | `xxd "$f" \| tail -1` — last byte is `2d` not `0a` |
+| UTF-8 BOM before `---` | Regex `^---` never matches | `xxd "$f" \| head -1` — starts with `ef bb bf` |
+| PowerShell `Set-Content` | Chinese garbled to `缂/锟/璇�` | Read tool shows correct? If PowerShell reads wrong, trust Read |
+| `WriteAllText` without trailing `\n` | Same as "no trailing newline" | File content ends on line `---` (line N, no N+1) |
+| Tab characters in YAML | Parser rejects mixed indentation | `grep -P "^\t"` in the file |
+
+### Safe Writing Patterns
+
+**Python (safe):**
+```python
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)  # ensure content ends with '\n'
+```
+
+**Node.js / TypeScript (safe):**
+```typescript
+writeFileSync(path, content, 'utf-8');
+```
+
+**PowerShell (use with care):**
+```powershell
+# WRONG — corrupts encoding:
+Set-Content -Encoding utf8 $path $content
+# RIGHT:
+[System.IO.File]::WriteAllText($path, $content,
+    [System.Text.UTF8Encoding]::new($false))
+# Then verify the file ends with \n:
+if ((Get-Content -Tail 1 $path) -eq "---") { "missing trailing newline" }
+```
+
+After any write, verify: `xxd "$f" | tail -1` must end in `0a`.
 
 ## Private Library Write Rule
 

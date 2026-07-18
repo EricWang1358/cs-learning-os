@@ -207,6 +207,8 @@ Before marking a node as complete (status: active), verify:
 - [ ] Frontmatter `prerequisites` and `related` are verified against the knowledge graph.
 - [ ] No mastery data in Markdown (mastery is dynamic, not frontmatter).
 - [ ] Summary field captures the one-sentence value proposition.
+- [ ] Frontmatter integrity: file begins with `---` (no BOM), ends with `\n` after
+      closing `---`, UTF-8 encoding. See SKILL.md → Frontmatter Integrity Rule.
 
 ## Anti-Slop: Removing AI Tells / 去机器味
 
