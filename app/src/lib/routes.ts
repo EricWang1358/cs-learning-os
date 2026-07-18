@@ -20,6 +20,7 @@ export function routeFromLocation(pathname: string, search: string) {
   const isKnowledgeGraph = pathname === '/knowledge-graph'
   const isHealth = pathname === '/health'
   const isSync = pathname === '/sync'
+  const isMore = pathname === '/more'
   const isCatalog = pathname === '/catalog'
   const isHome = pathname === '/'
 
@@ -35,6 +36,8 @@ export function routeFromLocation(pathname: string, search: string) {
         ? 'sync' as ViewMode
         : isHealth
           ? 'health' as ViewMode
+          : isMore
+            ? 'more' as ViewMode
           : isCatalog
             ? 'catalog' as ViewMode
           : isBite

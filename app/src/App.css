@@ -3841,6 +3841,45 @@
   padding: 28px 16px;
 }
 
+/* ---- More panel (Settings & AI provider config) ---- */
+.more-panel { max-width:780px; margin:0 auto; padding:32px 24px }
+.more-panel h2 { color:var(--ink-strong); font-size:28px; margin:0 0 8px }
+.more-section { border:1px solid var(--line); border-radius:16px; background:var(--surface-card); padding:20px; margin-top:18px }
+.more-section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px }
+.more-section-heading h3 { margin:0; color:var(--ink-strong); font-size:16px }
+.more-section-badge { padding:3px 10px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font:11px var(--mono); font-weight:800 }
+.more-section-desc { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 14px }
+.more-provider-list { list-style:none; margin:0 0 14px; padding:0; display:grid; gap:8px }
+.more-provider-row { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; flex-wrap:wrap }
+.more-provider-row.active { border-color:rgba(14,203,129,0.4); background:rgba(14,203,129,0.06) }
+.more-provider-info { display:grid; gap:3px }
+.more-provider-info strong { color:var(--ink-strong); font-size:14px }
+.more-provider-detail { color:var(--muted); font-size:11px }
+.more-badge { display:inline-block; padding:1px 7px; border-radius:999px; font:10px var(--mono); font-weight:700; margin-left:6px }
+.more-badge.builtin { background:rgba(165,162,154,0.16); color:#a5a29a }
+.more-badge.active { background:rgba(14,203,129,0.16); color:#0ecb81 }
+.more-provider-actions { display:flex; gap:6px; flex-shrink:0 }
+.more-btn { border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); color:var(--ink); cursor:pointer; font:12px var(--mono); font-weight:700; padding:8px 14px }
+.more-btn:hover { border-color:var(--line-strong); background:var(--surface-elevated) }
+.more-btn.primary { border-color:var(--accent); background:var(--accent-soft); color:var(--accent) }
+.more-btn.primary:hover { background:var(--accent); color:#0b0f14 }
+.more-btn.small { padding:5px 10px; font-size:11px }
+.more-btn.danger { border-color:rgba(246,70,93,0.3); color:#ff99a6 }
+.more-btn.danger:hover { border-color:rgba(246,70,93,0.6); background:rgba(246,70,93,0.1) }
+.more-form { border:1px solid var(--line-strong); border-radius:12px; background:rgba(11,14,17,0.34); padding:16px; display:grid; gap:12px; margin-top:12px }
+.more-form h4 { margin:0; color:var(--ink-strong); font-size:14px }
+.more-form label { display:grid; gap:5px; color:var(--muted); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase }
+.more-form input { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--surface-card); color:var(--ink-strong); padding:9px 11px; font-size:13px }
+.more-form input:focus { outline:2px solid var(--accent-soft); border-color:var(--accent) }
+.more-field-hint { font-size:10px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted) }
+.more-form-actions { display:flex; gap:8px }
+
+@media (max-width:620px) {
+  .more-panel { padding:16px 14px }
+  .more-provider-row { flex-direction:column; align-items:flex-start }
+  .more-provider-actions { width:100%; justify-content:flex-end }
+}
+
 /* ---- Knowledge tree 3D (KnowledgeGraph RFC, /knowledge-graph) ---- */
 .workspace-shell.kgraph-mode {
   grid-template-columns: 280px minmax(0, 1fr);

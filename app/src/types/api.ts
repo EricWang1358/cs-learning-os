@@ -505,7 +505,7 @@ export type ApiErrorBody = {
     | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'home' | 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'catalog' | 'kgraph'
+export type ViewMode = 'home' | 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'more' | 'catalog' | 'kgraph'
 
 export type SyncDevice = {
   id: string

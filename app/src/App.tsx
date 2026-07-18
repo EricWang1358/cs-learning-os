@@ -8,6 +8,7 @@ import { HomeDashboard } from './components/HomeDashboard'
 import { CatalogPage } from './components/CatalogPage'
 import { NodeSelfAssessment } from './components/NodeSelfAssessment'
 import { SyncPanel } from './components/SyncPanel'
+import { MorePanel } from './components/MorePanel'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
@@ -2553,6 +2554,14 @@ function App() {
             <span>Learning Catalog</span>
             <strong>MAP</strong>
           </a>
+          <a
+            className={`catalog-entry ${viewMode === 'more' ? 'active' : ''}`}
+            href="/more"
+            aria-current={viewMode === 'more' ? 'page' : undefined}
+          >
+            <span>More</span>
+            <strong>⚙</strong>
+          </a>
         </section>
       </aside>
 
@@ -2899,7 +2908,14 @@ function App() {
               <button
                 type="button"
                 className={activeTrack === 'all' ? 'active' : ''}
-                onClick={() => navigateToNode(selectedSlug, { replace: true })}
+                onClick={() => {
+                  const slug = selectedSlug || nodes[0]?.slug
+                  if (slug) {
+                    navigate(`/nodes/${encodeURIComponent(slug)}${routeSearch({ activeArea, activeTrack: 'all', query, nodeSort, isFocusMode })}`)
+                  } else {
+                    navigate(`/nodes${routeSearch({ activeArea, activeTrack: 'all', query, nodeSort, isFocusMode })}`)
+                  }
+                }}
               >
                 All tracks
               </button>
@@ -3295,6 +3311,8 @@ function App() {
             onRefresh={refreshSyncData}
             serverBaseUrl={syncToken?.endpoint || syncHealth?.advertisedBaseUrl || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '')}
           />
+        ) : viewMode === 'more' ? (
+          <MorePanel />
         ) : viewMode === 'health' ? (
           <div className="health-detail cockpit-detail-shell health-cockpit-shell">
             <section className="detail-heading health-heading cockpit-hero health-cockpit-hero">
