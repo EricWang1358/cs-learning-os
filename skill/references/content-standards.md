@@ -74,6 +74,22 @@ Rules:
 - Include a small C or GDB example when relevant.
 - When an image clarifies a tutorial step, store it under `<active-content-root>/assets/<topic>/`, use a lowercase kebab-case filename, and reference it as `![Alt text](/content-assets/<topic>/<file>.png)` followed by an italic caption.
 - Build links deliberately: prerequisites before related/suggested ideas.
+- Resolve every prerequisite and related target to an existing slug before
+  saving. Never use a title or filesystem path as a link value.
+- After frontmatter validation, read the entire Markdown body once. Audit each
+  introduced term, code identifier, and cross-topic claim. Define short terms
+  locally; link a concept with a reusable existing explanation; create a new
+  node only when the concept needs a durable example or will be reused.
+- Render the reading path as Markdown hyperlinks such as
+  `[waitpid](fork-process-creation-and-waitpid.md)`. A slug in backticks is a
+  reference for code, not a reader navigation affordance. External references
+  use authoritative HTTPS URLs and must not point at a developer's local path.
+- A prerequisite points from the current node to the concept it depends on;
+  `related` is lateral navigation and does not imply a tree edge.
+- Reject self-links, duplicate targets, and prerequisite cycles. Shared
+  prerequisites are valid and should be reused rather than copied.
+- Keep mastery out of Markdown; mastery state is updated from quiz verification
+  events in the KnowledgeGraph layer.
 - If a command depends on architecture, state the portable form and the common x86-64 form.
 - If a question only clarifies the current node, update that node; if it reveals a reusable prerequisite or cross-topic bridge, create a new linked node.
 - If the note introduces a term such as accumulator, general-purpose register, quad-word, stack pointer, immediate, displacement, or zero-extension, define it in plain language or link to a prerequisite node.

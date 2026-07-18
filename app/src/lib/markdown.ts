@@ -31,6 +31,19 @@ export function plainMarkdownText(text: string) {
   return text.replace(/`([^`]+)`/g, '$1').replace(/\*\*([^*]+?)\*\*/g, '$1')
 }
 
+/** Resolve a reader-facing Markdown link to a node slug when it is local. */
+export function markdownNodeSlug(href: string) {
+  const value = href.trim()
+  if (!value || /^(?:https?:|mailto:|tel:|data:|javascript:)/i.test(value)) return null
+
+  const path = value.split(/[?#]/, 1)[0]
+  const routeMatch = path.match(/^\/nodes\/([^/]+)$/)
+  if (routeMatch) return decodeURIComponent(routeMatch[1])
+
+  const fileMatch = path.match(/(?:^|\/)([a-z0-9][a-z0-9-]*)\.md$/i)
+  return fileMatch ? fileMatch[1] : null
+}
+
 export function headingId(text: string, index: number) {
   const base = plainMarkdownText(text)
     .toLowerCase()

@@ -1,5 +1,6 @@
 ---
 title: "C Memory and Pointers"
+slug: c-memory-and-pointers
 area: cs-fundamentals
 track: systems-memory
 order: 40

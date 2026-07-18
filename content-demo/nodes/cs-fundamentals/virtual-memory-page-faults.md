@@ -1,5 +1,6 @@
 ---
 title: "Virtual Memory and Page Faults"
+slug: virtual-memory-page-faults
 area: cs-fundamentals
 track: memory-hierarchy
 order: 20
@@ -29,4 +30,3 @@ A page fault happens when the page table says the requested virtual page is not 
 ## Common Mistake
 
 A TLB miss is not automatically a page fault. A TLB miss means the translation cache missed; a page fault means the page table entry does not permit the access.
-

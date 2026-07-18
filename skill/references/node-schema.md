@@ -5,7 +5,10 @@ Every node should start with YAML frontmatter.
 ```yaml
 ---
 title: "Dijkstra's Algorithm"
+slug: dijkstra
 area: algorithms
+track: graph-algorithms
+level: intermediate
 status: seed
 visibility: core
 tags: [graph, shortest-path, greedy]
@@ -20,7 +23,11 @@ summary: "Find shortest paths from one source in graphs with nonnegative edge we
 ## Required Fields
 
 - `title`: Human-readable title.
+- `slug`: Stable lowercase identifier. Recommended for every node; it is the
+  identity used by frontmatter links, API responses, and graph edges.
 - `area`: One top-level area.
+- `track`: Narrow learning path within an area.
+- `level`: Optional learning level such as `intro`, `intermediate`, or `advanced`.
 - `status`: Use `seed`, `growing`, `solid`, or `review`.
 - `visibility`: Use `core`, `support`, or `archive`.
 - `tags`: Searchable concept tags.
@@ -28,10 +35,17 @@ summary: "Find shortest paths from one source in graphs with nonnegative edge we
 
 ## Optional Fields
 
-- `prerequisites`: Slugs that should be learned before this.
-- `related`: Slugs that should be suggested nearby.
-- `sources`: URLs or local source files.
+- `prerequisites`: Existing node slugs that this node depends on. Direction is
+  current node -> prerequisite target; keep the list small and acyclic.
+- `related`: Existing lateral node slugs. This is not a parent/child edge.
+- `sources`: authoritative HTTPS URLs or repository-relative source files. Do
+  not commit developer-local absolute paths or references to ignored private
+  coursework files.
 - `review_after`: Date or rough trigger for future review.
+
+Do not add `mastery`, `score`, `attempts`, or `fail_streak` to frontmatter.
+Those values belong to the KnowledgeGraph mastery store and change after quiz
+verification events.
 
 ## Body Template
 
@@ -62,6 +76,19 @@ Use lowercase words separated by hyphens. Prefer stable concept names:
 - `union-find`
 - `cache-locality`
 - `project-auth-flow`
+
+## Reader Links
+
+Use a visible Markdown hyperlink whenever a reader should continue to another
+concept:
+
+```markdown
+[Process lifecycles](fork-process-creation-and-waitpid.md)
+```
+
+Relative `.md` links must resolve to a real node in the active content root.
+Use absolute HTTPS links only for authoritative external references; the app
+opens those links separately from internal node navigation.
 
 ## Path Rule
 

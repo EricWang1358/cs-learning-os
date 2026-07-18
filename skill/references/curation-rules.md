@@ -76,6 +76,37 @@ Use reasoning over tags. Good suggestions include:
 
 Keep suggestions short. Three to five links are enough.
 
+## Graph Link Quality Gate
+
+Before accepting a link:
+
+- Resolve the target by exact slug from the active index.
+- Use `prerequisites` only for a concept required before the current node.
+- Use `related` for lateral comparison, alternate technique, or context.
+- Do not duplicate a prerequisite in `related` unless the lateral reason is
+  explicit in the body.
+- Do not point to a title, path, URL, or future node placeholder.
+- Reject self-links and prerequisite cycles; shared prerequisites are allowed.
+- Prefer one to seven deliberate prerequisites and one to seven related links.
+
+When a target is missing, create and index the target node first, then add the
+link. Do not rely on the backend's broken-link repair to hide an Agent mistake.
+
+## Mastery-Driven Curation
+
+Mastery is runtime state, not a static tag. Use the KnowledgeGraph result to
+choose actions:
+
+- `UNKNOWN`: introduce or recall the node before adding harder dependents.
+- `LEARNING`: schedule another explanation or targeted quiz.
+- `FRAGILE`: reinforce the node and inspect recent failures.
+- `MASTERED`: avoid redundant remediation; move toward the next dependent.
+
+After a verification, prefer the returned `suggestedNext` direct prerequisites
+with the lowest score. For a quiz gap, prioritize the weakest prerequisite by
+`(1 - score) * (1 + blocksCount)`. Do not promote a node to mastered based on
+tags, reading time, or an LLM opinion.
+
 ## Quiz Items
 
 Create or update a quiz item when:

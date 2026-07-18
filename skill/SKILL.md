@@ -29,15 +29,54 @@ The LLM is responsible for judgment calls:
    - If `data/nodes/` or `data/quizzes/` exists, treat it as orphaned root-level content caused by a bad content-root selection; do not add new material there.
 4. Read [references/architecture.md](references/architecture.md) before changing the structure.
 5. Read [references/node-schema.md](references/node-schema.md) before creating or editing a node.
-6. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
-7. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
-8. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
-9. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
-10. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
-11. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
-12. Use `scripts/build_index.py` to generate or refresh the HTML and JSON index only for the selected content root when the map has changed.
+6. Read [references/knowledge-graph.md](references/knowledge-graph.md) before touching frontmatter links or anything tree-shaped. The system has two graph layers: frontmatter links power content navigation, while `kg_question`/`kg_edge`/`kg_mastery` form the explicit KnowledgeGraph DAG. They are related but not interchangeable.
+7. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
+8. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
+9. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
+10. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content.
+11. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
+12. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
+13. Run `scripts/validate_knowledge_graph.py <content-root>` before ingesting a
+    changed map. Use `scripts/build_index.py` to generate or refresh the HTML
+    and JSON index only for the selected content root when the map has changed.
+14. Read every changed Markdown node in full before reporting completion. Do
+    not rely on generated indexes or frontmatter alone: inspect every heading,
+    example, and “Suggested Next” section for missing definitions, stale links,
+    copied worksheet-specific answers, and taxonomy drift.
+15. For every unfamiliar term found during that read-through, choose exactly
+    one treatment: define it in the current node when the explanation is one or
+    two sentences; link to an existing node when it is already covered; or
+    create a reusable prerequisite node when it needs its own example and will
+    be referenced again. Record that decision in the node's concept links.
+16. Use Markdown hyperlinks for reader navigation. Internal links should point
+    to a real node Markdown file with a relative path and a visible concept
+    label; external links must be absolute HTTPS URLs and should be reserved for
+    authoritative references. Never leave a node slug in backticks as the only
+    way to reach a related concept.
 
 ## Map Operations
+
+## KnowledgeGraph Write Gate
+
+Before creating or moving any prerequisite relationship:
+
+1. Resolve exact node slugs from the active content root. Do not use display
+   titles, file paths, guessed slugs, or a `related` link as a parent edge.
+2. Classify the relationship: `prerequisites` means the current node depends
+   on the target; `related` is a lateral suggestion and never establishes a
+   prerequisite edge.
+3. Ensure every target node exists as a real Markdown-backed node before an
+   edge is written. Never leave a DB-only or guessed node id.
+4. Reject self-links, duplicate links, and any prerequisite cycle. A diamond
+   (one prerequisite shared by multiple nodes) is valid and should be reused.
+5. For KnowledgeGraph proposals, use the two-phase flow: propose, inspect and
+   edit the returned tree, then confirm. AI output is never persisted directly.
+6. After a write, read the tree/subtree snapshot and verify reachability,
+   parent direction, scope, and endpoint titles. A successful HTTP response is
+   not enough by itself.
+
+Do not write `mastery` into Markdown frontmatter. Mastery is dynamic graph data
+updated by verification events; use it to choose the next learning action.
 
 ## Private Library Write Rule
 

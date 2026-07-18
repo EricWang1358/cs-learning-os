@@ -44,6 +44,23 @@ These should be handled by files and scripts:
 - exact tag filtering
 - exact title or slug lookup
 
+## Two Graph Layers
+
+The project deliberately has two related graphs:
+
+1. **Content navigation graph**: ingest reads Markdown `prerequisites` and
+   `related` into the ordinary `links` table. It powers backlinks and note
+   navigation. It must use real slugs and must not contain self-links or
+   prerequisite cycles.
+2. **KnowledgeGraph DAG**: `kg_question` identifies a problem/root,
+   `kg_edge(parent_node_id, child_node_id)` records that the parent depends on
+   the child, and `kg_mastery` records learner state. This graph is explicit;
+   `related` metadata does not create a KG edge automatically.
+
+KnowledgeGraph nodes must be real Markdown-backed nodes because ingest can
+rebuild the ordinary node table. Shared prerequisites are valid DAG diamonds;
+cycles and orphaned endpoints are not.
+
 ## LLM-Judged Parts
 
 These should be decided by the assistant each time:
@@ -53,6 +70,10 @@ These should be decided by the assistant each time:
 - what should be suggested next
 - whether a tutorial is worth summarizing
 - whether a note is too broad and should be split
+
+The LLM may propose links or a prerequisite tree, but it does not decide that
+the graph is valid. Slug resolution, endpoint existence, cycle checks, scope,
+and proposal confirmation remain deterministic application responsibilities.
 
 ## Why Markdown First
 

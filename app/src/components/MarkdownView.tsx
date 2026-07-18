@@ -12,9 +12,11 @@ import x86asm from 'highlight.js/lib/languages/x86asm'
 import hljs from 'highlight.js/lib/core'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useNavigate } from 'react-router-dom'
 import { API_BASE } from '../lib/apiClient'
 import {
   headingId,
+  markdownNodeSlug,
   parseMarkdownHeadings,
   plainMarkdownText,
   splitMarkdownSections,
@@ -70,6 +72,7 @@ export function MarkdownView({
   onSaveSectionEdit,
   onStartSectionEdit,
   sectionEditError,
+  onOpenNode,
 }: {
   body: string
   editingSection?: SectionEditDraft | null
@@ -79,7 +82,9 @@ export function MarkdownView({
   onSaveSectionEdit?: () => void
   onStartSectionEdit?: (section: MarkdownSection) => void
   sectionEditError?: string
+  onOpenNode?: (slug: string) => void
 }) {
+  const navigate = useNavigate()
   const sections = splitMarkdownSections(body)
   const shouldRenderBySection = Boolean(editingSection)
   const headingIdsByLine = new Map(parseMarkdownHeadings(body).map((heading) => [heading.lineNumber, heading.id]))
@@ -168,6 +173,39 @@ export function MarkdownView({
                 src={imageSrc}
                 title={typeof title === 'string' ? title : undefined}
               />
+            )
+          },
+          a({ href, children, title }) {
+            const rawHref = typeof href === 'string' ? href : ''
+            const slug = markdownNodeSlug(rawHref)
+            if (slug) {
+              return (
+                <a
+                  href={`/nodes/${encodeURIComponent(slug)}`}
+                  title={title ?? `Open ${slug}`}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    if (onOpenNode) {
+                      onOpenNode(slug)
+                    } else {
+                      navigate(`/nodes/${encodeURIComponent(slug)}?focus=1`)
+                    }
+                  }}
+                >
+                  {children}
+                </a>
+              )
+            }
+            const external = /^https?:\/\//i.test(rawHref)
+            return (
+              <a
+                href={rawHref}
+                title={title ?? undefined}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noreferrer' : undefined}
+              >
+                {children}
+              </a>
             )
           },
         }}
