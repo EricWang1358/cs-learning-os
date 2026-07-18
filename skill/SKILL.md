@@ -128,10 +128,14 @@ During and immediately after writing:
       real existing nodes.
 
 **Bilingual completeness:**
-- [ ] Every `## Section Title / 中文标题` heading has BOTH English and Chinese
-      content in that section. The Chinese explains the same idea with
+- [ ] For Standard A: every `## Section Title / 中文标题` heading has BOTH
+      English and Chinese content. Chinese explains the same idea with
       equivalent depth, not a single sentence. Code blocks and tables stay
       English-only.
+- [ ] For Standard Q (quiz): every section (`## Prompt`, `## Answer`,
+      `## Explanation`, `## Plain Explanation`) has Chinese content
+      accompanying the English. A `中文：` paragraph in each section is
+      sufficient — the Chinese version of every question must exist.
 
 **KnowledgeGraph Write Gate (frontmatter links):**
 - [ ] Link classification correct: `prerequisites` = depends-on,
