@@ -499,7 +499,10 @@ export type GraphPayload = {
 export type ApiGraphResponse = GraphPayload
 
 export type ApiErrorBody = {
-  detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
+  detail?:
+    | string
+    | { code?: string; message?: string; [key: string]: unknown }
+    | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
 export type ViewMode = 'home' | 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'catalog' | 'kgraph'

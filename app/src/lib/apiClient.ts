@@ -91,6 +91,10 @@ function responseErrorMessageFromBody(status: number, statusText: string, body: 
         .join('; ')
       return `Request failed ${status}: ${details}`
     }
+    if (typeof detail === 'object') {
+      const message = typeof detail.message === 'string' ? detail.message : typeof detail.code === 'string' ? detail.code : JSON.stringify(detail)
+      return `Request failed ${status}: ${message}`
+    }
     return `Request failed ${status}: ${String(detail)}`
   }
   return `Request failed: ${status} ${statusText}`.trim()
