@@ -12,6 +12,7 @@
     "test:graph-layout": "node scripts/graph_layout_regression.mjs",
     "test:home-dashboard": "node scripts/home_dashboard_regression.mjs",
     "test:catalog": "node scripts/catalog_regression.mjs",
+    "test:library-workbench": "node scripts/library_workbench_regression.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
