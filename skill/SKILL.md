@@ -145,6 +145,15 @@ During and immediately after writing:
 - [ ] No cycles: A → B → A is forbidden.
 - [ ] Diamond (one prerequisite shared by multiple nodes) is valid — reuse
       is encouraged.
+- [ ] **Bundle node rule:** every `kg-bundle-*` node MUST list ALL of its
+      member/child node slugs under `prerequisites:` in its frontmatter.
+      `ingest.py` (`sync_markdown_prerequisite_edges`) enforces that every
+      ACTIVE IMPORT edge is backed by a Markdown prerequisite. If a bundle
+      node's frontmatter omits a child, the bundle→child edge will be
+      REJECTED on the next ingest, and that child becomes unreachable in
+      the 3D Knowledge Graph forest. Verify with:
+      `sqlite3 knowledge.db "SELECT child_node_id, status FROM kg_edge WHERE parent_node_id = '<bundle-slug>';"`
+      — all rows must show `status = ACTIVE`.
 
 **Node design:**
 - [ ] One durable concept per node — not two topics in one file.
@@ -162,8 +171,16 @@ Must run after every batch of new/changed nodes:
       Library Workbench and will break "edit source file".
 - [ ] `python3 scripts/build_kg_forest.py` — integrates frontmatter links
       into kg_question / kg_edge for the 3D tree visualization.
+- [ ] `python3 backend/ingest.py --content data/content --db data/knowledge.db` —
+      syncs Markdown nodes into SQLite AND enforces that every ACTIVE IMPORT
+      edge has a matching Markdown `prerequisites:` entry. Run this AFTER
+      `build_kg_forest.py` and check the output for rejected edges.
 - [ ] `python3 scripts/build_index.py data/content` — rebuilds HTML/JSON
       indexes so Library Workbench reflects new nodes.
+- [ ] After ingest: verify no REJECTED edges on bundles. Every `kg-bundle-*`
+      must have zero rows with `status = 'REJECTED'`:
+      `sqlite3 knowledge.db "SELECT COUNT(*) FROM kg_edge WHERE parent_node_id
+      LIKE 'kg-bundle-%' AND status = 'REJECTED';"` — must return 0.
 - [ ] After build: verify `kg_question` and `kg_edge` entries were created.
       `sqlite3 knowledge.db "SELECT question_id FROM kg_question WHERE
       root_node_id = '<new-slug>';"`

@@ -35,6 +35,56 @@ const MASTERY_LABELS: Record<KgMasteryState, string> = {
 
 type RootRef = { id: string; isQuestion: boolean; label: string }
 
+type SortMode = 'problemNo' | 'area' | 'alpha'
+
+const AREA_LABELS: Record<string, string> = {
+  'cs-fundamentals': 'CS Fundamentals',
+  'algorithms': 'Algorithms',
+  'networkprogramming': 'Network Programming',
+  'projects': 'Projects',
+  'tools': 'Tools',
+  'r-language': 'R Language',
+  'attacklab': 'Attack Lab',
+  'knowledge-graph': 'Knowledge Graph',
+  'abilities': 'Abilities',
+  'stack-prerequisite': 'Stack Prerequisites',
+  'stubs': 'Stubs',
+}
+
+function sortQuestions(questions: KgQuestionSummary[], mode: SortMode): KgQuestionSummary[] {
+  const sorted = [...questions]
+  switch (mode) {
+    case 'problemNo':
+      sorted.sort((a, b) => (a.problemNo - b.problemNo) || a.title.localeCompare(b.title))
+      break
+    case 'area':
+      sorted.sort((a, b) =>
+        (a.areaId || '').localeCompare(b.areaId || '') || (a.problemNo - b.problemNo)
+      )
+      break
+    case 'alpha':
+      sorted.sort((a, b) => a.title.localeCompare(b.title))
+      break
+  }
+  return sorted
+}
+
+function groupByArea(questions: KgQuestionSummary[]): Map<string, KgQuestionSummary[]> {
+  const map = new Map<string, KgQuestionSummary[]>()
+  for (const q of questions) {
+    const key = q.areaId || 'other'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(q)
+  }
+  // Sort area groups: cs-fundamentals first, then alphabetical
+  const sorted = new Map([...map.entries()].sort(([a], [b]) => {
+    if (a === 'cs-fundamentals') return -1
+    if (b === 'cs-fundamentals') return 1
+    return a.localeCompare(b)
+  }))
+  return sorted
+}
+
 export function KnowledgeGraphPanel() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -56,6 +106,12 @@ export function KnowledgeGraphPanel() {
   const [graphError, setGraphError] = useState('')
   const [listError, setListError] = useState('')
   const [isLoadingGraph, setIsLoadingGraph] = useState(false)
+
+  // Search, sort, and area grouping
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy] = useState<SortMode>('problemNo')
+  const [groupEnabled, setGroupEnabled] = useState(true)
 
   const selectRoot = useCallback(
     (next: RootRef, options: { remember?: boolean; clearHistory?: boolean } = {}) => {
@@ -192,18 +248,137 @@ export function KnowledgeGraphPanel() {
     return root.isQuestion ? `Question: ${root.label}` : `Rerooted: ${root.label}`
   }, [root])
 
+  // Derived: filtered, sorted, grouped question list
+  const processedQuestions = useMemo(() => {
+    let filtered = questions
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      filtered = questions.filter(
+        (item) =>
+          item.title.toLowerCase().includes(q) ||
+          (item.areaId || '').toLowerCase().includes(q) ||
+          String(item.problemNo).includes(q),
+      )
+    }
+    return {
+      all: sortQuestions(filtered, sortBy),
+      grouped: groupEnabled ? groupByArea(sortQuestions(filtered, sortBy)) : null,
+      total: filtered.length,
+      matched: filtered.length,
+    }
+  }, [questions, searchQuery, sortBy, groupEnabled])
+
+  const toggleArea = useCallback((areaId: string) => {
+    setExpandedAreas((prev) => {
+      const next = new Set(prev)
+      if (next.has(areaId)) next.delete(areaId); else next.add(areaId)
+      return next
+    })
+  }, [])
+
   return (
     <section className="kgraph-shell" aria-label="Knowledge tree 3D">
       <aside className="kgraph-rail">
+        {/* Search & filter controls */}
+        <div className="kgraph-rail-section kgraph-controls">
+          <div className="kgraph-search-row">
+            <input
+              type="search"
+              className="kgraph-search-input"
+              placeholder="Search questions, area…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Filter question roots"
+            />
+          </div>
+          <div className="kgraph-filter-row">
+            <label className="kgraph-filter-label">
+              <select
+                className="kgraph-filter-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortMode)}
+              >
+                <option value="problemNo">By problem #</option>
+                <option value="area">By area</option>
+                <option value="alpha">A–Z</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className={`kgraph-group-toggle ${groupEnabled ? 'active' : ''}`}
+              onClick={() => setGroupEnabled((v) => !v)}
+              aria-pressed={groupEnabled}
+              title={groupEnabled ? 'Hide area groups' : 'Group by area'}
+            >
+              📁
+            </button>
+          </div>
+        </div>
+
+        {/* Question list */}
         <div className="kgraph-rail-section">
-          <p className="eyebrow">Problem roots</p>
+          <p className="eyebrow">
+            Problem roots
+            {searchQuery && (
+              <span className="kgraph-count"> · {processedQuestions.matched} of {questions.length}</span>
+            )}
+          </p>
           {questions.length === 0 ? (
             <p className="kgraph-empty-hint">
               No registered question roots. Open a node's graph link to inspect its prerequisite subtree.
             </p>
+          ) : processedQuestions.matched === 0 ? (
+            <p className="kgraph-empty-hint">No questions match "{searchQuery}".</p>
+          ) : processedQuestions.grouped ? (
+            /* Grouped by area */
+            [...processedQuestions.grouped.entries()].map(([areaId, areaQuestions]) => {
+              const isExpanded = expandedAreas.has(areaId)
+              const areaLabel = AREA_LABELS[areaId] || areaId
+              return (
+                <div key={areaId} className="kgraph-area-group">
+                  <button
+                    type="button"
+                    className="kgraph-area-header"
+                    onClick={() => toggleArea(areaId)}
+                    aria-expanded={isExpanded}
+                  >
+                    <span className="kgraph-area-caret">{isExpanded ? '▾' : '▸'}</span>
+                    <span className="kgraph-area-label">{areaLabel}</span>
+                    <span className="kgraph-area-count">{areaQuestions.length}</span>
+                  </button>
+                  {isExpanded && (
+                    <ul className="kgraph-question-list">
+                      {areaQuestions.map((question) => (
+                        <li key={question.questionId}>
+                          <button
+                            type="button"
+                            className={
+                              root?.isQuestion && root.id === question.questionId ? 'active' : ''
+                            }
+                            onClick={() => {
+                              selectRoot({
+                                id: question.questionId,
+                                isQuestion: true,
+                                label: question.title,
+                              }, { clearHistory: true })
+                            }}
+                          >
+                            <span className="kgraph-question-title">
+                              #{question.problemNo} {question.title}
+                            </span>
+                            <span className="kgraph-question-meta">{question.category}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })
           ) : (
+            /* Flat list (grouping disabled) */
             <ul className="kgraph-question-list">
-              {questions.map((question) => (
+              {processedQuestions.all.map((question) => (
                 <li key={question.questionId}>
                   <button
                     type="button"
