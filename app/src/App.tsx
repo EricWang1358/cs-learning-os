@@ -2553,22 +2553,28 @@ function App() {
               }
             }}
             onNodeSortChange={(nextSort) => {
+              // A sort change can arrive immediately after the search input
+              // updates history, before React has rendered the new route state.
+              // Read the committed URL so the query cannot be dropped by a
+              // callback closed over the previous render.
+              const currentQuery = new URLSearchParams(window.location.search).get('q') ?? query
               navigate(
                 `/nodes${routeSearch({
                   activeArea,
                   activeTrack,
-                  query,
+                  query: currentQuery,
                   nodeSort: nextSort,
                   isFocusMode,
                 })}`,
               )
             }}
             onQuizSortChange={(nextSort) => {
+              const currentQuery = new URLSearchParams(window.location.search).get('q') ?? query
               navigate(
                 `/quizzes${routeSearch({
                   activeArea,
                   activeTrack,
-                  query,
+                  query: currentQuery,
                   quizSort: nextSort,
                   isFocusMode,
                 })}`,
