@@ -2367,3 +2367,188 @@
   font-family: var(--mono);
   font-size: 0.85em;
 }
+
+/* ---- Knowledge tree 3D (KnowledgeGraph RFC, /knowledge-graph) ---- */
+.workspace-shell.kgraph-mode {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.workspace-shell.kgraph-mode .detail-panel {
+  display: none;
+}
+
+.kgraph-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 100vh;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.kgraph-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--surface-soft);
+  padding: 18px 14px;
+}
+
+.kgraph-rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kgraph-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kgraph-create-form input,
+.kgraph-create-form select {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-card);
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.kgraph-create-form input:focus,
+.kgraph-create-form select:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.kgraph-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.kgraph-question-list,
+.kgraph-bottleneck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kgraph-question-list button,
+.kgraph-bottleneck-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-card);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 10px 12px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.kgraph-question-list button:hover,
+.kgraph-bottleneck-list button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-elevated);
+}
+
+.kgraph-question-list button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.kgraph-question-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.kgraph-question-meta {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.kgraph-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.kgraph-error {
+  margin: 0 18px;
+  border: 1px solid rgba(192, 95, 78, 0.5);
+  border-radius: 10px;
+  background: rgba(192, 95, 78, 0.12);
+  color: #e0a79d;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.kgraph-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kgraph-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.kgraph-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 480px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.kgraph-canvas > p {
+  align-self: center;
+  padding: 24px;
+}
+
+.mastery-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mastery-unknown {
+  background: rgba(165, 162, 154, 0.16);
+  color: #a5a29a;
+}
+
+.mastery-learning {
+  background: rgba(210, 162, 76, 0.16);
+  color: #d2a24c;
+}
+
+.mastery-fragile {
+  background: rgba(192, 95, 78, 0.18);
+  color: #d98a7c;
+}
+
+.mastery-mastered {
+  background: rgba(111, 159, 114, 0.16);
+  color: #8fbc92;
+}

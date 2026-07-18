@@ -31,6 +31,7 @@ android {
 }
 
 dependencies {
+    implementation project(":data:graph-room")
     implementation libs.coroutines.core
     api libs.room.runtime
     implementation libs.room.ktx

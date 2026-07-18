@@ -26,6 +26,8 @@ try:
     )
     from .db import connect, initialize
     from .graph_router import create_graph_router
+    from .kg_router import create_kg_router
+    from .kg_store import KgError, KgGraphStore
     from .node_router import create_node_router
     from .productization_router import create_productization_router
     from .quiz_router import create_quiz_router
@@ -52,6 +54,8 @@ except ImportError:
     )
     from db import connect, initialize
     from graph_router import create_graph_router
+    from kg_router import create_kg_router
+    from kg_store import KgError, KgGraphStore
     from node_router import create_node_router
     from productization_router import create_productization_router
     from quiz_router import create_quiz_router
@@ -143,6 +147,23 @@ app.include_router(create_quiz_router(get_conn, CONTENT_ROOT))
 app.include_router(create_bite_router(get_conn))
 app.include_router(create_graph_router(get_conn))
 app.include_router(create_reader_question_router(get_conn))
+
+# KnowledgeGraph deep module (RFC-knowledge-graph): problem-rooted knowledge DAG
+# under /api/kg. Own single-connection store over the shared DB file; kg node
+# creation writes real markdown under CONTENT_ROOT so ingest keeps the rows.
+kg_store = KgGraphStore(str(DB_PATH))
+app.state.kg_store = kg_store
+
+
+@app.exception_handler(KgError)
+async def kg_error_handler(_request, exc: KgError):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=exc.http_status,
+                        content={"error": exc.kind, **exc.details})
+
+
+app.include_router(create_kg_router(kg_store, CONTENT_ROOT))
 app.include_router(
     create_sync_router(
         get_conn,

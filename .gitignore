@@ -18,15 +18,9 @@ android-app/local.properties
 # Generated indexes and caches
 generated/
 var/
-data/
-!android-app/app/src/main/java/com/cslearningos/mobile/data/
-!android-app/app/src/main/java/com/cslearningos/mobile/data/**
-!android-app/app/src/main/java/com/cslearningos/mobile/feature/**/data/
-!android-app/app/src/main/java/com/cslearningos/mobile/feature/**/data/**
-!android-app/app/src/test/java/com/cslearningos/mobile/data/
-!android-app/app/src/test/java/com/cslearningos/mobile/data/**
-!android-app/app/src/test/java/com/cslearningos/mobile/feature/**/data/
-!android-app/app/src/test/java/com/cslearningos/mobile/feature/**/data/**
+# Only the repo-root runtime data root is ignored (leading slash anchors it).
+# Any *source* directory named data (Android modules, DAO packages) is tracked.
+/data/
 content/
 content/index.html
 content/index.json

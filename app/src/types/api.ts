@@ -502,7 +502,7 @@ export type ApiErrorBody = {
   detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync'
+export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'kgraph'
 
 export type SyncDevice = {
   id: string
@@ -544,3 +544,51 @@ export type ApiSyncRevokeResponse = {
 }
 
 export type AiDraftScope = 'question' | 'selected' | 'page'
+
+// ---- KnowledgeGraph (RFC-knowledge-graph, /api/kg) ----
+
+export type KgCategory = 'CS_BASIC' | 'ALGORITHM' | 'SYSTEM_DESIGN' | 'BEHAVIORAL'
+
+export type KgMasteryState = 'UNKNOWN' | 'LEARNING' | 'FRAGILE' | 'MASTERED'
+
+export type KgQuestionSummary = {
+  questionId: string
+  rootNodeId: string
+  areaId: string | null
+  problemNo: number
+  title: string
+  category: KgCategory
+  jdBatchId: string | null
+  createdAt: number
+}
+
+export type ApiKgQuestionsResponse = {
+  questions: KgQuestionSummary[]
+  total: number
+}
+
+export type KgCreateQuestionResponse = {
+  questionId: string
+  rootNodeId: string
+  problemNo: number
+  title: string
+  category: KgCategory
+  areaId: string
+  replayed: boolean
+}
+
+export type KgBottleneckItem = {
+  nodeId: string
+  title: string
+  mastery: KgMasteryState
+  score: number
+  blocksCount: number
+  distinctQuestionCount: number
+  dependentFailCount: number
+  recentFailures: number
+}
+
+export type ApiKgBottlenecksResponse = {
+  items: KgBottleneckItem[]
+  minDistinctQuestions: number
+}

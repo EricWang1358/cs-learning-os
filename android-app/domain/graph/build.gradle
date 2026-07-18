@@ -1,0 +1,24 @@
+/*
+ * domain:graph — KnowledgeGraph 纯 Kotlin 领域模块(RFC: docs/RFC-knowledge-graph.md)。
+ * 零 Android 依赖: GraphEngine(环检测/最长路径分层/树物化/瓶颈)、MasteryEngine(规则引擎)、
+ * Fingerprint(幂等)、KnowledgeGraphService(内存 facade)。
+ * 测试用 JUnit5(与工程内其他模块的 JUnit4 并存, 仅本模块启用 jupiter 平台)。
+ */
+plugins {
+    id "cslearningos.kotlin.library"
+}
+
+dependencies {
+    implementation libs.coroutines.core
+
+    testImplementation platform(libs.junit.bom)
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "failed", "skipped"
+    }
+}

@@ -7,6 +7,18 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.cslearningos.graph.data.GraphSchemaV9
+import com.cslearningos.graph.data.KgDaoProvider
+import com.cslearningos.graph.data.KgEdgeDao
+import com.cslearningos.graph.data.KgEdgeEntity
+import com.cslearningos.graph.data.KgMasteryDao
+import com.cslearningos.graph.data.KgMasteryEntity
+import com.cslearningos.graph.data.KgMasteryEventEntity
+import com.cslearningos.graph.data.KgProposalDao
+import com.cslearningos.graph.data.KgProposalEntity
+import com.cslearningos.graph.data.KgQuestionDao
+import com.cslearningos.graph.data.KgQuestionEntity
+import com.cslearningos.graph.data.MIGRATION_8_9
 import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntity
 
 @Database(
@@ -22,14 +34,25 @@ import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntit
         QuizFtsEntity::class,
         AssistantConversationEntity::class,
         ProcessedCommandEntity::class,
-        ReplicationOutboxEntity::class
+        ReplicationOutboxEntity::class,
+        KgQuestionEntity::class,
+        KgEdgeEntity::class,
+        KgProposalEntity::class,
+        KgMasteryEntity::class,
+        KgMasteryEventEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
-abstract class LearningDatabase : RoomDatabase() {
+abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
     abstract fun learningDao(): LearningDao
+
+    // KgDaoProvider — KnowledgeGraph v9 DAOs (Room generates the implementations).
+    abstract override fun kgQuestionDao(): KgQuestionDao
+    abstract override fun kgEdgeDao(): KgEdgeDao
+    abstract override fun kgProposalDao(): KgProposalDao
+    abstract override fun kgMasteryDao(): KgMasteryDao
 
     companion object {
         private val Migration1To2 = object : Migration(1, 2) {
@@ -204,8 +227,13 @@ abstract class LearningDatabase : RoomDatabase() {
                     Migration4To5,
                     Migration5To6,
                     Migration6To7,
-                    Migration7To8
+                    Migration7To8,
+                    MIGRATION_8_9
                 )
+                // Fresh installs (no migration path): Room auto-generates wrong
+                // full-unique indexes from the mirror annotations; this callback
+                // replaces them with the RFC §3.3 partial-unique originals.
+                .addCallback(GraphSchemaV9.freshInstallCallback)
                 .build()
     }
 }

@@ -74,6 +74,10 @@ const GraphNavigator = lazy(() =>
   import('./components/GraphNavigator').then((module) => ({ default: module.GraphNavigator })),
 )
 
+const KnowledgeGraphPanel = lazy(() =>
+  import('./components/KnowledgeGraphPanel').then((module) => ({ default: module.KnowledgeGraphPanel })),
+)
+
 const MarkdownView = lazy(() =>
   import('./components/MarkdownView').then((module) => ({ default: module.MarkdownView })),
 )
@@ -2301,7 +2305,7 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'sync' ? 'sync-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'sync' ? 'sync-mode' : ''} ${viewMode === 'kgraph' ? 'kgraph-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
         <div className="brand-block">
           <p className="eyebrow">CS Learning OS</p>
@@ -2426,6 +2430,16 @@ function App() {
           </button>
           <button
             type="button"
+            className={viewMode === 'kgraph' ? 'active' : ''}
+            onClick={() => {
+              if (!exitEditingBeforeNavigation()) return
+              navigate('/knowledge-graph')
+            }}
+          >
+            Knowledge tree 3D
+          </button>
+          <button
+            type="button"
             className={viewMode === 'health' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
@@ -2447,7 +2461,17 @@ function App() {
         </section>
       </aside>
 
-      {viewMode === 'graph' ? (
+      {viewMode === 'kgraph' ? (
+        <Suspense
+          fallback={
+            <section className="graph-navigator-shell" aria-label="Knowledge tree 3D">
+              <p className="detail-loading">Loading knowledge graph...</p>
+            </section>
+          }
+        >
+          <KnowledgeGraphPanel />
+        </Suspense>
+      ) : viewMode === 'graph' ? (
         <Suspense
           fallback={
             <section className="graph-navigator-shell" aria-label="Knowledge graph navigator">

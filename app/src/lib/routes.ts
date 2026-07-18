@@ -17,12 +17,15 @@ export function routeFromLocation(pathname: string, search: string) {
   const isReview = pathname === '/review'
   const isBite = pathname === '/bite'
   const isGraph = pathname === '/graph' || pathname.startsWith('/graph/')
+  const isKnowledgeGraph = pathname === '/knowledge-graph'
   const isHealth = pathname === '/health'
   const isSync = pathname === '/sync'
 
   const query = params.get('q') || ''
   return {
-    viewMode: isGraph
+    viewMode: isKnowledgeGraph
+      ? 'kgraph' as ViewMode
+      : isGraph
       ? 'graph' as ViewMode
       : isSync
         ? 'sync' as ViewMode
