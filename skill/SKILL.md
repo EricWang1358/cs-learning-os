@@ -32,28 +32,62 @@ The LLM is responsible for judgment calls:
 6. Read [references/knowledge-graph.md](references/knowledge-graph.md) before touching frontmatter links or anything tree-shaped. The system has two graph layers: frontmatter links power content navigation, while `kg_question`/`kg_edge`/`kg_mastery` form the explicit KnowledgeGraph DAG. They are related but not interchangeable.
 7. Read [references/curation-rules.md](references/curation-rules.md) when deciding what should be highlighted, buried, linked, or revisited.
 8. Read [references/content-standards.md](references/content-standards.md) before adding learning content.
-9. Read [references/textbook-writing.md](references/textbook-writing.md) when the user asks for textbook-grade quality, English CS textbook style, or content that reads like CS:APP or another authoritative textbook. This reference defines pedagogical patterns (worked examples, problem scaffolding, spiral review), a quality checklist, and precise technical English guidelines beyond what content-standards.md covers.
+
+### Verification Gate / 验证门
+
+After steps 1–8 but BEFORE writing any new node, run this checklist.
+Every item must pass; do not proceed to writing until all pass.
+
+- [ ] All prerequisite slugs in frontmatter resolve to existing `.md` files
+      under the active content root. (`find . -name "<slug>.md"` works.)
+- [ ] All `related` slugs are verified the same way.
+- [ ] The `prerequisites` chain is acyclic (no circular dependencies).
+- [ ] For each prerequisite node, read it in full. If it is `status: demo`
+      or shorter than 50 lines of body, mark it as needing a depth upgrade
+      before the new node can depend on it.
+- [ ] All terms that the new node introduces but does NOT define inline are
+      covered by an existing prerequisite node of sufficient depth. If a
+      prerequisite is too shallow, deepen it first.
+- [ ] Existing KnowledgeGraph entries: check `kg_question` and `kg_edge`
+      tables for the prerequisite nodes. If they are missing, run
+      `build_kg_forest.py` after writing.
+
+### Writing Gate / 写入门
+
+During and immediately after writing a node:
+
+- [ ] Every inline link uses Markdown hyperlink syntax:
+      `[visible label](slug.md)` — never a bare slug or `` `slug` ``.
+- [ ] The file begins with `---` (no BOM) and ends with `\n` after the
+      closing `---`. (See Frontmatter Integrity Rule below.)
+- [ ] At least one `## Worked Example` or `## Practice` section exists.
+- [ ] At least two `## Reader Questions` exist, written from the perspective
+      of a confused beginner.
+- [ ] `## Suggested Next` points to real existing nodes, not invented slugs.
+
+### Post-Write Verification / 写入后验证
+
+Must run every time new or changed nodes are written:
+
+- [ ] `python3 scripts/build_kg_forest.py` — integrates new frontmatter
+      links into kg_question / kg_edge tables for the 3D tree.
+- [ ] `python3 scripts/build_index.py data/content` — rebuilds HTML/JSON
+      indexes so the Library Workbench reflects new nodes.
+- [ ] Read every new/changed Markdown node in full (not just frontmatter).
+      For each unfamiliar term, choose: define inline (1–2 sentences) OR
+      link to existing node OR create a new prerequisite node.
+- [ ] Verify all hyperlinks: every `[label](slug.md)` matches a real file.
+      Use: `find data/content -name "<slug>.md"` for each link.
+- [ ] Check the Library Workbench UI: the new node appears with correct
+      area/track/order, no "missing" or "duplicate" warnings.
+### Remaining First-Step Workflow
+
+9. Read [references/textbook-writing.md](references/textbook-writing.md) when the user asks for textbook-grade quality, English CS textbook style, or content that reads like CS:APP. This supplements the gates above with pedagogical patterns and anti-slop rules.
 10. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
-11. Apply the quality gate: explanations must be tutorial-grade, with `Shark Tank Passcode: process_code and is_valid_code` as the minimum depth target for low-level systems and quiz content. For textbook-grade depth, additionally apply the checklist in [references/textbook-writing.md](references/textbook-writing.md).
-12. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
-13. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
-14. Run `scripts/validate_knowledge_graph.py <content-root>` before ingesting a
-    changed map. Use `scripts/build_index.py` to generate or refresh the HTML
-    and JSON index only for the selected content root when the map has changed.
-15. Read every changed Markdown node in full before reporting completion. Do
-    not rely on generated indexes or frontmatter alone: inspect every heading,
-    example, and “Suggested Next” section for missing definitions, stale links,
-    copied worksheet-specific answers, and taxonomy drift.
-16. For every unfamiliar term found during that read-through, choose exactly
-    one treatment: define it in the current node when the explanation is one or
-    two sentences; link to an existing node when it is already covered; or
-    create a reusable prerequisite node when it needs its own example and will
-    be referenced again. Record that decision in the node's concept links.
-17. Use Markdown hyperlinks for reader navigation. Internal links should point
-    to a real node Markdown file with a relative path and a visible concept
-    label; external links must be absolute HTTPS URLs and should be reserved for
-    authoritative references. Never leave a node slug in backticks as the only
-    way to reach a related concept.
+11. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
+12. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
+
+---
 
 ## Map Operations
 
