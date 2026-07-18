@@ -181,12 +181,20 @@ def create_system_router(
 
     @router.post("/system/restart")
     def system_restart(background_tasks: BackgroundTasks) -> dict:
-        """Restart the backend server. Returns immediately; server exits moments later."""
+        """Re-ingest all content, then restart the backend server."""
         def _shutdown():
+            try:
+                from pathlib import Path
+                from . import ingest as ingest_mod
+                root = Path(os.environ.get("CS_LEARNING_CONTENT", str(Path.cwd() / "data" / "content"))).resolve()
+                db = Path(os.environ.get("CS_LEARNING_DB", str(Path.cwd() / "data" / "knowledge.db"))).resolve()
+                ingest_mod.ingest(root, db)
+            except Exception as exc:
+                print(f"[restart] ingest failed (continuing with shutdown): {exc}")
             import time
             time.sleep(1)
             os.kill(os.getpid(), signal.SIGTERM)
         background_tasks.add_task(_shutdown)
-        return {"ok": True, "message": "Server is shutting down. Re-launch via startup script."}
+        return {"ok": True, "message": "Re-ingesting content then restarting server."}
 
     return router
