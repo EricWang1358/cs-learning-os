@@ -63,11 +63,12 @@ export function LibraryNodeRow({
 
   const commitOrder = async () => {
     const nextOrder = Number(draftOrder.trim())
-    if (!Number.isInteger(nextOrder) || nextOrder <= 0) return
     const committed = await onOrderCommit(node, nextOrder)
     if (committed) {
       setDraftOrder(orderLabel(node.display_order))
       setIsEditingOrder(false)
+    } else {
+      cancelOrderEdit()
     }
   }
 

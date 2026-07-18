@@ -116,6 +116,20 @@
   font-size: 12px;
 }
 
+.library-maintenance-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 4px 16px 10px;
+  font-size: 12px;
+}
+
+.library-maintenance-links a {
+  color: var(--accent, #e0ad48);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .library-date-group {
   border-top: 1px solid var(--line, #2d3948);
 }

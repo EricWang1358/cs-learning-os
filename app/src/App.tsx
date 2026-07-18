@@ -545,6 +545,13 @@ function App() {
     week: false,
     older: false,
   })
+  useEffect(() => {
+    if (viewMode === 'nodes') return
+    const resetTimer = window.setTimeout(() => {
+      setLibraryOpenGroups({ today: true, 'two-days': true, week: false, older: false })
+    }, 0)
+    return () => window.clearTimeout(resetTimer)
+  }, [viewMode])
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
@@ -1166,7 +1173,7 @@ function App() {
     older: 'Earlier',
   }
   const libraryGroupEntries = Array.from(libraryGroups.entries())
-  const libraryOrderIssues = (() => {
+  const libraryOrderIssueGroups = (() => {
     const activeNodes = nodes.filter((node) => !['archive', 'trash'].includes(node.visibility))
     const buckets = new Map<string, NodeSummary[]>()
     for (const node of activeNodes) {
@@ -1175,18 +1182,26 @@ function App() {
       if (group) group.push(node)
       else buckets.set(key, [node])
     }
-    let missing = 0
-    let duplicates = 0
+    const issues: Array<{ area: string; track: string; missing: number; duplicates: number }> = []
     for (const group of buckets.values()) {
       const seen = new Map<number, number>()
+      let missing = 0
       for (const node of group) {
         if (!Number.isInteger(node.display_order) || node.display_order <= 0) missing += 1
         else seen.set(node.display_order, (seen.get(node.display_order) ?? 0) + 1)
       }
-      for (const count of seen.values()) if (count > 1) duplicates += count - 1
+      const duplicates = Array.from(seen.values()).reduce((total, count) => total + Math.max(0, count - 1), 0)
+      const first = group[0]
+      if (first && (missing || duplicates)) {
+        issues.push({ area: first.area, track: first.track, missing, duplicates })
+      }
     }
-    return { missing, duplicates }
+    return issues.sort((left, right) => `${left.area}/${left.track}`.localeCompare(`${right.area}/${right.track}`))
   })()
+  const libraryOrderIssues = {
+    missing: libraryOrderIssueGroups.reduce((total, issue) => total + issue.missing, 0),
+    duplicates: libraryOrderIssueGroups.reduce((total, issue) => total + issue.duplicates, 0),
+  }
 
   const commitLibraryOrder = async (node: NodeSummary, nextOrder: number): Promise<boolean> => {
     if (!Number.isInteger(nextOrder) || nextOrder <= 0) {
@@ -1227,12 +1242,15 @@ function App() {
         setActionNotice(orderError instanceof Error ? orderError.message : 'Unable to update sequence.')
       }
       try {
-        const refreshed = await fetchJson<ApiNodesResponse>(`/api/nodes?sort=${encodeURIComponent(nodeSort)}`)
+        const refreshPath = query.trim()
+          ? `/api/search?q=${encodeURIComponent(query.trim())}&sort=${encodeURIComponent(nodeSort)}`
+          : `/api/nodes?sort=${encodeURIComponent(nodeSort)}`
+        const refreshed = await fetchJson<ApiNodesResponse>(refreshPath)
         setNodes(refreshed.nodes)
       } catch {
         // Keep the original list when a recovery request is unavailable.
       }
-      return code === 'display_order_conflict' || code === 'node_version_conflict'
+      return false
     }
   }
 
@@ -2677,11 +2695,12 @@ function App() {
               // updates history, before React has rendered the new route state.
               // Read the committed URL so the query cannot be dropped by a
               // callback closed over the previous render.
-              const currentQuery = new URLSearchParams(window.location.search).get('q') ?? query
+              const currentParams = new URLSearchParams(window.location.search)
+              const currentQuery = currentParams.get('q') ?? query
               navigate(
                 `/nodes${routeSearch({
-                  activeArea,
-                  activeTrack,
+                  activeArea: currentParams.get('area') ?? activeArea,
+                  activeTrack: currentParams.get('track') ?? activeTrack,
                   query: currentQuery,
                   nodeSort: nextSort,
                   isFocusMode,
@@ -2689,11 +2708,12 @@ function App() {
               )
             }}
             onQuizSortChange={(nextSort) => {
-              const currentQuery = new URLSearchParams(window.location.search).get('q') ?? query
+              const currentParams = new URLSearchParams(window.location.search)
+              const currentQuery = currentParams.get('q') ?? query
               navigate(
                 `/quizzes${routeSearch({
-                  activeArea,
-                  activeTrack,
+                  activeArea: currentParams.get('area') ?? activeArea,
+                  activeTrack: currentParams.get('track') ?? activeTrack,
                   query: currentQuery,
                   quizSort: nextSort,
                   isFocusMode,
@@ -2812,6 +2832,20 @@ function App() {
             {libraryOrderIssues.missing && libraryOrderIssues.duplicates ? ' · ' : ''}
             {libraryOrderIssues.duplicates ? `${libraryOrderIssues.duplicates} duplicate` : ''} values. Update them inline; no automatic changes were made.
           </p>
+        )}
+        {viewMode === 'nodes' && libraryOrderIssueGroups.length > 0 && (
+          <div className="library-maintenance-links" aria-label="Sequence maintenance filters">
+            {libraryOrderIssueGroups.map((issue) => (
+              <a
+                key={`${issue.area}/${issue.track}`}
+                href={`/nodes${routeSearch({ activeArea: issue.area, activeTrack: issue.track, query, nodeSort, isFocusMode })}`}
+              >
+                Review {issue.area} / {issue.track || 'General'}
+                {issue.missing ? ` (${issue.missing} missing)` : ''}
+                {issue.duplicates ? ` (${issue.duplicates} duplicate)` : ''}
+              </a>
+            ))}
+          </div>
         )}
 
         {viewMode === 'nodes' && visibleTracks.length > 0 && (

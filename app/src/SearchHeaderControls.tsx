@@ -78,7 +78,7 @@ export function SearchHeaderControls({
             </button>
           )}
         </div>
-        {mode === 'nodes' && (
+        {mode === 'nodes' && !isWorkbench && (
           <label className="sort-control" htmlFor="node-sort">
             <span>Sort</span>
             <select
