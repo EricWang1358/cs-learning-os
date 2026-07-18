@@ -5,7 +5,7 @@ export type LibraryNodeRowProps = {
   node: NodeSummary
   selected?: boolean
   onOpen: (node: NodeSummary) => void
-  onOrderCommit: (node: NodeSummary, nextOrder: number) => void
+  onOrderCommit: (node: NodeSummary, nextOrder: number) => boolean | Promise<boolean>
   formatUpdatedAt?: (updatedAt: string) => string
 }
 
@@ -25,7 +25,7 @@ function formatUpdatedAt(updatedAt: string) {
 }
 
 function orderLabel(order: number) {
-  return Number.isInteger(order) && order > 0 ? String(order) : '—'
+  return Number.isInteger(order) && order > 0 ? String(order) : '-'
 }
 
 function statusClass(status: string) {
@@ -61,11 +61,14 @@ export function LibraryNodeRow({
     setIsEditingOrder(false)
   }
 
-  const commitOrder = () => {
+  const commitOrder = async () => {
     const nextOrder = Number(draftOrder.trim())
     if (!Number.isInteger(nextOrder) || nextOrder <= 0) return
-    onOrderCommit(node, nextOrder)
-    setIsEditingOrder(false)
+    const committed = await onOrderCommit(node, nextOrder)
+    if (committed) {
+      setDraftOrder(orderLabel(node.display_order))
+      setIsEditingOrder(false)
+    }
   }
 
   const handleOrderKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

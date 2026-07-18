@@ -4,11 +4,13 @@ export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 
 export class ApiRequestError extends Error {
   status: number
+  body: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: unknown = null) {
     super(message)
     this.name = 'ApiRequestError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -44,6 +46,19 @@ export async function putJson<T>(path: string, payload: unknown): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export async function patchJson<T>(path: string, payload: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new ApiRequestError(response.status, responseErrorMessageFromBody(response.status, response.statusText, body), body)
+  }
+  return response.json() as Promise<T>
+}
+
 export async function deleteJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'DELETE',
@@ -57,20 +72,26 @@ export async function deleteJson<T>(path: string): Promise<T> {
 async function responseErrorMessage(response: Response) {
   try {
     const body = (await response.json()) as ApiErrorBody
-    if (body.detail) {
-      if (Array.isArray(body.detail)) {
-        const details = body.detail
-          .map((item) => {
-            const field = item.loc?.filter((part) => part !== 'body').join('.') || 'request'
-            return `${field}: ${item.msg || item.type || 'invalid value'}`
-          })
-          .join('; ')
-        return `Request failed ${response.status}: ${details}`
-      }
-      return `Request failed ${response.status}: ${body.detail}`
-    }
+    return responseErrorMessageFromBody(response.status, response.statusText, body)
   } catch {
     // Fall through to the generic message when the backend did not return JSON.
   }
   return `Request failed: ${response.status} ${response.statusText}`.trim()
+}
+
+function responseErrorMessageFromBody(status: number, statusText: string, body: unknown) {
+  const detail = (body as ApiErrorBody | null)?.detail
+  if (detail) {
+    if (Array.isArray(detail)) {
+      const details = detail
+        .map((item) => {
+          const field = item.loc?.filter((part) => part !== 'body').join('.') || 'request'
+          return `${field}: ${item.msg || item.type || 'invalid value'}`
+        })
+        .join('; ')
+      return `Request failed ${status}: ${details}`
+    }
+    return `Request failed ${status}: ${String(detail)}`
+  }
+  return `Request failed: ${status} ${statusText}`.trim()
 }

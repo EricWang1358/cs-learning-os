@@ -11,13 +11,15 @@ import { SyncPanel } from './components/SyncPanel'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
+import { LibraryDateGroup } from './LibraryDateGroup'
+import { groupLibraryNodes, sortLibraryNodes, type LibraryDateBucket } from './libraryGrouping'
 import {
   defaultNodeSort,
   defaultQuizSort,
   visibleNodeSortOptions,
   visibleQuizSortOptions,
 } from './searchSort'
-import { ApiRequestError, deleteJson, fetchJson, postJson, putJson } from './lib/apiClient'
+import { ApiRequestError, deleteJson, fetchJson, patchJson, postJson, putJson } from './lib/apiClient'
 import { clearStoredEditDraft, readStoredEditDraft, writeStoredEditDraft } from './lib/editDraftStorage'
 import {
   buildTableOfContents,
@@ -537,6 +539,12 @@ function App() {
   const [homeLoading, setHomeLoading] = useState(false)
   const [homeError, setHomeError] = useState('')
   const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(false)
+  const [libraryOpenGroups, setLibraryOpenGroups] = useState<Record<LibraryDateBucket, boolean>>({
+    today: true,
+    'two-days': true,
+    week: false,
+    older: false,
+  })
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
@@ -1148,6 +1156,85 @@ function App() {
       (activeTrack === 'all' || node.track === activeTrack)
     )
   })
+
+  const sortedLibraryNodes = sortLibraryNodes(filteredNodes)
+  const libraryGroups = groupLibraryNodes(sortedLibraryNodes, clockNow)
+  const libraryGroupLabels: Record<LibraryDateBucket, string> = {
+    today: 'Today',
+    'two-days': 'Two days ago',
+    week: 'This week',
+    older: 'Earlier',
+  }
+  const libraryGroupEntries = Array.from(libraryGroups.entries())
+  const libraryOrderIssues = (() => {
+    const activeNodes = nodes.filter((node) => !['archive', 'trash'].includes(node.visibility))
+    const buckets = new Map<string, NodeSummary[]>()
+    for (const node of activeNodes) {
+      const key = `${node.area}\u0000${node.track}`
+      const group = buckets.get(key)
+      if (group) group.push(node)
+      else buckets.set(key, [node])
+    }
+    let missing = 0
+    let duplicates = 0
+    for (const group of buckets.values()) {
+      const seen = new Map<number, number>()
+      for (const node of group) {
+        if (!Number.isInteger(node.display_order) || node.display_order <= 0) missing += 1
+        else seen.set(node.display_order, (seen.get(node.display_order) ?? 0) + 1)
+      }
+      for (const count of seen.values()) if (count > 1) duplicates += count - 1
+    }
+    return { missing, duplicates }
+  })()
+
+  const commitLibraryOrder = async (node: NodeSummary, nextOrder: number): Promise<boolean> => {
+    if (!Number.isInteger(nextOrder) || nextOrder <= 0) {
+      setActionNotice('Sequence must be a positive integer.')
+      return false
+    }
+    const duplicate = nodes.find(
+      (candidate) =>
+        candidate.slug !== node.slug &&
+        candidate.area === node.area &&
+        candidate.track === node.track &&
+        candidate.display_order === nextOrder,
+    )
+    if (duplicate) {
+      setActionNotice(`Sequence ${nextOrder} is already used by ${duplicate.title}. Nothing was saved.`)
+      return false
+    }
+    try {
+      const data = await patchJson<ApiNodeResponse>(`/api/nodes/${encodeURIComponent(node.slug)}/display-order`, {
+        display_order: nextOrder,
+        expected_updated_at: node.updated_at,
+      })
+      setNodes((current) => current.map((item) => (item.slug === data.node.slug ? data.node : item)))
+      setSelectedNode((current) => (current?.slug === data.node.slug ? data.node : current))
+      setActionNotice(`Updated sequence for ${data.node.title}.`)
+      return true
+    } catch (orderError) {
+      let code = ''
+      if (orderError instanceof ApiRequestError) {
+        const detail = (orderError.body as { detail?: { code?: string } } | null)?.detail
+        code = detail?.code ?? ''
+      }
+      if (code === 'display_order_conflict') {
+        setActionNotice(`Sequence ${nextOrder} is already used in ${node.area} / ${node.track}. Nothing was saved.`)
+      } else if (code === 'node_version_conflict') {
+        setActionNotice('This node changed elsewhere. The Library was reloaded; try again.')
+      } else {
+        setActionNotice(orderError instanceof Error ? orderError.message : 'Unable to update sequence.')
+      }
+      try {
+        const refreshed = await fetchJson<ApiNodesResponse>(`/api/nodes?sort=${encodeURIComponent(nodeSort)}`)
+        setNodes(refreshed.nodes)
+      } catch {
+        // Keep the original list when a recovery request is unavailable.
+      }
+      return code === 'display_order_conflict' || code === 'node_version_conflict'
+    }
+  }
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     if (activeArea === 'archive') return quiz.visibility === 'archive'
@@ -2522,6 +2609,39 @@ function App() {
             visibleCount={visibleCount}
             totalCount={totalCount}
             isNewNodeOpen={isNewNodeOpen}
+            isWorkbench={viewMode === 'nodes'}
+            onClearQuery={() => {
+              if (viewMode === 'quizzes') {
+                navigate(`/quizzes${routeSearch({ activeArea, activeTrack, query: '', quizSort, isFocusMode })}`, { replace: true })
+              } else if (viewMode === 'question-queue') {
+                navigate('/queue', { replace: true })
+              } else {
+                navigate(
+                  `${selectedSlug ? `/nodes/${encodeURIComponent(selectedSlug)}` : '/nodes'}${routeSearch({
+                    activeArea,
+                    activeTrack,
+                    query: '',
+                    nodeSort,
+                    isFocusMode,
+                  })}`,
+                  { replace: true },
+                )
+              }
+            }}
+            onExpandAll={() => {
+              setLibraryOpenGroups((current) => {
+                const next = { ...current }
+                for (const bucket of libraryGroups.keys()) next[bucket] = true
+                return next
+              })
+            }}
+            onCollapseAll={() => {
+              setLibraryOpenGroups((current) => {
+                const next = { ...current }
+                for (const bucket of libraryGroups.keys()) next[bucket] = false
+                return next
+              })
+            }}
             onNewNodeToggle={openNewNodeForm}
             onQueryChange={(nextQuery) => {
               if (viewMode === 'quizzes') {
@@ -2581,6 +2701,44 @@ function App() {
               )
             }}
           />
+        )}
+
+        {viewMode === 'nodes' && (
+          <div className="library-workbench-filters" aria-label="Library filters">
+            <label>
+              <span>Area</span>
+              <select
+                value={activeArea}
+                onChange={(event) =>
+                  navigate(`/nodes${routeSearch({
+                    activeArea: event.target.value,
+                    activeTrack: 'all',
+                    query,
+                    nodeSort,
+                    isFocusMode,
+                  })}`)
+                }
+              >
+                <option value="all">All areas</option>
+                {contentAreas.map((area) => <option key={area} value={area}>{areaLabels[area] ?? slugTitle(area)}</option>)}
+                <option value="archive">Archive</option>
+                <option value="trash">Trashbin</option>
+              </select>
+            </label>
+            <label>
+              <span>Track</span>
+              <select
+                value={activeTrack}
+                disabled={SYSTEM_AREAS.includes(activeArea)}
+                onChange={(event) =>
+                  navigate(`/nodes${routeSearch({ activeArea, activeTrack: event.target.value, query, nodeSort, isFocusMode })}`)
+                }
+              >
+                <option value="all">All tracks</option>
+                {tracks.map((track) => <option key={track.track} value={track.track}>{trackLabels[track.track] ?? track.label ?? slugTitle(track.track)}</option>)}
+              </select>
+            </label>
+          </div>
         )}
 
         {viewMode === 'nodes' && isNewNodeOpen && (
@@ -2647,6 +2805,14 @@ function App() {
           </div>
         )}
         {error && <p className="error-banner">{error}</p>}
+
+        {viewMode === 'nodes' && (libraryOrderIssues.missing > 0 || libraryOrderIssues.duplicates > 0) && (
+          <p className="library-maintenance-warning">
+            Sequence maintenance: {libraryOrderIssues.missing ? `${libraryOrderIssues.missing} missing` : ''}
+            {libraryOrderIssues.missing && libraryOrderIssues.duplicates ? ' · ' : ''}
+            {libraryOrderIssues.duplicates ? `${libraryOrderIssues.duplicates} duplicate` : ''} values. Update them inline; no automatic changes were made.
+          </p>
+        )}
 
         {viewMode === 'nodes' && visibleTracks.length > 0 && (
           <section className="track-panel" aria-label="Reading tracks">
@@ -2934,7 +3100,24 @@ function App() {
                   <span>{quiz.summary}</span>
                 </button>
               ))
-            : filteredNodes.map((node) => (
+            : viewMode === 'nodes'
+              ? libraryGroupEntries.map(([bucket, group]) => (
+                  <LibraryDateGroup
+                    key={bucket}
+                    bucket={bucket}
+                    label={libraryGroupLabels[bucket]}
+                    nodes={group}
+                    isOpen={libraryOpenGroups[bucket]}
+                    onToggle={() => setLibraryOpenGroups((current) => ({ ...current, [bucket]: !current[bucket] }))}
+                    selectedSlug={selectedSlug}
+                    onOpen={(node) => {
+                      if (!exitEditingBeforeNavigation()) return
+                      navigateToNode(node.slug)
+                    }}
+                    onOrderCommit={commitLibraryOrder}
+                  />
+                ))
+              : filteredNodes.map((node) => (
                 <button
                   key={node.slug}
                   type="button"
@@ -2957,7 +3140,10 @@ function App() {
       )}
 
       {viewMode !== 'graph' && viewMode !== 'home' && (
-      <aside className="detail-panel" aria-label="Node detail">
+      <aside
+        className={`detail-panel ${viewMode === 'nodes' || viewMode === 'quizzes' ? 'content-detail-panel' : ''}`}
+        aria-label="Node detail"
+      >
         {(viewMode === 'nodes' || viewMode === 'quizzes') &&
           ((viewMode === 'nodes' && selectedNode?.slug === selectedSlug) ||
             (viewMode === 'quizzes' && selectedQuiz?.id === selectedQuizId)) &&

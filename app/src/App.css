@@ -24,6 +24,259 @@
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
+/* Dense Library workbench */
+.library-workbench-toolbar {
+  position: static;
+  padding: 14px 16px;
+  gap: 8px;
+}
+
+.library-workbench-toolbar .search-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.search-input-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.search-input-shell input {
+  width: 100%;
+  padding-right: 64px;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--muted, #8b96a8);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.search-header-footer,
+.search-header-actions,
+.library-workbench-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-header-footer {
+  justify-content: space-between;
+}
+
+.search-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.toolbar-action {
+  border: 1px solid var(--line, #2d3948);
+  background: transparent;
+  color: var(--text, #e5e7eb);
+  border-radius: 4px;
+  padding: 6px 9px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.library-workbench-filters {
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--line, #2d3948);
+}
+
+.library-workbench-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted, #8b96a8);
+  font-size: 12px;
+}
+
+.library-workbench-filters select {
+  min-width: 120px;
+  border: 1px solid var(--line, #2d3948);
+  background: var(--panel, #121923);
+  color: var(--text, #e5e7eb);
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+
+.library-maintenance-warning {
+  margin: 8px 16px;
+  padding: 8px 10px;
+  border-left: 2px solid #d19a32;
+  background: rgba(209, 154, 50, 0.08);
+  color: #d7b870;
+  font-size: 12px;
+}
+
+.library-date-group {
+  border-top: 1px solid var(--line, #2d3948);
+}
+
+.library-date-group-header {
+  padding: 0 16px;
+}
+
+.library-date-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text, #e5e7eb);
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-date-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.library-date-group-count {
+  color: var(--muted, #8b96a8);
+  font-size: 11px;
+}
+
+.library-date-group-chevron {
+  margin-left: auto;
+  color: var(--muted, #8b96a8);
+}
+
+.library-node-row {
+  border-top: 1px solid color-mix(in srgb, var(--line, #2d3948) 72%, transparent);
+}
+
+.library-node-row.is-selected {
+  border-left: 2px solid var(--accent, #e0ad48);
+}
+
+.library-node-row-grid {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 68px;
+}
+
+.library-node-order-shell {
+  display: grid;
+  place-items: center;
+  color: var(--muted, #8b96a8);
+}
+
+.library-node-order,
+.library-node-order-input {
+  width: 32px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  font: inherit;
+}
+
+.library-node-order {
+  cursor: text;
+}
+
+.library-node-order:hover,
+.library-node-order:focus-visible {
+  color: var(--accent, #e0ad48);
+}
+
+.library-node-order-input {
+  border-bottom: 1px solid var(--accent, #e0ad48);
+  outline: 0;
+}
+
+.library-node-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px 10px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-node-row-content,
+.library-node-row-trailing {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.library-node-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-node-row-meta,
+.library-node-row-trailing,
+.library-node-row-summary {
+  color: var(--muted, #8b96a8);
+  font-size: 12px;
+}
+
+.library-node-row-meta {
+  display: flex;
+  gap: 5px;
+}
+
+.library-node-row-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-node-row-trailing {
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.library-node-status {
+  color: #73c89b;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .library-workbench-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-workbench-filters label,
+  .library-workbench-filters select {
+    width: 100%;
+  }
+
+  .library-node-row-main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .library-node-row-trailing {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+}
+
 .workspace-shell.catalog-mode {
   grid-template-columns: 280px minmax(0, 1fr);
   height: 100vh;
@@ -787,6 +1040,92 @@
   padding: 28px;
   overflow: auto;
   background: rgba(11, 14, 17, 0.82);
+}
+
+/* Node and quiz reading surfaces share the catalog's restrained content width. */
+.content-detail-panel {
+  border: 0;
+  background: var(--surface);
+  box-shadow: none;
+  padding: clamp(20px, 2.8vw, 36px) clamp(20px, 4vw, 56px) 48px;
+}
+
+.content-detail-panel .detail-main {
+  width: min(100%, 1180px);
+  margin-inline: auto;
+}
+
+.content-detail-panel .detail-heading {
+  padding-bottom: 18px;
+}
+
+.content-detail-panel .detail-toolbar {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.content-detail-panel .toolbar-actions {
+  gap: 8px;
+}
+
+.content-detail-panel .toolbar-actions .focus-toggle {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.content-detail-panel .detail-heading h2 {
+  margin: 12px 0 8px;
+  font-size: clamp(30px, 3.8vw, 48px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.content-detail-panel .tag-row {
+  margin: 16px 0 22px;
+}
+
+.content-detail-panel .tag-row span {
+  border-color: var(--line-strong);
+  background: transparent;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+.content-detail-panel .markdown-body {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.workspace-shell.focus-mode .content-detail-panel {
+  border-inline: 0;
+}
+
+/* The default three-column inspector is intentionally dense; reserve display
+   typography for the wider focus-reading surface. */
+@media (min-width: 1181px) {
+  .workspace-shell:not(.focus-mode) .content-detail-panel {
+    padding: 24px 20px 32px;
+  }
+
+  .workspace-shell:not(.focus-mode) .content-detail-panel .detail-heading h2 {
+    font-size: clamp(26px, 2.4vw, 34px);
+    line-height: 1.08;
+  }
+
+  .workspace-shell:not(.focus-mode) .content-detail-panel .toolbar-actions {
+    gap: 6px;
+  }
+
+  .workspace-shell:not(.focus-mode) .content-detail-panel .toolbar-actions .focus-toggle {
+    min-height: 34px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
 }
 
 .detail-heading {
@@ -3564,4 +3903,10 @@
   .catalog-link-description {
     grid-column: 2 / -1;
   }
+}
+
+/* Keep the Library toolbar compact after the shared search-header rules. */
+.search-header.library-workbench-toolbar {
+  position: static;
+  padding: 14px 16px;
 }

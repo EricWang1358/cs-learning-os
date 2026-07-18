@@ -42,7 +42,7 @@ export function LibraryDateGroup({
           </span>
           <span className="library-date-group-count">{nodes.length}</span>
           <span className="library-date-group-chevron" aria-hidden="true">
-            {isOpen ? '▾' : '▸'}
+            {isOpen ? 'v' : '>'}
           </span>
         </button>
       </header>

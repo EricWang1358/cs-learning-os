@@ -17,6 +17,10 @@ type SearchHeaderControlsProps = {
   onNodeSortChange: (sort: NodeSortKey) => void
   onQuizSortChange: (sort: QuizSortKey) => void
   onNewNodeToggle: () => void
+  isWorkbench?: boolean
+  onClearQuery?: () => void
+  onExpandAll?: () => void
+  onCollapseAll?: () => void
 }
 
 function searchLabel(mode: SearchMode) {
@@ -52,17 +56,28 @@ export function SearchHeaderControls({
   onNodeSortChange,
   onQuizSortChange,
   onNewNodeToggle,
+  isWorkbench = false,
+  onClearQuery,
+  onExpandAll,
+  onCollapseAll,
 }: SearchHeaderControlsProps) {
   return (
-    <header className="search-header">
+    <header className={`search-header${isWorkbench ? ' library-workbench-toolbar' : ''}`}>
       <label htmlFor="node-search">{searchLabel(mode)}</label>
       <div className="search-row">
-        <input
-          id="node-search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={searchPlaceholder(mode)}
-        />
+        <div className="search-input-shell">
+          <input
+            id="node-search"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder={searchPlaceholder(mode)}
+          />
+          {query && onClearQuery && (
+            <button type="button" className="search-clear" onClick={onClearQuery} aria-label="Clear search">
+              Clear
+            </button>
+          )}
+        </div>
         {mode === 'nodes' && (
           <label className="sort-control" htmlFor="node-sort">
             <span>Sort</span>
@@ -96,16 +111,26 @@ export function SearchHeaderControls({
           </label>
         )}
       </div>
-      <p>
-        {isLoading
-          ? 'Loading index...'
-          : `${visibleCount} visible of ${totalCount} indexed ${indexedNoun(mode)}`}
-      </p>
-      {mode === 'nodes' && (
-        <button type="button" className="focus-toggle new-node-toggle" onClick={onNewNodeToggle}>
-          {isNewNodeOpen ? 'Close new node' : '+ New node'}
-        </button>
-      )}
+      <div className="search-header-footer">
+        <p>
+          {isLoading
+            ? 'Loading index...'
+            : `${visibleCount} visible of ${totalCount} indexed ${indexedNoun(mode)}`}
+        </p>
+        {mode === 'nodes' && (
+          <div className="search-header-actions">
+            {isWorkbench && onExpandAll && onCollapseAll && (
+              <>
+                <button type="button" className="toolbar-action" onClick={onExpandAll}>Expand all</button>
+                <button type="button" className="toolbar-action" onClick={onCollapseAll}>Collapse all</button>
+              </>
+            )}
+            <button type="button" className="focus-toggle new-node-toggle" onClick={onNewNodeToggle}>
+              {isNewNodeOpen ? 'Close new node' : '+ New node'}
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   )
 }
