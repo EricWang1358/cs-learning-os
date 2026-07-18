@@ -12,7 +12,7 @@ try:
     from . import node_lifecycle_service
     from . import search_service
     from .ai_job_service import utc_now
-    from .api_models import BodyUpdate, NodeCreate, NodeReadMark
+    from .api_models import BodyUpdate, NodeCreate, NodeDisplayOrderUpdate, NodeReadMark
     from .api_serializers import row_to_node, slug_title
     from .content_write_service import body_hash
 except ImportError:
@@ -20,7 +20,7 @@ except ImportError:
     import node_lifecycle_service
     import search_service
     from ai_job_service import utc_now
-    from api_models import BodyUpdate, NodeCreate, NodeReadMark
+    from api_models import BodyUpdate, NodeCreate, NodeDisplayOrderUpdate, NodeReadMark
     from api_serializers import row_to_node, slug_title
     from content_write_service import body_hash
 
@@ -197,6 +197,18 @@ def create_node_router(get_conn: ConnectionFactory, content_root: Path) -> APIRo
                 (slug, write_time, utc_now(), 1 if should_increment else 0),
             )
             conn.commit()
+        return get_node_payload(slug)
+
+    @router.patch("/nodes/{slug}/display-order")
+    def update_node_display_order(slug: str, payload: NodeDisplayOrderUpdate) -> dict:
+        with get_conn() as conn:
+            node_lifecycle_service.update_node_display_order(
+                conn,
+                content_root,
+                slug,
+                payload.display_order,
+                payload.expected_updated_at,
+            )
         return get_node_payload(slug)
 
     @router.put("/nodes/{slug}/body")

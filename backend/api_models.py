@@ -36,6 +36,11 @@ class NodeReadMark(BaseModel):
     min_interval_seconds: int = Field(default=60, ge=0, le=86400)
 
 
+class NodeDisplayOrderUpdate(BaseModel):
+    display_order: int = Field(gt=0)
+    expected_updated_at: str = Field(min_length=1)
+
+
 class AiReviseRequest(BaseModel):
     target_type: str = Field(pattern="^(node|quiz)$")
     target_id: str = Field(min_length=1)

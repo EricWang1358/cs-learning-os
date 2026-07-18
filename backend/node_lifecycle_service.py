@@ -360,6 +360,77 @@ def node_source_or_404(conn: sqlite3.Connection, content_root: Path, slug: str) 
     return row, content_path
 
 
+def update_node_display_order(
+    conn: sqlite3.Connection,
+    content_root: Path,
+    slug: str,
+    display_order: int,
+    expected_updated_at: str,
+) -> sqlite3.Row:
+    """Update a node's order through the same file/DB lifecycle as ingest.
+
+    Validation happens before touching the source file. ``restore_file_on_failure``
+    then gives the filesystem the same rollback guarantee as the SQLite
+    transaction if ingestion or revision logging fails.
+    """
+    if display_order <= 0:
+        raise HTTPException(status_code=422, detail="display_order must be a positive integer")
+
+    # Serialize the compare-and-write sequence. Without an immediate write
+    # lock, two desktop clients could both pass the version check and then
+    # overwrite one another's order.
+    conn.execute("BEGIN IMMEDIATE")
+    row, content_path = node_source_or_404(conn, content_root, slug)
+    if row["updated_at"] != expected_updated_at:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "node_version_conflict",
+                "current_updated_at": row["updated_at"],
+            },
+        )
+
+    conflict = conn.execute(
+        """
+        SELECT slug, title
+        FROM nodes
+        WHERE area = ?
+          AND track = ?
+          AND display_order = ?
+          AND slug != ?
+        ORDER BY slug
+        LIMIT 1
+        """,
+        (row["area"], row["track"], display_order, slug),
+    ).fetchone()
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "display_order_conflict",
+                "display_order": display_order,
+                "conflicting_node": {
+                    "slug": conflict["slug"],
+                    "title": conflict["title"],
+                },
+            },
+        )
+
+    # Preserve the existing frontmatter key when possible. Older content may
+    # use ``display_order`` while current nodes use ``order``.
+    frontmatter_key = "order"
+    if not read_markdown_frontmatter_value(content_path, "order") and read_markdown_frontmatter_value(
+        content_path, "display_order"
+    ):
+        frontmatter_key = "display_order"
+
+    with restore_file_on_failure(content_path):
+        update_markdown_frontmatter_value(content_path, frontmatter_key, str(display_order))
+        updated = upsert_node_file_in_conn(conn, content_root, content_path)
+        conn.commit()
+    return updated
+
+
 def move_node_to_trash(conn: sqlite3.Connection, content_root: Path, slug: str) -> None:
     _, content_path = node_source_or_404(conn, content_root, slug)
     with restore_file_on_failure(content_path):
