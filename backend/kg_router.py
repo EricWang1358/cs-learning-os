@@ -161,6 +161,21 @@ def create_kg_router(store: KgGraphStore, content_root: Path) -> APIRouter:
                 "SELECT * FROM kg_edge WHERE status = 'ACTIVE' AND (scope_type = 'GLOBAL'"
                 " OR (scope_type = 'PROBLEM_LOCAL' AND scope_question_id = ?))",
                 (qid,)).fetchall()
+
+        # Ingest rebuilds `nodes` without cross-table foreign keys. A stale
+        # database can therefore retain an ACTIVE edge to a removed bundle.
+        # Never let that edge create a DB-only graph node with an empty title;
+        # the ingest boundary will mark it REJECTED on the next rebuild.
+        existing = {
+            r["slug"]
+            for r in cur.execute(
+                "SELECT slug FROM nodes WHERE title IS NOT NULL AND trim(title) <> ''"
+            ).fetchall()
+        }
+        rows = [
+            r for r in rows
+            if r["parent_node_id"] in existing and r["child_node_id"] in existing
+        ]
         return [{"edgeId": r["edge_id"], "parent": r["parent_node_id"],
                  "child": r["child_node_id"], "scope": r["scope_type"],
                  "scope_qid": r["scope_question_id"]} for r in rows]

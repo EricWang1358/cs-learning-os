@@ -486,6 +486,28 @@ def test_export3d_contract_and_content_hash(client):
     assert {n["title"] for n in r4.json()["nodes"]} == {"DP", "Recursion"}
 
 
+def test_export3d_does_not_emit_empty_title_for_stale_edge(client):
+    q = create_question(client, "Stale edge root")
+    store = client.app.state.kg_store
+    with store.transaction() as cur:
+        cur.execute(
+            "INSERT INTO kg_edge (edge_id, parent_node_id, child_node_id, scope_type, "
+            "scope_question_id, status, created_by, revision, created_at) "
+            "VALUES (?, ?, ?, 'GLOBAL', NULL, 'ACTIVE', 'IMPORT', 1, ?)",
+            ("stale-edge", q["rootNodeId"], "missing-node", store.now()),
+        )
+
+    response = client.get(
+        "/api/kg/export3d",
+        params={"root": q["questionId"], "rootIsQuestion": True},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert all(isinstance(node["title"], str) and node["title"].strip() for node in payload["nodes"])
+    assert all(link["target"] != "missing-node" for link in payload["links"])
+
+
 # ----------------------------------------------------------------- detachEdge
 def test_detach_edge_soft_delete(client):
     q = create_question(client, "Q-detach")

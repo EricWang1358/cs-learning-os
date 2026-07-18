@@ -244,6 +244,73 @@ def read_quizzes(content_root: Path) -> list[Quiz]:
     return quizzes
 
 
+def prune_kg_references(conn: sqlite3.Connection) -> dict[str, int]:
+    """Keep KnowledgeGraph rows aligned with the freshly ingested node set.
+
+    The KG tables intentionally do not use foreign keys to ``nodes`` because
+    ingest rebuilds that table. A content-root switch can therefore leave
+    active edges pointing at removed bundle nodes unless the boundary cleans
+    them up explicitly.
+    """
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kg_edge'"
+    ).fetchone()
+    if table_exists is None:
+        return {"rejected_edges": 0, "archived_questions": 0, "deleted_mastery": 0}
+
+    missing_edge_rows = conn.execute(
+        """
+        SELECT edge_id FROM kg_edge
+        WHERE status IN ('ACTIVE', 'PENDING_CONFIRMATION')
+          AND (
+            parent_node_id NOT IN (SELECT slug FROM nodes)
+            OR child_node_id NOT IN (SELECT slug FROM nodes)
+          )
+        """
+    ).fetchall()
+    if missing_edge_rows:
+        conn.execute(
+            """
+            UPDATE kg_edge
+            SET status = 'REJECTED'
+            WHERE edge_id IN ({})
+            """.format(",".join("?" for _ in missing_edge_rows)),
+            [row[0] for row in missing_edge_rows],
+        )
+
+    missing_question_rows = conn.execute(
+        """
+        SELECT question_id FROM kg_question
+        WHERE status = 'ACTIVE'
+          AND root_node_id NOT IN (SELECT slug FROM nodes)
+        """
+    ).fetchall()
+    if missing_question_rows:
+        conn.execute(
+            """
+            UPDATE kg_question
+            SET status = 'ARCHIVED'
+            WHERE question_id IN ({})
+            """.format(",".join("?" for _ in missing_question_rows)),
+            [row[0] for row in missing_question_rows],
+        )
+
+    deleted_mastery = 0
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kg_mastery'"
+    ).fetchone():
+        cursor = conn.execute(
+            "DELETE FROM kg_mastery WHERE node_id NOT IN (SELECT slug FROM nodes)"
+        )
+        deleted_mastery = cursor.rowcount
+
+    return {
+        "rejected_edges": len(missing_edge_rows),
+        "archived_questions": len(missing_question_rows),
+        "deleted_mastery": deleted_mastery,
+    }
+
+
 def ingest(content_root: Path, db_path: Path) -> int:
     conn = connect(db_path)
     initialize(conn)
@@ -357,6 +424,11 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 (node.slug, node.title, node.summary, node.body, " ".join(node.tags)),
             )
             record_content_file(conn, content_root, content_root / node.path, "node", node.slug)
+
+        # ``kg_*`` tables deliberately survive the node rebuild; prune their
+        # references after the new node set is complete so graph exports cannot
+        # emit empty titles for removed content-root nodes.
+        prune_kg_references(conn)
 
         node_slugs = {node.slug for node in nodes}
         for node_slug, activity in preserved_node_activity.items():
