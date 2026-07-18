@@ -55,7 +55,7 @@ export function HomeDashboard({
       <header className="home-dashboard-header">
         <div>
           <p className="eyebrow">Today / learning operations</p>
-          <h2>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}.</h2>
+          <h2>{(() => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'Good morning.' : h >= 12 && h < 18 ? 'Good afternoon.' : h >= 18 && h < 23 ? 'Good evening.' : "It's late — get some rest." })()}</h2>
           <p>Continue the current learning chain, clear today&apos;s review, and grow a knowledge tree.</p>
         </div>
         <div className="home-dashboard-actions">
