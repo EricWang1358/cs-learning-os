@@ -45,7 +45,10 @@ async function assertApiReady(page) {
   if (!activeNodes.some((node) => typeof node.updated_at === 'string' && node.updated_at.length > 0)) {
     fail('Knowledge node API has no usable updated_at values for date grouping.')
   }
-  return activeNodes.length
+  return {
+    count: activeNodes.length,
+    nodesBySlug: new Map(activeNodes.map((node) => [node.slug, node])),
+  }
 }
 
 async function openLibrary(page, viewport) {
@@ -129,6 +132,58 @@ async function assertToolbarAndGroupControls(page) {
   if (expandedStates.some((state) => !state.expanded)) fail('Expand all left at least one date group collapsed.')
 }
 
+async function assertSequenceEditing(page, nodesBySlug) {
+  const row = page.locator('[data-testid="library-node-row"]').first()
+  await row.waitFor({ state: 'visible' })
+  const rowLabel = await row.getAttribute('aria-label')
+  const title = rowLabel?.replace(/^Library node\s+/, '')
+  const sourceNode = [...nodesBySlug.values()].find((node) => node.title === title)
+  if (!sourceNode) fail(`Could not map visible Library row to API node: ${rowLabel ?? '(missing label)'}`)
+
+  const order = row.locator('[data-testid="library-node-order"]')
+  await order.dblclick()
+  const cancelledInput = row.locator('input.library-node-order-input')
+  await cancelledInput.waitFor({ state: 'visible' })
+  await cancelledInput.press('Escape')
+  await cancelledInput.waitFor({ state: 'hidden' })
+
+  let patchCalls = 0
+  await page.route('**/api/nodes/*/display-order', async (route) => {
+    const request = route.request()
+    const pathParts = new URL(request.url()).pathname.split('/').filter(Boolean)
+    const slug = decodeURIComponent(pathParts[pathParts.length - 2] ?? '')
+    const node = nodesBySlug.get(slug)
+    if (!node) {
+      await route.abort()
+      return
+    }
+    const payload = JSON.parse(request.postData() ?? '{}')
+    patchCalls += 1
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ node: { ...node, display_order: payload.display_order } }),
+    })
+  })
+
+  try {
+    await order.dblclick()
+    const input = row.locator('input.library-node-order-input')
+    await input.waitFor({ state: 'visible' })
+    const nextOrder = 900000 + (Number.isInteger(sourceNode.display_order) ? sourceNode.display_order : 1)
+    await input.fill(String(nextOrder))
+    await input.press('Enter')
+    await input.waitFor({ state: 'hidden', timeout: 10000 })
+    if (patchCalls !== 1) fail(`Expected one intercepted sequence PATCH after Enter, got ${patchCalls}.`)
+    const displayedOrder = await order.textContent()
+    if (displayedOrder?.trim() !== String(nextOrder)) {
+      fail(`Sequence display did not update after Enter: expected ${nextOrder}, got ${displayedOrder?.trim() ?? '(empty)'}.`)
+    }
+  } finally {
+    await page.unroute('**/api/nodes/*/display-order')
+  }
+}
+
 async function assertSearchAndQueryPreservation(page) {
   const search = page.getByLabel('Global search')
   await search.fill('binary')
@@ -150,13 +205,14 @@ async function main() {
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-    const activeNodeCount = await assertApiReady(page)
+    const { count: activeNodeCount, nodesBySlug } = await assertApiReady(page)
 
     await openLibrary(page, { width: 1440, height: 900 })
     await assertNoHorizontalOverflow(page, 'Desktop Library Workbench')
     await assertGroups(page)
-    await assertToolbarAndGroupControls(page)
     await page.screenshot({ path: path.join(outputDirectory, 'library-workbench-desktop.png'), fullPage: true })
+    await assertToolbarAndGroupControls(page)
+    await assertSequenceEditing(page, nodesBySlug)
     await assertSearchAndQueryPreservation(page)
 
     await openLibrary(page, { width: 390, height: 844 })

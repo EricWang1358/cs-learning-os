@@ -1,4 +1,4 @@
-import { lazy, startTransition, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react'
+import { lazy, startTransition, Suspense, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import { DailyBitePanel } from './components/DailyBitePanel'
@@ -545,6 +545,8 @@ function App() {
     week: false,
     older: false,
   })
+  const [libraryIndexNodes, setLibraryIndexNodes] = useState<NodeSummary[]>([])
+  const [debouncedQuery, setDebouncedQuery] = useState(query)
   useEffect(() => {
     if (viewMode === 'nodes') return
     const resetTimer = window.setTimeout(() => {
@@ -555,12 +557,30 @@ function App() {
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
-  const deferredQuery = useDeferredValue(query)
-
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(new Date()), 1000)
     return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 220)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    if (viewMode !== 'nodes') return
+    let isActive = true
+    fetchJson<ApiNodesResponse>('/api/nodes?sort=order')
+      .then((data) => {
+        if (isActive) setLibraryIndexNodes(data.nodes)
+      })
+      .catch(() => {
+        // The visible result remains usable when the maintenance index is unavailable.
+      })
+    return () => {
+      isActive = false
+    }
+  }, [viewMode])
 
   useEffect(() => {
     if (viewMode !== 'nodes' || !isFocusMode || !selectedNode?.slug || selectedNode.slug !== selectedSlug) return
@@ -678,9 +698,9 @@ function App() {
           })
         } else if (viewMode === 'quizzes') {
           const quizSortParam = encodeURIComponent(quizSort)
-          const data = deferredQuery.trim()
+          const data = debouncedQuery.trim()
             ? await fetchJson<ApiQuizzesResponse>(
-                `/api/quiz-search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${quizSortParam}`,
+                `/api/quiz-search?q=${encodeURIComponent(debouncedQuery.trim())}&sort=${quizSortParam}`,
               )
             : await fetchJson<ApiQuizzesResponse>(`/api/quizzes?sort=${quizSortParam}`)
 
@@ -774,9 +794,9 @@ function App() {
         } else if (viewMode === 'catalog') {
           setError('')
         } else {
-          const data = deferredQuery.trim()
+          const data = debouncedQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
-                `/api/search?q=${encodeURIComponent(deferredQuery.trim())}&sort=${encodeURIComponent(nodeSort)}`,
+                `/api/search?q=${encodeURIComponent(debouncedQuery.trim())}&sort=${encodeURIComponent(nodeSort)}`,
               )
             : await fetchJson<ApiNodesResponse>(`/api/nodes?sort=${encodeURIComponent(nodeSort)}`)
 
@@ -804,7 +824,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [activeArea, activeTrack, deferredQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, quizSort, selectedSlug, viewMode])
+  }, [activeArea, activeTrack, debouncedQuery, graphCache, graphPage, isFocusMode, location.pathname, navigate, nodeSort, query, quizSort, selectedSlug, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'health' || !systemMetrics?.cache?.refreshing) return
@@ -1168,13 +1188,15 @@ function App() {
   const libraryGroups = groupLibraryNodes(sortedLibraryNodes, clockNow)
   const libraryGroupLabels: Record<LibraryDateBucket, string> = {
     today: 'Today',
-    'two-days': 'Two days ago',
+    'two-days': 'Yesterday',
     week: 'This week',
     older: 'Earlier',
   }
   const libraryGroupEntries = Array.from(libraryGroups.entries())
   const libraryOrderIssueGroups = (() => {
-    const activeNodes = nodes.filter((node) => !['archive', 'trash'].includes(node.visibility))
+    const activeNodes = (libraryIndexNodes.length ? libraryIndexNodes : nodes).filter(
+      (node) => !['archive', 'trash'].includes(node.visibility),
+    )
     const buckets = new Map<string, NodeSummary[]>()
     for (const node of activeNodes) {
       const key = `${node.area}\u0000${node.track}`
