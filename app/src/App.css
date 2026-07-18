@@ -1556,7 +1556,9 @@
 .sync-cockpit-shell,
 .health-cockpit-shell,
 .graph-cockpit-shell {
+  width: 100%;
   max-width: 1320px;
+  margin-inline: 0;
 }
 
 .sync-cockpit-shell .detail-section,
@@ -2379,7 +2381,10 @@
 .kgraph-shell {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
-  min-height: 100vh;
+  /* 锁定在视口高度: 3D 画布需要确定的高度边界, 否则 ResizeObserver 与
+     显式像素高度的场景画布互相喂尺寸, 形成失控的正反馈(画布无限长高)。 */
+  height: 100vh;
+  overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--surface);
 }
@@ -2502,6 +2507,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .kgraph-header {
@@ -2511,7 +2517,8 @@
 .kgraph-canvas {
   position: relative;
   flex: 1;
-  min-height: 480px;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   align-items: stretch;
   justify-content: center;

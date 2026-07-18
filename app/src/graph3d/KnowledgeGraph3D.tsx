@@ -343,11 +343,14 @@ const toolButtonStyle: React.CSSProperties = {
 };
 
 const legendDockStyle: React.CSSProperties = {
+  // 弹层锚定在工具栏"图例"按钮下方(画布右上角), 不再常驻画布左上角遮挡场景。
   position: 'absolute',
-  top: 12,
-  left: 12,
-  zIndex: 2,
+  top: 44,
+  right: 12,
+  zIndex: 3,
   maxWidth: 260,
+  maxHeight: 'calc(100% - 64px)',
+  overflowY: 'auto',
 };
 
 const panelStyle: React.CSSProperties = {
@@ -437,6 +440,9 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>(layout);
   useEffect(() => setLayoutMode(layout), [layout]);
 
+  // ---- 图例弹层: 默认收起(场景全可见), 经工具栏"图例"按钮开关 ----
+  const [legendOpen, setLegendOpen] = useState(false);
+
   // ---- 尺寸: 固定值优先, 否则 ResizeObserver 跟随容器 ----
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fixedSize = width !== undefined || height !== undefined;
@@ -476,6 +482,10 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
     fitPendingRef.current = true;
   }, [effectiveHash]);
 
+  // 力导引擎首轮跑完前, 不调用任何 ref 方法(d3ReheatSimulation/cameraPosition)——
+  // 引擎未初始化时调用会在库内部读到 undefined 并抛 '.tick' TypeError。
+  const engineReadyRef = useRef(false);
+
   /**
    * layered 布局: 用锚点坐标 fz 把节点钉在 layer * LAYER_Z_SPACING 平面(自定义力思路)。
    * 不直接用 dagMode 的原因: layer 是服务端算好的"最长拓扑距离", 直接锚定完全贴合契约语义,
@@ -490,7 +500,7 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
       }
     }
     const fg = fgRef.current;
-    if (!fg) return;
+    if (!fg || !engineReadyRef.current) return;  // 首轮: fz 已就位, 引擎初始化后自行布局
     fitPendingRef.current = true;
     fg.d3ReheatSimulation();
     if (layoutMode === 'layered') {
@@ -502,10 +512,11 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
 
   // highlightShared 变化 → 重建全部自定义 three 对象
   useEffect(() => {
-    fgRef.current?.refresh();
+    if (engineReadyRef.current) fgRef.current?.refresh();
   }, [highlightShared]);
 
   const handleEngineStop = useCallback(() => {
+    engineReadyRef.current = true;
     if (!fitPendingRef.current) return;
     fitPendingRef.current = false;
     fgRef.current?.zoomToFit(600, 48);
@@ -528,7 +539,10 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
     [onTracePrerequisites],
   );
 
-  const handleBackgroundClick = useCallback(() => setSelectedId(null), []);
+  const handleBackgroundClick = useCallback(() => {
+    setSelectedId(null);
+    setLegendOpen(false);
+  }, []);
 
   const buildNode = useCallback((node: GraphNodeObject) => buildNodeObject(node, highlightShared), [highlightShared]);
   const buildLink = useCallback((link: GraphLinkObject) => buildLinkObject(link), []);
@@ -575,13 +589,28 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
         cooldownTime={9000}
       />
 
-      {showLegend && (
+      {showLegend && legendOpen && (
         <div style={legendDockStyle}>
           <Legend />
         </div>
       )}
 
       <div style={toolbarStyle}>
+        {showLegend && (
+          <button
+            type="button"
+            style={{
+              ...toolButtonStyle,
+              fontWeight: legendOpen ? 600 : 400,
+              borderColor: legendOpen ? GRAPH_THEME.textSecondary : GRAPH_THEME.panelBorder,
+            }}
+            onClick={() => setLegendOpen((open) => !open)}
+            title="图例: 掌握度配色 / 共享双环 / 边线型"
+            aria-expanded={legendOpen}
+          >
+            图例
+          </button>
+        )}
         <button
           type="button"
           style={{
