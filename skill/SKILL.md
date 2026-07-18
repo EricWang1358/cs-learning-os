@@ -83,20 +83,18 @@ Run BEFORE writing any new node. Every item must pass.
 
 During and immediately after writing:
 
-**File integrity:**
+**File integrity (both standards):**
 - [ ] File begins with `---` (no UTF-8 BOM — first three bytes are `2d 2d 2d`,
       not `ef bb bf`).
 - [ ] File ends with `\n` after closing `---`. Verify:
       `xxd "$file" | tail -1` — last hex byte must be `0a`.
-- [ ] `slug:` in frontmatter matches the filename (without `.md`).
+- [ ] `area:` and `track:` are both present and non-empty. `track:` is a
+      meaningful sub-category used consistently with peers.
 
-**Path & taxonomy:**
+**Standard A node (tutorial):**
+- [ ] `slug:` in frontmatter matches the filename (without `.md`).
 - [ ] File path: `<content-root>/nodes/<area>/<slug>.md` — not in root-level
       `data/nodes/` or `data/quizzes/`.
-- [ ] `area:` matches one of: `algorithms`, `projects`, `abilities`,
-      `cs-fundamentals`, `tools`, `questions` (or existing map taxonomy).
-- [ ] `track:` is a meaningful sub-category used consistently with peers in
-      the same area.
 - [ ] `visibility:` is `core`, `support`, or `archive` — decision justified
       per curation-rules.md.
 
@@ -107,6 +105,17 @@ During and immediately after writing:
       Query: `sqlite3 knowledge.db "SELECT display_order FROM nodes WHERE
       area='...' AND track='...' AND display_order = <order>;"`
 - [ ] No `mastery` field in frontmatter (mastery is dynamic graph data).
+- [ ] For Standard A nodes only: `order:` is an integer, positive, and unique
+      within `area` + `track`.
+
+**Standard Q quiz — additional frontmatter:**
+- [ ] `id:` matches the filename (without `.md`), not `slug:`.
+- [ ] File path: `<content-root>/quizzes/<area>/<slug>.md`.
+- [ ] `difficulty:` is `easy`, `medium`, or `hard`.
+- [ ] `weight:` is a positive integer.
+- [ ] `linked_nodes:` points to existing Standard A node slugs.
+- [ ] `track:` is present (same rule as Standard A — required, non-empty).
+- [ ] `visibility:` is `practice` (for active quizzes) or `seed`.
 
 **Content structure (Standard A):**
 - [ ] At least one `## Worked Example` or `## Practice` section with step-by-
@@ -158,6 +167,8 @@ Must run after every batch of new/changed nodes:
       Use: `find data/content -name "<slug>.md"` for each link.
 - [ ] Frontmatter integrity re-check: `xxd "$file" | tail -1` ends with `0a`
       for every new/changed file.
+- [ ] For Standard Q quizzes: verify `linked_nodes:` slugs resolve to real
+      Standard A node files. Every quiz must link to at least one node.
 - [ ] KnowledgeGraph Write Gate rule 6: after write, read the tree/subtree
       snapshot and verify reachability, parent direction, scope, and endpoint
       titles. A successful HTTP response is not enough by itself.
