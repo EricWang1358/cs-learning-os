@@ -37,7 +37,8 @@ For each allocation:
 
 1. Round the request up to satisfy alignment and metadata requirements.
 2. Enforce the minimum block size; tiny requests can still consume a full block.
-3. Apply the placement policy to the current free list.
+3. Apply the allocator's placement policy to the current free list. WA8 uses
+   **first-fit**: choose the first free block in list order that is large enough.
 4. When freeing, account for immediate coalescing and whether a footer remains.
 5. Add a new chunk only when no usable block exists, then recompute live payload and heap totals.
 

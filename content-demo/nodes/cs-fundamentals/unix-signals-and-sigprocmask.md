@@ -7,7 +7,7 @@ level: intermediate
 status: seed
 visibility: core
 tags: [unix, signals, sigprocmask, sigsegv, sigkill, sigstop]
-prerequisites: [c-memory-and-pointers]
+prerequisites: []
 related: [fork-process-creation-and-waitpid]
 sources:
   - https://man7.org/linux/man-pages/man7/signal.7.html

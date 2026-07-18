@@ -7,7 +7,7 @@ level: intermediate
 status: seed
 visibility: core
 tags: [c, unix, fork, waitpid, process-lifecycle, zombie, orphan]
-prerequisites: [c-memory-and-pointers]
+prerequisites: []
 related: [unix-signals-and-sigprocmask]
 sources:
   - https://man7.org/linux/man-pages/man2/fork.2.html
