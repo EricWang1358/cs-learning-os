@@ -329,20 +329,23 @@ def create_system_router(
 
     @router.post("/system/restart")
     def system_restart(background_tasks: BackgroundTasks) -> dict:
-        """Re-ingest all content, then restart the backend server."""
-        def _shutdown():
-            try:
-                root = Path(os.environ.get("CS_LEARNING_CONTENT", str(Path.cwd() / "data" / "content"))).resolve()
-                db = Path(os.environ.get("CS_LEARNING_DB", str(Path.cwd() / "data" / "knowledge.db"))).resolve()
-                sys.path.insert(0, str(Path(__file__).resolve().parent))
-                from ingest import ingest as ingest_content
-                ingest_content(root, db)
-            except Exception as exc:
-                print(f"[restart] ingest failed (continuing): {exc}")
-            import time
-            time.sleep(1)
+        """Run the launcher script which re-ingests, kills old ports, and restarts both servers."""
+        def _restart():
+            import subprocess, time
+            repo_root = Path(__file__).resolve().parents[1]
+            launcher = repo_root / "启动 Learning OS.cmd"
+            if launcher.exists():
+                try:
+                    subprocess.Popen(
+                        ["cmd", "/c", str(launcher)],
+                        cwd=str(repo_root),
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0,
+                    )
+                except Exception as exc:
+                    print(f"[restart] failed to launch: {exc}")
+            time.sleep(2)
             os.kill(os.getpid(), signal.SIGTERM)
-        background_tasks.add_task(_shutdown)
-        return {"ok": True, "message": "Re-ingesting content then restarting server."}
+        background_tasks.add_task(_restart)
+        return {"ok": True, "message": "Restarting via launcher. Reconnect in a few seconds."}
 
     return router
