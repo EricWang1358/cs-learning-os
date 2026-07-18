@@ -12,7 +12,7 @@ import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
 import { SearchHeaderControls } from './SearchHeaderControls'
 import { LibraryDateGroup } from './LibraryDateGroup'
-import { groupLibraryNodes, sortLibraryNodes, type LibraryDateBucket } from './libraryGrouping'
+import { groupLibraryNodes, isMaintainedDisplayOrder, sortLibraryNodes, type LibraryDateBucket } from './libraryGrouping'
 import {
   defaultNodeSort,
   defaultQuizSort,
@@ -1209,7 +1209,7 @@ function App() {
       const seen = new Map<number, number>()
       let missing = 0
       for (const node of group) {
-        if (!Number.isInteger(node.display_order) || node.display_order <= 0) missing += 1
+        if (!isMaintainedDisplayOrder(node.display_order)) missing += 1
         else seen.set(node.display_order, (seen.get(node.display_order) ?? 0) + 1)
       }
       const duplicates = Array.from(seen.values()).reduce((total, count) => total + Math.max(0, count - 1), 0)
@@ -1226,11 +1226,12 @@ function App() {
   }
 
   const commitLibraryOrder = async (node: NodeSummary, nextOrder: number): Promise<boolean> => {
-    if (!Number.isInteger(nextOrder) || nextOrder <= 0) {
-      setActionNotice('Sequence must be a positive integer.')
+    if (!isMaintainedDisplayOrder(nextOrder)) {
+      setActionNotice('Sequence must be a positive integer other than the unmaintained placeholder 1000.')
       return false
     }
-    const duplicate = nodes.find(
+    const duplicateSource = libraryIndexNodes.length ? libraryIndexNodes : nodes
+    const duplicate = duplicateSource.find(
       (candidate) =>
         candidate.slug !== node.slug &&
         candidate.area === node.area &&
@@ -1247,6 +1248,7 @@ function App() {
         expected_updated_at: node.updated_at,
       })
       setNodes((current) => current.map((item) => (item.slug === data.node.slug ? data.node : item)))
+      setLibraryIndexNodes((current) => current.map((item) => (item.slug === data.node.slug ? data.node : item)))
       setSelectedNode((current) => (current?.slug === data.node.slug ? data.node : current))
       setActionNotice(`Updated sequence for ${data.node.title}.`)
       return true

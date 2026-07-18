@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isMaintainedDisplayOrder } from './libraryGrouping'
 import type { NodeSummary } from './types/api'
 
 export type LibraryNodeRowProps = {
@@ -25,7 +26,7 @@ function formatUpdatedAt(updatedAt: string) {
 }
 
 function orderLabel(order: number) {
-  return Number.isInteger(order) && order > 0 ? String(order) : '-'
+  return isMaintainedDisplayOrder(order) ? String(order) : '-'
 }
 
 function statusClass(status: string) {

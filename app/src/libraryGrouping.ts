@@ -6,8 +6,14 @@ type LibraryNodeForSort = {
   title: string
 }
 
+export const UNMAINTAINED_DISPLAY_ORDER = 1000
+
 const BUCKET_ORDER: LibraryDateBucket[] = ['today', 'two-days', 'week', 'older']
 const BEIJING_TIME_ZONE = 'Asia/Shanghai'
+
+export function isMaintainedDisplayOrder(order: number): boolean {
+  return Number.isInteger(order) && order > 0 && order !== UNMAINTAINED_DISPLAY_ORDER
+}
 
 /** Return a stable Beijing calendar-day key without depending on the browser locale. */
 function beijingDateKey(value: string | Date): string {
@@ -63,8 +69,8 @@ export function sortLibraryNodes<T extends LibraryNodeForSort>(nodes: T[]): T[] 
     if (leftValid && rightValid && leftTime !== rightTime) return rightTime - leftTime
     if (leftValid !== rightValid) return leftValid ? -1 : 1
 
-    const leftOrder = Number.isFinite(left.display_order) ? left.display_order : Number.POSITIVE_INFINITY
-    const rightOrder = Number.isFinite(right.display_order) ? right.display_order : Number.POSITIVE_INFINITY
+    const leftOrder = isMaintainedDisplayOrder(left.display_order) ? left.display_order : Number.POSITIVE_INFINITY
+    const rightOrder = isMaintainedDisplayOrder(right.display_order) ? right.display_order : Number.POSITIVE_INFINITY
     if (leftOrder !== rightOrder) return leftOrder - rightOrder
     return left.title.localeCompare(right.title, 'en', { sensitivity: 'base' })
   })

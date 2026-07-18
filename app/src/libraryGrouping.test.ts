@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   bucketForUpdatedAt,
   groupLibraryNodes,
+  isMaintainedDisplayOrder,
   sortLibraryNodes,
   type LibraryDateBucket,
 } from './libraryGrouping.ts'
@@ -36,6 +37,19 @@ test('sorts updated time descending with deterministic tie-breakers', () => {
   const sorted = sortLibraryNodes(nodes)
   assert.deepEqual(sorted.map((node) => node.title), ['Newest', 'Alpha', 'Beta', 'Zulu'])
   assert.deepEqual(nodes.map((node) => node.title), ['Zulu', 'Alpha', 'Beta', 'Newest'])
+})
+
+test('treats default 1000 as an unmaintained display order', () => {
+  assert.equal(isMaintainedDisplayOrder(1), true)
+  assert.equal(isMaintainedDisplayOrder(1000), false)
+  assert.equal(isMaintainedDisplayOrder(0), false)
+
+  const nodes = [
+    { title: 'Placeholder', display_order: 1000, updated_at: '2026-07-18T01:00:00+08:00' },
+    { title: 'Maintained', display_order: 9, updated_at: '2026-07-18T01:00:00+08:00' },
+  ]
+
+  assert.deepEqual(sortLibraryNodes(nodes).map((node) => node.title), ['Maintained', 'Placeholder'])
 })
 
 test('groups in bucket order and omits empty groups', () => {

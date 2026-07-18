@@ -139,10 +139,11 @@ async function assertSequenceEditing(page, nodesBySlug) {
   const title = rowLabel?.replace(/^Library node\s+/, '')
   const sourceNode = [...nodesBySlug.values()].find((node) => node.title === title)
   if (!sourceNode) fail(`Could not map visible Library row to API node: ${rowLabel ?? '(missing label)'}`)
+  const targetRow = page.locator('[data-testid="library-node-row"]').filter({ has: page.getByText(title, { exact: true }) })
 
-  const order = row.locator('[data-testid="library-node-order"]')
+  const order = targetRow.locator('[data-testid="library-node-order"]')
   await order.dblclick()
-  const cancelledInput = row.locator('input.library-node-order-input')
+  const cancelledInput = targetRow.locator('input.library-node-order-input')
   await cancelledInput.waitFor({ state: 'visible' })
   await cancelledInput.press('Escape')
   await cancelledInput.waitFor({ state: 'hidden' })
@@ -168,7 +169,7 @@ async function assertSequenceEditing(page, nodesBySlug) {
 
   try {
     await order.dblclick()
-    const input = row.locator('input.library-node-order-input')
+    const input = targetRow.locator('input.library-node-order-input')
     await input.waitFor({ state: 'visible' })
     const nextOrder = 900000 + (Number.isInteger(sourceNode.display_order) ? sourceNode.display_order : 1)
     await input.fill(String(nextOrder))
