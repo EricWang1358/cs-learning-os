@@ -18,6 +18,7 @@ import {
   defaultQuizSort,
   visibleNodeSortOptions,
   visibleQuizSortOptions,
+  type NodeSortKey,
 } from './searchSort'
 import { ApiRequestError, deleteJson, fetchJson, patchJson, postJson, putJson } from './lib/apiClient'
 import { clearStoredEditDraft, readStoredEditDraft, writeStoredEditDraft } from './lib/editDraftStorage'
@@ -1184,7 +1185,7 @@ function App() {
     )
   })
 
-  const sortedLibraryNodes = sortLibraryNodes(filteredNodes)
+  const sortedLibraryNodes = sortLibraryNodes(filteredNodes, nodeSort)
   const libraryGroups = groupLibraryNodes(sortedLibraryNodes, clockNow)
   const libraryGroupLabels: Record<LibraryDateBucket, string> = {
     today: 'Today',
@@ -2786,6 +2787,16 @@ function App() {
               >
                 <option value="all">All tracks</option>
                 {tracks.map((track) => <option key={track.track} value={track.track}>{trackLabels[track.track] ?? track.label ?? slugTitle(track.track)}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Sort</span>
+              <select value={nodeSort} onChange={(e) => {
+                const s = e.target.value as NodeSortKey
+                const p = new URLSearchParams(window.location.search)
+                navigate(`/nodes${routeSearch({ activeArea: p.get('area')??activeArea, activeTrack: p.get('track')??activeTrack, query: p.get('q')??query, nodeSort: s, isFocusMode })}`)
+              }}>
+                {availableNodeSortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
             </label>
           </div>

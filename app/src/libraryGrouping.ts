@@ -1,9 +1,12 @@
+import type { NodeSortKey } from './searchSort'
+
 export type LibraryDateBucket = 'today' | 'two-days' | 'week' | 'older'
 
 type LibraryNodeForSort = {
   updated_at: string
   display_order: number
   title: string
+  last_read_at?: string | null
 }
 
 export const UNMAINTAINED_DISPLAY_ORDER = 1000
@@ -60,8 +63,25 @@ export function bucketForUpdatedAt(updatedAt: string, now: Date): LibraryDateBuc
 }
 
 /** Sort by recent update, then sequence number, then title, without mutating input. */
-export function sortLibraryNodes<T extends LibraryNodeForSort>(nodes: T[]): T[] {
+export function sortLibraryNodes<T extends LibraryNodeForSort>(nodes: T[], sortKey: NodeSortKey = 'last-edit'): T[] {
   return [...nodes].sort((left, right) => {
+    if (sortKey === 'order') {
+      const lo = isMaintainedDisplayOrder(left.display_order) ? left.display_order : Number.POSITIVE_INFINITY
+      const ro = isMaintainedDisplayOrder(right.display_order) ? right.display_order : Number.POSITIVE_INFINITY
+      if (lo !== ro) return lo - ro
+    }
+    if (sortKey === 'last-read') {
+      const lt = left.last_read_at ? Date.parse(left.last_read_at) : 0
+      const rt = right.last_read_at ? Date.parse(right.last_read_at) : 0
+      const lv = Number.isFinite(lt)
+      const rv = Number.isFinite(rt)
+      if (lv && rv && lt !== rt) return rt - lt
+      if (lv !== rv) return lv ? -1 : 1
+    }
+    if (sortKey === 'alphabet') {
+      return left.title.localeCompare(right.title, 'en', { sensitivity: 'base' })
+    }
+    // 'last-edit' (default) — sort by updated_at desc, then by order, then by title
     const leftTime = Date.parse(left.updated_at)
     const rightTime = Date.parse(right.updated_at)
     const leftValid = Number.isFinite(leftTime)
