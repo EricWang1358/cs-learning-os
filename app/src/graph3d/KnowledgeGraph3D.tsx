@@ -598,11 +598,19 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
   }, [engineReadyTick, frameLayeredView, layoutMode]);
 
   const handleNodeDragEnd = useCallback((node: GraphNodeObject) => {
+    // A drag is direct user positioning. Never let the first engine-stop
+    // callback re-fit the camera after this interaction completes.
+    fitPendingRef.current = false;
     if (node.x == null || node.y == null || node.z == null) return;
     node.fx = node.x;
     node.fy = node.y;
     node.fz = node.z;
     setPinnedNodeIds((ids) => new Set(ids).add(String(node.id)));
+  }, []);
+
+  const handleNodeDrag = useCallback(() => {
+    // Dragging can stop the simulation before onNodeDragEnd fires.
+    fitPendingRef.current = false;
   }, []);
 
   const resetPinnedNodes = useCallback(() => {
@@ -729,6 +737,7 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
         linkDirectionalArrowRelPos={0.85}
         linkDirectionalArrowColor={(link: GraphLinkObject) => linkStyle({ scope: link.scope }).color}
         onNodeClick={handleNodeClick}
+        onNodeDrag={handleNodeDrag}
         onNodeDragEnd={handleNodeDragEnd}
         onNodeRightClick={handleNodeRightClick}
         onBackgroundClick={handleBackgroundClick}
