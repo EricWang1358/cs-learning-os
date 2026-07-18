@@ -12,8 +12,10 @@
  * App.tsx only lazy-loads this panel — keeping three.js out of the main chunk.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { API_BASE, fetchJson, postJson } from '../lib/apiClient'
 import type {
+  ApiGraphResponse,
   ApiKgBottlenecksResponse,
   ApiKgQuestionsResponse,
   KgCategory,
@@ -23,6 +25,7 @@ import type {
 } from '../types/api'
 import { fetchExport3d } from '../graph3d/fetchGraph'
 import type { GraphExport, SceneNode } from '../graph3d/types'
+import { mergeHeadingsIntoExport, type NavigationHeadingItem } from '../graph3d/headingMerge'
 import { KnowledgeGraph3D } from '../graph3d/KnowledgeGraph3D'
 
 const KG_CATEGORIES: KgCategory[] = ['CS_BASIC', 'ALGORITHM', 'SYSTEM_DESIGN', 'BEHAVIORAL']
@@ -41,6 +44,7 @@ function newCommandId(): string {
 type RootRef = { id: string; isQuestion: boolean; label: string }
 
 export function KnowledgeGraphPanel() {
+  const navigate = useNavigate()
   const [questions, setQuestions] = useState<KgQuestionSummary[]>([])
   const [bottlenecks, setBottlenecks] = useState<ApiKgBottlenecksResponse['items']>([])
   const [root, setRoot] = useState<RootRef | null>(null)
@@ -86,6 +90,22 @@ export function KnowledgeGraphPanel() {
     setIsLoadingGraph(true)
     setGraphError('')
     fetchExport3d(API_BASE, root.id, root.isQuestion)
+      .then(async (result) => {
+        // reroot 到单个知识节点时, 参照导航图谱 node 层, 把该节点笔记的
+        // 章节子标题合并为卫星节点(kind='heading'); 问题树根视图保持纯 DAG。
+        if (!root.isQuestion) {
+          try {
+            const nav = await fetchJson<ApiGraphResponse>(
+              `/api/graph/node/${encodeURIComponent(root.id)}?page=1`,
+            )
+            const headings = (nav.children ?? []) as NavigationHeadingItem[]
+            return { ...result, data: mergeHeadingsIntoExport(result.data, root.id, headings) }
+          } catch {
+            return result // 无子标题或节点不存在 → 原样展示
+          }
+        }
+        return result
+      })
       .then((result) => {
         if (!cancelled) setGraphData(result.data)
       })
@@ -103,10 +123,18 @@ export function KnowledgeGraphPanel() {
     }
   }, [root])
 
-  const rerootToNode = useCallback((node: SceneNode) => {
-    if (node.isRoot) return
-    setRoot({ id: node.id, isQuestion: false, label: node.title })
-  }, [])
+  const rerootToNode = useCallback(
+    (node: SceneNode) => {
+      // 子标题卫星: 打开笔记对应章节(与导航图谱 heading 跳转一致), 不参与 reroot
+      if (node.kind === 'heading') {
+        if (node.href) navigate(node.href)
+        return
+      }
+      if (node.isRoot) return
+      setRoot({ id: node.id, isQuestion: false, label: node.title })
+    },
+    [navigate],
+  )
 
   const createQuestion = async () => {
     const title = newTitle.trim()

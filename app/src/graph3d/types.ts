@@ -45,6 +45,15 @@ export interface SceneNode {
   sharedByQuestions: number;
   /** 是否为本次导出的根(问题根或 reroot 节点) */
   isRoot: boolean;
+  /**
+   * 合成节点类别(前端合并, 非服务端契约字段): 'heading' = 根节点 markdown
+   * 的章节子标题卫星(参照导航图谱 node 层), 缺省为普通知识节点。
+   */
+  kind?: 'heading';
+  /** kind='heading': 打开对应笔记章节的 href(来自 /api/graph/node/{slug}) */
+  href?: string;
+  /** kind='heading': 标题层级(2=##, 3=###, ...) */
+  headingLevel?: number;
 }
 
 /**
@@ -58,6 +67,8 @@ export interface SceneLink {
   target: string;
   /** GLOBAL=全局共享边(实线); PROBLEM_LOCAL=某问题私有边(虚线) */
   scope: EdgeScope;
+  /** 合成边类别(前端合并, 非服务端契约字段): 'heading' = 根 → 子标题卫星 */
+  kind?: 'heading';
 }
 
 /**

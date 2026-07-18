@@ -96,8 +96,11 @@ export function isSharedNode(node: Pick<SceneNode, 'sharedByQuestions'>): boolea
   return node.sharedByQuestions >= 2;
 }
 
-/** 节点底色 = 掌握度底色 (根/共享通过尺寸与描边表达, 不改色相) */
-export function nodeColor(node: Pick<SceneNode, 'mastery'>): string {
+/** 节点底色 = 掌握度底色 (根/共享通过尺寸与描边表达, 不改色相); 子标题卫星用中性冷灰 */
+export const HEADING_NODE_COLOR = '#8d94a0';
+
+export function nodeColor(node: Pick<SceneNode, 'mastery' | 'kind'>): string {
+  if (node.kind === 'heading') return HEADING_NODE_COLOR;
   return MASTERY_VISUALS[node.mastery].color;
 }
 
@@ -108,7 +111,11 @@ export interface NodeGlow {
   haloScale: number;
 }
 
-export function nodeGlow(node: Pick<SceneNode, 'mastery' | 'isRoot'>): NodeGlow {
+export function nodeGlow(node: Pick<SceneNode, 'mastery' | 'isRoot' | 'kind'>): NodeGlow {
+  if (node.kind === 'heading') {
+    // 子标题卫星: 无光晕, 避免与知识节点的掌握度信号混淆
+    return { emissive: '#000000', emissiveIntensity: 0, haloScale: 0 };
+  }
   const visual = MASTERY_VISUALS[node.mastery];
   if (!node.isRoot) {
     return {
@@ -128,11 +135,15 @@ export function nodeGlow(node: Pick<SceneNode, 'mastery' | 'isRoot'>): NodeGlow 
  * 节点半径: 随 parentCount 对数增长(被依赖越多越大), 根与共享节点再放大。
  * 返回值保留两位小数以便几何体缓存命中。
  */
-export function nodeSize(node: Pick<SceneNode, 'parentCount' | 'isRoot' | 'sharedByQuestions'>): number {
+/** 子标题卫星尺寸系数(在基础半径上再缩小, 一眼区别于知识"球") */
+export const HEADING_SIZE_FACTOR = 0.45;
+
+export function nodeSize(node: Pick<SceneNode, 'parentCount' | 'isRoot' | 'sharedByQuestions' | 'kind'>): number {
   const safeParentCount = Math.max(0, node.parentCount);
   let radius = NODE_BASE_RADIUS * (1 + 0.3 * Math.log2(1 + safeParentCount));
   if (node.isRoot) radius *= ROOT_SIZE_FACTOR;
   if (isSharedNode(node)) radius *= SHARED_SIZE_FACTOR;
+  if (node.kind === 'heading') radius *= HEADING_SIZE_FACTOR;
   return Math.round(radius * 100) / 100;
 }
 
@@ -148,7 +159,18 @@ export interface LinkStyle {
   width: number;
 }
 
-export function linkStyle(link: Pick<SceneLink, 'scope'>): LinkStyle {
+export function linkStyle(link: Pick<SceneLink, 'scope' | 'kind'>): LinkStyle {
+  if (link.kind === 'heading') {
+    // 根 → 子标题卫星: 细短虚线, 弱化处理(注释性结构, 非前置依赖)
+    return {
+      color: '#b7b3aa',
+      dashed: true,
+      dashSize: 2,
+      gapSize: 2.4,
+      opacity: 0.55,
+      width: 0.8,
+    };
+  }
   if (link.scope === 'PROBLEM_LOCAL') {
     return {
       color: GRAPH_THEME.linkLocalColor,

@@ -11,32 +11,22 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 page.on('pageerror', (err) => console.log('[pageerror]', err.stack || String(err)))
 
 await page.goto('http://127.0.0.1:5173/knowledge-graph', { waitUntil: 'networkidle' })
+await page.waitForTimeout(3000)
+
+// Reroot to "GDB Basics" via the bottleneck rail (real node with markdown headings)
+await page.locator('.kgraph-bottleneck-list button').first().click()
 await page.waitForTimeout(4500)
-await page.screenshot({ path: shot('kgraph-after-fix.png'), fullPage: false })
+await page.screenshot({ path: shot('kgraph-heading-satellites.png'), fullPage: false })
 
-const before = await page.evaluate(() => {
-  const canvas = document.querySelector('canvas')
-  const r = canvas?.getBoundingClientRect()
-  return { canvas: r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null }
+// Report what the scene received (via the header root label) and heading API payload
+const info = await page.evaluate(async () => {
+  const header = document.querySelector('.kgraph-header p:last-child')?.textContent
+  const resp = await fetch('http://127.0.0.1:8000/api/graph/node/gdb-basics?page=1')
+  const nav = await resp.json()
+  return {
+    header,
+    headingChildren: (nav.children || []).filter((c) => c.type === 'heading').map((c) => c.label),
+  }
 })
-console.log('geometry:', JSON.stringify(before))
-
-// Open the legend popup via the toolbar button
-const legendButton = page.getByRole('button', { name: '图例' })
-if (await legendButton.count()) {
-  await legendButton.first().click()
-  await page.waitForTimeout(600)
-  await page.screenshot({ path: shot('kgraph-legend-open.png'), fullPage: false })
-  const popup = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('div')].find(
-      (d) => (d.textContent || '').startsWith('掌握度') && d.style.position === 'absolute',
-    )
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: r.x, y: r.y, w: r.width, h: r.height }
-  })
-  console.log('legend popup:', JSON.stringify(popup))
-} else {
-  console.log('图例 button NOT FOUND')
-}
+console.log(JSON.stringify(info, null, 2))
 await browser.close()

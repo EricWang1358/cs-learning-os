@@ -16,7 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three';
 import ForceGraph3D from 'react-force-graph-3d';
 import type { ForceGraphMethods, GraphData, LinkObject, NodeObject } from 'react-force-graph-3d';
-import type { EdgeScope, GraphExport, RuntimeLink, RuntimeNode, SceneNode } from './types';
+import type { GraphExport, RuntimeLink, RuntimeNode, SceneNode } from './types';
 import {
   GRAPH_THEME,
   LAYER_Z_SPACING,
@@ -77,10 +77,11 @@ type Vec3 = { x: number; y: number; z: number };
 // ---------------------------------------------------------------------------
 
 const sphereGeometryCache = new Map<number, THREE.SphereGeometry>();
+const octaGeometryCache = new Map<number, THREE.OctahedronGeometry>();
 const nodeMaterialCache = new Map<string, THREE.MeshLambertMaterial>();
 const ringGeometryCache = new Map<string, THREE.TorusGeometry>();
 const haloTextureCache = new Map<string, THREE.CanvasTexture>();
-const lineMaterialCache = new Map<EdgeScope, THREE.Material>();
+const lineMaterialCache = new Map<string, THREE.Material>();
 let ringMaterialSingleton: THREE.MeshBasicMaterial | null = null;
 
 function sphereGeometryOf(radius: number): THREE.SphereGeometry {
@@ -88,6 +89,16 @@ function sphereGeometryOf(radius: number): THREE.SphereGeometry {
   if (!geometry) {
     geometry = new THREE.SphereGeometry(radius, 20, 16);
     sphereGeometryCache.set(radius, geometry);
+  }
+  return geometry;
+}
+
+/** 子标题卫星用小八面体: 形状上与知识"球"瞬时区分(内容结构 vs 知识依赖) */
+function octaGeometryOf(radius: number): THREE.OctahedronGeometry {
+  let geometry = octaGeometryCache.get(radius);
+  if (!geometry) {
+    geometry = new THREE.OctahedronGeometry(radius, 1);
+    octaGeometryCache.set(radius, geometry);
   }
   return geometry;
 }
@@ -220,7 +231,7 @@ function buildNodeObject(node: GraphNodeObject, highlightShared: boolean): THREE
   }
 
   const sphere = new THREE.Mesh(
-    sphereGeometryOf(radius),
+    node.kind === 'heading' ? octaGeometryOf(radius) : sphereGeometryOf(radius),
     nodeMaterialOf(nodeColor(node), glow.emissive, glow.emissiveIntensity),
   );
   group.add(sphere);
@@ -240,10 +251,11 @@ function buildNodeObject(node: GraphNodeObject, highlightShared: boolean): THREE
   return group;
 }
 
-function lineMaterialOf(scope: EdgeScope): THREE.Material {
-  const cached = lineMaterialCache.get(scope);
+function lineMaterialOf(link: Pick<GraphLinkObject, 'scope' | 'kind'>): THREE.Material {
+  const key = link.kind === 'heading' ? 'HEADING' : link.scope;
+  const cached = lineMaterialCache.get(key);
   if (cached) return cached;
-  const style = linkStyle({ scope });
+  const style = linkStyle(link);
   const material = style.dashed
     ? new THREE.LineDashedMaterial({
         color: style.color,
@@ -259,7 +271,7 @@ function lineMaterialOf(scope: EdgeScope): THREE.Material {
         opacity: style.opacity,
         linewidth: style.width,
       });
-  lineMaterialCache.set(scope, material);
+  lineMaterialCache.set(key, material);
   return material;
 }
 
@@ -267,7 +279,7 @@ function lineMaterialOf(scope: EdgeScope): THREE.Material {
 function buildLinkObject(link: GraphLinkObject): THREE.Object3D {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(2 * 3), 3));
-  const line = new THREE.Line(geometry, lineMaterialOf(link.scope));
+  const line = new THREE.Line(geometry, lineMaterialOf(link));
   // 端点每帧更新, 关闭视锥剔除避免包围球过期导致线消失
   line.frustumCulled = false;
   return line;
@@ -305,6 +317,14 @@ function escapeHtml(text: string): string {
 }
 
 function tooltipOf(node: GraphNodeObject): string {
+  if (node.kind === 'heading') {
+    const level = node.headingLevel ? `h${node.headingLevel}` : '章节';
+    const lines = [
+      `<div style="font-weight:600;font-size:13px;margin-bottom:4px">§ ${escapeHtml(node.title)}</div>`,
+      `<div>本节点笔记的章节 (${level}) · 点击打开对应内容</div>`,
+    ];
+    return `<div style="text-align:left;line-height:1.5">${lines.join('')}</div>`;
+  }
   const visual = masteryVisual(node.mastery);
   const lines = [
     `<div style="font-weight:600;font-size:13px;margin-bottom:4px">${escapeHtml(node.title)}</div>`,
