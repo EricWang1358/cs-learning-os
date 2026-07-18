@@ -64,6 +64,14 @@ During and immediately after writing a node:
 - [ ] At least two `## Reader Questions` exist, written from the perspective
       of a confused beginner.
 - [ ] `## Suggested Next` points to real existing nodes, not invented slugs.
+- [ ] **Display order uniqueness:** the `order:` value must not duplicate any
+      existing node within the same `area` + `track`. Query:
+      `sqlite3 knowledge.db "SELECT display_order FROM nodes WHERE area='...'
+      AND track='...' AND display_order = N;"`
+- [ ] **Bilingual completeness (Standard A):** every `## Section / 中文标题`
+      must have both English and Chinese content. Chinese is never a single
+      sentence — it explains the same idea with equivalent depth.
+      Non-section items (code blocks, tables) stay English-only.
 
 ### Post-Write Verification / 写入后验证
 
