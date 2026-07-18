@@ -35,65 +35,139 @@ The LLM is responsible for judgment calls:
 
 ### Verification Gate / 验证门
 
-After steps 1–8 but BEFORE writing any new node, run this checklist.
-Every item must pass; do not proceed to writing until all pass.
+Run BEFORE writing any new node. Every item must pass.
 
-- [ ] All prerequisite slugs in frontmatter resolve to existing `.md` files
-      under the active content root. (`find . -name "<slug>.md"` works.)
-- [ ] All `related` slugs are verified the same way.
-- [ ] The `prerequisites` chain is acyclic (no circular dependencies).
-- [ ] For each prerequisite node, read it in full. If it is `status: demo`
-      or shorter than 50 lines of body, mark it as needing a depth upgrade
-      before the new node can depend on it.
-- [ ] All terms that the new node introduces but does NOT define inline are
-      covered by an existing prerequisite node of sufficient depth. If a
-      prerequisite is too shallow, deepen it first.
-- [ ] Existing KnowledgeGraph entries: check `kg_question` and `kg_edge`
-      tables for the prerequisite nodes. If they are missing, run
-      `build_kg_forest.py` after writing.
+**Context & root:**
+- [ ] Folder tree and existing indexes inspected: know what nodes already exist
+      in the target area/track before adding new ones.
+- [ ] Active content root resolved (priority order):
+      `CS_LEARNING_CONTENT` > `data/content/` > `content-demo/`.
+      Never write to ignored `content/` or orphan `data/nodes/`.
+- [ ] User has been asked which content standard to use (Standard A or Q),
+      unless the user explicitly named one.
+
+**Reference documents read — confirm each:**
+- [ ] [references/architecture.md](references/architecture.md) — before changing
+      structure.
+- [ ] [references/node-schema.md](references/node-schema.md) — before creating
+      or editing a node.
+- [ ] [references/knowledge-graph.md](references/knowledge-graph.md) — before
+      touching frontmatter links. (If file does not exist, note it.)
+- [ ] [references/curation-rules.md](references/curation-rules.md) — before
+      deciding visibility.
+- [ ] [references/content-standards.md](references/content-standards.md) —
+      before writing content.
+- [ ] [references/textbook-writing.md](references/textbook-writing.md) — when
+      user asks for textbook-grade quality.
+
+**Prerequisite integrity:**
+- [ ] All `prerequisites` slugs resolve to existing `.md` files under the
+      active content root. (`find . -name "<slug>.md"`.)
+- [ ] All `related` slugs verified the same way.
+- [ ] `prerequisites` chain is acyclic (no circular dependencies).
+- [ ] For each prerequisite, read it in full. If `status: demo` or shorter
+      than 50 lines of body, deepen it before depending on it.
+- [ ] Every unfamiliar term the new node introduces is defined inline (1–2
+      sentences) OR covered by an existing prerequisite of sufficient depth.
+      If neither, create a new prerequisite node first.
+
+**KnowledgeGraph:**
+- [ ] Existing `kg_question` + `kg_edge` entries checked for prerequisite
+      nodes. If missing, flag for `build_kg_forest.py` after writing.
+
+**Placement gate (cs-fundamentals):**
+- [ ] New cs-fundamentals nodes are intro-level prerequisites or foundational
+      bridges. If not, choose a more specific area/track or archive.
 
 ### Writing Gate / 写入门
 
-During and immediately after writing a node:
+During and immediately after writing:
 
-- [ ] Every inline link uses Markdown hyperlink syntax:
-      `[visible label](slug.md)` — never a bare slug or `` `slug` ``.
-- [ ] The file begins with `---` (no BOM) and ends with `\n` after the
-      closing `---`. (See Frontmatter Integrity Rule below.)
-- [ ] At least one `## Worked Example` or `## Practice` section exists.
-- [ ] At least two `## Reader Questions` exist, written from the perspective
-      of a confused beginner.
-- [ ] `## Suggested Next` points to real existing nodes, not invented slugs.
-- [ ] **Display order uniqueness:** the `order:` value must not duplicate any
-      existing node within the same `area` + `track`. Query:
-      `sqlite3 knowledge.db "SELECT display_order FROM nodes WHERE area='...'
-      AND track='...' AND display_order = N;"`
-- [ ] **Bilingual completeness (Standard A):** every `## Section / 中文标题`
-      must have both English and Chinese content. Chinese is never a single
-      sentence — it explains the same idea with equivalent depth.
-      Non-section items (code blocks, tables) stay English-only.
+**File integrity:**
+- [ ] File begins with `---` (no UTF-8 BOM — first three bytes are `2d 2d 2d`,
+      not `ef bb bf`).
+- [ ] File ends with `\n` after closing `---`. Verify:
+      `xxd "$file" | tail -1` — last hex byte must be `0a`.
+- [ ] `slug:` in frontmatter matches the filename (without `.md`).
+
+**Path & taxonomy:**
+- [ ] File path: `<content-root>/nodes/<area>/<slug>.md` — not in root-level
+      `data/nodes/` or `data/quizzes/`.
+- [ ] `area:` matches one of: `algorithms`, `projects`, `abilities`,
+      `cs-fundamentals`, `tools`, `questions` (or existing map taxonomy).
+- [ ] `track:` is a meaningful sub-category used consistently with peers in
+      the same area.
+- [ ] `visibility:` is `core`, `support`, or `archive` — decision justified
+      per curation-rules.md.
+
+**Frontmatter metadata:**
+- [ ] `sources:` contains at least one authoritative URL (HTTPS) or reference.
+- [ ] `summary:` is a single-sentence value proposition.
+- [ ] `order:` is an integer, positive, and unique within `area` + `track`.
+      Query: `sqlite3 knowledge.db "SELECT display_order FROM nodes WHERE
+      area='...' AND track='...' AND display_order = <order>;"`
+- [ ] No `mastery` field in frontmatter (mastery is dynamic graph data).
+
+**Content structure (Standard A):**
+- [ ] At least one `## Worked Example` or `## Practice` section with step-by-
+      step reasoning, where each step cites the rule it applies.
+- [ ] At least two `## Reader Questions` written from the perspective of a
+      confused beginner.
+- [ ] `## Common Confusions` or `## Common Mistakes` present.
+- [ ] `## Quick Recall` — a compact mnemonic hook.
+- [ ] `## Suggested Next` — curated by reasoning, not just tags. Points to
+      real existing nodes.
+
+**Bilingual completeness:**
+- [ ] Every `## Section Title / 中文标题` heading has BOTH English and Chinese
+      content in that section. The Chinese explains the same idea with
+      equivalent depth, not a single sentence. Code blocks and tables stay
+      English-only.
+
+**KnowledgeGraph Write Gate (frontmatter links):**
+- [ ] Link classification correct: `prerequisites` = depends-on,
+      `related` = lateral suggestion (never establishes a tree edge).
+- [ ] Every target slug is a real Markdown-backed node (not DB-only).
+- [ ] No self-links, no duplicate entries in the same list.
+- [ ] No cycles: A → B → A is forbidden.
+- [ ] Diamond (one prerequisite shared by multiple nodes) is valid — reuse
+      is encouraged.
+
+**Node design:**
+- [ ] One durable concept per node — not two topics in one file.
+- [ ] Node is compact — prefer short + well-linked over long + self-contained.
+- [ ] Placement decision is explained briefly (in the body or commit message).
 
 ### Post-Write Verification / 写入后验证
 
-Must run every time new or changed nodes are written:
+Must run after every batch of new/changed nodes:
 
-- [ ] `python3 scripts/build_kg_forest.py` — integrates new frontmatter
-      links into kg_question / kg_edge tables for the 3D tree.
+- [ ] `python3 scripts/build_kg_forest.py` — integrates frontmatter links
+      into kg_question / kg_edge for the 3D tree visualization.
 - [ ] `python3 scripts/build_index.py data/content` — rebuilds HTML/JSON
-      indexes so the Library Workbench reflects new nodes.
-- [ ] Read every new/changed Markdown node in full (not just frontmatter).
-      For each unfamiliar term, choose: define inline (1–2 sentences) OR
-      link to existing node OR create a new prerequisite node.
-- [ ] Verify all hyperlinks: every `[label](slug.md)` matches a real file.
+      indexes so Library Workbench reflects new nodes.
+- [ ] After build: verify `kg_question` and `kg_edge` entries were created.
+      `sqlite3 knowledge.db "SELECT question_id FROM kg_question WHERE
+      root_node_id = '<new-slug>';"`
+- [ ] After build: verify HTML index file exists and is non-empty.
+      `ls -la data/content/nodes/*/index.md` or equivalent.
+- [ ] Read every new/changed Markdown node in full (not frontmatter only).
+      Inspect every heading, example, and Suggested Next for missing
+      definitions, stale links, copied answers, and taxonomy drift.
+- [ ] Verify all hyperlinks: every `[label](slug.md)` resolves to a real file.
       Use: `find data/content -name "<slug>.md"` for each link.
-- [ ] Check the Library Workbench UI: the new node appears with correct
-      area/track/order, no "missing" or "duplicate" warnings.
-### Remaining First-Step Workflow
+- [ ] Frontmatter integrity re-check: `xxd "$file" | tail -1` ends with `0a`
+      for every new/changed file.
+- [ ] KnowledgeGraph Write Gate rule 6: after write, read the tree/subtree
+      snapshot and verify reachability, parent direction, scope, and endpoint
+      titles. A successful HTTP response is not enough by itself.
+- [ ] Check Library Workbench UI: new node appears with correct area/track/
+      order, no "missing" or "duplicate" warnings, Chinese text renders
+      correctly.
+### Standard Q Note
 
-9. Read [references/textbook-writing.md](references/textbook-writing.md) when the user asks for textbook-grade quality, English CS textbook style, or content that reads like CS:APP. This supplements the gates above with pedagogical patterns and anti-slop rules.
-10. Ask the user which content standard to use before adding content, unless the user explicitly names a standard.
-11. Apply the placement gate: new `cs-fundamentals` nodes must be intro-level prerequisites or foundational bridges; otherwise choose a more specific area/track or archive.
-12. When creating Standard Q quiz content, make it Daily-Bite-friendly unless the user explicitly says it should not be used for bite-sized review.
+When creating Standard Q quiz content additionally make it Daily-Bite-friendly
+unless the user explicitly says it should not be used for bite-sized review.
 
 ---
 
