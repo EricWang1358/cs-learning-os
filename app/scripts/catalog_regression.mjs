@@ -9,20 +9,26 @@ try {
   await page.getByRole('heading', { name: 'Learning Catalog' }).waitFor()
   await page.getByRole('link', { name: 'Learning Catalog' }).waitFor()
   await page.getByRole('link', { name: 'Library' }).waitFor()
-  await page.getByRole('link', { name: /WA8: Optimization/ }).waitFor()
-  await page.getByRole('link', { name: /WA9: Exceptional/ }).waitFor()
   await page.getByText('Reader orientation').first().waitFor()
 
+  const fundamentals = page.locator('#catalog-cs-fundamentals .catalog-section')
+  if (await fundamentals.locator('.catalog-section-body').isVisible()) {
+    throw new Error('Only Reader orientation should be open by default.')
+  }
+  await fundamentals.locator('summary').click()
+  if (!(await fundamentals.locator('.catalog-section-body').isVisible())) {
+    throw new Error('A catalog chapter should open when its summary is clicked.')
+  }
+  await page.getByRole('link', { name: /WA8: Optimization/ }).waitFor()
+  await page.getByRole('link', { name: /WA9: Exceptional/ }).waitFor()
   const wa8Href = await page.getByRole('link', { name: /WA8: Optimization/ }).getAttribute('href')
   const wa9Href = await page.getByRole('link', { name: /WA9: Exceptional/ }).getAttribute('href')
   if (wa8Href !== '/nodes/wa8-systems-optimization-and-linking' || wa9Href !== '/nodes/wa9-exceptional-control-flow') {
     throw new Error(`Unexpected written-assignment links: ${wa8Href}, ${wa9Href}`)
   }
-
-  const fundamentals = page.locator('#catalog-cs-fundamentals .catalog-section')
   await fundamentals.locator('summary').click()
   if (await fundamentals.locator('.catalog-section-body').isVisible()) {
-    throw new Error('A catalog chapter should collapse when its summary is clicked.')
+    throw new Error('A catalog chapter should collapse when its summary is clicked again.')
   }
 
   const outlineToggle = page.getByRole('button', { name: 'Hide outline' })

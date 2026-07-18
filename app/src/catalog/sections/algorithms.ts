@@ -20,5 +20,5 @@ export const algorithmsSection: CatalogSection = {
     nodeLink('graph-traversal', 'Graph Traversal', 'A compact entry point for BFS and DFS reasoning.'),
     nodeLink('strongly-connected-components', 'Strongly Connected Components', 'Condense a directed graph into a DAG of components.'),
   ],
-  defaultOpen: true,
+  defaultOpen: false,
 }

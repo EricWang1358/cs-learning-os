@@ -32,7 +32,7 @@ function CatalogLinkRow({ link }: { link: CatalogLink }) {
 
 function CatalogSectionBlock({ section }: { section: CatalogSection }) {
   return (
-    <details className="catalog-section" open={section.defaultOpen}>
+    <details className="catalog-section" open={section.defaultOpen ?? false}>
       <summary className="catalog-section-summary">
         <span className="catalog-section-number">{section.number}</span>
         <span className="catalog-section-heading">

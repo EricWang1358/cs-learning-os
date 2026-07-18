@@ -23,5 +23,5 @@ export const csFundamentalsSection: CatalogSection = {
     nodeLink('wa9-exceptional-control-flow', 'WA9: Exceptional Control Flow', 'Processes, waitpid, signals, and asynchronous control flow.'),
     quizLink('gdb-disassemble-stepi-stack-examine', 'GDB disassemble / stepi quiz', 'Practice reading machine state instead of only rereading notes.'),
   ],
-  defaultOpen: true,
+  defaultOpen: false,
 }
