@@ -151,6 +151,11 @@ During and immediately after writing:
 
 Must run after every batch of new/changed nodes:
 
+- [ ] **Verify files exist on disk:** every slug marked as created/changed
+      has a corresponding `.md` file under `data/content/nodes/<area>/`
+      or `data/content/quizzes/<area>/`. A node that only exists in the
+      DB (from an SQL INSERT) but has no `.md` file is invisible in the
+      Library Workbench and will break "edit source file".
 - [ ] `python3 scripts/build_kg_forest.py` — integrates frontmatter links
       into kg_question / kg_edge for the 3D tree visualization.
 - [ ] `python3 scripts/build_index.py data/content` — rebuilds HTML/JSON
