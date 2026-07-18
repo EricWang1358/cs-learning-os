@@ -19,7 +19,7 @@ import type { ForceGraphMethods, GraphData, LinkObject, NodeObject } from 'react
 import type { GraphExport, RuntimeLink, RuntimeNode, SceneNode } from './types';
 import {
   GRAPH_THEME,
-  LAYER_Z_SPACING,
+  LAYER_Y_SPACING,
   formatScore,
   isSharedNode,
   linkStyle,
@@ -39,11 +39,13 @@ export interface KnowledgeGraph3DProps {
   /** RFC §3.4 导出数据; contentHash 不变时组件跳过重渲染与重布局 */
   data: GraphExport;
   /**
-   * 点击节点(reroot): 调用方应请求新根的导出数据并替换 data。
+   * 单击节点(reroot): 调用方应请求新根的导出数据并替换 data。
    * 推荐 `GET /graph/export3d?root={node.id}&rootIsQuestion=false` (见 fetchGraph.fetchExport3d);
    * 也可 `GET /graph/nodes/{id}/subtree` 后自行映射为 GraphExport。
    */
   onNodeClick?: (node: SceneNode) => void;
+  /** 双击节点: 打开对应笔记(如 `/nodes/{slug}?focus=1`), 不触发 reroot */
+  onNodeDoubleClick?: (node: SceneNode) => void;
   /** 共享子树(sharedByQuestions >= 2)双环高亮开关, 默认 true */
   highlightShared?: boolean;
   /** 布局: 'force' 自由力导(默认) | 'layered' 按 layer 分层(z 轴) */
@@ -330,6 +332,7 @@ function tooltipOf(node: GraphNodeObject): string {
     `<div style="font-weight:600;font-size:13px;margin-bottom:4px">${escapeHtml(node.title)}</div>`,
     `<div>掌握度: ${visual.label} · 得分 ${formatScore(node.score)}</div>`,
     `<div>layer ${node.layer} · parentCount ${node.parentCount} · 被 ${node.sharedByQuestions} 棵问题树引用</div>`,
+    `<div style="margin-top:2px;opacity:.8">箭头 = 依赖 → 前置 · 单击 reroot · 双击打开笔记</div>`,
   ];
   if (node.isRoot) lines.push('<div style="margin-top:2px">当前根节点(加大 + 标注)</div>');
   if (isSharedNode(node)) lines.push('<div style="margin-top:2px">共享子树(双环标识)</div>');
@@ -427,6 +430,7 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
   const {
     data,
     onNodeClick,
+    onNodeDoubleClick,
     onTracePrerequisites,
     highlightShared = true,
     layout = 'force',
@@ -490,6 +494,8 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
   // ---- 选中节点(reroot/数据变化后清空) ----
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => setSelectedId(null), [effectiveHash]);
+  const [pinnedNodeIds, setPinnedNodeIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => setPinnedNodeIds(new Set()), [effectiveHash]);
   const selectedNode = useMemo(
     () => graphData.nodes.find((n) => String(n.id) === selectedId) ?? null,
     [graphData, selectedId],
@@ -505,28 +511,51 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
   // 力导引擎首轮跑完前, 不调用任何 ref 方法(d3ReheatSimulation/cameraPosition)——
   // 引擎未初始化时调用会在库内部读到 undefined 并抛 '.tick' TypeError。
   const engineReadyRef = useRef(false);
+  const [engineReadyTick, setEngineReadyTick] = useState(0);
 
   /**
-   * layered 布局: 用锚点坐标 fz 把节点钉在 layer * LAYER_Z_SPACING 平面(自定义力思路)。
+   * layered 布局: 用锚点坐标 fy 把根节点固定在顶部、前置层固定在其下方。
    * 不直接用 dagMode 的原因: layer 是服务端算好的"最长拓扑距离", 直接锚定完全贴合契约语义,
    * 而 dagMode 会在前端按边重新推导层级, 可能与服务端 layer 不一致。
    */
   useEffect(() => {
+    const layerBuckets = new Map<number, RuntimeNode[]>();
     for (const node of graphData.nodes) {
       if (layoutMode === 'layered') {
-        node.fz = node.layer * LAYER_Z_SPACING;
-      } else {
+        const bucket = layerBuckets.get(node.layer) ?? [];
+        bucket.push(node);
+        layerBuckets.set(node.layer, bucket);
+        node.fy = -node.layer * LAYER_Y_SPACING;
         delete node.fz;
+      } else {
+        delete node.fx;
+        delete node.fy;
+        delete node.fz;
+      }
+    }
+    if (layoutMode === 'layered') {
+      for (const bucket of layerBuckets.values()) {
+        bucket.sort((a, b) => a.id.localeCompare(b.id));
+        const span = 44;
+        const offset = ((bucket.length - 1) * span) / 2;
+        bucket.forEach((node, index) => {
+          if (node.x == null) node.x = index * span - offset;
+        });
       }
     }
     const fg = fgRef.current;
     if (!fg || !engineReadyRef.current) return;  // 首轮: fz 已就位, 引擎初始化后自行布局
     fitPendingRef.current = true;
+    const charge = fg.d3Force('charge') as { strength?: (value: number) => unknown } | undefined;
+    const link = fg.d3Force('link') as { distance?: (value: number) => unknown } | undefined;
+    charge?.strength?.(layoutMode === 'layered' ? -220 : -30);
+    link?.distance?.(layoutMode === 'layered' ? 72 : 30);
     fg.d3ReheatSimulation();
     if (layoutMode === 'layered') {
       const maxLayer = graphData.nodes.reduce((m, n) => Math.max(m, n.layer), 0);
-      const midZ = (maxLayer * LAYER_Z_SPACING) / 2;
-      fg.cameraPosition({ x: 150, y: 36, z: midZ + 60 }, { x: 0, y: 0, z: midZ }, 900);
+      const midY = -(maxLayer * LAYER_Y_SPACING) / 2;
+      const distance = Math.max(160, maxLayer * LAYER_Y_SPACING + 100);
+      fg.cameraPosition({ x: 0, y: midY, z: distance }, { x: 0, y: midY, z: 0 }, 900);
     }
   }, [layoutMode, graphData]);
 
@@ -535,20 +564,118 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
     if (engineReadyRef.current) fgRef.current?.refresh();
   }, [highlightShared]);
 
+  const frameLayeredView = useCallback((transitionMs = 900) => {
+    const fg = fgRef.current;
+    if (!fg || layoutMode !== 'layered') return;
+    const maxLayer = graphData.nodes.reduce((m, n) => Math.max(m, n.layer), 0);
+    const verticalSpan = maxLayer * LAYER_Y_SPACING;
+    const midY = -verticalSpan / 2;
+    const horizontalSpan = graphData.nodes.reduce(
+      (m, n) => Math.max(m, Math.abs(n.x ?? 0), Math.abs(n.z ?? 0)),
+      0,
+    );
+    const distance = Math.max(220, verticalSpan + 180, horizontalSpan * 3 + 240);
+    fg.cameraPosition({ x: 0, y: midY, z: distance }, { x: 0, y: midY, z: 0 }, transitionMs);
+  }, [graphData, layoutMode]);
+
   const handleEngineStop = useCallback(() => {
     engineReadyRef.current = true;
     if (!fitPendingRef.current) return;
+    setEngineReadyTick((tick) => tick + 1);
     fitPendingRef.current = false;
-    fgRef.current?.zoomToFit(600, 48);
+    if (layoutMode === 'layered') {
+      frameLayeredView(0);
+      window.setTimeout(() => frameLayeredView(500), 60);
+    } else {
+      fgRef.current?.zoomToFit(600, 48);
+    }
+  }, [frameLayeredView, layoutMode]);
+
+  useEffect(() => {
+    if (!engineReadyTick || layoutMode !== 'layered') return;
+    const timer = window.setTimeout(() => frameLayeredView(500), 80);
+    return () => window.clearTimeout(timer);
+  }, [engineReadyTick, frameLayeredView, layoutMode]);
+
+  const handleNodeDragEnd = useCallback((node: GraphNodeObject) => {
+    if (node.x == null || node.y == null || node.z == null) return;
+    node.fx = node.x;
+    node.fy = node.y;
+    node.fz = node.z;
+    setPinnedNodeIds((ids) => new Set(ids).add(String(node.id)));
   }, []);
 
+  const resetPinnedNodes = useCallback(() => {
+    for (const node of graphData.nodes) {
+      delete node.fx;
+      delete node.fy;
+      delete node.fz;
+      if (layoutMode === 'layered') node.fy = -node.layer * LAYER_Y_SPACING;
+    }
+    setPinnedNodeIds(new Set());
+    fgRef.current?.d3ReheatSimulation();
+    if (layoutMode === 'layered') frameLayeredView(700);
+  }, [frameLayeredView, graphData, layoutMode]);
+
   // ---- 交互回调 ----
+  // 双击检测: 两次点击同一节点且间隔 ≤ 300ms 视为双击, 打开笔记而不 reroot。
+  // 单点击延迟 300ms 执行, 给双击留出判定窗口; 若未注册双击回调则立即 reroot。
+  const DBL_CLICK_MS = 300;
+  const lastClickRef = useRef<{ id: string; time: number } | null>(null);
+  const singleClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (singleClickTimerRef.current) {
+        clearTimeout(singleClickTimerRef.current);
+        singleClickTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleNodeClick = useCallback(
     (node: GraphNodeObject) => {
-      setSelectedId(String(node.id));
-      onNodeClick?.(node);
+      const id = String(node.id);
+      const now = Date.now();
+      setSelectedId(id);
+
+      // 子标题卫星没有 reroot 语义, 单/双击都是打开对应章节, 直接走 onNodeClick 不延迟
+      if (node.kind === 'heading') {
+        if (singleClickTimerRef.current) {
+          clearTimeout(singleClickTimerRef.current);
+          singleClickTimerRef.current = null;
+        }
+        lastClickRef.current = null;
+        onNodeClick?.(node);
+        return;
+      }
+
+      // 未注册双击行为 → 保持原有即时 reroot
+      if (!onNodeDoubleClick) {
+        onNodeClick?.(node);
+        return;
+      }
+
+      const last = lastClickRef.current;
+      if (last && last.id === id && now - last.time <= DBL_CLICK_MS) {
+        lastClickRef.current = null;
+        if (singleClickTimerRef.current) {
+          clearTimeout(singleClickTimerRef.current);
+          singleClickTimerRef.current = null;
+        }
+        onNodeDoubleClick(node);
+        return;
+      }
+
+      lastClickRef.current = { id, time: now };
+      if (singleClickTimerRef.current) {
+        clearTimeout(singleClickTimerRef.current);
+      }
+      singleClickTimerRef.current = setTimeout(() => {
+        singleClickTimerRef.current = null;
+        onNodeClick?.(node);
+      }, DBL_CLICK_MS);
     },
-    [onNodeClick],
+    [onNodeClick, onNodeDoubleClick],
   );
 
   const handleNodeRightClick = useCallback(
@@ -602,6 +729,7 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
         linkDirectionalArrowRelPos={0.85}
         linkDirectionalArrowColor={(link: GraphLinkObject) => linkStyle({ scope: link.scope }).color}
         onNodeClick={handleNodeClick}
+        onNodeDragEnd={handleNodeDragEnd}
         onNodeRightClick={handleNodeRightClick}
         onBackgroundClick={handleBackgroundClick}
         onEngineStop={handleEngineStop}
@@ -655,6 +783,16 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
         >
           分层
         </button>
+        {pinnedNodeIds.size > 0 && (
+          <button
+            type="button"
+            style={toolButtonStyle}
+            onClick={resetPinnedNodes}
+            title="清除手动固定的位置并重新布局"
+          >
+            重置位置
+          </button>
+        )}
       </div>
 
       {prepared.truncated && (
@@ -692,7 +830,7 @@ function KnowledgeGraph3DInner(props: KnowledgeGraph3DProps): React.ReactElement
           </div>
         ) : (
           <div style={{ color: GRAPH_THEME.textSecondary }}>
-            左键节点 = 以其为根(reroot) · 右键节点 = 追溯前置 · 拖拽旋转 / 滚轮缩放
+            箭头方向 = 依赖 → 前置 · 左键节点 = 以其为根(reroot) · 右键节点 = 追溯前置 · 拖拽旋转 / 滚轮缩放
           </div>
         )}
       </div>
@@ -712,6 +850,7 @@ function propsAreEqual(prev: KnowledgeGraph3DProps, next: KnowledgeGraph3DProps)
   return (
     prev.data.contentHash === next.data.contentHash &&
     prev.onNodeClick === next.onNodeClick &&
+    prev.onNodeDoubleClick === next.onNodeDoubleClick &&
     prev.onTracePrerequisites === next.onTracePrerequisites &&
     prev.highlightShared === next.highlightShared &&
     prev.layout === next.layout &&

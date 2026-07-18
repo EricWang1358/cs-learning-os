@@ -4,6 +4,9 @@ import './App.css'
 import { DailyBitePanel } from './components/DailyBitePanel'
 import { DailyReviewPanel, type DailyReviewRating } from './components/DailyReviewPanel'
 import { HealthActionPanels } from './components/HealthActionPanels'
+import { HomeDashboard } from './components/HomeDashboard'
+import { CatalogPage } from './components/CatalogPage'
+import { NodeSelfAssessment } from './components/NodeSelfAssessment'
 import { SyncPanel } from './components/SyncPanel'
 import { QuestionQueueDetail } from './components/QuestionQueueDetail'
 import { ReaderQuestionPanel } from './components/ReaderQuestionPanel'
@@ -25,6 +28,7 @@ import {
   type SectionEditDraft,
 } from './lib/markdown'
 import { graphApiPath, routeFromLocation, routeSearch } from './lib/routes'
+import { emptyHomeSummary, loadHomeSummary, type HomeSummary } from './homeData'
 import type {
   AiDraftScope,
   AiJob,
@@ -529,7 +533,10 @@ function App() {
   const [syncError, setSyncError] = useState('')
   const [graphPayload, setGraphPayload] = useState<GraphPayload | null>(null)
   const [graphCache, setGraphCache] = useState<Record<string, GraphPayload>>({})
-  const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(true)
+  const [homeSummary, setHomeSummary] = useState<HomeSummary>(emptyHomeSummary)
+  const [homeLoading, setHomeLoading] = useState(false)
+  const [homeError, setHomeError] = useState('')
+  const [isAreaNavExpanded, setIsAreaNavExpanded] = useState(false)
   const [readTraceError, setReadTraceError] = useState('')
   const readingReturnAnchorRef = useRef<ReadingReturnAnchor | null>(null)
 
@@ -615,6 +622,11 @@ function App() {
     }))
   }
 
+  const openNodeCreationFromHome = () => {
+    openNewNodeForm()
+    navigate('/nodes')
+  }
+
   const navigateToArea = (area: string) => {
     const targetSlug = selectedSlug || nodes[0]?.slug
     if (targetSlug) {
@@ -640,7 +652,16 @@ function App() {
       try {
         setIsLoading(true)
         setError('')
-        if (viewMode === 'quizzes') {
+        if (viewMode === 'home') {
+          setHomeLoading(true)
+          setHomeError('')
+          const data = await loadHomeSummary()
+          if (!isActive) return
+          startTransition(() => {
+            setHomeSummary(data)
+            setHomeError('')
+          })
+        } else if (viewMode === 'quizzes') {
           const quizSortParam = encodeURIComponent(quizSort)
           const data = deferredQuery.trim()
             ? await fetchJson<ApiQuizzesResponse>(
@@ -735,6 +756,8 @@ function App() {
             setSyncDevices(devicesData.devices)
             setSyncError('')
           })
+        } else if (viewMode === 'catalog') {
+          setError('')
         } else {
           const data = deferredQuery.trim()
             ? await fetchJson<ApiNodesResponse>(
@@ -746,32 +769,18 @@ function App() {
 
           startTransition(() => {
             setNodes(data.nodes)
-            const topSlug = data.nodes[0]?.slug
-            const shouldOpenTopNode =
-              topSlug &&
-              (
-                location.pathname === '/' ||
-                location.pathname === '/nodes'
-              )
-            if (shouldOpenTopNode) {
-              navigate(
-                `/nodes/${encodeURIComponent(topSlug)}${routeSearch({
-                  activeArea,
-                  activeTrack,
-                  query,
-                  nodeSort,
-                  isFocusMode,
-                })}`,
-                { replace: true },
-              )
-            }
           })
         }
       } catch (loadError) {
         if (!isActive) return
-        setError(loadError instanceof Error ? loadError.message : 'Unable to load index')
+        const message = loadError instanceof Error ? loadError.message : 'Unable to load index'
+        if (viewMode === 'home') setHomeError(message)
+        else setError(message)
       } finally {
-        if (isActive) setIsLoading(false)
+        if (isActive) {
+          setIsLoading(false)
+          if (viewMode === 'home') setHomeLoading(false)
+        }
       }
     }
 
@@ -2305,12 +2314,21 @@ function App() {
     : null
 
   return (
-    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'sync' ? 'sync-mode' : ''} ${viewMode === 'kgraph' ? 'kgraph-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
+    <main className={`workspace-shell ${isFocusMode ? 'focus-mode' : ''} ${isEditMode ? 'editing-mode' : ''} ${viewMode === 'home' ? 'home-mode' : ''} ${viewMode === 'graph' ? 'graph-mode' : ''} ${viewMode === 'health' ? 'health-mode' : ''} ${viewMode === 'sync' ? 'sync-mode' : ''} ${viewMode === 'catalog' ? 'catalog-mode' : ''} ${viewMode === 'kgraph' ? 'kgraph-mode' : ''} ${viewMode === 'bite' ? 'bite-mode' : ''} ${isWidgetMode ? 'bite-widget-mode' : ''}`}>
       <aside className="sidebar" aria-label="Knowledge areas">
-        <div className="brand-block">
+        <a
+          className="brand-block"
+          href="/"
+          aria-label="Knowledge Workbench home"
+          onClick={(event) => {
+            event.preventDefault()
+            if (!exitEditingBeforeNavigation()) return
+            navigate('/')
+          }}
+        >
           <p className="eyebrow">CS Learning OS</p>
           <h1>Knowledge Workbench</h1>
-        </div>
+        </a>
 
         <section className="world-clock" aria-label="World clock">
           <div>
@@ -2360,7 +2378,7 @@ function App() {
               </strong>
             </button>
           ))}
-          {systemSidebarAreas.map((area) => (
+          {isAreaNavExpanded && systemSidebarAreas.map((area) => (
             <button
               key={area}
               type="button"
@@ -2377,91 +2395,56 @@ function App() {
         </nav>
 
         <section className="practice-switch">
-          <p className="eyebrow">Review system</p>
           <button
             type="button"
-            className={viewMode === 'quizzes' ? 'active' : ''}
+            className={viewMode === 'home' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
-              navigate(`/quizzes${routeSearch({ query, quizSort })}`)
+              navigate('/')
             }}
           >
-            Practice / Quiz Bank
+            Home dashboard
           </button>
           <button
             type="button"
-            className={viewMode === 'bite' ? 'active' : ''}
+            className={viewMode === 'nodes' ? 'active' : ''}
             onClick={() => {
               if (!exitEditingBeforeNavigation()) return
-              navigateToBite()
+              navigate('/nodes')
             }}
           >
-            Daily Bite
+            Library
           </button>
-          <button
-            type="button"
-            className={viewMode === 'review' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigate('/review')
-            }}
+          <a
+            className={`catalog-entry ${viewMode === 'catalog' ? 'active' : ''}`}
+            href="/catalog"
+            aria-current={viewMode === 'catalog' ? 'page' : undefined}
           >
-            Daily review
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'question-queue' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigateToQueue()
-            }}
-          >
-            Q Queue
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'graph' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigate('/graph')
-            }}
-          >
-            Knowledge navigator
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'kgraph' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigate('/knowledge-graph')
-            }}
-          >
-            Knowledge tree 3D
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'health' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigate('/health')
-            }}
-          >
-            System health
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'sync' ? 'active' : ''}
-            onClick={() => {
-              if (!exitEditingBeforeNavigation()) return
-              navigate('/sync')
-            }}
-          >
-            Sync
-          </button>
+            <span>Learning Catalog</span>
+            <strong>MAP</strong>
+          </a>
         </section>
       </aside>
 
-      {viewMode === 'kgraph' ? (
+      {viewMode === 'home' ? (
+        <HomeDashboard
+          summary={homeSummary}
+          isLoading={homeLoading}
+          error={homeError}
+          onOpenNode={(slug) => navigateToNode(slug)}
+          onOpenReview={() => navigate('/review')}
+          onOpenBite={navigateToBite}
+          onOpenQueue={navigateToQueue}
+          onOpenQuizzes={() => navigate(`/quizzes${routeSearch({ query, quizSort })}`)}
+          onOpenGraph={() => navigate('/graph')}
+          onOpenKnowledgeGraph={() => navigate('/knowledge-graph')}
+          onOpenHealth={() => navigate('/health')}
+          onOpenSync={() => navigate('/sync')}
+          onCreateNode={openNodeCreationFromHome}
+        />
+      ) : viewMode === 'catalog' ? (
+        <CatalogPage />
+      ) : viewMode === 'kgraph' ? (
         <Suspense
           fallback={
             <section className="graph-navigator-shell" aria-label="Knowledge tree 3D">
@@ -2967,9 +2950,13 @@ function App() {
       </section>
       )}
 
-      {viewMode !== 'graph' && (
+      {viewMode !== 'graph' && viewMode !== 'home' && (
       <aside className="detail-panel" aria-label="Node detail">
-        {(viewMode === 'nodes' || viewMode === 'quizzes') && (selectedNode || selectedQuiz) && !isEditMode && !isFocusMode && (
+        {(viewMode === 'nodes' || viewMode === 'quizzes') &&
+          ((viewMode === 'nodes' && selectedNode?.slug === selectedSlug) ||
+            (viewMode === 'quizzes' && selectedQuiz?.id === selectedQuizId)) &&
+          !isEditMode &&
+          !isFocusMode && (
           <button
             type="button"
             className="focus-edge-toggle"
@@ -3238,6 +3225,10 @@ function App() {
                   <Suspense fallback={<p className="detail-loading">Loading Markdown renderer...</p>}>
                   <MarkdownView
                     body={selectedQuiz.body}
+                    onOpenNode={(slug) => {
+                      if (!exitEditingBeforeNavigation()) return
+                      navigateToNode(slug, { focus: true })
+                    }}
                     editingSection={sectionEditDraft}
                     isSectionSaving={isEditSaving}
                     onCancelSectionEdit={cancelSectionEdit}
@@ -3325,6 +3316,17 @@ function App() {
                 <div className="detail-toolbar">
                   <p className="eyebrow">{selectedNode.area}</p>
                   <div className="toolbar-actions">
+                    <button
+                      type="button"
+                      className="focus-toggle ai-action"
+                      onClick={() => {
+                        if (!exitEditingBeforeNavigation()) return
+                        navigate(`/knowledge-graph?root=${encodeURIComponent(selectedNode.slug)}&rootIsQuestion=false`)
+                      }}
+                      title="Open prerequisite and dependent knowledge"
+                    >
+                      Knowledge graph
+                    </button>
                     <button
                       type="button"
                       className="focus-toggle"
@@ -3423,6 +3425,10 @@ function App() {
                   <Suspense fallback={<p className="detail-loading">Loading Markdown renderer...</p>}>
                   <MarkdownView
                     body={selectedNode.body}
+                    onOpenNode={(slug) => {
+                      if (!exitEditingBeforeNavigation()) return
+                      navigateToNode(slug, { focus: true })
+                    }}
                     editingSection={sectionEditDraft}
                     isSectionSaving={isEditSaving}
                     onCancelSectionEdit={cancelSectionEdit}
@@ -3436,6 +3442,14 @@ function App() {
                   />
                   </Suspense>
                 )}
+              </section>
+
+              <section className="detail-section" aria-label="Self assessment">
+                <h3>Self check</h3>
+                <NodeSelfAssessment
+                  nodeId={selectedNode.slug}
+                  onOpenNode={(slug) => navigateToNode(slug, { focus: true })}
+                />
               </section>
 
               <section className="detail-section split">

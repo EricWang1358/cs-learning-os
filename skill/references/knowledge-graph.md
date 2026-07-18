@@ -20,7 +20,14 @@ related: [bellman-ford, bfs]
   list in Markdown.
 
 This graph supports search, backlinks, and reading navigation. It is not a
-replacement for the explicit KG edge store.
+replacement for the explicit KG edge store. During ingest, every valid
+Markdown `prerequisites` relation is also bridged into a `GLOBAL` `kg_edge`
+with `created_by = IMPORT`. The bridge is idempotent and never overwrites an
+existing user or AI edge; removed Markdown prerequisites reject their old
+`IMPORT` edge, while re-added prerequisites restore it. `related` links remain
+navigation-only. This gives a new Markdown-backed node an immediately usable
+3D prerequisite map while preserving the explicit KG proposal/confirmation
+workflow for richer trees.
 
 ## 2. Explicit KnowledgeGraph DAG
 

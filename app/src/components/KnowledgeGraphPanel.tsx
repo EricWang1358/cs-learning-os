@@ -11,15 +11,13 @@
  * Self-contained state (unlike SyncPanel, which is prop-driven from App.tsx) so
  * App.tsx only lazy-loads this panel — keeping three.js out of the main chunk.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { API_BASE, fetchJson, postJson } from '../lib/apiClient'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { API_BASE, fetchJson } from '../lib/apiClient'
 import type {
   ApiGraphResponse,
   ApiKgBottlenecksResponse,
   ApiKgQuestionsResponse,
-  KgCategory,
-  KgCreateQuestionResponse,
   KgMasteryState,
   KgQuestionSummary,
 } from '../types/api'
@@ -28,8 +26,6 @@ import type { GraphExport, SceneNode } from '../graph3d/types'
 import { mergeHeadingsIntoExport, type NavigationHeadingItem } from '../graph3d/headingMerge'
 import { KnowledgeGraph3D } from '../graph3d/KnowledgeGraph3D'
 
-const KG_CATEGORIES: KgCategory[] = ['CS_BASIC', 'ALGORITHM', 'SYSTEM_DESIGN', 'BEHAVIORAL']
-
 const MASTERY_LABELS: Record<KgMasteryState, string> = {
   UNKNOWN: 'Unknown',
   LEARNING: 'Learning',
@@ -37,24 +33,51 @@ const MASTERY_LABELS: Record<KgMasteryState, string> = {
   MASTERED: 'Mastered',
 }
 
-function newCommandId(): string {
-  return crypto.randomUUID().replaceAll('-', '')
-}
-
 type RootRef = { id: string; isQuestion: boolean; label: string }
 
 export function KnowledgeGraphPanel() {
+  const location = useLocation()
   const navigate = useNavigate()
+  const requestedRoot = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const id = params.get('root')
+    if (!id) return null
+    return {
+      id,
+      isQuestion: params.get('rootIsQuestion') === 'true',
+    }
+  }, [location.search])
   const [questions, setQuestions] = useState<KgQuestionSummary[]>([])
   const [bottlenecks, setBottlenecks] = useState<ApiKgBottlenecksResponse['items']>([])
   const [root, setRoot] = useState<RootRef | null>(null)
+  const rootRef = useRef<RootRef | null>(null)
+  const [rootHistory, setRootHistory] = useState<RootRef[]>([])
   const [graphData, setGraphData] = useState<GraphExport | null>(null)
   const [graphError, setGraphError] = useState('')
   const [listError, setListError] = useState('')
   const [isLoadingGraph, setIsLoadingGraph] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newCategory, setNewCategory] = useState<KgCategory>('CS_BASIC')
-  const [isCreating, setIsCreating] = useState(false)
+
+  const selectRoot = useCallback(
+    (next: RootRef, options: { remember?: boolean; clearHistory?: boolean } = {}) => {
+      const current = rootRef.current
+      if (options.clearHistory) {
+        setRootHistory([])
+      } else if (options.remember && current && current.id !== next.id) {
+        setRootHistory((history) => [...history, current].slice(-20))
+      }
+      rootRef.current = next
+      setRoot(next)
+    },
+    [],
+  )
+
+  const goBackToPreviousRoot = useCallback(() => {
+    const previous = rootHistory[rootHistory.length - 1]
+    if (!previous) return
+    setRootHistory((history) => history.slice(0, -1))
+    rootRef.current = previous
+    setRoot(previous)
+  }, [rootHistory])
 
   const loadLists = useCallback(async (selectFirst: boolean) => {
     try {
@@ -65,41 +88,57 @@ export function KnowledgeGraphPanel() {
       setQuestions(questionData.questions)
       setBottlenecks(bottleneckData.items)
       setListError('')
-      if (selectFirst && questionData.questions.length > 0) {
-        setRoot((current) => {
-          if (current) return current
+      if (selectFirst) {
+        if (requestedRoot) {
+          selectRoot(
+            { id: requestedRoot.id, isQuestion: requestedRoot.isQuestion, label: requestedRoot.id },
+            { clearHistory: true },
+          )
+        } else if (questionData.questions.length > 0 && !rootRef.current) {
           const first = questionData.questions[0]
-          return { id: first.questionId, isQuestion: true, label: first.title }
-        })
+          selectRoot(
+            { id: first.questionId, isQuestion: true, label: first.title },
+            { clearHistory: true },
+          )
+        }
       }
     } catch (err) {
       setListError(err instanceof Error ? err.message : 'Failed to load knowledge graph data')
     }
-  }, [])
+  }, [requestedRoot, selectRoot])
 
   useEffect(() => {
     void loadLists(true)
   }, [loadLists])
 
+  const rootId = root?.id ?? ''
+  const rootIsQuestion = root?.isQuestion ?? false
   useEffect(() => {
-    if (!root) {
+    if (!rootId) {
       setGraphData(null)
       return
     }
     let cancelled = false
     setIsLoadingGraph(true)
     setGraphError('')
-    fetchExport3d(API_BASE, root.id, root.isQuestion)
+    fetchExport3d(API_BASE, rootId, rootIsQuestion)
       .then(async (result) => {
+        if (!rootIsQuestion) {
+          const resolvedTitle = result.data.nodes.find((node) => node.id === rootId)?.title
+          if (resolvedTitle) {
+            rootRef.current = { id: rootId, isQuestion: false, label: resolvedTitle }
+            setRoot((current) => (current?.id === rootId ? { ...current, label: resolvedTitle } : current))
+          }
+        }
         // reroot 到单个知识节点时, 参照导航图谱 node 层, 把该节点笔记的
         // 章节子标题合并为卫星节点(kind='heading'); 问题树根视图保持纯 DAG。
-        if (!root.isQuestion) {
+        if (!rootIsQuestion) {
           try {
             const nav = await fetchJson<ApiGraphResponse>(
-              `/api/graph/node/${encodeURIComponent(root.id)}?page=1`,
+              `/api/graph/node/${encodeURIComponent(rootId)}?page=1`,
             )
             const headings = (nav.children ?? []) as NavigationHeadingItem[]
-            return { ...result, data: mergeHeadingsIntoExport(result.data, root.id, headings) }
+            return { ...result, data: mergeHeadingsIntoExport(result.data, rootId, headings) }
           } catch {
             return result // 无子标题或节点不存在 → 原样展示
           }
@@ -121,7 +160,7 @@ export function KnowledgeGraphPanel() {
     return () => {
       cancelled = true
     }
-  }, [root])
+  }, [rootId, rootIsQuestion])
 
   const rerootToNode = useCallback(
     (node: SceneNode) => {
@@ -131,30 +170,22 @@ export function KnowledgeGraphPanel() {
         return
       }
       if (node.isRoot) return
-      setRoot({ id: node.id, isQuestion: false, label: node.title })
+      selectRoot({ id: node.id, isQuestion: false, label: node.title }, { remember: true })
+    },
+    [navigate, selectRoot],
+  )
+
+  const openNode = useCallback(
+    (node: SceneNode) => {
+      // 子标题卫星单/双击都应打开对应章节
+      if (node.kind === 'heading' && node.href) {
+        navigate(node.href)
+        return
+      }
+      navigate(`/nodes/${encodeURIComponent(node.id)}?focus=1`)
     },
     [navigate],
   )
-
-  const createQuestion = async () => {
-    const title = newTitle.trim()
-    if (!title || isCreating) return
-    setIsCreating(true)
-    try {
-      const created = await postJson<KgCreateQuestionResponse>('/api/kg/questions', {
-        commandId: newCommandId(),
-        title,
-        category: newCategory,
-      })
-      setNewTitle('')
-      await loadLists(false)
-      setRoot({ id: created.questionId, isQuestion: true, label: created.title })
-    } catch (err) {
-      setListError(err instanceof Error ? err.message : 'Failed to create question')
-    } finally {
-      setIsCreating(false)
-    }
-  }
 
   const rootLabel = useMemo(() => {
     if (!root) return 'No root selected'
@@ -166,39 +197,9 @@ export function KnowledgeGraphPanel() {
       <aside className="kgraph-rail">
         <div className="kgraph-rail-section">
           <p className="eyebrow">Problem roots</p>
-          <form
-            className="kgraph-create-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void createQuestion()
-            }}
-          >
-            <input
-              type="text"
-              value={newTitle}
-              placeholder="New question (e.g. LC 300 LIS)"
-              onChange={(event) => setNewTitle(event.target.value)}
-            />
-            <div className="kgraph-create-row">
-              <select
-                value={newCategory}
-                onChange={(event) => setNewCategory(event.target.value as KgCategory)}
-                aria-label="Question category"
-              >
-                {KG_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="focus-toggle" disabled={!newTitle.trim() || isCreating}>
-                {isCreating ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </form>
           {questions.length === 0 ? (
             <p className="kgraph-empty-hint">
-              No questions yet. Create one above — each question grows its own prerequisite tree.
+              No registered question roots. Open a node's graph link to inspect its prerequisite subtree.
             </p>
           ) : (
             <ul className="kgraph-question-list">
@@ -209,13 +210,13 @@ export function KnowledgeGraphPanel() {
                     className={
                       root?.isQuestion && root.id === question.questionId ? 'active' : ''
                     }
-                    onClick={() =>
-                      setRoot({
+                    onClick={() => {
+                      selectRoot({
                         id: question.questionId,
                         isQuestion: true,
                         label: question.title,
-                      })
-                    }
+                      }, { clearHistory: true })
+                    }}
                   >
                     <span className="kgraph-question-title">
                       #{question.problemNo} {question.title}
@@ -242,7 +243,7 @@ export function KnowledgeGraphPanel() {
                   <button
                     type="button"
                     onClick={() =>
-                      setRoot({ id: item.nodeId, isQuestion: false, label: item.title })
+                      selectRoot({ id: item.nodeId, isQuestion: false, label: item.title }, { remember: true })
                     }
                   >
                     <span className="kgraph-question-title">{item.title}</span>
@@ -264,15 +265,35 @@ export function KnowledgeGraphPanel() {
       <div className="kgraph-main">
         <header className="search-header cockpit-header kgraph-header">
           <p className="eyebrow">Knowledge tree OS</p>
-          <h2>Knowledge Graph</h2>
-          <p>{rootLabel}</p>
+          <div className="kgraph-header-row">
+            <div>
+              <h2>Knowledge Graph</h2>
+              <p>{rootLabel}</p>
+            </div>
+            <button
+              type="button"
+              className="focus-toggle"
+              disabled={rootHistory.length === 0}
+              onClick={goBackToPreviousRoot}
+              aria-label="Back to previous graph root"
+              title="Return to the previous reroot"
+            >
+              ← Previous root
+            </button>
+          </div>
         </header>
         {listError ? <p className="kgraph-error">{listError}</p> : null}
         <div className="kgraph-canvas">
           {graphError ? (
             <p className="kgraph-error">{graphError}</p>
           ) : graphData ? (
-            <KnowledgeGraph3D data={graphData} onNodeClick={rerootToNode} highlightShared />
+            <KnowledgeGraph3D
+              data={graphData}
+              layout="layered"
+              onNodeClick={rerootToNode}
+              onNodeDoubleClick={openNode}
+              highlightShared
+            />
           ) : (
             <p className="kgraph-empty-hint">
               {isLoadingGraph

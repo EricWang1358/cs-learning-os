@@ -61,10 +61,10 @@ try {
   await page.waitForURL((url) => url.pathname.startsWith('/nodes') && url.searchParams.get('sort') === 'alphabet')
   await page.getByLabel('Node detail').locator('.markdown-body h1').first().waitFor()
   const sortedUrl = currentUrl(page)
-  if (sortedUrl.searchParams.has('focus') || sortedUrl.searchParams.get('q') !== 'binary') {
+  if (sortedUrl.pathname !== '/nodes' || sortedUrl.searchParams.has('focus') || sortedUrl.searchParams.get('q') !== 'binary') {
     throw new Error(`Sort navigation should preserve map-mode query params, got ${sortedUrl.pathname}${sortedUrl.search}.`)
   }
-  await page.locator('.toolbar-actions').getByRole('button', { name: 'Focus reading' }).waitFor()
+  await page.getByLabel('Knowledge nodes').waitFor()
 
   await page.goBack()
   await expectMappedBinarySearch(page)

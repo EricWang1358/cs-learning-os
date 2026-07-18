@@ -35,6 +35,8 @@ downloads/
 
 # Local learning/demo scratch files
 content-demo/quizzes/cs-fundamentals/x86-rax-trace-leaq-jump.md
+Instruction/
+experimental/**/*.zip
 content-demo/quizzes/cs-fundamentals/gdb-disassemble-stepi-stack-examine.md
 启动 Learning OS.cmd
 启动 Learning OS Beta.cmd
@@ -48,3 +50,10 @@ Thumbs.db
 .idea/
 .vscode/
 .worktrees/
+
+# Local agent, browser, and test-runner state
+.playwright-cli/
+.superpowers/
+.claude/
+.pytest_cache/
+tmp/

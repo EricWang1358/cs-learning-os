@@ -1,16 +1,17 @@
 :root {
-  --surface: #0b0e11;
-  --surface-soft: #181a20;
-  --surface-card: #1e2329;
-  --surface-elevated: #2b3139;
+  --surface: #0b0f14;
+  --surface-soft: #141a21;
+  --surface-card: #1b222b;
+  --surface-elevated: #252e39;
   --ink: #eaecef;
   --ink-strong: #ffffff;
   --muted: #929aa5;
-  --line: #2b3139;
-  --line-strong: #3f4854;
-  --accent: #fcd535;
-  --accent-strong: #f0b90b;
-  --accent-soft: rgba(252, 213, 53, 0.12);
+  --line: #27313c;
+  --line-strong: #3b4856;
+  --accent: #f59e0b;
+  --accent-strong: #d97706;
+  --accent-soft: rgba(245, 158, 11, 0.12);
+  --info: #60a5fa;
   --danger: #f6465d;
   --success: #0ecb81;
   --shadow: rgba(0, 0, 0, 0.32);
@@ -43,6 +44,6 @@ input {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid rgba(252, 213, 53, 0.28);
+  outline: 3px solid rgba(245, 158, 11, 0.32);
   outline-offset: 2px;
 }

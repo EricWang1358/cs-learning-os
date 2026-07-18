@@ -85,6 +85,8 @@ export const ROOT_SIZE_FACTOR = 2.0;
 export const SHARED_SIZE_FACTOR = 1.15;
 /** layered 布局下相邻 layer 的 z 轴间距 */
 export const LAYER_Z_SPACING = 42;
+/** layered 视图中，根节点在顶部、前置层向下排列的垂直间距。 */
+export const LAYER_Y_SPACING = 42;
 
 /** 掌握度 → 视觉描述 */
 export function masteryVisual(mastery: MasteryState): MasteryVisual {

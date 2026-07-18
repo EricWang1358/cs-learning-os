@@ -502,7 +502,7 @@ export type ApiErrorBody = {
   detail?: string | Array<{ loc?: Array<string | number>; msg?: string; type?: string }>
 }
 
-export type ViewMode = 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'kgraph'
+export type ViewMode = 'home' | 'nodes' | 'quizzes' | 'question-queue' | 'review' | 'bite' | 'graph' | 'health' | 'sync' | 'catalog' | 'kgraph'
 
 export type SyncDevice = {
   id: string
@@ -591,4 +591,40 @@ export type KgBottleneckItem = {
 export type ApiKgBottlenecksResponse = {
   items: KgBottleneckItem[]
   minDistinctQuestions: number
+}
+
+export type KgMasterySummary = {
+  state: KgMasteryState
+  score: number
+  attempts: number
+  failStreak: number
+  lastVerdict: 'PASS' | 'FAIL' | null
+}
+
+export type KgVerificationResponse = {
+  nodeId: string
+  mastery: KgMasterySummary
+  suggestedNext: Array<{
+    nodeId: string
+    title: string
+    mastery: KgMasteryState
+    score: number
+  }>
+  replayed?: boolean
+}
+
+export type KgGapWeakestPrerequisite = {
+  nodeId: string
+  title: string
+  mastery: KgMasteryState
+  score: number
+  blocksCount: number
+  recentFailures: number
+}
+
+export type KgGapResponse = {
+  quizItemId: string
+  failedNodeId: string
+  weakestPrerequisite: KgGapWeakestPrerequisite | null
+  suggestedAction: 'REINFORCE_PREREQUISITE' | 'LEAF_REINFORCE'
 }

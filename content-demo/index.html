@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personal CS Knowledge Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18211f;
+      --muted: #63706b;
+      --paper: #f7f4ed;
+      --line: #d9d1c3;
+      --core: #0f766e;
+      --support: #315f8c;
+      --archive: #8a6f2a;
+    }
+    body {
+      margin: 0;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 40px auto;
+    }
+    h1 {
+      font-size: 34px;
+      margin: 0 0 8px;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 28px;
+    }
+    section {
+      border-top: 1px solid var(--line);
+      padding: 24px 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      text-transform: capitalize;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .node {
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--support);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .node.core { border-left-color: var(--core); }
+    .node.archive { border-left-color: var(--archive); }
+    a {
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta span, .meta strong {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: rgba(255, 255, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Personal CS Knowledge Map</h1>
+    <p class="lead">Generated from Markdown nodes. Markdown stays the source of truth.</p>
+    
+            <section>
+              <h2>abilities</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/abilities/debugging-loop.md">Debugging Loop</a>
+                  <p>Debug by reproducing, measuring, testing one hypothesis, and preserving the regression case.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>debugging</span> <span>hypothesis</span> <span>testing</span> <span>logs</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>algorithms</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/algorithms/binary-search.md">Binary Search</a>
+                  <p>Use a monotonic condition to locate a boundary in logarithmic time.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>search</span> <span>monotonicity</span> <span>optimization</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/algorithms/dynamic-programming-basics.md">Dynamic Programming Basics</a>
+                  <p>Turn overlapping subproblems into a recurrence, base cases, and a compact state table.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>dynamic-programming</span> <span>recurrence</span> <span>optimization</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/algorithms/graph-traversal.md">Graph Traversal</a>
+                  <p>Choose BFS or DFS to explore reachability, components, paths, and dependencies.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>graph</span> <span>bfs</span> <span>dfs</span> <span>shortest-path</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/algorithms/kg-bundle-algorithms-analysis.md">Review bundle · algorithms / analysis</a>
+                  <p>Auto-generated review bundle for algorithms / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/algorithms/two-pointers.md">Two Pointers and Sliding Windows</a>
+                  <p>Maintain a moving interval so each element is processed a small, predictable number of times.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>array</span> <span>string</span> <span>two-pointers</span> <span>sliding-window</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>cs-fundamentals</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/c-memory-and-pointers.md">C Memory and Pointers</a>
+                  <p>Separate addresses, values, stack lifetime, heap lifetime, and ownership before debugging C code.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>c</span> <span>pointers</span> <span>stack</span> <span>heap</span> <span>memory</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/compiler-optimization-and-aliasing.md">Compiler Optimization Limits and Aliasing / 编译器优化边界与别名</a>
+                  <p>Recognize when aliasing, opaque calls, volatile accesses, or observable behavior prevent a legal optimization.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>compiler</span> <span>optimization</span> <span>aliasing</span> <span>restrict</span> <span>volatile</span> <span>strlen</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/database-indexes.md">Database Indexes</a>
+                  <p>Use indexes to reduce row scans while accounting for write cost, selectivity, and query shape.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>database</span> <span>sql</span> <span>index</span> <span>query-plan</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/fork-process-creation-and-waitpid.md">fork, Process Lifecycles, and waitpid / 进程创建与等待</a>
+                  <p>Reason about process trees, child ownership, waitpid errors, and zombie or orphan outcomes without guessing output order.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>c</span> <span>unix</span> <span>fork</span> <span>waitpid</span> <span>process-lifecycle</span> <span>zombie</span> <span>orphan</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/http-request-lifecycle.md">HTTP Request Lifecycle</a>
+                  <p>Trace a browser request from URL resolution through server work to a validated response.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>http</span> <span>dns</span> <span>tls</span> <span>api</span> <span>backend</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/kg-bundle-cs-fundamentals-cache-lab.md">Review bundle · cs-fundamentals / cache-lab</a>
+                  <p>Auto-generated review bundle for cs-fundamentals / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/kg-bundle-cs-fundamentals-gdb-debugging.md">Review bundle · cs-fundamentals / gdb-debugging</a>
+                  <p>Auto-generated review bundle for cs-fundamentals / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/kg-bundle-cs-fundamentals-x86-64-assembly.md">Review bundle · cs-fundamentals / x86-64-assembly</a>
+                  <p>Auto-generated review bundle for cs-fundamentals / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/linker-symbol-resolution.md">Linker Symbol Resolution / 链接器符号解析</a>
+                  <p>Apply strong, weak, and local linkage rules to predict duplicate-definition errors and silent type mismatches.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>linker</span> <span>object-files</span> <span>symbols</span> <span>strong</span> <span>weak</span> <span>static</span> <span>extern</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/malloc-utilization-and-block-layout.md">Malloc Utilization and Block Layout / Malloc 利用率与块布局</a>
+                  <p>Compute allocator utilization by separating live payload bytes from alignment, metadata, minimum-block, and heap-extension overhead.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>malloc</span> <span>allocator</span> <span>alignment</span> <span>headers</span> <span>footers</span> <span>coalescing</span> <span>utilization</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/unix-signals-and-sigprocmask.md">Unix Signals and sigprocmask / Unix 信号与信号屏蔽</a>
+                  <p>Separate signal masks, pending delivery, handlers, and default actions while reasoning about asynchronous control flow.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>unix</span> <span>signals</span> <span>sigprocmask</span> <span>sigsegv</span> <span>sigkill</span> <span>sigstop</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/virtual-memory-page-faults.md">Virtual Memory and Page Faults</a>
+                  <p>Connect virtual addresses, page tables, TLB misses, and page faults into one reviewable story.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>virtual-memory</span> <span>page-table</span> <span>tlb</span> <span>page-fault</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/wa8-systems-optimization-and-linking.md">WA8: Optimization, Linking, and Allocation / 优化、链接与分配</a>
+                  <p>A compact systems-performance map connecting compiler legality, linker symbol rules, and allocator space overhead.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>csapp</span> <span>compiler-optimization</span> <span>linking</span> <span>malloc</span> <span>utilization</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/cs-fundamentals/wa9-exceptional-control-flow.md">WA9: Exceptional Control Flow / 异常控制流</a>
+                  <p>A reusable map of how processes, waits, and signals change the normal sequential control-flow story.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>csapp</span> <span>exceptional-control-flow</span> <span>processes</span> <span>signals</span> <span>synchronization</span>
+                  </div>
+                </article>
+                
+                <article class="node core">
+                  <a href="nodes/cs-fundamentals/x86-64-addressing-and-leaq.md">x86-64 Addressing and leaq</a>
+                  <p>Read address expressions and understand why `leaq` often behaves like arithmetic.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>assembly</span> <span>x86-64</span> <span>addressing</span> <span>leaq</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>networkprogramming</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-application-layer.md">Review bundle · networkprogramming / application-layer</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-distributed-ml.md">Review bundle · networkprogramming / distributed-ml</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-ip-configuration.md">Review bundle · networkprogramming / ip-configuration</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-ip-routing.md">Review bundle · networkprogramming / ip-routing</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-network-fundamentals.md">Review bundle · networkprogramming / network-fundamentals</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-network-layer.md">Review bundle · networkprogramming / network-layer</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-p2p-systems.md">Review bundle · networkprogramming / p2p-systems</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-routing-protocols.md">Review bundle · networkprogramming / routing-protocols</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                
+                <article class="node support">
+                  <a href="nodes/networkprogramming/kg-bundle-networkprogramming-tcp-ip-fundamentals.md">Review bundle · networkprogramming / tcp-ip-fundamentals</a>
+                  <p>Auto-generated review bundle for networkprogramming / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>projects</h2>
+              <div class="grid">
+                <article class="node core">
+                  <a href="nodes/projects/project-crud-app.md">Project Pattern: CRUD App</a>
+                  <p>A tiny full-stack pattern for creating, reading, updating, and deleting records.</p>
+                  <div class="meta">
+                    <strong>core</strong>
+                    <span>backend</span> <span>frontend</span> <span>database</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>questions</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/questions/capture-slip-workflow.md">Capture Slip Workflow</a>
+                  <p>A phone-first workflow for turning a tiny unclear point into Markdown and review material.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>capture</span> <span>mobile</span> <span>ai-draft</span> <span>workflow</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>r-language</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/r-language/kg-bundle-r-language-r-data-manipulation.md">Review bundle · r-language / r-data-manipulation</a>
+                  <p>Auto-generated review bundle for r-language / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>stack-prerequisite</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/stack-prerequisite/kg-bundle-stack-prerequisite-stack-fundamentals.md">Review bundle · stack-prerequisite / stack-fundamentals</a>
+                  <p>Auto-generated review bundle for stack-prerequisite / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+            <section>
+              <h2>stubs</h2>
+              <div class="grid">
+                <article class="node support">
+                  <a href="nodes/stubs/kg-bundle-stubs-general.md">Review bundle · stubs / general</a>
+                  <p>Auto-generated review bundle for stubs / general.</p>
+                  <div class="meta">
+                    <strong>support</strong>
+                    <span>kg-bundle</span>
+                  </div>
+                </article>
+                </div>
+            </section>
+            
+  </main>
+</body>
+</html>

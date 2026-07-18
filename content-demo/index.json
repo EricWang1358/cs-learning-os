@@ -1,0 +1,583 @@
+{
+  "nodes": [
+    {
+      "title": "Debugging Loop",
+      "path": "nodes/abilities/debugging-loop.md",
+      "area": "abilities",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "debugging",
+        "hypothesis",
+        "testing",
+        "logs"
+      ],
+      "summary": "Debug by reproducing, measuring, testing one hypothesis, and preserving the regression case.",
+      "related": [
+        "c-memory-and-pointers",
+        "http-request-lifecycle"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Binary Search",
+      "path": "nodes/algorithms/binary-search.md",
+      "area": "algorithms",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "search",
+        "monotonicity",
+        "optimization"
+      ],
+      "summary": "Use a monotonic condition to locate a boundary in logarithmic time.",
+      "related": [
+        "x86-64-addressing-and-leaq"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Dynamic Programming Basics",
+      "path": "nodes/algorithms/dynamic-programming-basics.md",
+      "area": "algorithms",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "dynamic-programming",
+        "recurrence",
+        "optimization"
+      ],
+      "summary": "Turn overlapping subproblems into a recurrence, base cases, and a compact state table.",
+      "related": [
+        "binary-search",
+        "two-pointers"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Graph Traversal",
+      "path": "nodes/algorithms/graph-traversal.md",
+      "area": "algorithms",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "graph",
+        "bfs",
+        "dfs",
+        "shortest-path"
+      ],
+      "summary": "Choose BFS or DFS to explore reachability, components, paths, and dependencies.",
+      "related": [
+        "binary-search",
+        "two-pointers"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · algorithms / analysis",
+      "path": "nodes/algorithms/kg-bundle-algorithms-analysis.md",
+      "area": "algorithms",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for algorithms / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Two Pointers and Sliding Windows",
+      "path": "nodes/algorithms/two-pointers.md",
+      "area": "algorithms",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "array",
+        "string",
+        "two-pointers",
+        "sliding-window"
+      ],
+      "summary": "Maintain a moving interval so each element is processed a small, predictable number of times.",
+      "related": [
+        "binary-search",
+        "graph-traversal"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "C Memory and Pointers",
+      "path": "nodes/cs-fundamentals/c-memory-and-pointers.md",
+      "area": "cs-fundamentals",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "c",
+        "pointers",
+        "stack",
+        "heap",
+        "memory"
+      ],
+      "summary": "Separate addresses, values, stack lifetime, heap lifetime, and ownership before debugging C code.",
+      "related": [
+        "virtual-memory-page-faults",
+        "x86-64-addressing-and-leaq"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Compiler Optimization Limits and Aliasing / 编译器优化边界与别名",
+      "path": "nodes/cs-fundamentals/compiler-optimization-and-aliasing.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "compiler",
+        "optimization",
+        "aliasing",
+        "restrict",
+        "volatile",
+        "strlen"
+      ],
+      "summary": "Recognize when aliasing, opaque calls, volatile accesses, or observable behavior prevent a legal optimization.",
+      "related": [
+        "linker-symbol-resolution",
+        "malloc-utilization-and-block-layout"
+      ],
+      "prerequisites": [
+        "c-memory-and-pointers"
+      ]
+    },
+    {
+      "title": "Database Indexes",
+      "path": "nodes/cs-fundamentals/database-indexes.md",
+      "area": "cs-fundamentals",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "database",
+        "sql",
+        "index",
+        "query-plan"
+      ],
+      "summary": "Use indexes to reduce row scans while accounting for write cost, selectivity, and query shape.",
+      "related": [
+        "http-request-lifecycle",
+        "project-crud-app"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "fork, Process Lifecycles, and waitpid / 进程创建与等待",
+      "path": "nodes/cs-fundamentals/fork-process-creation-and-waitpid.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "c",
+        "unix",
+        "fork",
+        "waitpid",
+        "process-lifecycle",
+        "zombie",
+        "orphan"
+      ],
+      "summary": "Reason about process trees, child ownership, waitpid errors, and zombie or orphan outcomes without guessing output order.",
+      "related": [
+        "unix-signals-and-sigprocmask"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "HTTP Request Lifecycle",
+      "path": "nodes/cs-fundamentals/http-request-lifecycle.md",
+      "area": "cs-fundamentals",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "http",
+        "dns",
+        "tls",
+        "api",
+        "backend"
+      ],
+      "summary": "Trace a browser request from URL resolution through server work to a validated response.",
+      "related": [
+        "database-indexes",
+        "project-crud-app"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · cs-fundamentals / cache-lab",
+      "path": "nodes/cs-fundamentals/kg-bundle-cs-fundamentals-cache-lab.md",
+      "area": "cs-fundamentals",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for cs-fundamentals / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · cs-fundamentals / gdb-debugging",
+      "path": "nodes/cs-fundamentals/kg-bundle-cs-fundamentals-gdb-debugging.md",
+      "area": "cs-fundamentals",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for cs-fundamentals / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · cs-fundamentals / x86-64-assembly",
+      "path": "nodes/cs-fundamentals/kg-bundle-cs-fundamentals-x86-64-assembly.md",
+      "area": "cs-fundamentals",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for cs-fundamentals / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Linker Symbol Resolution / 链接器符号解析",
+      "path": "nodes/cs-fundamentals/linker-symbol-resolution.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "linker",
+        "object-files",
+        "symbols",
+        "strong",
+        "weak",
+        "static",
+        "extern"
+      ],
+      "summary": "Apply strong, weak, and local linkage rules to predict duplicate-definition errors and silent type mismatches.",
+      "related": [
+        "compiler-optimization-and-aliasing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Malloc Utilization and Block Layout / Malloc 利用率与块布局",
+      "path": "nodes/cs-fundamentals/malloc-utilization-and-block-layout.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "malloc",
+        "allocator",
+        "alignment",
+        "headers",
+        "footers",
+        "coalescing",
+        "utilization"
+      ],
+      "summary": "Compute allocator utilization by separating live payload bytes from alignment, metadata, minimum-block, and heap-extension overhead.",
+      "related": [
+        "compiler-optimization-and-aliasing"
+      ],
+      "prerequisites": [
+        "c-memory-and-pointers"
+      ]
+    },
+    {
+      "title": "Unix Signals and sigprocmask / Unix 信号与信号屏蔽",
+      "path": "nodes/cs-fundamentals/unix-signals-and-sigprocmask.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "unix",
+        "signals",
+        "sigprocmask",
+        "sigsegv",
+        "sigkill",
+        "sigstop"
+      ],
+      "summary": "Separate signal masks, pending delivery, handlers, and default actions while reasoning about asynchronous control flow.",
+      "related": [
+        "fork-process-creation-and-waitpid"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Virtual Memory and Page Faults",
+      "path": "nodes/cs-fundamentals/virtual-memory-page-faults.md",
+      "area": "cs-fundamentals",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "virtual-memory",
+        "page-table",
+        "tlb",
+        "page-fault"
+      ],
+      "summary": "Connect virtual addresses, page tables, TLB misses, and page faults into one reviewable story.",
+      "related": [
+        "x86-64-addressing-and-leaq"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "WA8: Optimization, Linking, and Allocation / 优化、链接与分配",
+      "path": "nodes/cs-fundamentals/wa8-systems-optimization-and-linking.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "support",
+      "tags": [
+        "csapp",
+        "compiler-optimization",
+        "linking",
+        "malloc",
+        "utilization"
+      ],
+      "summary": "A compact systems-performance map connecting compiler legality, linker symbol rules, and allocator space overhead.",
+      "related": [],
+      "prerequisites": [
+        "compiler-optimization-and-aliasing",
+        "linker-symbol-resolution",
+        "malloc-utilization-and-block-layout"
+      ]
+    },
+    {
+      "title": "WA9: Exceptional Control Flow / 异常控制流",
+      "path": "nodes/cs-fundamentals/wa9-exceptional-control-flow.md",
+      "area": "cs-fundamentals",
+      "status": "seed",
+      "visibility": "support",
+      "tags": [
+        "csapp",
+        "exceptional-control-flow",
+        "processes",
+        "signals",
+        "synchronization"
+      ],
+      "summary": "A reusable map of how processes, waits, and signals change the normal sequential control-flow story.",
+      "related": [],
+      "prerequisites": [
+        "fork-process-creation-and-waitpid",
+        "unix-signals-and-sigprocmask"
+      ]
+    },
+    {
+      "title": "x86-64 Addressing and leaq",
+      "path": "nodes/cs-fundamentals/x86-64-addressing-and-leaq.md",
+      "area": "cs-fundamentals",
+      "status": "demo",
+      "visibility": "core",
+      "tags": [
+        "assembly",
+        "x86-64",
+        "addressing",
+        "leaq"
+      ],
+      "summary": "Read address expressions and understand why `leaq` often behaves like arithmetic.",
+      "related": [
+        "binary-search"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / application-layer",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-application-layer.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / distributed-ml",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-distributed-ml.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / ip-configuration",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-ip-configuration.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / ip-routing",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-ip-routing.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / network-fundamentals",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-network-fundamentals.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / network-layer",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-network-layer.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / p2p-systems",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-p2p-systems.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / routing-protocols",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-routing-protocols.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · networkprogramming / tcp-ip-fundamentals",
+      "path": "nodes/networkprogramming/kg-bundle-networkprogramming-tcp-ip-fundamentals.md",
+      "area": "networkprogramming",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for networkprogramming / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Project Pattern: CRUD App",
+      "path": "nodes/projects/project-crud-app.md",
+      "area": "projects",
+      "status": "seed",
+      "visibility": "core",
+      "tags": [
+        "backend",
+        "frontend",
+        "database"
+      ],
+      "summary": "A tiny full-stack pattern for creating, reading, updating, and deleting records.",
+      "related": [
+        "binary-search"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Capture Slip Workflow",
+      "path": "nodes/questions/capture-slip-workflow.md",
+      "area": "questions",
+      "status": "demo",
+      "visibility": "support",
+      "tags": [
+        "capture",
+        "mobile",
+        "ai-draft",
+        "workflow"
+      ],
+      "summary": "A phone-first workflow for turning a tiny unclear point into Markdown and review material.",
+      "related": [
+        "virtual-memory-page-faults"
+      ],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · r-language / r-data-manipulation",
+      "path": "nodes/r-language/kg-bundle-r-language-r-data-manipulation.md",
+      "area": "r-language",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for r-language / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · stack-prerequisite / stack-fundamentals",
+      "path": "nodes/stack-prerequisite/kg-bundle-stack-prerequisite-stack-fundamentals.md",
+      "area": "stack-prerequisite",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for stack-prerequisite / general.",
+      "related": [],
+      "prerequisites": []
+    },
+    {
+      "title": "Review bundle · stubs / general",
+      "path": "nodes/stubs/kg-bundle-stubs-general.md",
+      "area": "stubs",
+      "status": "draft",
+      "visibility": "support",
+      "tags": [
+        "kg-bundle"
+      ],
+      "summary": "Auto-generated review bundle for stubs / general.",
+      "related": [],
+      "prerequisites": []
+    }
+  ]
+}

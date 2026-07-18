@@ -84,4 +84,10 @@ backend/       FastAPI, SQLite, and Markdown ingest
 content-demo/  Small tracked sample library
 docs/          Product, recovery, and architecture guides
 scripts/       Setup, development, and verification commands
+experimental/  Non-production prototypes kept for reference and extraction
 ```
+
+The repository layout contract, runtime-data boundaries, and rules for adding
+new modules are documented in [docs/repository-layout.md](docs/repository-layout.md).
+Run `.scripts\verify-repository-layout.ps1` before opening a structural pull
+request.

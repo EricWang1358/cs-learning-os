@@ -20,10 +20,14 @@ export function routeFromLocation(pathname: string, search: string) {
   const isKnowledgeGraph = pathname === '/knowledge-graph'
   const isHealth = pathname === '/health'
   const isSync = pathname === '/sync'
+  const isCatalog = pathname === '/catalog'
+  const isHome = pathname === '/'
 
   const query = params.get('q') || ''
   return {
-    viewMode: isKnowledgeGraph
+    viewMode: isHome
+      ? 'home' as ViewMode
+      : isKnowledgeGraph
       ? 'kgraph' as ViewMode
       : isGraph
       ? 'graph' as ViewMode
@@ -31,6 +35,8 @@ export function routeFromLocation(pathname: string, search: string) {
         ? 'sync' as ViewMode
         : isHealth
           ? 'health' as ViewMode
+          : isCatalog
+            ? 'catalog' as ViewMode
           : isBite
             ? 'bite' as ViewMode
             : isReview

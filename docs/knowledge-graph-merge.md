@@ -1,6 +1,6 @@
 # KnowledgeGraph 合并记录 — 问题为根的知识树 OS
 
-> 来源: `cs-learning-os-graph/` 模块包(RFC + 三端实现, 见包内 `docs/RFC-knowledge-graph.md`)。
+> 来源: `experimental/knowledge-graph-prototype/` 模块包(RFC + 三端实现, 见包内 `docs/RFC-knowledge-graph.md`)。
 > 本文档记录: 插入逻辑审计结论、实际合并步骤、双端入口、已知接缝与后续阶段。
 
 ## 1. 审计结论(插入逻辑是否合理)

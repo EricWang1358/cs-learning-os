@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "test:smoke": "node scripts/frontend_smoke_test.mjs",
     "test:navigation-focus": "node scripts/navigation_focus_regression.mjs",
+    "test:graph-layout": "node scripts/graph_layout_regression.mjs",
+    "test:home-dashboard": "node scripts/home_dashboard_regression.mjs",
+    "test:catalog": "node scripts/catalog_regression.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -136,6 +136,12 @@ export const Legend = React.memo(function Legend({ className, style }: LegendPro
           <span style={descStyle}>{ls.dashed ? '虚线 · 本题私有' : '实线 · 全局共享'}</span>
         </div>
       ))}
+      <div style={{ ...titleStyle, marginTop: 4 }}>箭头方向</div>
+      <div style={rowStyle} title="边 source → target 表示 source 依赖 target">
+        <span style={{ ...glyphBoxStyle, fontSize: 16, color: GRAPH_THEME.linkLocalColor }}>→</span>
+        <span>依赖 → 前置</span>
+        <span style={descStyle}>source → target</span>
+      </div>
     </div>
   );
 });

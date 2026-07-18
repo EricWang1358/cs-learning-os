@@ -10,6 +10,7 @@ from typing import Any
 
 try:
     from .db import connect, initialize
+    from .kg_store import SCHEMA_KG_DDL
     from .sync_envelope import (
         ENTITY_NODE,
         ENTITY_QUIZ,
@@ -18,6 +19,7 @@ try:
     )
 except ImportError:
     from db import connect, initialize
+    from kg_store import SCHEMA_KG_DDL
     from sync_envelope import (
         ENTITY_NODE,
         ENTITY_QUIZ,
@@ -65,6 +67,134 @@ class Quiz:
     tags: list[str]
     linked_nodes: list[str]
     sources: list[str]
+
+
+def ensure_kg_schema(conn) -> None:
+    """Keep standalone ingest and API startup on the same KG schema."""
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kg_edge'"
+    ).fetchone()
+    if exists is None:
+        conn.executescript(SCHEMA_KG_DDL)
+
+
+def _kg_path_exists(adjacency: dict[str, set[str]], start: str, target: str) -> bool:
+    pending = [start]
+    visited: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current == target:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        pending.extend(adjacency.get(current, ()))
+    return False
+
+
+def sync_markdown_prerequisite_edges(conn, nodes: list[Node]) -> int:
+    """Materialize Markdown prerequisites as idempotent global KG edges.
+
+    Markdown remains the source of truth for imported edges. Existing user/AI
+    edges are left untouched, while duplicate imported edges are ignored. The
+    validator normally catches cycles before ingest; this second check protects
+    against a cycle introduced by an already-materialized KG edge.
+    """
+    ensure_kg_schema(conn)
+    node_slugs = {node.slug for node in nodes}
+    desired = sorted(
+        {
+            (node.slug, prerequisite)
+            for node in nodes
+            for prerequisite in node.prerequisites
+            if prerequisite in node_slugs
+        }
+    )
+    desired_set = set(desired)
+    for row in conn.execute(
+        """
+        SELECT edge_id, parent_node_id, child_node_id
+        FROM kg_edge
+        WHERE status = 'ACTIVE' AND created_by = 'IMPORT'
+        """
+    ).fetchall():
+        if (row["parent_node_id"], row["child_node_id"]) not in desired_set:
+            conn.execute(
+                "UPDATE kg_edge SET status = 'REJECTED', revision = revision + 1 WHERE edge_id = ?",
+                (row["edge_id"],),
+            )
+
+    adjacency: dict[str, set[str]] = {}
+    for row in conn.execute(
+        "SELECT parent_node_id, child_node_id FROM kg_edge WHERE status = 'ACTIVE'"
+    ).fetchall():
+        adjacency.setdefault(row["parent_node_id"], set()).add(row["child_node_id"])
+
+    imported = 0
+    for parent_slug, child_slug in desired:
+        existing_rows = conn.execute(
+            """
+            SELECT status, created_by
+            FROM kg_edge
+            WHERE parent_node_id = ?
+              AND child_node_id = ?
+              AND scope_type = 'GLOBAL'
+              AND scope_question_id IS NULL
+            ORDER BY CASE status WHEN 'ACTIVE' THEN 0 WHEN 'PENDING_CONFIRMATION' THEN 1 ELSE 2 END
+            LIMIT 1
+            """,
+            (parent_slug, child_slug),
+        ).fetchall()
+        if any(row["status"] in ("ACTIVE", "PENDING_CONFIRMATION") for row in existing_rows):
+            continue
+        if parent_slug == child_slug or _kg_path_exists(adjacency, child_slug, parent_slug):
+            raise ValueError(
+                "Markdown prerequisite would create a KnowledgeGraph cycle: "
+                f"{parent_slug} -> {child_slug}"
+            )
+
+        rejected_import = next(
+            (row for row in existing_rows if row["status"] == "REJECTED" and row["created_by"] == "IMPORT"),
+            None,
+        )
+        if rejected_import is not None:
+            conn.execute(
+                """
+                UPDATE kg_edge
+                SET status = 'ACTIVE', revision = revision + 1,
+                    created_by = 'IMPORT'
+                WHERE parent_node_id = ?
+                  AND child_node_id = ?
+                  AND scope_type = 'GLOBAL'
+                  AND scope_question_id IS NULL
+                  AND status = 'REJECTED'
+                  AND created_by = 'IMPORT'
+                """,
+                (parent_slug, child_slug),
+            )
+            adjacency.setdefault(parent_slug, set()).add(child_slug)
+            imported += 1
+            continue
+        if existing_rows:
+            # A rejected edge is an explicit user/AI decision. Do not resurrect
+            # it merely because a Markdown prerequisite still exists.
+            continue
+
+        edge_id = "md-" + hashlib.sha256(
+            f"{parent_slug}\0{child_slug}\0GLOBAL".encode("utf-8")
+        ).hexdigest()[:32]
+        conn.execute(
+            """
+            INSERT INTO kg_edge (
+                edge_id, parent_node_id, child_node_id, scope_type,
+                scope_question_id, status, created_by, revision, created_at
+            ) VALUES (?, ?, ?, 'GLOBAL', NULL, 'ACTIVE', 'IMPORT', 1, ?)
+            """,
+            (edge_id, parent_slug, child_slug, int(datetime.now(timezone.utc).timestamp() * 1000)),
+        )
+        adjacency.setdefault(parent_slug, set()).add(child_slug)
+        imported += 1
+    return imported
 
 
 def strip_utf8_bom(text: str) -> str:
@@ -314,6 +444,7 @@ def prune_kg_references(conn: sqlite3.Connection) -> dict[str, int]:
 def ingest(content_root: Path, db_path: Path) -> int:
     conn = connect(db_path)
     initialize(conn)
+    ensure_kg_schema(conn)
     nodes = read_nodes(content_root)
     quizzes = read_quizzes(content_root)
 
@@ -424,6 +555,10 @@ def ingest(content_root: Path, db_path: Path) -> int:
                 (node.slug, node.title, node.summary, node.body, " ".join(node.tags)),
             )
             record_content_file(conn, content_root, content_root / node.path, "node", node.slug)
+
+        # Keep the explicit KnowledgeGraph aligned with Markdown prerequisite
+        # declarations before pruning stale endpoints from the rebuilt node set.
+        sync_markdown_prerequisite_edges(conn, nodes)
 
         # ``kg_*`` tables deliberately survive the node rebuild; prune their
         # references after the new node set is complete so graph exports cannot

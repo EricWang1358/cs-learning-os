@@ -61,11 +61,15 @@ await page.goto(baseUrl, { waitUntil: 'networkidle' })
 await page.getByText('Knowledge Workbench').waitFor()
 await page.getByLabel('World clock').getByText('Beijing').waitFor()
 await page.getByLabel('World clock').getByText('US East').waitFor()
-await page.getByLabel('Knowledge nodes').getByRole('button', { name: /Binary Search/ }).waitFor()
-if (!currentUrl(page).pathname.startsWith('/nodes/')) {
-  throw new Error('Home should redirect to a node URL.')
+await page.getByLabel('Home dashboard').waitFor()
+await page.getByRole('heading', { name: 'Continue learning' }).waitFor()
+if (currentUrl(page).pathname !== '/') {
+  throw new Error('Home dashboard should remain at the root URL.')
 }
 await page.screenshot({ path: screenshotPath('desktop-home.png'), fullPage: false })
+
+await page.locator('.home-dashboard-header').getByRole('link', { name: 'Open library' }).click()
+await page.getByLabel('Knowledge nodes').getByRole('button', { name: /Binary Search/ }).waitFor()
 
 await page.getByLabel('Global search').fill('binary')
 await page.getByLabel('Knowledge nodes').getByRole('button', { name: /Binary Search/ }).waitFor()
@@ -90,6 +94,9 @@ if (!createdSlug || !currentUrl(page).pathname.startsWith('/nodes/')) {
 }
 await page.getByRole('button', { name: 'Exit edit mode' }).click()
 await page.locator('.toolbar-actions').getByRole('button', { name: 'Show map' }).click()
+await page.reload({ waitUntil: 'networkidle' })
+const areaNavToggle = page.getByRole('button', { name: /Knowledge areas Show/ })
+if (await areaNavToggle.count()) await areaNavToggle.click()
 await page.locator('.area-nav').getByRole('button', { name: /^Network Programming\s+\d+$/ }).waitFor()
 const createdDetail = await page.request.get(`${apiBaseUrl}/api/nodes/${createdSlug}`)
 const createdNode = (await createdDetail.json()).node
@@ -110,6 +117,8 @@ await page.request.post(`${apiBaseUrl}/api/nodes/${createdSlug}/trash`, { data: 
 await page.request.delete(`${apiBaseUrl}/api/nodes/${createdSlug}`)
 await page.goto(`${baseUrl}/nodes/binary-search`, { waitUntil: 'networkidle' })
 
+const areaNavToggleAfterCleanup = page.getByRole('button', { name: /Knowledge areas Show/ })
+if (await areaNavToggleAfterCleanup.count()) await areaNavToggleAfterCleanup.click()
 await page.locator('.area-nav').getByRole('button', { name: /^CS fundamentals\s+\d+$/ }).click()
 await page.getByText('Reading tracks').waitFor()
 await page.getByRole('button', { name: /x86-64 Addressing and leaq/ }).click()
@@ -151,6 +160,7 @@ if (!currentUrl(page).hash.startsWith('#section-')) {
 await page.locator('.toolbar-actions').getByRole('button', { name: 'Show map' }).click()
 await page.screenshot({ path: screenshotPath('desktop-markdown-bold.png'), fullPage: false })
 
+await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' })
 await page.getByRole('button', { name: 'Practice / Quiz Bank' }).click()
 if (currentUrl(page).pathname !== '/quizzes') {
   throw new Error('Quiz bank navigation should use /quizzes.')
@@ -176,6 +186,7 @@ if (await linkedReviewButton.count()) {
     throw new Error('Linked review should navigate to a node URL.')
   }
 } else {
+  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Knowledge navigator' }).click()
   await page.getByLabel('Knowledge graph navigator').waitFor()
   if (currentUrl(page).pathname !== '/graph') {
@@ -189,6 +200,7 @@ if (!currentUrl(page).pathname.endsWith(`/quizzes/${smokeQuiz.id}`)) {
 }
 
 if (currentUrl(page).pathname !== '/graph') {
+  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Knowledge navigator' }).click()
 }
 await page.getByLabel('Knowledge graph navigator').waitFor()
