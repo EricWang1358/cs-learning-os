@@ -31,6 +31,7 @@ export function HomeDashboard({
   onOpenHealth,
   onOpenSync,
   onCreateNode,
+  onRestartServer,
 }: {
   summary: HomeSummary
   isLoading: boolean
@@ -45,6 +46,7 @@ export function HomeDashboard({
   onOpenHealth: () => void
   onOpenSync: () => void
   onCreateNode: () => void
+  onRestartServer: () => void
 }) {
   const recentNode = summary.recentNode
 
@@ -53,7 +55,7 @@ export function HomeDashboard({
       <header className="home-dashboard-header">
         <div>
           <p className="eyebrow">Today / learning operations</p>
-          <h2>Good morning.</h2>
+          <h2>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}.</h2>
           <p>Continue the current learning chain, clear today&apos;s review, and grow a knowledge tree.</p>
         </div>
         <div className="home-dashboard-actions">
@@ -87,6 +89,7 @@ export function HomeDashboard({
           <h3>System</h3>
           <div className="home-metric-group-items">
             <div><strong className={summary.syncHealth ? 'home-good' : undefined}>{summary.syncHealth ? 'OK' : '--'}</strong><span>sync health</span></div>
+            <div><strong><button type="button" onClick={onRestartServer} style={{background:'none',border:'none',cursor:'pointer',padding:0,color:'inherit',font:'inherit'}} title="Restart backend server">⟳</button></strong><span>restart</span></div>
           </div>
         </section>
       </div>

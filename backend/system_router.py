@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import os
+import signal
+import sys
 from threading import Lock
 from time import monotonic
 from typing import Callable, List, Optional
@@ -175,5 +178,15 @@ def create_system_router(
             "ai": ai_payload,
             "schema": meta,
         }
+
+    @router.post("/system/restart")
+    def system_restart(background_tasks: BackgroundTasks) -> dict:
+        """Restart the backend server. Returns immediately; server exits moments later."""
+        def _shutdown():
+            import time
+            time.sleep(1)
+            os.kill(os.getpid(), signal.SIGTERM)
+        background_tasks.add_task(_shutdown)
+        return {"ok": True, "message": "Server is shutting down. Re-launch via startup script."}
 
     return router

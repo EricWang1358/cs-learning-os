@@ -2570,6 +2570,12 @@ function App() {
           onOpenHealth={() => navigate('/health')}
           onOpenSync={() => navigate('/sync')}
           onCreateNode={openNodeCreationFromHome}
+          onRestartServer={async () => {
+            try {
+              await fetch('/api/system/restart', { method: 'POST' })
+            } catch { /* server may shut down before responding */ }
+            setTimeout(() => window.location.reload(), 2000)
+          }}
         />
       ) : viewMode === 'catalog' ? (
         <CatalogPage />
