@@ -270,6 +270,61 @@ def create_system_router(
         _save_ai_providers(providers)
         return {"ok": True, "providers": providers}
 
+    # -- AI provider test & models ------------------------------------------------
+
+    @router.post("/system/ai-config/test")
+    def test_ai_provider(payload: dict) -> dict:
+        """Test connection to an AI provider by calling its /models endpoint."""
+        import ssl, urllib.request
+        base = payload.get("baseUrl", "").strip().rstrip("/")
+        key = payload.get("apiKey", "").strip()
+        if not base or not key:
+            raise HTTPException(status_code=400, detail="Base URL and API Key are required.")
+        url = f"{base}/models"
+        try:
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            })
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                data = json.loads(resp.read().decode())
+                ids = [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+                return {
+                    "ok": True,
+                    "status": resp.status,
+                    "modelCount": len(ids),
+                    "models": ids[:20],
+                    "message": f"Connected. Found {len(ids)} models.",
+                }
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()[:500] if e.fp else ""
+            return {"ok": False, "status": e.code, "message": f"HTTP {e.code}: {body}"}
+        except Exception as e:
+            return {"ok": False, "status": 0, "message": str(e)}
+
+    @router.post("/system/ai-config/models")
+    def pull_ai_models(payload: dict) -> dict:
+        """Pull the model list from an AI provider."""
+        import ssl, urllib.request
+        base = payload.get("baseUrl", "").strip().rstrip("/")
+        key = payload.get("apiKey", "").strip()
+        if not base or not key:
+            raise HTTPException(status_code=400, detail="Base URL and API Key are required.")
+        url = f"{base}/models"
+        try:
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            })
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                data = json.loads(resp.read().decode())
+                ids = sorted([m.get("id", "") for m in data.get("data", []) if m.get("id")])
+                return {"ok": True, "models": ids, "count": len(ids)}
+        except Exception as e:
+            return {"ok": False, "models": [], "count": 0, "message": str(e)}
+
     # -- restart ----------------------------------------------------------------
 
     @router.post("/system/restart")

@@ -2615,6 +2615,8 @@ function App() {
             onPage={navigateGraphPage}
           />
         </Suspense>
+      ) : viewMode === 'more' ? (
+        <MorePanel />
       ) : (
       <section className="node-column" aria-label="Knowledge nodes">
         {viewMode === 'health' ? (
@@ -3311,8 +3313,6 @@ function App() {
             onRefresh={refreshSyncData}
             serverBaseUrl={syncToken?.endpoint || syncHealth?.advertisedBaseUrl || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '')}
           />
-        ) : viewMode === 'more' ? (
-          <MorePanel />
         ) : viewMode === 'health' ? (
           <div className="health-detail cockpit-detail-shell health-cockpit-shell">
             <section className="detail-heading health-heading cockpit-hero health-cockpit-hero">

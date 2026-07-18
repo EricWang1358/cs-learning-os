@@ -3858,6 +3858,7 @@
 .more-badge { display:inline-block; padding:1px 7px; border-radius:999px; font:10px var(--mono); font-weight:700; margin-left:6px }
 .more-badge.builtin { background:rgba(165,162,154,0.16); color:#a5a29a }
 .more-badge.active { background:rgba(14,203,129,0.16); color:#0ecb81 }
+.more-badge.error { background:rgba(246,70,93,0.16); color:#ff99a6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px }
 .more-provider-actions { display:flex; gap:6px; flex-shrink:0 }
 .more-btn { border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); color:var(--ink); cursor:pointer; font:12px var(--mono); font-weight:700; padding:8px 14px }
 .more-btn:hover { border-color:var(--line-strong); background:var(--surface-elevated) }
