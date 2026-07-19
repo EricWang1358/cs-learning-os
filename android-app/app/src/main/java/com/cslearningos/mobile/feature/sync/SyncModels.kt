@@ -128,6 +128,27 @@ sealed interface SyncRecord {
         override val type: String get() = TYPE
         companion object { const val TYPE = "capture_slip" }
     }
+
+    data class BiteCard(
+        override val id: String,
+        val sourceType: String,
+        val sourceId: String,
+        val title: String,
+        val area: String,
+        val difficulty: String,
+        val prompt: String,
+        val answer: String,
+        val hint: String,
+        val explanationJson: String,
+        val status: String,
+        val questionType: String,
+        val optionsJson: String,
+        val revision: Long,
+        val hash: String
+    ) : SyncRecord {
+        override val type: String get() = TYPE
+        companion object { const val TYPE = "bite_card" }
+    }
 }
 
 data class SyncReport(
@@ -135,6 +156,7 @@ data class SyncReport(
     val pulledQuizzes: Int = 0,
     val pulledQuestions: Int = 0,
     val pulledCaptureSlips: Int = 0,
+    val pulledBiteCards: Int = 0,
     val appliedAttempts: Int = 0,
     val skippedAttempts: Int = 0,
     val skippedRecords: Int = 0,
@@ -143,7 +165,7 @@ data class SyncReport(
     val cursor: Long = 0,
     val serverId: String = ""
 ) {
-    val totalApplied: Int get() = pulledNodes + pulledQuizzes + pulledQuestions + pulledCaptureSlips
+    val totalApplied: Int get() = pulledNodes + pulledQuizzes + pulledQuestions + pulledCaptureSlips + pulledBiteCards
 }
 
 data class SyncReceipt(
@@ -295,6 +317,24 @@ fun parseSyncRecord(json: JSONObject): SyncRecord? = when (json.optString("type"
         revision = json.optLong("revision"),
         createdAt = json.optString("createdAt"),
         updatedAt = json.optString("updatedAt")
+    )
+
+    SyncRecord.BiteCard.TYPE -> SyncRecord.BiteCard(
+        id = json.getString("id"),
+        sourceType = json.optString("sourceType", "quiz"),
+        sourceId = json.optString("sourceId"),
+        title = json.optString("title"),
+        area = json.optString("area"),
+        difficulty = json.optString("difficulty", "medium"),
+        prompt = json.getString("prompt"),
+        answer = json.getString("answer"),
+        hint = json.optString("hint"),
+        explanationJson = json.optString("explanationJson", "[]"),
+        status = json.optString("status", "active"),
+        questionType = json.optString("questionType", "blank"),
+        optionsJson = json.optString("optionsJson", "[]"),
+        revision = json.optLong("revision"),
+        hash = json.optString("hash")
     )
 
     else -> null
