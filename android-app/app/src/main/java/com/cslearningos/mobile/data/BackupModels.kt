@@ -9,5 +9,6 @@ data class LearningBackup(
     val reviewStates: List<ReviewStateEntity>,
     val attempts: List<ReviewAttemptEntity>,
     val readerQuestions: List<ReaderQuestionEntity> = emptyList(),
-    val captureSlips: List<CaptureSlipEntity> = emptyList()
+    val captureSlips: List<CaptureSlipEntity> = emptyList(),
+    val biteCards: List<BiteCardEntity> = emptyList()
 )

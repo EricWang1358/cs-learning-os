@@ -214,7 +214,7 @@ class SyncPushBiteCardItem(BaseModel):
     questionType: str = "blank"
     optionsJson: str = "[]"
     status: str = "active"
-    baseRevision: int | None = None
+    baseRevision: Optional[int] = None
     revision: int = 1
     tombstone: bool = False
 

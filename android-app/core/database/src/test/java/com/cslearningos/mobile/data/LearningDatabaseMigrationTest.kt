@@ -123,6 +123,7 @@ class LearningDatabaseMigrationTest {
                 attempts = emptyList(),
                 questions = emptyList(),
                 captureSlips = emptyList(),
+                biteCards = emptyList(),
                 nodeFts = emptyList(),
                 quizFts = emptyList()
             )

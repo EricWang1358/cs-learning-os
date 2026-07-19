@@ -29,6 +29,7 @@ object BackupCodec {
             .put("attempts", JSONArray(backup.attempts.map { it.toJson() }))
             .put("readerQuestions", JSONArray(backup.readerQuestions.map { it.toJson() }))
             .put("captureSlips", JSONArray(backup.captureSlips.map { it.toJson() }))
+            .put("biteCards", JSONArray(backup.biteCards.map { it.toJson() }))
             .toString(2)
 
     fun decode(rawJson: String): LearningBackup {
@@ -45,6 +46,7 @@ object BackupCodec {
         val attemptsJson = root.requiredArray("attempts")
         val readerQuestionsJson = root.optionalArray("readerQuestions")
         val captureSlipsJson = root.optionalArray("captureSlips")
+        val biteCardsJson = root.optionalArray("biteCards")
 
         areasJson?.validateAreaStrings()
         quizzesJson.validateQuizStrings()
@@ -52,6 +54,7 @@ object BackupCodec {
         attemptsJson.validateAttemptStrings()
         readerQuestionsJson?.validateReaderQuestionStrings()
         captureSlipsJson?.validateCaptureSlipStrings()
+        biteCardsJson?.validateBiteCardStrings()
 
         val nodes = nodesJson.mapObjects { it.toNode() }
         val areas = areasJson?.mapObjects { it.toArea() }.orEmpty()
@@ -65,7 +68,8 @@ object BackupCodec {
             reviewStates = reviewStatesJson.mapObjects { it.toReviewState() },
             attempts = attemptsJson.mapObjects { it.toAttempt() },
             readerQuestions = readerQuestionsJson?.mapObjects { it.toReaderQuestion() }.orEmpty(),
-            captureSlips = captureSlipsJson?.mapObjects { it.toCaptureSlip() }.orEmpty()
+            captureSlips = captureSlipsJson?.mapObjects { it.toCaptureSlip() }.orEmpty(),
+            biteCards = biteCardsJson?.mapObjects { it.toBiteCard() }.orEmpty()
         )
     }
 
@@ -160,6 +164,25 @@ object BackupCodec {
             .put("revision", revision)
             .put("syncStatus", syncStatus.name)
             .put("deletedAt", deletedAt)
+
+    private fun BiteCardEntity.toJson(): JSONObject =
+        JSONObject()
+            .put("id", id)
+            .put("sourceType", sourceType)
+            .put("sourceId", sourceId)
+            .put("title", title)
+            .put("area", area)
+            .put("difficulty", difficulty)
+            .put("prompt", prompt)
+            .put("answer", answer)
+            .put("hint", hint)
+            .put("explanationJson", explanationJson)
+            .put("questionType", questionType)
+            .put("optionsJson", optionsJson)
+            .put("status", status)
+            .put("syncStatus", syncStatus)
+            .put("createdAt", createdAt)
+            .put("updatedAt", updatedAt)
 
     private fun JSONObject.toArea(): AreaEntity =
         AreaEntity(
@@ -260,6 +283,26 @@ object BackupCodec {
             deletedAt = nullableLong("deletedAt")
         )
 
+    private fun JSONObject.toBiteCard(): BiteCardEntity =
+        BiteCardEntity(
+            id = getLong("id"),
+            sourceType = optString("sourceType", "quiz"),
+            sourceId = optString("sourceId"),
+            title = getString("title"),
+            area = optString("area"),
+            difficulty = optString("difficulty", "medium"),
+            prompt = getString("prompt"),
+            answer = getString("answer"),
+            hint = optString("hint"),
+            explanationJson = optString("explanationJson", "[]"),
+            questionType = optString("questionType", "blank"),
+            optionsJson = optString("optionsJson", "[]"),
+            status = optString("status", "active"),
+            syncStatus = optString("syncStatus", "clean"),
+            createdAt = optLong("createdAt", 0L),
+            updatedAt = optLong("updatedAt", optLong("createdAt", 0L))
+        )
+
     private fun JSONObject.nullableLong(name: String): Long? =
         if (isNull(name)) null else getLong(name)
 
@@ -334,6 +377,22 @@ object BackupCodec {
         slip.validateNullableString("linkedNodeId")
         slip.validateRequiredString("status")
         slip.validateRequiredString("syncStatus")
+    }
+
+    private fun JSONArray.validateBiteCardStrings() = validateObjects { card ->
+        card.validateRequiredString("title")
+        card.validateOptionalString("sourceType")
+        card.validateOptionalString("sourceId")
+        card.validateOptionalString("area")
+        card.validateOptionalString("difficulty")
+        card.validateRequiredString("prompt", MaxContentStringCharacters)
+        card.validateRequiredString("answer", MaxContentStringCharacters)
+        card.validateOptionalString("hint", MaxContentStringCharacters)
+        card.validateOptionalString("explanationJson", MaxContentStringCharacters)
+        card.validateOptionalString("questionType")
+        card.validateOptionalString("optionsJson", MaxContentStringCharacters)
+        card.validateOptionalString("status")
+        card.validateOptionalString("syncStatus")
     }
 
     private fun JSONArray.validateObjects(validator: (JSONObject) -> Unit) {

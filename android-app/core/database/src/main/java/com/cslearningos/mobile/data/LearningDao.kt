@@ -361,6 +361,7 @@ interface LearningDao {
         captureSlips: List<CaptureSlipEntity>,
         attempts: List<ReviewAttemptEntity>,
         reviewStates: List<ReviewStateEntity>,
+        biteCards: List<BiteCardEntity>,
         nodeFts: List<NodeFtsEntity>,
         quizFts: List<QuizFtsEntity>,
         deletedNodeFtsIds: List<String>,
@@ -373,35 +374,7 @@ interface LearningDao {
         upsertCaptureSlips(captureSlips)
         insertAttempts(attempts)
         upsertReviewStates(reviewStates)
-        deletedNodeFtsIds.forEach { deleteNodeFts(it) }
-        deletedQuizFtsIds.forEach { deleteQuizFts(it) }
-        nodeFts.forEach { upsertNodeFts(it) }
-        quizFts.forEach { upsertQuizFts(it) }
-    }
-
-    @Transaction
-    suspend fun applySyncBatch(
-        areas: List<AreaEntity>,
-        nodes: List<LearningNodeEntity>,
-        quizzes: List<QuizItemEntity>,
-        states: List<ReviewStateEntity>,
-        attempts: List<ReviewAttemptEntity>,
-        questions: List<ReaderQuestionEntity>,
-        captureSlips: List<CaptureSlipEntity>,
-        biteCards: List<BiteCardEntity>,
-        deletedNodeFtsIds: List<Int>,
-        deletedQuizFtsIds: List<Int>,
-        nodeFts: List<NodeFtsEntity>,
-        quizFts: List<QuizFtsEntity>
-    ) {
-        upsertAreas(areas)
-        upsertNodes(nodes)
-        upsertQuizzes(quizzes)
-        upsertReaderQuestions(questions)
-        upsertCaptureSlips(captureSlips)
         upsertBiteCards(biteCards)
-        insertAttempts(attempts)
-        upsertReviewStates(reviewStates)
         deletedNodeFtsIds.forEach { deleteNodeFts(it) }
         deletedQuizFtsIds.forEach { deleteQuizFts(it) }
         nodeFts.forEach { upsertNodeFts(it) }
@@ -433,6 +406,9 @@ interface LearningDao {
 
     @Query("SELECT * FROM bite_cards WHERE status = 'active' ORDER BY updated_at DESC")
     suspend fun getBiteCards(): List<BiteCardEntity>
+
+    @Query("SELECT * FROM bite_cards ORDER BY updated_at DESC")
+    suspend fun getAllBiteCards(): List<BiteCardEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertBiteCards(cards: List<BiteCardEntity>)

@@ -246,7 +246,8 @@ class LearningRepository private constructor(
                 reviewStates = dao.getAllReviewStates(),
                 attempts = dao.getAllAttempts(),
                 readerQuestions = dao.getAllReaderQuestions(),
-                captureSlips = dao.getAllCaptureSlips()
+                captureSlips = dao.getAllCaptureSlips(),
+                biteCards = dao.getAllBiteCards()
             )
         )
 
@@ -345,6 +346,7 @@ class LearningRepository private constructor(
             attempts = backup.attempts,
             questions = backup.readerQuestions,
             captureSlips = backup.captureSlips,
+            biteCards = backup.biteCards,
             nodeFts = backup.nodes
                 .filter { it.deletedAt == null && it.visibility != TrashVisibility }
                 .map {

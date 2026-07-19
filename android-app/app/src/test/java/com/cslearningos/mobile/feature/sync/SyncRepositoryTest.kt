@@ -2,6 +2,7 @@ package com.cslearningos.mobile.feature.sync
 
 import androidx.test.core.app.ApplicationProvider
 import com.cslearningos.mobile.data.AreaEntity
+import com.cslearningos.mobile.data.BiteCardEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -73,6 +74,24 @@ class SyncRepositoryTest {
         visibility = "practice",
         revision = revision,
         updatedAt = "2026-07-17T10:00:00+00:00",
+        hash = "hash-$id"
+    )
+
+    private fun biteCardRecord(id: String, revision: Long) = SyncRecord.BiteCard(
+        id = id,
+        sourceType = "quiz",
+        sourceId = "q1",
+        title = "TLB Bite",
+        area = "algorithms",
+        difficulty = "easy",
+        prompt = "A ____ caches recent virtual-to-physical translations.",
+        answer = "TLB",
+        hint = "Translation cache",
+        explanationJson = "[\"It avoids repeated page-table walks.\"]",
+        status = "active",
+        questionType = "blank",
+        optionsJson = "[]",
+        revision = revision,
         hash = "hash-$id"
     )
 
@@ -286,6 +305,38 @@ class SyncRepositoryTest {
         assertEquals("A translation cache.", quiz.answer)
         assertTrue(quiz.explanation.contains("page walks"))
         assertTrue(dao.quizFts.any { it.quizId == "q1" })
+    }
+
+    @Test
+    fun biteCardManifestChangePullsAndStoresCard() = runTest {
+        val dao = FakeDao()
+        val transport = FakeTransport(
+            manifests = ArrayDeque(
+                listOf(
+                    SyncManifest(
+                        false,
+                        1,
+                        "srv",
+                        5,
+                        false,
+                        listOf(SyncChange("bite_card", "101", 3, "h", false, "algorithms"))
+                    )
+                )
+            ),
+            records = mapOf("bite_card" to listOf(biteCardRecord("101", 3)))
+        )
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pullAndApply(scope)
+
+        assertEquals(1, report.pulledBiteCards)
+        assertEquals(1, report.totalApplied)
+        assertEquals(listOf(listOf("101")), transport.pullRequests["bite_card"])
+        val card = dao.biteCards.getValue(101L)
+        assertEquals("TLB Bite", card.title)
+        assertEquals("A ____ caches recent virtual-to-physical translations.", card.prompt)
+        assertEquals("TLB", card.answer)
+        assertEquals("clean", card.syncStatus)
     }
 
     @Test
@@ -766,6 +817,7 @@ class SyncRepositoryTest {
         val slips = linkedMapOf<String, CaptureSlipEntity>()
         val attempts = linkedMapOf<String, ReviewAttemptEntity>()
         val reviewStates = linkedMapOf<String, ReviewStateEntity>()
+        val biteCards = linkedMapOf<Long, BiteCardEntity>()
         val nodeFts = mutableListOf<NodeFtsEntity>()
         val quizFts = mutableListOf<QuizFtsEntity>()
         val deletedNodeFts = mutableListOf<String>()
@@ -879,10 +931,11 @@ class SyncRepositoryTest {
                         (args[4] as List<CaptureSlipEntity>).forEach { slips[it.id] = it }
                         (args[5] as List<ReviewAttemptEntity>).forEach { attempts[it.id] = it }
                         (args[6] as List<ReviewStateEntity>).forEach { reviewStates[it.quizId] = it }
-                        nodeFts += args[7] as List<NodeFtsEntity>
-                        quizFts += args[8] as List<QuizFtsEntity>
-                        deletedNodeFts += args[9] as List<String>
-                        deletedQuizFts += args[10] as List<String>
+                        (args[7] as List<BiteCardEntity>).forEach { biteCards[it.id] = it }
+                        nodeFts += args[8] as List<NodeFtsEntity>
+                        quizFts += args[9] as List<QuizFtsEntity>
+                        deletedNodeFts += args[10] as List<String>
+                        deletedQuizFts += args[11] as List<String>
                         Unit
                     }
                     else -> when {

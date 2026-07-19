@@ -1217,6 +1217,7 @@ private class FakeLearningDao : LearningDao {
     val reviewAttempts = linkedMapOf<String, ReviewAttemptEntity>()
     val readerQuestions = linkedMapOf<String, ReaderQuestionEntity>()
     val captureSlips = linkedMapOf<String, CaptureSlipEntity>()
+    val biteCards = linkedMapOf<Long, BiteCardEntity>()
     val processedCommands = linkedMapOf<String, ProcessedCommandEntity>()
     val outbox = linkedMapOf<String, ReplicationOutboxEntity>()
     val deletedNodeFtsIds = mutableListOf<String>()
@@ -1243,6 +1244,8 @@ private class FakeLearningDao : LearningDao {
         )
     override fun observeArchivedCaptureSlips(): Flow<List<CaptureSlipEntity>> =
         flowOf(captureSlips.values.filter { it.deletedAt == null && it.status == CaptureSlipStatus.archived })
+    override fun observeBiteCards(): Flow<List<BiteCardEntity>> =
+        flowOf(biteCards.values.filter { it.status == "active" }.sortedByDescending { it.updatedAt })
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override suspend fun getArea(id: String): AreaEntity? = areas[id]?.takeIf { it.deletedAt == null }
     override suspend fun getAreaBySlug(slug: String): AreaEntity? = areas.values.firstOrNull { it.slug == slug && it.deletedAt == null }
@@ -1266,6 +1269,9 @@ private class FakeLearningDao : LearningDao {
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = reviewAttempts.values.toList()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = readerQuestions.values.toList()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = captureSlips.values.toList()
+    override suspend fun getBiteCards(): List<BiteCardEntity> =
+        biteCards.values.filter { it.status == "active" }.sortedByDescending { it.updatedAt }
+    override suspend fun getAllBiteCards(): List<BiteCardEntity> = biteCards.values.toList()
     override suspend fun latestAssistantConversation(): AssistantConversationEntity? = null
     override suspend fun recentAssistantConversations(limit: Int): List<AssistantConversationEntity> = emptyList()
     override suspend fun getAssistantConversation(id: String): AssistantConversationEntity? = null
@@ -1352,6 +1358,9 @@ private class FakeLearningDao : LearningDao {
     override suspend fun upsertCaptureSlips(slips: List<CaptureSlipEntity>) {
         slips.forEach { captureSlips[it.id] = it }
     }
+    override suspend fun upsertBiteCards(cards: List<BiteCardEntity>) {
+        cards.forEach { biteCards[it.id] = it }
+    }
     override suspend fun upsertNodeFts(entity: NodeFtsEntity) = Unit
     override suspend fun upsertQuizFts(entity: QuizFtsEntity) = Unit
     override suspend fun deleteNodeFts(nodeId: String) {
@@ -1374,6 +1383,9 @@ private class FakeLearningDao : LearningDao {
     }
     override suspend fun deleteAllReaderQuestions() = unsupported()
     override suspend fun deleteAllCaptureSlips() = unsupported()
+    override suspend fun deleteAllBiteCards() {
+        biteCards.clear()
+    }
     override suspend fun deleteAllNodeFts() = unsupported()
     override suspend fun deleteAllQuizFts() = unsupported()
     override suspend fun deleteAllProcessedCommands() {

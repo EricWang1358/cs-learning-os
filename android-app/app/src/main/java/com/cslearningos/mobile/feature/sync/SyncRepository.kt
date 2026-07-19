@@ -3,6 +3,7 @@ package com.cslearningos.mobile.feature.sync
 import com.cslearningos.mobile.content.room.ContentNodeCodec
 import com.cslearningos.mobile.feature.review.data.QuizOutboxCodec
 import com.cslearningos.mobile.data.AreaEntity
+import com.cslearningos.mobile.data.BiteCardEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
@@ -320,6 +321,7 @@ class SyncRepository(
         val quizzes = mutableListOf<QuizItemEntity>()
         val questions = mutableListOf<ReaderQuestionEntity>()
         val slips = mutableListOf<CaptureSlipEntity>()
+        val biteCards = mutableListOf<BiteCardEntity>()
         val nodeFts = mutableListOf<NodeFtsEntity>()
         val quizFts = mutableListOf<QuizFtsEntity>()
         val deletedNodeFts = mutableListOf<String>()
@@ -346,6 +348,7 @@ class SyncRepository(
         val quizIdsToPull = mutableListOf<String>()
         val questionIdsToPull = mutableListOf<String>()
         val slipIdsToPull = mutableListOf<String>()
+        val biteCardIdsToPull = mutableListOf<String>()
         val attemptIdsToPull = linkedSetOf<String>()
 
         for (change in manifest.changes) {
@@ -411,6 +414,12 @@ class SyncRepository(
                 SyncRecord.ReaderQuestion.TYPE -> if (!change.tombstone) questionIdsToPull += change.id
 
                 SyncRecord.CaptureSlip.TYPE -> if (!change.tombstone) slipIdsToPull += change.id
+
+                SyncRecord.BiteCard.TYPE -> {
+                    if (!change.tombstone && scope.includesArea(change.area)) {
+                        biteCardIdsToPull += change.id
+                    }
+                }
             }
         }
 
@@ -485,6 +494,13 @@ class SyncRepository(
                 }
             }
 
+        pullInBatches(SyncRecord.BiteCard.TYPE, biteCardIdsToPull, scope)
+            .filterIsInstance<SyncRecord.BiteCard>()
+            .forEach { record ->
+                biteCards += record.toBiteCardEntity(now())
+                pulledBiteCards += 1
+            }
+
         // Desktop-originated attempts: idempotent by client attempt ID; each
         // affected quiz's scheduling state is rebuilt from the merged log.
         val reviewStates = mutableListOf<ReviewStateEntity>()
@@ -539,6 +555,7 @@ class SyncRepository(
             captureSlips = slips,
             attempts = attemptsToInsert,
             reviewStates = reviewStates,
+            biteCards = biteCards,
             nodeFts = nodeFts,
             quizFts = quizFts,
             deletedNodeFtsIds = deletedNodeFts,

@@ -26,6 +26,14 @@ interface BiteCard {
   id: number; sourceType: string; sourceId: string; title: string; prompt: string; answer: string; hint: string; status: string
 }
 
+function apiErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('HTTP 502') || message.toLowerCase().includes('failed to fetch')) {
+    return 'Backend API is not reachable. Start Learning OS backend first, then refresh this page.'
+  }
+  return message || 'Request failed'
+}
+
 export function MorePanel() {
   const [activeTab, setActiveTab] = useState<'providers' | 'bite'>('providers')
   const [config, setConfig] = useState<AiConfigResponse | null>(null)
@@ -63,7 +71,7 @@ export function MorePanel() {
       const data = await res.json()
       setConfig(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load AI config')
+      setError(apiErrorMessage(e))
     } finally {
       setLoading(false)
     }
@@ -79,7 +87,10 @@ export function MorePanel() {
       ])
       if (srcRes.ok) setBiteSources((await srcRes.json()).sources || [])
       if (cardRes.ok) setBiteCards((await cardRes.json()).bites || [])
-    } catch { /* ignore */ }
+      if (!srcRes.ok || !cardRes.ok) setBiteNotice(apiErrorMessage(new Error(`HTTP ${srcRes.ok ? cardRes.status : srcRes.status}`)))
+    } catch (e) {
+      setBiteNotice(apiErrorMessage(e))
+    }
   }
   useEffect(() => { if (activeTab === 'bite') fetchBiteData() }, [activeTab])
 

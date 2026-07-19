@@ -233,6 +233,7 @@ object SyncPackageImporter {
             captureSlips = plan.captureSlips,
             attempts = emptyList(),
             reviewStates = emptyList(),
+            biteCards = emptyList(),
             nodeFts = plan.nodeFts,
             quizFts = plan.quizFts,
             deletedNodeFtsIds = emptyList(),

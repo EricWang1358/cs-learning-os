@@ -185,8 +185,8 @@ class SyncPackageImporterTest {
                         (args[1] as List<LearningNodeEntity>).forEach { nodes[it.id] = it }
                         (args[2] as List<QuizItemEntity>).forEach { quizzes[it.id] = it }
                         (args[4] as List<CaptureSlipEntity>).forEach { slips[it.id] = it }
-                        nodeFts += args[7] as List<NodeFtsEntity>
-                        quizFts += args[8] as List<QuizFtsEntity>
+                        nodeFts += args[8] as List<NodeFtsEntity>
+                        quizFts += args[9] as List<QuizFtsEntity>
                         Unit
                     }
                     else -> when {

@@ -3,6 +3,7 @@ package com.cslearningos.mobile.feature.sync
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.CaptureSlipStatus
 import com.cslearningos.mobile.data.CaptureSlipType
+import com.cslearningos.mobile.data.BiteCardEntity
 import com.cslearningos.mobile.data.LearningNodeEntity
 import com.cslearningos.mobile.data.NodeFtsEntity
 import com.cslearningos.mobile.data.QuizFtsEntity

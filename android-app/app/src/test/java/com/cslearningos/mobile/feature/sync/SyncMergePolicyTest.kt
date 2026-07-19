@@ -144,6 +144,40 @@ class SyncModelsTest {
     }
 
     @Test
+    fun parsesBiteCardRecord() {
+        val record = parseSyncRecord(
+            JSONObject(
+                """
+                {
+                  "type": "bite_card",
+                  "id": "101",
+                  "sourceType": "quiz",
+                  "sourceId": "q1",
+                  "title": "TLB Bite",
+                  "area": "algorithms",
+                  "difficulty": "easy",
+                  "prompt": "A ____ caches translations.",
+                  "answer": "TLB",
+                  "hint": "Translation cache",
+                  "explanationJson": "[\"Avoids page-table walks\"]",
+                  "questionType": "blank",
+                  "optionsJson": "[]",
+                  "status": "active",
+                  "revision": 3,
+                  "hash": "h"
+                }
+                """.trimIndent()
+            )
+        ) as SyncRecord.BiteCard
+
+        assertEquals("101", record.id)
+        assertEquals("q1", record.sourceId)
+        assertEquals("A ____ caches translations.", record.prompt)
+        assertEquals("TLB", record.answer)
+        assertEquals(3L, record.revision)
+    }
+
+    @Test
     fun parsesDevicePolicyScopes() {
         val policy = parseSyncDevicePolicy(
             JSONObject(

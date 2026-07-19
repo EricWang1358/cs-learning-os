@@ -1,6 +1,7 @@
 package com.cslearningos.mobile.feature.review
 
 import com.cslearningos.mobile.data.AreaEntity
+import com.cslearningos.mobile.data.BiteCardEntity
 import com.cslearningos.mobile.data.CaptureSlipEntity
 import com.cslearningos.mobile.data.LearningDao
 import com.cslearningos.mobile.data.LearningNodeEntity
@@ -73,6 +74,7 @@ private class FakeReviewLearningDao(
     override fun observeOpenReaderQuestions(): Flow<List<ReaderQuestionEntity>> = flowOf(emptyList())
     override fun observeInboxCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
     override fun observeArchivedCaptureSlips(): Flow<List<CaptureSlipEntity>> = flowOf(emptyList())
+    override fun observeBiteCards(): Flow<List<BiteCardEntity>> = flowOf(emptyList())
     override fun observeDueQuizzes(now: Long): Flow<List<QuizItemEntity>> = flowOf(emptyList())
     override suspend fun getArea(id: String): AreaEntity? = unsupported()
     override suspend fun getAreaBySlug(slug: String): AreaEntity? = unsupported()
@@ -92,6 +94,8 @@ private class FakeReviewLearningDao(
     override suspend fun getAllAttempts(): List<ReviewAttemptEntity> = unsupported()
     override suspend fun getAllReaderQuestions(): List<ReaderQuestionEntity> = unsupported()
     override suspend fun getAllCaptureSlips(): List<CaptureSlipEntity> = unsupported()
+    override suspend fun getBiteCards(): List<BiteCardEntity> = unsupported()
+    override suspend fun getAllBiteCards(): List<BiteCardEntity> = unsupported()
     override suspend fun latestAssistantConversation(): AssistantConversationEntity? = unsupported()
     override suspend fun recentAssistantConversations(limit: Int): List<AssistantConversationEntity> = unsupported()
     override suspend fun getAssistantConversation(id: String): AssistantConversationEntity? = unsupported()
@@ -125,6 +129,7 @@ private class FakeReviewLearningDao(
     override suspend fun insertAttempts(attempts: List<ReviewAttemptEntity>) = unsupported()
     override suspend fun upsertReaderQuestions(questions: List<ReaderQuestionEntity>) = unsupported()
     override suspend fun upsertCaptureSlips(slips: List<CaptureSlipEntity>) = unsupported()
+    override suspend fun upsertBiteCards(cards: List<BiteCardEntity>) = unsupported()
     override suspend fun upsertNodeFts(entity: NodeFtsEntity) = unsupported()
     override suspend fun upsertQuizFts(entity: QuizFtsEntity) = unsupported()
     override suspend fun deleteNodeFts(nodeId: String) = unsupported()
@@ -140,6 +145,7 @@ private class FakeReviewLearningDao(
     override suspend fun deleteReviewAttemptsForQuiz(quizId: String) = unsupported()
     override suspend fun deleteAllReaderQuestions() = unsupported()
     override suspend fun deleteAllCaptureSlips() = unsupported()
+    override suspend fun deleteAllBiteCards() = unsupported()
     override suspend fun deleteAllNodeFts() = unsupported()
     override suspend fun deleteAllQuizFts() = unsupported()
     override suspend fun deleteAllProcessedCommands() = unsupported()

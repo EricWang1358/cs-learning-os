@@ -13,6 +13,7 @@ class MoreSettingsModelsTest {
                 MoreSectionId.System,
                 MoreSectionId.Service,
                 MoreSectionId.Sync,
+                MoreSectionId.DailyBite,
                 MoreSectionId.Data,
                 MoreSectionId.Guide
             ),
@@ -55,7 +56,7 @@ class MoreSettingsModelsTest {
 
     @Test
     fun moreSettingsModelsKeepOnlyStateAndSelectionLogic() {
-        assertEquals(5, orderedMoreSectionIds().size)
+        assertEquals(6, orderedMoreSectionIds().size)
         assertEquals(MoreSectionId.System, orderedMoreSectionIds().first())
         assertEquals(MoreSectionId.Guide, orderedMoreSectionIds().last())
     }
