@@ -431,6 +431,14 @@
     <string name="more_section_data_body">Backup, restore, and local cleanup.</string>
     <string name="more_section_sync_title">Sync</string>
     <string name="more_section_sync_body">Sync notes, quizzes, review progress, and captures with your desktop.</string>
+    <string name="more_section_daily_bite_title">Daily Bite</string>
+    <string name="more_section_daily_bite_body">Lightweight review cards synced from desktop. Tap to flip and rate your recall.</string>
+    <string name="more_daily_bite_label">Daily Bite Review</string>
+    <string name="more_daily_bite_empty">No bite cards yet. Extract cards from quizzes on your desktop and sync them here.</string>
+    <string name="more_daily_bite_progress">Card %1$d of %2$d</string>
+    <string name="more_daily_bite_reveal">Reveal Answer</string>
+    <string name="more_daily_bite_again">Again</string>
+    <string name="more_daily_bite_good">Good</string>
     <string name="sync_value_unpaired">Not paired</string>
     <string name="sync_value_paired">Paired</string>
     <string name="sync_pair_title">Pair desktop</string>

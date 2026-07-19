@@ -147,6 +147,7 @@ data class LearningUiState(
     val collapsedLibraryAreas: Set<String> = emptySet(),
     val systemLanguage: SystemLanguage = SystemLanguage.FollowSystem,
     val appearanceMode: AppearanceMode = AppearanceMode.FollowSystem,
+    val biteCardCount: Int = 0,
     val expandedMoreSection: MoreSectionId? = null,
     val quizAnswerVisible: Boolean = false,
     val sync: SyncUiState = SyncUiState(),

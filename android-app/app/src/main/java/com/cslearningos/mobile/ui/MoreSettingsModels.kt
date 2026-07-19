@@ -16,6 +16,7 @@ enum class MoreSectionId {
     System,
     Service,
     Sync,
+    DailyBite,
     Data,
     Guide
 }
@@ -29,6 +30,7 @@ fun orderedMoreSectionIds(): List<MoreSectionId> =
         MoreSectionId.System,
         MoreSectionId.Service,
         MoreSectionId.Sync,
+        MoreSectionId.DailyBite,
         MoreSectionId.Data,
         MoreSectionId.Guide
     )

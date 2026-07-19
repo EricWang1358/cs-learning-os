@@ -27,10 +27,16 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.room.Room
+import com.cslearningos.mobile.data.BiteCardEntity
+import com.cslearningos.mobile.data.LearningDatabase
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +89,7 @@ private fun MoreSettingsList(
                     MoreSectionId.System -> SystemSettingsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Service -> AiProviderContent(state = state, viewModel = viewModel)
                     MoreSectionId.Sync -> SyncSectionContent(state = state, viewModel = viewModel)
+                    MoreSectionId.DailyBite -> DailyBiteContent(state = state, viewModel = viewModel)
                     MoreSectionId.Data -> DataToolsContent(state = state, viewModel = viewModel)
                     MoreSectionId.Guide -> GuideContent(viewModel = viewModel)
                 }
@@ -458,3 +465,106 @@ private fun SettingsRow(label: String, content: @Composable ColumnScope.() -> Un
 
 private fun String.maskSecret(): String =
     if (isBlank()) "" else take(6) + "..." + takeLast(4)
+
+// ---- Daily Bite ----
+
+@Composable
+private fun DailyBiteContent(state: LearningUiState, viewModel: LearningViewModel) {
+    val context = LocalContext.current
+    val db = remember { Room.databaseBuilder(context, LearningDatabase::class.java, "learning-os.db").build() }
+    val cards by db.learningDao().observeBiteCards().collectAsStateWithLifecycle(initialValue = emptyList())
+    var currentIndex by rememberSaveable { mutableStateOf(0) }
+    var showAnswer by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(cards.size) { if (cards.isNotEmpty() && currentIndex >= cards.size) currentIndex = 0 }
+
+    if (cards.isEmpty()) {
+        SettingsRow(label = stringResource(R.string.more_daily_bite_label)) {
+            Text(
+                text = stringResource(R.string.more_daily_bite_empty),
+                color = WorkbenchColors.Muted,
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
+        }
+        return
+    }
+
+    val card = cards.getOrNull(currentIndex)
+    if (card == null) return
+
+    SettingsRow(label = stringResource(R.string.more_daily_bite_label)) {
+        Text(
+            text = stringResource(R.string.more_daily_bite_progress, currentIndex + 1, cards.size),
+            color = WorkbenchColors.Muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        // Prompt card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(WorkbenchColors.SurfaceCard.copy(alpha = 0.72f))
+                .border(BorderStroke(1.dp, WorkbenchColors.Accent.copy(alpha = 0.38f)), RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = card.prompt,
+                color = WorkbenchColors.InkStrong,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (card.hint.isNotBlank() && !showAnswer) {
+                Text(
+                    text = "Hint: ${card.hint}",
+                    color = WorkbenchColors.Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+            AnimatedVisibility(visible = showAnswer) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = card.answer,
+                        color = WorkbenchColors.Success,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        // Action buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (!showAnswer) {
+                WorkbenchButton(
+                    text = stringResource(R.string.more_daily_bite_reveal),
+                    onClick = { showAnswer = true },
+                    primary = true,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                WorkbenchButton(
+                    text = stringResource(R.string.more_daily_bite_again),
+                    onClick = { showAnswer = false },
+                    modifier = Modifier.weight(1f)
+                )
+                WorkbenchButton(
+                    text = stringResource(R.string.more_daily_bite_good),
+                    onClick = {
+                        showAnswer = false
+                        currentIndex = (currentIndex + 1) % cards.size
+                    },
+                    primary = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}

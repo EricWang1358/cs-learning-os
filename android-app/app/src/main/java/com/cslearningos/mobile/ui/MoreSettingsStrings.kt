@@ -45,6 +45,13 @@ fun moreSectionSummaries(state: LearningUiState): List<MoreSectionSummary> =
                 )
             )
 
+            MoreSectionId.DailyBite -> MoreSectionSummary(
+                id = sectionId,
+                title = stringResource(R.string.more_section_daily_bite_title),
+                body = stringResource(R.string.more_section_daily_bite_body),
+                value = "${state.biteCardCount} cards"
+            )
+
             MoreSectionId.Guide -> MoreSectionSummary(
                 id = sectionId,
                 title = stringResource(R.string.more_section_guide_title),
