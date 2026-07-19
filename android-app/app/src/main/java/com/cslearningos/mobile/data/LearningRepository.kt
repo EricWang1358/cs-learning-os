@@ -41,6 +41,7 @@ class LearningRepository private constructor(
     val nodes: Flow<List<LearningNodeEntity>> = libraryRepository.nodes
     val trashNodes: Flow<List<LearningNodeEntity>> = libraryRepository.trashNodes
     val quizzes: Flow<List<QuizItemEntity>> = reviewRepository.quizzes
+    val biteCards: Flow<List<BiteCardEntity>> = dao.observeBiteCards()
     val openReaderQuestions: Flow<List<ReaderQuestionEntity>> = dao.observeOpenReaderQuestions()
     val inboxCaptureSlips: Flow<List<CaptureSlipEntity>> = captureRepository.inboxCaptureSlips
     val archivedCaptureSlips: Flow<List<CaptureSlipEntity>> = captureRepository.archivedCaptureSlips

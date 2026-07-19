@@ -416,7 +416,7 @@ class SyncRepository(
                 SyncRecord.CaptureSlip.TYPE -> if (!change.tombstone) slipIdsToPull += change.id
 
                 SyncRecord.BiteCard.TYPE -> {
-                    if (!change.tombstone && scope.includesArea(change.area)) {
+                    if (scope.includesArea(change.area)) {
                         biteCardIdsToPull += change.id
                     }
                 }

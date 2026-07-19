@@ -401,6 +401,11 @@ class LearningViewModel private constructor(
             }
         }
         viewModelScope.launch {
+            repository.biteCards.collect { biteCards ->
+                _state.update { it.copy(biteCardCount = biteCards.size) }
+            }
+        }
+        viewModelScope.launch {
             dueReviewNow.flatMapLatest { now -> repository.dueQuizzes(now) }.collect { due ->
                 _state.update { it.copy(dueQuizzes = due) }
             }

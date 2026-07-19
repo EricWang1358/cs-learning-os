@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS capture_slips (
 
 CREATE TABLE IF NOT EXISTS sync_changes (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_type TEXT NOT NULL CHECK(entity_type IN ('node', 'quiz', 'capture_slip', 'reader_question', 'review_attempt')),
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('node', 'quiz', 'capture_slip', 'reader_question', 'review_attempt', 'bite_card')),
     entity_id TEXT NOT NULL,
     revision INTEGER,
     content_hash TEXT,
@@ -280,6 +280,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def initialize(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _ensure_sync_changes_accepts_bite_card(conn)
     existing_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()
     }
@@ -359,3 +360,40 @@ def initialize(conn: sqlite3.Connection) -> None:
             (key, value, now),
         )
     conn.commit()
+
+
+def _ensure_sync_changes_accepts_bite_card(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sync_changes'"
+    ).fetchone()
+    table_sql = row["sql"] if row else ""
+    if "bite_card" in table_sql:
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_sync_changes_entity")
+    conn.execute("DROP INDEX IF EXISTS idx_sync_changes_seq")
+    conn.execute("ALTER TABLE sync_changes RENAME TO sync_changes_legacy")
+    conn.execute(
+        """
+        CREATE TABLE sync_changes (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL CHECK(entity_type IN ('node', 'quiz', 'capture_slip', 'reader_question', 'review_attempt', 'bite_card')),
+            entity_id TEXT NOT NULL,
+            revision INTEGER,
+            content_hash TEXT,
+            tombstone INTEGER NOT NULL DEFAULT 0,
+            changed_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO sync_changes (seq, entity_type, entity_id, revision, content_hash, tombstone, changed_at)
+        SELECT seq, entity_type, entity_id, revision, content_hash, tombstone, changed_at
+        FROM sync_changes_legacy
+        """
+    )
+    conn.execute("DROP TABLE sync_changes_legacy")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_changes_entity ON sync_changes(entity_type, entity_id)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_changes_seq ON sync_changes(seq)")

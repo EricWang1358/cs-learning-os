@@ -77,7 +77,7 @@ class SyncRepositoryTest {
         hash = "hash-$id"
     )
 
-    private fun biteCardRecord(id: String, revision: Long) = SyncRecord.BiteCard(
+    private fun biteCardRecord(id: String, revision: Long, status: String = "active") = SyncRecord.BiteCard(
         id = id,
         sourceType = "quiz",
         sourceId = "q1",
@@ -88,7 +88,7 @@ class SyncRepositoryTest {
         answer = "TLB",
         hint = "Translation cache",
         explanationJson = "[\"It avoids repeated page-table walks.\"]",
-        status = "active",
+        status = status,
         questionType = "blank",
         optionsJson = "[]",
         revision = revision,
@@ -337,6 +337,51 @@ class SyncRepositoryTest {
         assertEquals("A ____ caches recent virtual-to-physical translations.", card.prompt)
         assertEquals("TLB", card.answer)
         assertEquals("clean", card.syncStatus)
+    }
+
+    @Test
+    fun archivedBiteCardManifestChangePullsArchiveStatusToHideLocalCard() = runTest {
+        val dao = FakeDao()
+        dao.biteCards[101L] = BiteCardEntity(
+            id = 101L,
+            sourceType = "quiz",
+            sourceId = "q1",
+            title = "TLB Bite",
+            area = "algorithms",
+            difficulty = "easy",
+            prompt = "A ____ caches recent virtual-to-physical translations.",
+            answer = "TLB",
+            hint = "Translation cache",
+            explanationJson = "[\"It avoids repeated page-table walks.\"]",
+            questionType = "blank",
+            optionsJson = "[]",
+            status = "active",
+            syncStatus = "clean",
+            createdAt = 1L,
+            updatedAt = 1L
+        )
+        val transport = FakeTransport(
+            manifests = ArrayDeque(
+                listOf(
+                    SyncManifest(
+                        false,
+                        1,
+                        "srv",
+                        6,
+                        false,
+                        listOf(SyncChange("bite_card", "101", 4, "h", true, "algorithms"))
+                    )
+                )
+            ),
+            records = mapOf("bite_card" to listOf(biteCardRecord("101", 4, status = "archive")))
+        )
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pullAndApply(scope)
+
+        assertEquals(1, report.pulledBiteCards)
+        assertEquals(listOf(listOf("101")), transport.pullRequests["bite_card"])
+        assertEquals("archive", dao.biteCards.getValue(101L).status)
     }
 
     @Test

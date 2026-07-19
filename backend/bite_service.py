@@ -76,8 +76,14 @@ def archive_bite_card(conn, card_id):
         raise ValueError(f"bite card {card_id} not found")
     conn.execute("UPDATE bite_cards SET status='archive',updated_at=? WHERE id=?",
                  (utc_now(), card_id))
-    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
-                  content_hash(row["prompt"] + row["answer"]))
+    record_change(
+        conn,
+        ENTITY_BITE_CARD,
+        str(card_id),
+        1,
+        content_hash(row["prompt"] + row["answer"]),
+        tombstone=True,
+    )
     conn.commit()
     return _card_dict(conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card_id,)).fetchone())
 
@@ -148,11 +154,17 @@ def delete_bite_card(conn, card_id):
     if not existing:
         return False
     conn.execute(
-        "UPDATE bite_cards SET status='archived',updated_at=? WHERE id=?",
+        "UPDATE bite_cards SET status='archive',updated_at=? WHERE id=?",
         (utc_now(), card_id),
     )
-    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
-                  content_hash(existing["prompt"] + existing["answer"]))
+    record_change(
+        conn,
+        ENTITY_BITE_CARD,
+        str(card_id),
+        1,
+        content_hash(existing["prompt"] + existing["answer"]),
+        tombstone=True,
+    )
     conn.commit()
     return True
 
@@ -283,7 +295,7 @@ def next_bite(conn, cursor=""):
 
 def _card_dict(row):
     return {
-        "id": row["id"], "sourceType": row["source_type"],
+        "id": row["id"], "card_id": row["id"], "sourceType": row["source_type"],
         "sourceId": row["source_id"], "title": row["title"],
         "area": row["area"], "difficulty": row["difficulty"],
         "prompt": row["prompt"], "answer": row["answer"],

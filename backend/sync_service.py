@@ -169,6 +169,9 @@ def _current_area(conn: sqlite3.Connection, entity_type: str, entity_id: str) ->
     if entity_type == "quiz":
         row = conn.execute("SELECT area FROM quizzes WHERE id = ?", (entity_id,)).fetchone()
         return row["area"] if row else None
+    if entity_type == "bite_card":
+        row = conn.execute("SELECT area FROM bite_cards WHERE id = ?", (entity_id,)).fetchone()
+        return row["area"] if row else None
     return None
 
 
@@ -289,7 +292,7 @@ def _baseline_changes(
                 "id": str(row["id"]),
                 "revision": 1,
                 "hash": content_hash(row["prompt"] + row["answer"]),
-                "tombstone": row["status"] == "archived",
+                "tombstone": row["status"] == "archive",
                 "area": row["area"],
             }
         )
@@ -563,7 +566,7 @@ def push_bite_cards(conn: sqlite3.Connection, device_id: str, items: list[dict])
             str(item.get("prompt") or existing["prompt"])
             + str(item.get("answer") or existing["answer"])
         )
-        record_change(conn, ENTITY_BITE_CARD, card_id, 1, body_hash)
+        record_change(conn, ENTITY_BITE_CARD, card_id, 1, body_hash, tombstone=status == "archive")
         receipt = _content_receipt(card_id, RECEIPT_ACCEPTED)
         _save_push_receipt(conn, device_id, change_id, receipt)
         conn.commit()
