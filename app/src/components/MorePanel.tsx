@@ -19,11 +19,27 @@ interface AiConfigResponse {
 
 type ConnStatus = null | { ok: boolean; message: string; modelCount?: number }
 
+interface BiteSource {
+  type: string; id: string; title: string; area: string; summary: string; hasBiteCards: boolean
+}
+interface BiteCard {
+  id: number; sourceType: string; sourceId: string; title: string; prompt: string; answer: string; hint: string; status: string
+}
+
 export function MorePanel() {
+  const [activeTab, setActiveTab] = useState<'providers' | 'bite'>('providers')
   const [config, setConfig] = useState<AiConfigResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+
+  // Daily Bite state
+  const [biteSources, setBiteSources] = useState<BiteSource[]>([])
+  const [biteCards, setBiteCards] = useState<BiteCard[]>([])
+  const [extractedCards, setExtractedCards] = useState<BiteCard[]>([])
+  const [selectedSource, setSelectedSource] = useState('')
+  const [biteNotice, setBiteNotice] = useState('')
+  const [biteBusy, setBiteBusy] = useState(false)
 
   // New provider form
   const [showNewForm, setShowNewForm] = useState(false)
@@ -54,6 +70,48 @@ export function MorePanel() {
   }
 
   useEffect(() => { fetchConfig() }, [])
+
+  // ---- Daily Bite helpers ----
+  const fetchBiteData = async () => {
+    try {
+      const [srcRes, cardRes] = await Promise.all([
+        fetch('/api/bite/sources'), fetch('/api/bites?status=active')
+      ])
+      if (srcRes.ok) setBiteSources((await srcRes.json()).sources || [])
+      if (cardRes.ok) setBiteCards((await cardRes.json()).bites || [])
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { if (activeTab === 'bite') fetchBiteData() }, [activeTab])
+
+  const handleExtract = async (sourceId: string) => {
+    setBiteBusy(true); setBiteNotice('')
+    setSelectedSource(sourceId)
+    const source = biteSources.find(s => s.id === sourceId)
+    if (!source) { setBiteBusy(false); return }
+    try {
+      const res = await fetch(`/api/bite/extract?source_type=${source.type}&source_id=${encodeURIComponent(sourceId)}`)
+      const data = await res.json()
+      setExtractedCards(data.cards || [])
+      setBiteNotice(`Extracted ${data.count} cards from "${source.title}". Review and save below.`)
+    } catch (e) {
+      setBiteNotice('Extraction failed: ' + (e instanceof Error ? e.message : String(e)))
+    } finally { setBiteBusy(false) }
+  }
+
+  const handleSaveAll = async () => {
+    setBiteBusy(true); setBiteNotice('')
+    const source = biteSources.find(s => s.id === selectedSource)
+    if (!source) { setBiteBusy(false); return }
+    try {
+      const res = await fetch(`/api/bite/extract-and-save?source_type=${source.type}&source_id=${encodeURIComponent(selectedSource)}`, { method: 'POST' })
+      const data = await res.json()
+      setBiteNotice(`Saved ${data.count} cards.`)
+      setExtractedCards([]); setSelectedSource('')
+      fetchBiteData()
+    } catch (e) {
+      setBiteNotice('Save failed: ' + (e instanceof Error ? e.message : String(e)))
+    } finally { setBiteBusy(false) }
+  }
 
   const testConnection = async (baseUrl: string, apiKey: string) => {
     setBusy(true)
@@ -163,6 +221,62 @@ export function MorePanel() {
         </p>
       )}
 
+      {/* Tab bar */}
+      <nav className="more-tabs" style={{ display: 'flex', gap: 0, marginBottom: 18, borderBottom: '1px solid var(--line)' }}>
+        <button style={{ padding: '8px 16px', border: 'none', borderBottom: activeTab === 'providers' ? '2px solid var(--accent)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontWeight: activeTab === 'providers' ? 600 : 400, color: 'var(--ink)', fontSize: 14 }}
+          onClick={() => setActiveTab('providers')}>AI Providers</button>
+        <button style={{ padding: '8px 16px', border: 'none', borderBottom: activeTab === 'bite' ? '2px solid var(--accent)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontWeight: activeTab === 'bite' ? 600 : 400, color: 'var(--ink)', fontSize: 14 }}
+          onClick={() => setActiveTab('bite')}>Daily Bite</button>
+      </nav>
+
+      {activeTab === 'bite' && (
+        <section className="more-section" aria-label="Daily Bite">
+          <h3>Daily Bite Builder</h3>
+          <p className="more-section-desc">Extract review cards from quiz Markdown and sync to mobile for review.</p>
+          <h4 style={{ margin: '12px 0 6px' }}>Quiz Sources</h4>
+          {biteSources.length === 0 ? <p className="more-field-hint">Loading…</p> : (
+            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {biteSources.filter(s => s.type === 'quiz').slice(0, 40).map(s => (
+                <li key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface-card)' }}>
+                  <span style={{ minWidth: 0 }}><strong style={{ fontSize: 13 }}>{s.title}</strong><span className="more-field-hint" style={{ display: 'block', fontSize: 11 }}>{s.area}{s.hasBiteCards ? ' · has cards' : ''}</span></span>
+                  <button type="button" className="more-btn small primary" disabled={biteBusy} onClick={() => handleExtract(s.id)}>Extract</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {extractedCards.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <h4 style={{ margin: 0 }}>Preview ({extractedCards.length})</h4>
+                <button type="button" className="more-btn primary" onClick={handleSaveAll} disabled={biteBusy}>Save All</button>
+              </div>
+              {extractedCards.map((card, i) => (
+                <div key={i} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', marginBottom: 6, fontSize: 12 }}>
+                  <p style={{ margin: '0 0 4px' }}><strong>Q:</strong> {card.prompt.slice(0, 150)}{card.prompt.length > 150 ? '…' : ''}</p>
+                  <p style={{ margin: 0, color: 'var(--muted)' }}><strong>A:</strong> {card.answer.slice(0, 100)}{card.answer.length > 100 ? '…' : ''}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {biteCards.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ margin: '12px 0 6px' }}>Saved Cards ({biteCards.length})</h4>
+              <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {biteCards.slice(0, 30).map(c => (
+                  <li key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 12 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}: {c.prompt.slice(0, 50)}…</span>
+                    <span className="more-badge">{c.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {biteNotice && <p className="more-field-hint" style={{ marginTop: 8 }}>{biteNotice}</p>}
+        </section>
+      )}
+
+      {activeTab === 'providers' && (
+      <>
       {/* AI Provider Section */}
       <section className="more-section" aria-label="AI providers">
         <div className="more-section-heading">
@@ -294,6 +408,8 @@ export function MorePanel() {
           API keys stay local. Restart the server after switching providers.
         </p>
       </section>
+      </>
+      )}
     </section>
   )
 }

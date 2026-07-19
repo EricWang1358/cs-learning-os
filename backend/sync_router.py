@@ -27,6 +27,7 @@ try:
         SyncPushNodesRequest,
         SyncPushQuizzesRequest,
         SyncPushQuestionsRequest,
+        SyncPushBiteCardsRequest,
     )
     from . import sync_auth, sync_package, sync_service
 except ImportError:  # pragma: no cover - script execution
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover - script execution
         SyncPushNodesRequest,
         SyncPushQuizzesRequest,
         SyncPushQuestionsRequest,
+        SyncPushBiteCardsRequest,
     )
     import sync_auth
     import sync_service
@@ -213,6 +215,19 @@ def create_sync_router(
             receipts = sync_service.push_nodes(
                 conn,
                 content_root,
+                device["id"],
+                [item.model_dump() for item in payload.items],
+            )
+            return {"receipts": receipts}
+
+    @router.post("/push/bite-cards")
+    def push_bite_cards(
+        payload: SyncPushBiteCardsRequest,
+        device: sqlite3.Row = Depends(require_scope(sync_auth.SCOPE_PUSH)),
+    ) -> dict:
+        with get_conn() as conn:
+            receipts = sync_service.push_bite_cards(
+                conn,
                 device["id"],
                 [item.model_dump() for item in payload.items],
             )

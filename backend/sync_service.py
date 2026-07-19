@@ -66,7 +66,7 @@ except ImportError:  # pragma: no cover - script execution
 MANIFEST_PAGE_LIMIT = 500
 PULL_ID_LIMIT = 200
 
-ENTITY_TYPES = {"node", "quiz", "capture_slip", "reader_question", "review_attempt"}
+ENTITY_TYPES = {"node", "quiz", "capture_slip", "reader_question", "review_attempt", "bite_card"}
 
 
 @dataclass
@@ -154,6 +154,11 @@ def entity_in_scope(
         if not row:
             return True, None
         return entity_in_scope(conn, "quiz", row["quiz_id"], scope, due_quizzes, due_nodes)
+    if entity_type == "bite_card":
+        row = conn.execute("SELECT area FROM bite_cards WHERE id = ?", (entity_id,)).fetchone()
+        if not row:
+            return True, None
+        return (row["area"] in scope.areas), row["area"]
     return False, None
 
 
@@ -270,6 +275,24 @@ def _baseline_changes(
                 "area": row["area"],
             }
         )
+    bite_rows = conn.execute(
+        "SELECT id, area, prompt, answer, status FROM bite_cards"
+    ).fetchall()
+    for row in bite_rows:
+        if ("bite_card", str(row["id"])) in seen:
+            continue
+        if row["area"] not in scope.areas:
+            continue
+        baseline.append(
+            {
+                "type": "bite_card",
+                "id": str(row["id"]),
+                "revision": 1,
+                "hash": content_hash(row["prompt"] + row["answer"]),
+                "tombstone": row["status"] == "archived",
+                "area": row["area"],
+            }
+        )
     return baseline
 
 
@@ -363,6 +386,28 @@ def _record_for(conn: sqlite3.Connection, entity_type: str, entity_id: str) -> d
             "createdAt": row["created_at"],
             "resolvedAt": row["resolved_at"],
             "resolutionNote": row["resolution_note"],
+        }
+    if entity_type == "bite_card":
+        row = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (entity_id,)).fetchone()
+        if not row:
+            return None
+        return {
+            "type": "bite_card",
+            "id": str(row["id"]),
+            "sourceType": row["source_type"],
+            "sourceId": row["source_id"],
+            "title": row["title"],
+            "area": row["area"],
+            "difficulty": row["difficulty"],
+            "prompt": row["prompt"],
+            "answer": row["answer"],
+            "hint": row["hint"],
+            "explanationJson": row["explanation_json"],
+            "status": row["status"],
+            "questionType": row["question_type"],
+            "optionsJson": row["options_json"],
+            "revision": 1,
+            "hash": content_hash(row["prompt"] + row["answer"]),
         }
     if entity_type == "capture_slip":
         row = conn.execute("SELECT * FROM capture_slips WHERE id = ?", (entity_id,)).fetchone()
@@ -477,6 +522,52 @@ def push_captures(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
         record_change(conn, ENTITY_CAPTURE_SLIP, slip_id, 1, content_hash(item["body"]))
         receipts.append(_receipt(slip_id, RECEIPT_ACCEPTED))
     conn.commit()
+    return receipts
+
+
+def push_bite_cards(conn: sqlite3.Connection, device_id: str, items: list[dict]) -> list[dict]:
+    """Accept bite card updates from mobile (status changes, edits)."""
+    _ensure_push_receipt_schema(conn)
+    receipts: list[dict] = []
+    for item in items:
+        change_id = str(item["changeId"])
+        replay = _load_push_receipt(conn, device_id, change_id)
+        if replay is not None:
+            receipts.append(replay)
+            continue
+        card_id = str(item["id"])
+        existing = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card_id,)).fetchone()
+        if existing is None:
+            receipts.append(_content_receipt(card_id, RECEIPT_REJECTED, "missing_card"))
+            continue
+        status = str(item.get("status") or "active")
+        if status not in ("active", "archive"):
+            receipts.append(_content_receipt(card_id, RECEIPT_REJECTED, "invalid_status"))
+            continue
+        conn.execute(
+            "UPDATE bite_cards SET status = ?, title = ?, prompt = ?, answer = ?, "
+            "hint = ?, explanation_json = ?, difficulty = ?, updated_at = ? WHERE id = ?",
+            (
+                status,
+                str(item.get("title") or existing["title"]),
+                str(item.get("prompt") or existing["prompt"]),
+                str(item.get("answer") or existing["answer"]),
+                str(item.get("hint") or existing["hint"]),
+                str(item.get("explanationJson") or existing["explanation_json"]),
+                str(item.get("difficulty") or existing["difficulty"]),
+                utc_now(),
+                card_id,
+            ),
+        )
+        body_hash = content_hash(
+            str(item.get("prompt") or existing["prompt"])
+            + str(item.get("answer") or existing["answer"])
+        )
+        record_change(conn, ENTITY_BITE_CARD, card_id, 1, body_hash)
+        receipt = _content_receipt(card_id, RECEIPT_ACCEPTED)
+        _save_push_receipt(conn, device_id, change_id, receipt)
+        conn.commit()
+        receipts.append(receipt)
     return receipts
 
 

@@ -19,6 +19,7 @@ ENTITY_QUIZ = "quiz"
 ENTITY_CAPTURE_SLIP = "capture_slip"
 ENTITY_READER_QUESTION = "reader_question"
 ENTITY_REVIEW_ATTEMPT = "review_attempt"
+ENTITY_BITE_CARD = "bite_card"
 
 
 def utc_now() -> str:

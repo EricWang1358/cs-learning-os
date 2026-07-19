@@ -199,3 +199,25 @@ class BiteCardUpdate(BaseModel):
     hint: str = ""
     explanation: list[str] = []
     status: str = Field(default="active", pattern="^(active|archive)$")
+
+
+class SyncPushBiteCardItem(BaseModel):
+    changeId: str = Field(min_length=1, max_length=64)
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=300)
+    area: str = Field(min_length=1, max_length=80)
+    prompt: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    hint: str = ""
+    explanationJson: str = "[]"
+    difficulty: str = "medium"
+    questionType: str = "blank"
+    optionsJson: str = "[]"
+    status: str = "active"
+    baseRevision: int | None = None
+    revision: int = 1
+    tombstone: bool = False
+
+
+class SyncPushBiteCardsRequest(BaseModel):
+    items: list[SyncPushBiteCardItem] = Field(default_factory=list, max_length=200)

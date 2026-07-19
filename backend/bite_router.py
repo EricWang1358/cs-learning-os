@@ -61,6 +61,28 @@ def create_bite_router(get_conn: ConnectionFactory) -> APIRouter:
         except ValueError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 
+    @router.get("/bite/sources")
+    def list_sources(area: str = Query(default="")) -> dict:
+        with get_conn() as conn:
+            return {"sources": bite_service.list_sources(conn, area)}
+
+    @router.post("/bite/extract")
+    def extract_cards(source_type: str = Query(pattern="^(quiz|node)$"),
+                      source_id: str = Query(min_length=1)) -> dict:
+        with get_conn() as conn:
+            cards = bite_service.extract_from_source(conn, source_type, source_id)
+            return {"cards": cards, "count": len(cards)}
+
+    @router.post("/bite/extract-and-save")
+    def extract_and_save(source_type: str = Query(pattern="^(quiz|node)$"),
+                         source_id: str = Query(min_length=1)) -> dict:
+        with get_conn() as conn:
+            cards = bite_service.extract_from_source(conn, source_type, source_id)
+            saved = []
+            for c in cards:
+                saved.append(bite_service.create_bite_card(conn, c))
+            return {"cards": saved, "count": len(saved)}
+
     @router.get("/bite/next")
     def get_next_bite(cursor: str = "") -> dict:
         try:

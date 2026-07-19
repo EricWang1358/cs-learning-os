@@ -1,499 +1,296 @@
+"""Daily Bite card extraction and CRUD service."""
+
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import sqlite3
-from datetime import date, datetime, timezone
-from typing import Optional
+
+try:
+    from .sync_envelope import ENTITY_BITE_CARD, content_hash, record_change, utc_now
+except ImportError:
+    from sync_envelope import ENTITY_BITE_CARD, content_hash, record_change, utc_now
 
 
-SECTION_HEADING_RE = re.compile(r"^##+\s+(.+?)\s*$", re.MULTILINE)
-NUMBERED_ITEM_RE = re.compile(r"^\s*(\d+)[.)]\s+(.+?)(?=^\s*\d+[.)]\s+|\Z)", re.MULTILINE | re.DOTALL)
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-MARKDOWN_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+|>\s*)")
-INLINE_CODE_RE = re.compile(r"`([^`]+)`")
-CHOICE_LINE_RE = re.compile(r"^\s*(?:[-*]\s*)?(?:\[[ xX]\]\s*)?(?:[A-Ha-h][\).:-]\s+)?(.+?)\s*$")
+def list_sources(conn, area=""):
+    """Return quizzes and nodes eligible for bite card extraction."""
+    sources = []
+    quiz_rows = conn.execute(
+        "SELECT id, title, area, summary FROM quizzes"
+        " WHERE deleted_at IS NULL AND visibility != 'trash'"
+        + (" AND area = ?" if area else "")
+        + " ORDER BY area, title",
+        (area,) if area else (),
+    ).fetchall()
+    for row in quiz_rows:
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM bite_cards WHERE source_id = ? AND status = 'active'",
+            (row["id"],),
+        ).fetchone()["n"]
+        sources.append({
+            "type": "quiz", "id": row["id"], "title": row["title"],
+            "area": row["area"], "summary": row["summary"],
+            "hasBiteCards": count > 0,
+        })
+    node_rows = conn.execute(
+        "SELECT slug, title, area, summary FROM nodes"
+        " WHERE visibility IN ('core','support')"
+        + (" AND area = ?" if area else "")
+        + " ORDER BY area, title",
+        (area,) if area else (),
+    ).fetchall()
+    for row in node_rows:
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM bite_cards WHERE source_id = ? AND status = 'active'",
+            (row["slug"],),
+        ).fetchone()["n"]
+        sources.append({
+            "type": "node", "id": row["slug"], "title": row["title"],
+            "area": row["area"], "summary": row["summary"],
+            "hasBiteCards": count > 0,
+        })
+    return sources
 
 
-def daily_bite(conn: sqlite3.Connection, day: Optional[str] = None) -> dict:
-    selected_day = day or date.today().isoformat()
-    card = _card_for_daily_seed(conn, selected_day)
-    if card:
-        return _payload_from_card(card)
-    row = _row_for_daily_seed(conn, selected_day)
-    return _payload_from_row(conn, row, selected_day)
-
-
-def next_bite(conn: sqlite3.Connection, cursor: str = "") -> dict:
-    if cursor.startswith("card:"):
-        card = _card_after_cursor(conn, cursor.removeprefix("card:")) or _card_after_cursor(conn, "")
-        if card:
-            return _payload_from_card(card)
-    row = _row_after_cursor(conn, cursor) or _row_after_cursor(conn, "")
-    return _payload_from_row(conn, row, date.today().isoformat())
-
-
-def list_bite_cards(conn: sqlite3.Connection, status: str = "active") -> list[dict]:
+def list_bite_cards(conn, status="active"):
     rows = conn.execute(
-        """
-        SELECT *
-        FROM bite_cards
-        WHERE status = ?
-        ORDER BY updated_at DESC, id DESC
-        """,
+        "SELECT * FROM bite_cards WHERE status = ? ORDER BY updated_at DESC, id DESC",
         (status,),
     ).fetchall()
-    return [_card_to_bite(row) for row in rows]
+    return [_card_dict(row) for row in rows]
 
 
-def get_bite_card(conn: sqlite3.Connection, card_id: int) -> dict:
-    return _card_to_bite(_get_card_row(conn, card_id))
-
-
-def create_bite_card(conn: sqlite3.Connection, payload) -> dict:
-    now = _utc_now()
-    cursor = conn.execute(
-        """
-        INSERT INTO bite_cards (
-            source_type, source_id, title, area, difficulty, question_type, prompt,
-            answer, options_json, hint, explanation_json, status, created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-        """,
-        (
-            payload.source_type,
-            payload.source_id,
-            payload.title.strip(),
-            payload.area.strip(),
-            payload.difficulty.strip(),
-            _normalized_question_type(payload.question_type, payload.options),
-            payload.prompt.strip(),
-            payload.answer.strip(),
-            json.dumps(_normalized_options(payload.options, payload.answer, payload.question_type)),
-            payload.hint.strip(),
-            json.dumps(_normalized_explanation(payload.explanation)),
-            now,
-            now,
-        ),
-    )
-    conn.commit()
-    return get_bite_card(conn, int(cursor.lastrowid))
-
-
-def update_bite_card(conn: sqlite3.Connection, card_id: int, payload) -> dict:
-    _get_card_row(conn, card_id)
-    conn.execute(
-        """
-        UPDATE bite_cards
-        SET title = ?,
-            area = ?,
-            difficulty = ?,
-            question_type = ?,
-            prompt = ?,
-            answer = ?,
-            options_json = ?,
-            hint = ?,
-            explanation_json = ?,
-            status = ?,
-            updated_at = ?
-        WHERE id = ?
-        """,
-        (
-            payload.title.strip(),
-            payload.area.strip(),
-            payload.difficulty.strip(),
-            _normalized_question_type(payload.question_type, payload.options),
-            payload.prompt.strip(),
-            payload.answer.strip(),
-            json.dumps(_normalized_options(payload.options, payload.answer, payload.question_type)),
-            payload.hint.strip(),
-            json.dumps(_normalized_explanation(payload.explanation)),
-            payload.status,
-            _utc_now(),
-            card_id,
-        ),
-    )
-    conn.commit()
-    return get_bite_card(conn, card_id)
-
-
-def archive_bite_card(conn: sqlite3.Connection, card_id: int) -> dict:
-    _get_card_row(conn, card_id)
-    conn.execute(
-        "UPDATE bite_cards SET status = 'archive', updated_at = ? WHERE id = ?",
-        (_utc_now(), card_id),
-    )
-    conn.commit()
-    return get_bite_card(conn, card_id)
-
-
-def _card_for_daily_seed(conn: sqlite3.Connection, selected_day: str) -> Optional[sqlite3.Row]:
-    count = conn.execute(
-        "SELECT COUNT(*) AS count FROM bite_cards WHERE status = 'active'"
-    ).fetchone()["count"]
-    if count <= 0:
-        return None
-    offset = _stable_index(f"bite-card:{selected_day}", count)
-    return conn.execute(
-        """
-        SELECT *
-        FROM bite_cards
-        WHERE status = 'active'
-        ORDER BY id
-        LIMIT 1 OFFSET ?
-        """,
-        (offset,),
+def get_bite_card(conn, card_id):
+    row = conn.execute(
+        "SELECT * FROM bite_cards WHERE id = ?", (card_id,)
     ).fetchone()
+    if not row:
+        raise ValueError(f"bite card {card_id} not found")
+    return _card_dict(row)
 
 
-def _card_after_cursor(conn: sqlite3.Connection, cursor: str) -> Optional[sqlite3.Row]:
-    if not cursor:
-        return conn.execute(
-            """
-            SELECT *
-            FROM bite_cards
-            WHERE status = 'active'
-            ORDER BY id
-            LIMIT 1
-            """
-        ).fetchone()
-    try:
-        card_id = int(cursor)
-    except ValueError:
-        return None
-    return conn.execute(
-        """
-        SELECT *
-        FROM bite_cards
-        WHERE status = 'active'
-          AND id > ?
-        ORDER BY id
-        LIMIT 1
-        """,
-        (card_id,),
-    ).fetchone()
-
-
-def _row_for_daily_seed(conn: sqlite3.Connection, selected_day: str) -> sqlite3.Row:
-    count = conn.execute(
-        "SELECT COUNT(*) AS count FROM quizzes WHERE visibility != 'trash'"
-    ).fetchone()["count"]
-    if count <= 0:
-        raise ValueError("No quizzes are available for Daily Bite.")
-    offset = _stable_index(selected_day, count)
-    return conn.execute(
-        """
-        SELECT *
-        FROM quizzes
-        WHERE visibility != 'trash'
-        ORDER BY display_order, id
-        LIMIT 1 OFFSET ?
-        """,
-        (offset,),
-    ).fetchone()
-
-
-def _row_after_cursor(conn: sqlite3.Connection, cursor: str) -> Optional[sqlite3.Row]:
-    if cursor.startswith("quiz:"):
-        cursor = cursor.removeprefix("quiz:")
-    if not cursor:
-        return conn.execute(
-            """
-            SELECT *
-            FROM quizzes
-            WHERE visibility != 'trash'
-            ORDER BY display_order, id
-            LIMIT 1
-            """
-        ).fetchone()
-
-    current = conn.execute(
-        "SELECT display_order, id FROM quizzes WHERE id = ? AND visibility != 'trash'",
-        (cursor,),
-    ).fetchone()
-    if not current:
-        return None
-
-    return conn.execute(
-        """
-        SELECT *
-        FROM quizzes
-        WHERE visibility != 'trash'
-          AND (display_order > ? OR (display_order = ? AND id > ?))
-        ORDER BY display_order, id
-        LIMIT 1
-        """,
-        (current["display_order"], current["display_order"], current["id"]),
-    ).fetchone()
-
-
-def _payload_from_row(conn: sqlite3.Connection, row: sqlite3.Row, selected_day: str) -> dict:
-    if row is None:
-        raise ValueError("No quizzes are available for Daily Bite.")
-
-    body = row["body"] or ""
-    prompt_section = _section(body, "prompt") or row["summary"] or row["title"]
-    answer_section = _section(body, "answer") or row["title"]
-    explanation_section = _section(body, "explanation") or _section(body, "plain explanation") or row["summary"]
-    hint_section = _section(body, "hint")
-    choices_section = _section(body, "choices") or _section(body, "options")
-    pair = _select_prompt_answer_pair(row["id"], selected_day, prompt_section, answer_section)
-    answer = _one_line(pair["answer"] or answer_section or row["title"], fallback=row["title"])
-    prompt = _fill_blank_prompt(pair["prompt"] or prompt_section or row["summary"], answer)
-    explanation = _three_sentences(explanation_section, row["summary"], row["title"])
-    linked_nodes = _linked_nodes(conn, row["id"])
-    hint = _first_sentence(hint_section or row["summary"]) or _fallback_hint(row, linked_nodes)
-    options = _choice_options(choices_section or pair["prompt"])
-    question_type = "multiple_choice" if len(options) >= 2 else "blank"
-    if question_type == "multiple_choice":
-        prompt = _one_line(pair["prompt"] or prompt_section or row["summary"])
-
-    bite = {
-        "id": f"quiz:{row['id']}",
-        "card_id": None,
-        "source_type": "quiz",
-        "source_id": row["id"],
-        "title": row["title"],
-        "area": row["area"],
-        "difficulty": row["difficulty"],
-        "question_type": question_type,
-        "prompt": prompt,
-        "answer": answer,
-        "options": options,
-        "hint": hint,
-        "explanation": explanation,
-        "summary": row["summary"],
-        "linked_nodes": linked_nodes,
-        "open_quiz_path": f"/quizzes/{row['id']}",
-        "open_node_path": f"/nodes/{linked_nodes[0]['slug']}" if linked_nodes else "",
-        "status": "generated",
-        "created_at": "",
-        "updated_at": row["updated_at"],
-    }
-    return {"bite": bite, "next_cursor": f"quiz:{row['id']}"}
-
-
-def _payload_from_card(row: sqlite3.Row) -> dict:
-    bite = _card_to_bite(row)
-    return {"bite": bite, "next_cursor": bite["id"]}
-
-
-def _card_to_bite(row: sqlite3.Row) -> dict:
-    source_type = row["source_type"]
-    source_id = row["source_id"]
-    return {
-        "id": f"card:{row['id']}",
-        "card_id": row["id"],
-        "source_type": source_type,
-        "source_id": source_id,
-        "title": row["title"],
-        "area": row["area"],
-        "difficulty": row["difficulty"],
-        "question_type": row["question_type"] if "question_type" in row.keys() else "blank",
-        "prompt": row["prompt"],
-        "answer": row["answer"],
-        "options": _decode_options(row["options_json"] if "options_json" in row.keys() else "[]"),
-        "hint": row["hint"],
-        "explanation": _decode_explanation(row["explanation_json"]),
-        "summary": row["hint"] or row["prompt"],
-        "linked_nodes": [],
-        "open_quiz_path": f"/quizzes/{source_id}" if source_type == "quiz" else "",
-        "open_node_path": f"/nodes/{source_id}" if source_type == "node" else "",
-        "status": row["status"],
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-    }
-
-
-def _get_card_row(conn: sqlite3.Connection, card_id: int) -> sqlite3.Row:
+def archive_bite_card(conn, card_id):
+    """Archive a card (called by DELETE /api/bites/{id})."""
     row = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card_id,)).fetchone()
     if not row:
-        raise ValueError("Daily Bite card not found.")
-    return row
+        raise ValueError(f"bite card {card_id} not found")
+    conn.execute("UPDATE bite_cards SET status='archive',updated_at=? WHERE id=?",
+                 (utc_now(), card_id))
+    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
+                  content_hash(row["prompt"] + row["answer"]))
+    conn.commit()
+    return _card_dict(conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card_id,)).fetchone())
 
 
-def _section(body: str, section_name: str) -> str:
-    matches = list(SECTION_HEADING_RE.finditer(body))
-    target = section_name.strip().lower()
-    for index, match in enumerate(matches):
-        heading = match.group(1).strip().lower()
-        if heading != target:
+def _to_dict(data):
+    """Accept either a dict or a Pydantic model."""
+    if hasattr(data, "model_dump"):
+        return data.model_dump()
+    if hasattr(data, "dict"):
+        return data.dict()
+    return data
+
+
+def create_bite_card(conn, data):
+    data = _to_dict(data)
+    now = utc_now()
+    expl = json.dumps(data.get("explanation", []), ensure_ascii=False)
+    opts = json.dumps(data.get("options", []), ensure_ascii=False)
+    conn.execute(
+        "INSERT INTO bite_cards (source_type,source_id,title,area,difficulty,"
+        "prompt,answer,hint,explanation_json,status,question_type,options_json,"
+        "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'active',?,?,?,?)",
+        (data["source_type"], data["source_id"], data["title"],
+         data.get("area", ""), data.get("difficulty", "medium"),
+         data["prompt"], data["answer"], data.get("hint", ""), expl,
+         data.get("question_type", "blank"), opts, now, now),
+    )
+    card_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
+                  content_hash(data["prompt"] + data["answer"]))
+    conn.commit()
+    return get_bite_card(conn, card_id)
+
+
+def update_bite_card(conn, card_id, data):
+    data = _to_dict(data)
+    existing = conn.execute(
+        "SELECT * FROM bite_cards WHERE id = ?", (card_id,)
+    ).fetchone()
+    if not existing:
+        return None
+    expl = json.dumps(data.get("explanation", []), ensure_ascii=False)
+    opts = json.dumps(data.get("options", []), ensure_ascii=False)
+    conn.execute(
+        "UPDATE bite_cards SET title=?,area=?,difficulty=?,prompt=?,answer=?,"
+        "hint=?,explanation_json=?,question_type=?,options_json=?,status=?,"
+        "updated_at=? WHERE id=?",
+        (data.get("title", existing["title"]),
+         data.get("area", existing["area"]),
+         data.get("difficulty", existing["difficulty"]),
+         data.get("prompt", existing["prompt"]),
+         data.get("answer", existing["answer"]),
+         data.get("hint", existing["hint"]), expl,
+         data.get("question_type", existing["question_type"]), opts,
+         data.get("status", existing["status"]), utc_now(), card_id),
+    )
+    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
+                  content_hash(data.get("prompt", existing["prompt"])
+                               + data.get("answer", existing["answer"])))
+    conn.commit()
+    return get_bite_card(conn, card_id)
+
+
+def delete_bite_card(conn, card_id):
+    existing = conn.execute(
+        "SELECT * FROM bite_cards WHERE id = ?", (card_id,)
+    ).fetchone()
+    if not existing:
+        return False
+    conn.execute(
+        "UPDATE bite_cards SET status='archived',updated_at=? WHERE id=?",
+        (utc_now(), card_id),
+    )
+    record_change(conn, ENTITY_BITE_CARD, str(card_id), 1,
+                  content_hash(existing["prompt"] + existing["answer"]))
+    conn.commit()
+    return True
+
+
+def extract_from_source(conn, source_type, source_id):
+    if source_type == "quiz":
+        row = conn.execute(
+            "SELECT id, title, area, body FROM quizzes WHERE id = ?",
+            (source_id,),
+        ).fetchone()
+        if not row:
+            return []
+        return _extract_quiz(row["body"], source_id, row["area"])
+    return []
+
+
+def _extract_quiz(body, source_id, area):
+    sections = re.split(r"^## ", body, flags=re.MULTILINE)
+    prompts, answers, hints, explanations = [], [], [], []
+    cur_section = None
+    cur_content = []
+
+    for section in sections:
+        if not section.strip():
             continue
-        start = match.end()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
-        return body[start:end].strip()
-    return ""
+        parts = section.split("\n", 1)
+        heading = parts[0].strip().lower()
+        content = parts[1].strip() if len(parts) > 1 else ""
+
+        if cur_section == "prompt":
+            prompts.append(cur_content[0] if cur_content else "")
+        elif cur_section == "answer":
+            answers.append(cur_content[0] if cur_content else "")
+        elif cur_section == "hint":
+            hints.append(cur_content[0] if cur_content else "")
+        elif cur_section == "explanation":
+            explanations.append([l for l in cur_content if l.strip()])
+
+        if heading.startswith("prompt"):
+            cur_section = "prompt"
+            cur_content = [content]
+        elif heading.startswith("answer"):
+            cur_section = "answer"
+            cur_content = [content]
+        elif heading.startswith("hint"):
+            cur_section = "hint"
+            cur_content = [content]
+        elif heading.startswith("explanation"):
+            cur_section = "explanation"
+            cur_content = content.split("\n")
+        else:
+            cur_section = None
+            cur_content = []
+
+    if cur_section == "prompt":
+        prompts.append(cur_content[0] if cur_content else "")
+    elif cur_section == "answer":
+        answers.append(cur_content[0] if cur_content else "")
+    elif cur_section == "hint":
+        hints.append(cur_content[0] if cur_content else "")
+    elif cur_section == "explanation":
+        explanations.append([l for l in cur_content if l.strip()])
+
+    cards = []
+    for i in range(min(len(prompts), len(answers))):
+        p = _clean_text(prompts[i])
+        a = _clean_text(answers[i])
+        if not p or not a:
+            continue
+        h = hints[i] if i < len(hints) else ""
+        e = explanations[i] if i < len(explanations) else []
+        cards.append({
+            "source_type": "quiz", "source_id": source_id,
+            "title": f"{source_id} #{i+1}", "area": area,
+            "difficulty": "medium", "question_type": "blank",
+            "prompt": p, "answer": a, "hint": h,
+            "explanation": e[:3], "options": [],
+        })
+    return cards
 
 
-def _select_prompt_answer_pair(quiz_id: str, selected_day: str, prompt: str, answer: str) -> dict[str, str]:
-    prompt_items = _numbered_items(prompt)
-    answer_items = _numbered_items(answer)
-    pairs = [
-        {"prompt": prompt_items[key], "answer": answer_items[key]}
-        for key in prompt_items.keys() & answer_items.keys()
-    ]
-    if not pairs:
-        return {"prompt": _one_line(prompt), "answer": _one_line(answer)}
-    return pairs[_stable_index(f"{selected_day}:{quiz_id}:pair", len(pairs))]
-
-
-def _numbered_items(value: str) -> dict[str, str]:
-    return {
-        match.group(1): _clean_markdown_text(match.group(2))
-        for match in NUMBERED_ITEM_RE.finditer(value.strip())
-    }
-
-
-def _fill_blank_prompt(prompt: str, answer: str) -> str:
-    cleaned_prompt = _one_line(prompt)
-    cleaned_answer = _one_line(answer)
-    if "____" in cleaned_prompt or "___" in cleaned_prompt:
-        return cleaned_prompt
-    if "blank" in cleaned_prompt.lower():
-        return cleaned_prompt
-
-    for token in INLINE_CODE_RE.findall(cleaned_prompt):
-        if token and token.lower() in cleaned_answer.lower():
-            return cleaned_prompt.replace(f"`{token}`", "____", 1)
-
-    return f"____ - {cleaned_prompt.rstrip('.?')}"
-
-
-def _choice_options(value: str) -> list[str]:
-    options: list[str] = []
-    for raw_line in value.splitlines():
-        line = raw_line.strip()
+def _clean_text(text):
+    text = text.strip()
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        line = line.strip()
         if not line:
             continue
-        match = CHOICE_LINE_RE.match(line)
-        if not match:
-            continue
-        option = _clean_markdown_text(match.group(1))
-        if option:
-            options.append(option)
-    return _unique_options(options)[:8]
+        if line.lower().startswith(("english:", "chinese:", "中文：")):
+            cleaned.append(line.split(":", 1)[1].strip() if ":" in line else line)
+        else:
+            cleaned.append(line)
+    return "\n".join(cleaned).strip()
 
 
-def _three_sentences(value: str, summary: str, title: str) -> list[str]:
-    sentences = [_clean_markdown_text(item) for item in SENTENCE_SPLIT_RE.split(value or "") if _clean_markdown_text(item)]
-    if not sentences:
-        sentences = [_clean_markdown_text(summary)]
-    while len(sentences) < 3:
-        fallback = "Connect the answer back to the original quiz before moving on."
-        if len(sentences) == 0:
-            fallback = title
-        elif len(sentences) == 1:
-            fallback = "The full quiz keeps the longer Markdown explanation and examples."
-        sentences.append(fallback)
-    return sentences[:3]
+def daily_bite(conn, day=None):
+    """Return today's Daily Bite card (deterministic by date)."""
+    from datetime import date
+    selected = day or date.today().isoformat()
+    rows = conn.execute(
+        "SELECT * FROM bite_cards WHERE status = 'active'"
+        " ORDER BY id LIMIT 1"
+    ).fetchall()
+    if not rows:
+        raise ValueError("no active bite cards")
+    # Deterministic pick: hash date to pick a card index
+    import hashlib
+    idx = int(hashlib.md5(selected.encode()).hexdigest(), 16) % len(rows)
+    return _card_dict(rows[idx])
 
 
-def _linked_nodes(conn: sqlite3.Connection, quiz_id: str) -> list[dict]:
-    return [
-        {"slug": item["node_slug"], "kind": item["kind"], "title": item["title"]}
-        for item in conn.execute(
-            """
-            SELECT ql.node_slug, ql.kind, COALESCE(n.title, ql.node_slug) AS title
-            FROM quiz_links ql
-            LEFT JOIN nodes n ON n.slug = ql.node_slug
-            WHERE ql.quiz_id = ?
-            ORDER BY ql.kind, ql.node_slug
-            """,
-            (quiz_id,),
-        ).fetchall()
-    ]
+def next_bite(conn, cursor=""):
+    """Return the next bite card after cursor."""
+    rows = conn.execute(
+        "SELECT * FROM bite_cards WHERE status = 'active'"
+        " ORDER BY id"
+    ).fetchall()
+    if not rows:
+        raise ValueError("no active bite cards")
+    if not cursor:
+        return _card_dict(rows[0])
+    for i, row in enumerate(rows):
+        if str(row["id"]) == cursor and i + 1 < len(rows):
+            return _card_dict(rows[i + 1])
+    return _card_dict(rows[0])
 
 
-def _fallback_hint(row: sqlite3.Row, linked_nodes: list[dict]) -> str:
-    if linked_nodes:
-        return f"Think about {linked_nodes[0]['title']}."
-    if row["area"]:
-        return f"Anchor it in {row['area']}."
-    return "Recall the smallest command, term, or invariant first."
-
-
-def _one_line(value: str, fallback: str = "") -> str:
-    for line in value.splitlines():
-        cleaned = _clean_markdown_text(line)
-        if cleaned:
-            return cleaned
-    return _clean_markdown_text(fallback)
-
-
-def _first_sentence(value: str) -> str:
-    cleaned = _clean_markdown_text(value)
-    if not cleaned:
-        return ""
-    return SENTENCE_SPLIT_RE.split(cleaned)[0]
-
-
-def _clean_markdown_text(value: str) -> str:
-    text = MARKDOWN_PREFIX_RE.sub("", value.strip())
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def _normalized_explanation(value: list[str]) -> list[str]:
-    items = [_clean_markdown_text(item) for item in value if _clean_markdown_text(item)]
-    while len(items) < 3:
-        items.append("Review the linked source for the full explanation.")
-    return items[:3]
-
-
-def _decode_explanation(value: str) -> list[str]:
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        parsed = []
-    if not isinstance(parsed, list):
-        parsed = []
-    return _normalized_explanation([str(item) for item in parsed])
-
-
-def _normalized_question_type(question_type: str, options: list[str]) -> str:
-    if question_type == "multiple_choice" and len(_unique_options(options)) >= 2:
-        return "multiple_choice"
-    return "blank"
-
-
-def _normalized_options(options: list[str], answer: str, question_type: str) -> list[str]:
-    if question_type != "multiple_choice":
-        return []
-    normalized = _unique_options([_clean_markdown_text(item) for item in options])
-    cleaned_answer = _clean_markdown_text(answer)
-    if cleaned_answer and cleaned_answer not in normalized:
-        normalized.insert(0, cleaned_answer)
-    return normalized[:8]
-
-
-def _decode_options(value: str) -> list[str]:
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        parsed = []
-    if not isinstance(parsed, list):
-        parsed = []
-    return _unique_options([_clean_markdown_text(str(item)) for item in parsed])[:8]
-
-
-def _unique_options(options: list[str]) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    for option in options:
-        cleaned = option.strip()
-        key = cleaned.lower()
-        if not cleaned or key in seen:
-            continue
-        seen.add(key)
-        unique.append(cleaned)
-    return unique
-
-
-def _stable_index(seed: str, count: int) -> int:
-    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-    return int(digest[:12], 16) % count
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _card_dict(row):
+    return {
+        "id": row["id"], "sourceType": row["source_type"],
+        "sourceId": row["source_id"], "title": row["title"],
+        "area": row["area"], "difficulty": row["difficulty"],
+        "prompt": row["prompt"], "answer": row["answer"],
+        "hint": row["hint"],
+        "explanation": json.loads(row["explanation_json"] or "[]"),
+        "questionType": row["question_type"],
+        "options": json.loads(row["options_json"] or "[]"),
+        "status": row["status"],
+        "createdAt": row["created_at"], "updatedAt": row["updated_at"],
+    }
