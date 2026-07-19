@@ -60,6 +60,10 @@ class AppLocalizationTest {
         assertTrue(defaultStrings.contains("More - Service"))
         assertTrue(defaultStrings.contains("generated output is always a proposal"))
         assertTrue(defaultStrings.contains("restore replaces current local data"))
+        assertTrue(defaultStrings.contains("Study Sync"))
+        assertTrue(defaultStrings.contains("phone-friendly study subset"))
+        assertTrue(defaultStrings.contains("Complex knowledge graph structure stays desktop-first"))
+        assertTrue(defaultStrings.contains("%3\$d bites"))
         assertTrue(defaultStrings.contains("export a backup"))
         assertTrue(defaultStrings.contains("Delete forever"))
         assertTrue(defaultStrings.contains("only recoverable from a backup"))
@@ -71,12 +75,16 @@ class AppLocalizationTest {
         assertTrue(chineseStrings.contains("API Key"))
         assertTrue(chineseStrings.contains("HTTPS"))
         assertTrue(chineseStrings.contains("Markdown"))
+        assertTrue(chineseStrings.contains("复习同步"))
+        assertTrue(chineseStrings.contains("适合手机使用的学习子集"))
+        assertTrue(chineseStrings.contains("复杂知识图谱结构仍以电脑端为准"))
+        assertTrue(chineseStrings.contains("%3\$d 每日一练"))
         assertTrue(chineseStrings.contains("more_guide_step_bodies"))
         assertTrue(chineseStrings.contains("more_section_expanded"))
     }
 
     private fun resourceText(relativePath: String): String {
-        val root = File(System.getProperty("user.dir"))
+        val root = File(requireNotNull(System.getProperty("user.dir")))
         return root.resolve("src/main/res").resolve(relativePath).readText(Charsets.UTF_8)
     }
 }

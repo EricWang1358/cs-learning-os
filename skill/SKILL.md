@@ -334,6 +334,30 @@ When the user asks for addictive daily practice, bite-sized review, flashcards, 
 - Do not require AI generation for Daily Bite; the card must work offline from Markdown.
 - Treat custom Bite CRUD as a local runtime layer. Editing or archiving a custom Bite must not mutate the source quiz Markdown.
 
+## Android Study Sync Boundary
+
+Android is a mobile review companion, not a full desktop knowledge-base mirror.
+When creating or changing content that should reach the phone, think in terms
+of a phone-friendly study projection:
+
+- Prefer Standard Q quiz Markdown and Daily-Bite-friendly prompts for anything
+  the user should practice on Android.
+- A phone-visible Daily Bite requires a saved `bite_card` row on the desktop;
+  quiz Markdown alone can support desktop projection, but Android reads synced
+  `bite_cards` from Room.
+- Android may consume light Node reading fields, Quiz records, Bite cards,
+  Capture slips, Reader Questions, and Review Attempts.
+- Do not require Android to ingest full desktop KnowledgeGraph tables,
+  frontmatter repair state, generated indexes, or every prerequisite edge.
+- If a desktop-only graph concept must affect Android, project it into one of
+  the supported study records instead of expanding the phone schema by default.
+- Area scope matters: cards and nodes outside the selected Android sync Areas
+  will not appear on the phone even if the desktop has them.
+
+Recommended framing for agents: desktop builds the map and creates durable
+learning material; Android drills recall, supports light reading, and records
+learning events.
+
 ## Tutorial Image Rule
 
 When a tutorial needs screenshots or diagrams:

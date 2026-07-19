@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cslearningos.mobile.R
+import com.cslearningos.mobile.feature.sync.SyncReport
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -158,8 +159,15 @@ private fun SyncStatusCard(state: LearningUiState, viewModel: LearningViewModel)
             fontSize = 12.sp
         )
         sync.lastPullReport?.let { report ->
+            val reportArgs = syncPullReportArgs(report)
             Text(
-                text = stringResource(R.string.sync_report_pull_line, report.pulledNodes, report.pulledQuizzes, report.conflicts),
+                text = stringResource(
+                    R.string.sync_report_pull_line,
+                    reportArgs[0],
+                    reportArgs[1],
+                    reportArgs[2],
+                    reportArgs[3]
+                ),
                 color = WorkbenchColors.Muted,
                 fontSize = 12.sp
             )
@@ -282,5 +290,8 @@ private fun syncReadinessLabel(readiness: SyncReadiness): Int = when (readiness)
     SyncReadiness.ReadOnly -> R.string.sync_readiness_read_only
     SyncReadiness.UploadOnly -> R.string.sync_readiness_upload_only
 }
+
+internal fun syncPullReportArgs(report: SyncReport): Array<Int> =
+    arrayOf(report.pulledNodes, report.pulledQuizzes, report.pulledBiteCards, report.conflicts)
 
 private val SyncTimestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")

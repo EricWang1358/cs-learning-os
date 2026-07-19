@@ -22,6 +22,7 @@ $requiredPaths = @(
     "android-app/domain/content",
     "android-app/application/content",
     "android-app/data/content-room",
+    "android-app/data/graph-room",
     "android-app/feature/assistant/api",
     "android-app/feature/assistant/impl",
     "android-app/adapter/model-openai"
@@ -35,6 +36,7 @@ $requiredProjects = @(
     ":domain:content",
     ":application:content",
     ":data:content-room",
+    ":data:graph-room",
     ":feature:assistant:api",
     ":feature:assistant:impl",
     ":adapter:model-openai"
@@ -50,7 +52,7 @@ $forbiddenPureReferences = @(
 
 $moduleDependencyAllowlist = [ordered]@{
     "android-app/core/kernel" = @()
-    "android-app/core/database" = @()
+    "android-app/core/database" = @(':data:graph-room')
     "android-app/domain/assistant" = @(':core:kernel')
     "android-app/domain/content" = @(':core:kernel')
     "android-app/application/content" = @(':core:kernel', ':domain:content')

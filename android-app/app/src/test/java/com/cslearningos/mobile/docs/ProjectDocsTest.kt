@@ -12,6 +12,7 @@ class ProjectDocsTest {
         val readme = root.resolve("README.md").readText(Charsets.UTF_8)
         val architecture = root.resolve("docs/architecture.md").readText(Charsets.UTF_8)
         val dataRecovery = root.resolve("docs/data-recovery.md").readText(Charsets.UTF_8)
+        val usage = root.resolve("docs/android-app-usage.md").readText(Charsets.UTF_8)
 
         listOf(readme, architecture, dataRecovery).forEach { text ->
             assertFalse(text.contains('\uFFFD'))
@@ -20,7 +21,12 @@ class ProjectDocsTest {
         assertTrue(readme.contains("Network permission policy"))
         assertTrue(readme.contains("Advanced commands"))
         assertTrue(architecture.contains("independently buildable"))
+        assertTrue(architecture.contains("Study Sync Boundary"))
+        assertTrue(architecture.contains("not a full desktop database mirror"))
         assertTrue(dataRecovery.contains("Backup schema v1"))
+        assertTrue(dataRecovery.contains("Study Sync is not a backup replacement"))
+        assertTrue(usage.contains("复习同步（Study Sync）"))
+        assertTrue(usage.contains("不是完整知识库镜像"))
     }
 
     private fun androidRoot(): File {

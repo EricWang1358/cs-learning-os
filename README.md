@@ -32,9 +32,11 @@ installing; configure an external AI provider only if you choose to use AI.
 Local notes, review data, backups, and provider settings stay on the device by
 default.
 
-The Android beta currently mirrors the desktop Library and sync flows. The
-next phase narrows mobile scope to review drills and AI Q&A (see
-[Next phase](#next-phase-mobile-first-review-loop) above).
+Android sync is intentionally scoped as **Study Sync**, not a full desktop
+knowledge-base mirror. The desktop remains the authoring and knowledge-graph
+workbench; Android pulls a phone-friendly study subset for light reading,
+quizzes, Daily Bite cards, captures, and review progress. This avoids forcing
+the phone Room schema to understand every desktop-only KG/frontmatter detail.
 
 Android documentation:
 
@@ -71,22 +73,22 @@ The supported `scripts/dev.ps1` launcher binds the API to loopback only. Direct 
 
 Recovery steps and backup limits are documented in [docs/data-recovery.md](docs/data-recovery.md).
 
-## Next phase: mobile-first review loop
+## Mobile-first review loop
 
-The current desktop app excels at authoring and knowledge-graph building. The
-next phase shifts the mobile experience from a general client into a focused
-review companion:
+The current desktop app excels at authoring and knowledge-graph building.
+The mobile experience is a focused review companion rather than a general
+desktop clone:
 
 **Desktop (authoring → generation)**
 - Build and maintain tutorial nodes, quiz banks, and 3D knowledge trees.
 - Generate Daily-Bite-compatible review questions plus answer explanations
   from the quiz Markdown already stored under `data/content/quizzes/`.
-- Package generated review sets into a mobile-ready bundle (sync protocol
-  already exists). The desktop does the heavy content work so the phone
-  never has to.
+- Project complex nodes, quiz banks, and Daily Bite cards into a mobile-ready
+  study subset. The desktop does the heavy content work so the phone never has
+  to parse the full desktop schema.
 
 **Phone (review → Q&A)**
-- Pull review bundles from the desktop via the existing sync gateway.
+- Pull the scoped study subset from the desktop via the existing sync gateway.
 - Focus on fill-in-blank and short-answer recall drills — not reading
   full tutorials.
 - AI assistant provides on-device explanations when you get a question
@@ -97,7 +99,7 @@ review companion:
 - Tutorial content is best authored and consumed on a large screen.
 - Phone storage and network for a complete course mirror are unnecessary
   when only review cards and answer keys matter on the go.
-- The sync protocol already supports scoped pulls; review bundles are a
+- The sync protocol already supports scoped pulls; mobile study data is the
   natural filter.
 
 The goal: desktop builds the map and writes the tests; phone drills recall
