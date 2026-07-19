@@ -52,6 +52,7 @@ class SyncRepository(
         var pulledQuizzes = 0
         var pulledQuestions = 0
         var pulledCaptureSlips = 0
+        var pulledBiteCards = 0
         var appliedAttempts = 0
         var skippedAttempts = 0
         var skippedRecords = 0
@@ -75,6 +76,7 @@ class SyncRepository(
             pulledQuizzes += outcome.pulledQuizzes
             pulledQuestions += outcome.pulledQuestions
             pulledCaptureSlips += outcome.pulledCaptureSlips
+            pulledBiteCards += outcome.pulledBiteCards
             appliedAttempts += outcome.appliedAttempts
             skippedAttempts += outcome.skippedAttempts
             skippedRecords += outcome.skippedRecords
@@ -94,6 +96,7 @@ class SyncRepository(
             pulledQuizzes = pulledQuizzes,
             pulledQuestions = pulledQuestions,
             pulledCaptureSlips = pulledCaptureSlips,
+            pulledBiteCards = pulledBiteCards,
             appliedAttempts = appliedAttempts,
             skippedAttempts = skippedAttempts,
             skippedRecords = skippedRecords,
@@ -292,6 +295,7 @@ class SyncRepository(
         val pulledQuizzes: Int,
         val pulledQuestions: Int,
         val pulledCaptureSlips: Int,
+        val pulledBiteCards: Int,
         val appliedAttempts: Int,
         val skippedAttempts: Int,
         val skippedRecords: Int,
@@ -304,6 +308,7 @@ class SyncRepository(
         var pulledQuizzes = 0
         var pulledQuestions = 0
         var pulledCaptureSlips = 0
+        var pulledBiteCards = 0
         var appliedAttempts = 0
         var skippedAttempts = 0
         var skippedRecords = 0
@@ -545,6 +550,7 @@ class SyncRepository(
             pulledQuizzes = pulledQuizzes,
             pulledQuestions = pulledQuestions,
             pulledCaptureSlips = pulledCaptureSlips,
+            pulledBiteCards = pulledBiteCards,
             appliedAttempts = appliedAttempts,
             skippedAttempts = skippedAttempts,
             skippedRecords = skippedRecords,

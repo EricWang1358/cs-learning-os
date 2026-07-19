@@ -379,6 +379,35 @@ interface LearningDao {
         quizFts.forEach { upsertQuizFts(it) }
     }
 
+    @Transaction
+    suspend fun applySyncBatch(
+        areas: List<AreaEntity>,
+        nodes: List<LearningNodeEntity>,
+        quizzes: List<QuizItemEntity>,
+        states: List<ReviewStateEntity>,
+        attempts: List<ReviewAttemptEntity>,
+        questions: List<ReaderQuestionEntity>,
+        captureSlips: List<CaptureSlipEntity>,
+        biteCards: List<BiteCardEntity>,
+        deletedNodeFtsIds: List<Int>,
+        deletedQuizFtsIds: List<Int>,
+        nodeFts: List<NodeFtsEntity>,
+        quizFts: List<QuizFtsEntity>
+    ) {
+        upsertAreas(areas)
+        upsertNodes(nodes)
+        upsertQuizzes(quizzes)
+        upsertReaderQuestions(questions)
+        upsertCaptureSlips(captureSlips)
+        upsertBiteCards(biteCards)
+        insertAttempts(attempts)
+        upsertReviewStates(reviewStates)
+        deletedNodeFtsIds.forEach { deleteNodeFts(it) }
+        deletedQuizFtsIds.forEach { deleteQuizFts(it) }
+        nodeFts.forEach { upsertNodeFts(it) }
+        quizFts.forEach { upsertQuizFts(it) }
+    }
+
     @Query(
         """
         SELECT 'node' AS type, node_id AS id, title, snippet(node_fts, 3, '[', ']', '...', 12) AS snippet
@@ -397,6 +426,20 @@ interface LearningDao {
     )
     suspend fun searchQuizzes(query: String): List<SearchResultEntity>
 
+    // ---- Daily Bite cards ----
+
+    @Query("SELECT * FROM bite_cards WHERE status = 'active' ORDER BY updated_at DESC")
+    fun observeBiteCards(): Flow<List<BiteCardEntity>>
+
+    @Query("SELECT * FROM bite_cards WHERE status = 'active' ORDER BY updated_at DESC")
+    suspend fun getBiteCards(): List<BiteCardEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBiteCards(cards: List<BiteCardEntity>)
+
+    @Query("DELETE FROM bite_cards")
+    suspend fun deleteAllBiteCards()
+
     @Transaction
     suspend fun clearAll() {
         deleteAllAttempts()
@@ -404,6 +447,7 @@ interface LearningDao {
         deleteAllQuizzes()
         deleteAllReaderQuestions()
         deleteAllCaptureSlips()
+        deleteAllBiteCards()
         deleteAllAreas()
         deleteAllNodes()
         deleteAllQuizFts()
@@ -419,6 +463,7 @@ interface LearningDao {
         attempts: List<ReviewAttemptEntity>,
         questions: List<ReaderQuestionEntity>,
         captureSlips: List<CaptureSlipEntity>,
+        biteCards: List<BiteCardEntity>,
         nodeFts: List<NodeFtsEntity>,
         quizFts: List<QuizFtsEntity>
     ) {
@@ -432,6 +477,7 @@ interface LearningDao {
         insertAttempts(attempts)
         upsertReaderQuestions(questions)
         upsertCaptureSlips(captureSlips)
+        upsertBiteCards(biteCards)
         nodeFts.forEach { upsertNodeFts(it) }
         quizFts.forEach { upsertQuizFts(it) }
     }

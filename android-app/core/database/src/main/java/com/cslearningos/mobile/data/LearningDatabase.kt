@@ -39,9 +39,10 @@ import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntit
         KgEdgeEntity::class,
         KgProposalEntity::class,
         KgMasteryEntity::class,
-        KgMasteryEventEntity::class
+        KgMasteryEventEntity::class,
+        BiteCardEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -214,6 +215,34 @@ abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
             }
         }
 
+        internal val Migration9To10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `bite_cards` (
+                        `id` INTEGER NOT NULL,
+                        `source_type` TEXT NOT NULL,
+                        `source_id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `area` TEXT NOT NULL,
+                        `difficulty` TEXT NOT NULL,
+                        `prompt` TEXT NOT NULL,
+                        `answer` TEXT NOT NULL,
+                        `hint` TEXT NOT NULL,
+                        `explanation_json` TEXT NOT NULL,
+                        `question_type` TEXT NOT NULL,
+                        `options_json` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `sync_status` TEXT NOT NULL DEFAULT 'clean',
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun create(context: Context): LearningDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -228,7 +257,8 @@ abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
                     Migration5To6,
                     Migration6To7,
                     Migration7To8,
-                    MIGRATION_8_9
+                    MIGRATION_8_9,
+                    Migration9To10
                 )
                 // Fresh installs (no migration path): Room auto-generates wrong
                 // full-unique indexes from the mirror annotations; this callback

@@ -158,6 +158,27 @@ data class QuizFtsEntity(
     val answer: String
 )
 
+@Entity(tableName = "bite_cards")
+data class BiteCardEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    @ColumnInfo(name = "source_type") val sourceType: String,
+    @ColumnInfo(name = "source_id") val sourceId: String,
+    val title: String,
+    val area: String,
+    val difficulty: String,
+    val prompt: String,
+    val answer: String,
+    val hint: String,
+    @ColumnInfo(name = "explanation_json") val explanationJson: String,
+    @ColumnInfo(name = "question_type") val questionType: String,
+    @ColumnInfo(name = "options_json") val optionsJson: String,
+    val status: String,
+    @ColumnInfo(name = "sync_status") val syncStatus: String = "clean",
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long
+)
+
 data class SearchResultEntity(
     val type: String,
     val id: String,
