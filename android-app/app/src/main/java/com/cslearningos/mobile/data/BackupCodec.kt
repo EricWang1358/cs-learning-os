@@ -168,6 +168,7 @@ object BackupCodec {
     private fun BiteCardEntity.toJson(): JSONObject =
         JSONObject()
             .put("id", id)
+            .put("clientId", clientId)
             .put("sourceType", sourceType)
             .put("sourceId", sourceId)
             .put("title", title)
@@ -181,6 +182,11 @@ object BackupCodec {
             .put("optionsJson", optionsJson)
             .put("status", status)
             .put("syncStatus", syncStatus)
+            .put("lastReviewedAt", lastReviewedAt)
+            .put("reviewCount", reviewCount)
+            .put("lastRating", lastRating)
+            .put("nextReviewAt", nextReviewAt)
+            .put("masteryScore", masteryScore)
             .put("createdAt", createdAt)
             .put("updatedAt", updatedAt)
 
@@ -286,10 +292,11 @@ object BackupCodec {
     private fun JSONObject.toBiteCard(): BiteCardEntity =
         BiteCardEntity(
             id = getLong("id"),
+            clientId = optString("clientId"),
             sourceType = optString("sourceType", "quiz"),
             sourceId = optString("sourceId"),
             title = getString("title"),
-            area = optString("area"),
+            area = optString("area").ifBlank { "questions" },
             difficulty = optString("difficulty", "medium"),
             prompt = getString("prompt"),
             answer = getString("answer"),
@@ -299,6 +306,11 @@ object BackupCodec {
             optionsJson = optString("optionsJson", "[]"),
             status = optString("status", "active"),
             syncStatus = optString("syncStatus", "clean"),
+            lastReviewedAt = optLong("lastReviewedAt", 0L),
+            reviewCount = optInt("reviewCount", 0),
+            lastRating = optString("lastRating"),
+            nextReviewAt = optLong("nextReviewAt", 0L),
+            masteryScore = optDouble("masteryScore", 0.0),
             createdAt = optLong("createdAt", 0L),
             updatedAt = optLong("updatedAt", optLong("createdAt", 0L))
         )
@@ -381,6 +393,7 @@ object BackupCodec {
 
     private fun JSONArray.validateBiteCardStrings() = validateObjects { card ->
         card.validateRequiredString("title")
+        card.validateOptionalString("clientId")
         card.validateOptionalString("sourceType")
         card.validateOptionalString("sourceId")
         card.validateOptionalString("area")

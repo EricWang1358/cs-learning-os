@@ -79,6 +79,49 @@ class LearningDatabaseMigrationTest {
     }
 
     @Test
+    fun migration10To11AddsBiteCardProgressColumnsAndNormalizesBlankArea() {
+        helper.createDatabase("bite-card-progress-migration", 10).apply {
+            execSQL(
+                """
+                INSERT INTO bite_cards(
+                    id, source_type, source_id, title, area, difficulty, prompt, answer,
+                    hint, explanation_json, question_type, options_json, status,
+                    sync_status, created_at, updated_at
+                ) VALUES(
+                    7, 'quiz', 'quiz-7', 'Legacy bite', '', 'easy', 'Prompt', 'Answer',
+                    '', '[]', 'blank', '[]', 'active', 'dirty', 1000, 2000
+                )
+                """.trimIndent()
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            "bite-card-progress-migration",
+            11,
+            true,
+            LearningDatabase.Migration10To11
+        ).use { db ->
+            db.query(
+                """
+                SELECT area, client_id, last_reviewed_at, review_count, last_rating,
+                       next_review_at, mastery_score
+                FROM bite_cards WHERE id = 7
+                """.trimIndent()
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("questions", it.getString(0))
+                assertEquals("", it.getString(1))
+                assertEquals(0L, it.getLong(2))
+                assertEquals(0, it.getInt(3))
+                assertEquals("", it.getString(4))
+                assertEquals(0L, it.getLong(5))
+                assertEquals(0.0, it.getDouble(6), 0.0001)
+            }
+        }
+    }
+
+    @Test
     fun restoreBackupReplacesCanonicalDataAndClearsV7OperationalRecords() = runBlocking {
         val database = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(),

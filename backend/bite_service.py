@@ -97,6 +97,11 @@ def _to_dict(data):
     return data
 
 
+def normalize_area(area: str | None) -> str:
+    value = str(area or "").strip()
+    return value or "questions"
+
+
 def create_bite_card(conn, data):
     data = _to_dict(data)
     now = utc_now()
@@ -107,7 +112,7 @@ def create_bite_card(conn, data):
         "prompt,answer,hint,explanation_json,status,question_type,options_json,"
         "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'active',?,?,?,?)",
         (data["source_type"], data["source_id"], data["title"],
-         data.get("area", ""), data.get("difficulty", "medium"),
+         normalize_area(data.get("area")), data.get("difficulty", "medium"),
          data["prompt"], data["answer"], data.get("hint", ""), expl,
          data.get("question_type", "blank"), opts, now, now),
     )
@@ -132,7 +137,7 @@ def update_bite_card(conn, card_id, data):
         "hint=?,explanation_json=?,question_type=?,options_json=?,status=?,"
         "updated_at=? WHERE id=?",
         (data.get("title", existing["title"]),
-         data.get("area", existing["area"]),
+         normalize_area(data.get("area", existing["area"])),
          data.get("difficulty", existing["difficulty"]),
          data.get("prompt", existing["prompt"]),
          data.get("answer", existing["answer"]),
@@ -184,8 +189,6 @@ def extract_from_source(conn, source_type, source_id):
 def _extract_quiz(body, source_id, area):
     sections = re.split(r"^## ", body, flags=re.MULTILINE)
     prompts, answers, hints, explanations = [], [], [], []
-    cur_section = None
-    cur_content = []
 
     for section in sections:
         if not section.strip():
@@ -194,39 +197,18 @@ def _extract_quiz(body, source_id, area):
         heading = parts[0].strip().lower()
         content = parts[1].strip() if len(parts) > 1 else ""
 
-        if cur_section == "prompt":
-            prompts.append(cur_content[0] if cur_content else "")
-        elif cur_section == "answer":
-            answers.append(cur_content[0] if cur_content else "")
-        elif cur_section == "hint":
-            hints.append(cur_content[0] if cur_content else "")
-        elif cur_section == "explanation":
-            explanations.append([l for l in cur_content if l.strip()])
-
         if heading.startswith("prompt"):
-            cur_section = "prompt"
-            cur_content = [content]
+            prompts.append(content)
         elif heading.startswith("answer"):
-            cur_section = "answer"
-            cur_content = [content]
-        elif heading.startswith("hint"):
-            cur_section = "hint"
-            cur_content = [content]
-        elif heading.startswith("explanation"):
-            cur_section = "explanation"
-            cur_content = content.split("\n")
-        else:
-            cur_section = None
-            cur_content = []
-
-    if cur_section == "prompt":
-        prompts.append(cur_content[0] if cur_content else "")
-    elif cur_section == "answer":
-        answers.append(cur_content[0] if cur_content else "")
-    elif cur_section == "hint":
-        hints.append(cur_content[0] if cur_content else "")
-    elif cur_section == "explanation":
-        explanations.append([l for l in cur_content if l.strip()])
+            answers.append(content)
+        elif heading.startswith("hint") and len(answers) < len(prompts):
+            while len(hints) < len(prompts):
+                hints.append("")
+            hints[-1] = content
+        elif heading.startswith("explanation") and len(answers) < len(prompts):
+            while len(explanations) < len(prompts):
+                explanations.append([])
+            explanations[-1] = [l for l in content.split("\n") if l.strip()]
 
     cards = []
     for i in range(min(len(prompts), len(answers))):
@@ -267,7 +249,7 @@ def daily_bite(conn, day=None):
     selected = day or date.today().isoformat()
     rows = conn.execute(
         "SELECT * FROM bite_cards WHERE status = 'active'"
-        " ORDER BY id LIMIT 1"
+        " ORDER BY id"
     ).fetchall()
     if not rows:
         raise ValueError("no active bite cards")
@@ -304,5 +286,11 @@ def _card_dict(row):
         "questionType": row["question_type"],
         "options": json.loads(row["options_json"] or "[]"),
         "status": row["status"],
+        "clientId": row["client_id"] if "client_id" in row.keys() else "",
+        "lastReviewedAt": row["last_reviewed_at"] if "last_reviewed_at" in row.keys() else "",
+        "reviewCount": row["review_count"] if "review_count" in row.keys() else 0,
+        "lastRating": row["last_rating"] if "last_rating" in row.keys() else "",
+        "nextReviewAt": row["next_review_at"] if "next_review_at" in row.keys() else "",
+        "masteryScore": row["mastery_score"] if "mastery_score" in row.keys() else 0,
         "createdAt": row["created_at"], "updatedAt": row["updated_at"],
     }

@@ -79,6 +79,7 @@ class SyncRepositoryTest {
 
     private fun biteCardRecord(id: String, revision: Long, status: String = "active") = SyncRecord.BiteCard(
         id = id,
+        clientId = "",
         sourceType = "quiz",
         sourceId = "q1",
         title = "TLB Bite",
@@ -91,6 +92,11 @@ class SyncRepositoryTest {
         status = status,
         questionType = "blank",
         optionsJson = "[]",
+        lastReviewedAt = "",
+        reviewCount = 0,
+        lastRating = "",
+        nextReviewAt = "",
+        masteryScore = 0.0,
         revision = revision,
         hash = "hash-$id"
     )
@@ -385,6 +391,32 @@ class SyncRepositoryTest {
     }
 
     @Test
+    fun repeatedBiteCardPullReplacesExistingCardWithoutDuplicatingIt() = runTest {
+        val dao = FakeDao()
+        val repeatedManifest = SyncManifest(
+            reset = false,
+            protocolVersion = 1,
+            serverId = "srv",
+            cursor = 4,
+            hasMore = false,
+            changes = listOf(SyncChange("bite_card", "101", 4, "h", false, "algorithms"))
+        )
+        val transport = FakeTransport(
+            manifests = ArrayDeque(listOf(repeatedManifest, repeatedManifest)),
+            records = mapOf("bite_card" to listOf(biteCardRecord("101", 4)))
+        )
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        repository.pullAndApply(scope)
+        store.cursor = 0L
+        repository.pullAndApply(scope)
+
+        assertEquals(1, dao.biteCards.size)
+        assertEquals("TLB Bite", dao.biteCards.getValue(101L).title)
+        assertEquals(listOf(listOf("101"), listOf("101")), transport.pullRequests["bite_card"])
+    }
+
+    @Test
     fun reviewAttemptFromDesktopAppliesIdempotentlyAndRebuildsState() = runTest {
         val dao = FakeDao()
         dao.quizzes["q1"] = localQuiz("q1")
@@ -472,6 +504,53 @@ class SyncRepositoryTest {
         assertEquals(SyncStatus.clean, dao.slips.getValue("slip-1").syncStatus)
         assertEquals(1, report.uploadedQuestions)
         assertEquals(SyncStatus.clean, dao.questions.getValue("rq-1").syncStatus)
+        assertEquals(0, report.rejected)
+    }
+
+    @Test
+    fun pushLocalChangesUploadsDirtyBiteCardsAsLightweightReviewContent() = runTest {
+        val dao = FakeDao()
+        dao.biteCards[42L] = BiteCardEntity(
+            id = 42L,
+            clientId = "android-bite-42",
+            sourceType = "mobile_bite",
+            sourceId = "local-review-42",
+            title = "Phone bite",
+            area = "",
+            difficulty = "medium",
+            prompt = "Mobile lightweight cards sync into ____.",
+            answer = "bite_cards",
+            hint = "Not desktop quizzes.",
+            explanationJson = "[\"Keep it lightweight.\"]",
+            questionType = "blank",
+            optionsJson = "[]",
+            status = "active",
+            syncStatus = "dirty",
+            lastReviewedAt = 110L,
+            reviewCount = 2,
+            lastRating = "good",
+            nextReviewAt = 220L,
+            masteryScore = 0.7,
+            createdAt = 10L,
+            updatedAt = 120L
+        )
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(1, report.uploadedBiteCards)
+        assertEquals(0, report.uploadedQuizzes)
+        assertEquals(0, transport.pushedQuizzes.size)
+        assertEquals(1, transport.pushedBiteCards.size)
+        val pushed = transport.pushedBiteCards.single()
+        assertEquals("42", pushed.getString("id"))
+        assertEquals("android-bite-42", pushed.getString("clientId"))
+        assertEquals("mobile_bite", pushed.getString("sourceType"))
+        assertEquals("questions", pushed.getString("area"))
+        assertEquals(2, pushed.getInt("reviewCount"))
+        assertEquals("good", pushed.getString("lastRating"))
+        assertEquals("clean", dao.biteCards.getValue(42L).syncStatus)
         assertEquals(0, report.rejected)
     }
 
@@ -590,6 +669,42 @@ class SyncRepositoryTest {
         assertTrue(transport.pushedQuizzes.single().getString("body").contains("## Prompt"))
         assertEquals(SyncStatus.clean, dao.quizzes.getValue("q1").syncStatus)
         assertEquals(2L, dao.quizzes.getValue("q1").baseRevision)
+        assertTrue(dao.outbox.isEmpty())
+    }
+
+    @Test
+    fun locallyCreatedQuizPushesAsBiteCardInsteadOfDesktopQuiz() = runTest {
+        val dao = FakeDao()
+        dao.quizzes["local-q1"] = localQuiz("local-q1").copy(
+            prompt = "Phone-created prompt",
+            answer = "Phone-created answer",
+            explanation = "Phone-created explanation",
+            area = "",
+            revision = 1,
+            baseRevision = 0,
+            syncStatus = SyncStatus.dirty
+        )
+        dao.outbox["quiz-change-local-1"] = pendingQuizOutbox(
+            "quiz-change-local-1",
+            dao.quizzes.getValue("local-q1"),
+            baseRevision = null
+        )
+        val transport = FakeTransport(manifests = ArrayDeque(emptyList()), records = emptyMap())
+        val repository = SyncRepository(dao.proxy(), transport, store) { 100L }
+
+        val report = repository.pushLocalChanges()
+
+        assertEquals(0, report.uploadedQuizzes)
+        assertEquals(1, report.uploadedBiteCards)
+        assertEquals(0, transport.pushedQuizzes.size)
+        val pushed = transport.pushedBiteCards.single()
+        assertEquals("local-q1", pushed.getString("id"))
+        assertEquals("android-quiz-local-q1", pushed.getString("clientId"))
+        assertEquals("mobile_bite", pushed.getString("sourceType"))
+        assertEquals("local-q1", pushed.getString("sourceId"))
+        assertEquals("questions", pushed.getString("area"))
+        assertEquals("Phone-created prompt", pushed.getString("prompt"))
+        assertEquals(SyncStatus.clean, dao.quizzes.getValue("local-q1").syncStatus)
         assertTrue(dao.outbox.isEmpty())
     }
 
@@ -769,12 +884,14 @@ class SyncRepositoryTest {
         val pushedQuestions = mutableListOf<JSONObject>()
         val pushedNodes = mutableListOf<JSONObject>()
         val pushedQuizzes = mutableListOf<JSONObject>()
+        val pushedBiteCards = mutableListOf<JSONObject>()
         val pullRequests = mutableMapOf<String, MutableList<List<String>>>()
         var attemptsReceipts: List<SyncReceipt> = emptyList()
         var capturesReceipts: List<SyncReceipt> = emptyList()
         var questionsReceipts: List<SyncReceipt> = emptyList()
         var nodeReceipts: List<SyncReceipt> = emptyList()
         var quizReceipts: List<SyncReceipt> = emptyList()
+        var biteCardReceipts: List<SyncReceipt> = emptyList()
 
         override suspend fun health(): SyncHealth = SyncHealth(1, healthServerId, 1)
 
@@ -845,6 +962,20 @@ class SyncRepositoryTest {
             }
         }
 
+        override suspend fun pushBiteCards(items: List<JSONObject>): List<SyncReceipt> {
+            pushedBiteCards += items
+            return biteCardReceipts.ifEmpty {
+                items.map {
+                    SyncReceipt(
+                        id = it.getString("id"),
+                        status = SyncReceipt.STATUS_ACCEPTED,
+                        reason = null,
+                        revision = 1
+                    )
+                }
+            }
+        }
+
         override suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult =
             SyncPairing.PairResult(
                 deviceId = "device-test",
@@ -885,6 +1016,7 @@ class SyncRepositoryTest {
                     "getAllAttempts" -> attempts.values.toList()
                     "getAllCaptureSlips" -> slips.values.toList()
                     "getAllReaderQuestions" -> questions.values.toList()
+                    "getAllBiteCards" -> biteCards.values.toList()
                     "getPendingNodeOutbox" -> outbox.values
                         .filter { it.aggregateType == "content.node" && it.state == "pending" }
                         .take(args[0] as Int)
@@ -935,9 +1067,18 @@ class SyncRepositoryTest {
                         questions[question.id] = question
                         Unit
                     }
+                    "upsertQuiz" -> {
+                        val quiz = args[0] as QuizItemEntity
+                        quizzes[quiz.id] = quiz
+                        Unit
+                    }
                     "upsertReviewState" -> {
                         val state = args[0] as ReviewStateEntity
                         reviewStates[state.quizId] = state
+                        Unit
+                    }
+                    "upsertBiteCards" -> {
+                        (args[0] as List<BiteCardEntity>).forEach { biteCards[it.id] = it }
                         Unit
                     }
                     "markNodeSyncedDeleted" -> {

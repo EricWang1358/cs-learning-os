@@ -228,10 +228,11 @@ CREATE TABLE IF NOT EXISTS sync_changes (
 
 CREATE TABLE IF NOT EXISTS bite_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_type TEXT NOT NULL CHECK(source_type IN ('node', 'quiz')),
+    client_id TEXT,
+    source_type TEXT NOT NULL CHECK(source_type IN ('node', 'quiz', 'mobile_bite', 'manual')),
     source_id TEXT NOT NULL,
     title TEXT NOT NULL,
-    area TEXT NOT NULL DEFAULT '',
+    area TEXT NOT NULL DEFAULT 'questions',
     difficulty TEXT NOT NULL DEFAULT '',
     question_type TEXT NOT NULL DEFAULT 'blank' CHECK(question_type IN ('blank', 'multiple_choice')),
     prompt TEXT NOT NULL,
@@ -240,6 +241,11 @@ CREATE TABLE IF NOT EXISTS bite_cards (
     hint TEXT NOT NULL DEFAULT '',
     explanation_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archive')),
+    last_reviewed_at TEXT NOT NULL DEFAULT '',
+    review_count INTEGER NOT NULL DEFAULT 0,
+    last_rating TEXT NOT NULL DEFAULT '' CHECK(last_rating IN ('', 'again', 'hard', 'good', 'easy')),
+    next_review_at TEXT NOT NULL DEFAULT '',
+    mastery_score REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -281,6 +287,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 def initialize(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     _ensure_sync_changes_accepts_bite_card(conn)
+    _ensure_bite_cards_lightweight_sync_schema(conn)
     existing_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()
     }
@@ -397,3 +404,115 @@ def _ensure_sync_changes_accepts_bite_card(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_sync_changes_entity ON sync_changes(entity_type, entity_id)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_changes_seq ON sync_changes(seq)")
+
+
+def _ensure_bite_cards_lightweight_sync_schema(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bite_cards'"
+    ).fetchone()
+    table_sql = row["sql"] if row else ""
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(bite_cards)").fetchall()
+    }
+    requires_rebuild = bool(table_sql and "mobile_bite" not in table_sql)
+    if requires_rebuild:
+        conn.execute("DROP INDEX IF EXISTS idx_bite_cards_status_updated")
+        conn.execute("DROP INDEX IF EXISTS idx_bite_cards_client_id")
+        conn.execute("ALTER TABLE bite_cards RENAME TO bite_cards_legacy")
+        conn.execute(
+            """
+            CREATE TABLE bite_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_id TEXT,
+                source_type TEXT NOT NULL CHECK(source_type IN ('node', 'quiz', 'mobile_bite', 'manual')),
+                source_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                area TEXT NOT NULL DEFAULT 'questions',
+                difficulty TEXT NOT NULL DEFAULT '',
+                question_type TEXT NOT NULL DEFAULT 'blank' CHECK(question_type IN ('blank', 'multiple_choice')),
+                prompt TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                options_json TEXT NOT NULL DEFAULT '[]',
+                hint TEXT NOT NULL DEFAULT '',
+                explanation_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archive')),
+                last_reviewed_at TEXT NOT NULL DEFAULT '',
+                review_count INTEGER NOT NULL DEFAULT 0,
+                last_rating TEXT NOT NULL DEFAULT '' CHECK(last_rating IN ('', 'again', 'hard', 'good', 'easy')),
+                next_review_at TEXT NOT NULL DEFAULT '',
+                mastery_score REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        legacy_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(bite_cards_legacy)").fetchall()
+        }
+        select_client_id = "client_id" if "client_id" in legacy_columns else "NULL"
+        select_question_type = "question_type" if "question_type" in legacy_columns else "'blank'"
+        select_options_json = "options_json" if "options_json" in legacy_columns else "'[]'"
+        select_last_reviewed_at = "last_reviewed_at" if "last_reviewed_at" in legacy_columns else "''"
+        select_review_count = "review_count" if "review_count" in legacy_columns else "0"
+        select_last_rating = "last_rating" if "last_rating" in legacy_columns else "''"
+        select_next_review_at = "next_review_at" if "next_review_at" in legacy_columns else "''"
+        select_mastery_score = "mastery_score" if "mastery_score" in legacy_columns else "0"
+        conn.execute(
+            f"""
+            INSERT INTO bite_cards (
+                id, client_id, source_type, source_id, title, area, difficulty,
+                question_type, prompt, answer, options_json, hint, explanation_json,
+                status, last_reviewed_at, review_count, last_rating, next_review_at,
+                mastery_score, created_at, updated_at
+            )
+            SELECT
+                id,
+                {select_client_id},
+                source_type,
+                source_id,
+                title,
+                COALESCE(NULLIF(TRIM(area), ''), 'questions'),
+                difficulty,
+                {select_question_type},
+                prompt,
+                answer,
+                {select_options_json},
+                hint,
+                explanation_json,
+                status,
+                {select_last_reviewed_at},
+                {select_review_count},
+                {select_last_rating},
+                {select_next_review_at},
+                {select_mastery_score},
+                created_at,
+                updated_at
+            FROM bite_cards_legacy
+            """
+        )
+        conn.execute("DROP TABLE bite_cards_legacy")
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(bite_cards)").fetchall()
+        }
+
+    migrations = {
+        "client_id": "ALTER TABLE bite_cards ADD COLUMN client_id TEXT",
+        "last_reviewed_at": "ALTER TABLE bite_cards ADD COLUMN last_reviewed_at TEXT NOT NULL DEFAULT ''",
+        "review_count": "ALTER TABLE bite_cards ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0",
+        "last_rating": "ALTER TABLE bite_cards ADD COLUMN last_rating TEXT NOT NULL DEFAULT ''",
+        "next_review_at": "ALTER TABLE bite_cards ADD COLUMN next_review_at TEXT NOT NULL DEFAULT ''",
+        "mastery_score": "ALTER TABLE bite_cards ADD COLUMN mastery_score REAL NOT NULL DEFAULT 0",
+    }
+    for column, statement in migrations.items():
+        if column not in columns:
+            conn.execute(statement)
+    conn.execute(
+        "UPDATE bite_cards SET area = 'questions' WHERE TRIM(COALESCE(area, '')) = ''"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bite_cards_status_updated ON bite_cards(status, updated_at DESC)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bite_cards_client_id "
+        "ON bite_cards(client_id) WHERE client_id IS NOT NULL AND client_id != ''"
+    )

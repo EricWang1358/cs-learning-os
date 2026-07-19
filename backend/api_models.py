@@ -175,7 +175,7 @@ class SyncPushQuizzesRequest(BaseModel):
 
 
 class BiteCardCreate(BaseModel):
-    source_type: str = Field(pattern="^(node|quiz)$")
+    source_type: str = Field(pattern="^(node|quiz|mobile_bite|manual)$")
     source_id: str = Field(min_length=1)
     title: str = Field(min_length=1)
     area: str = ""
@@ -204,8 +204,11 @@ class BiteCardUpdate(BaseModel):
 class SyncPushBiteCardItem(BaseModel):
     changeId: str = Field(min_length=1, max_length=64)
     id: str = Field(min_length=1, max_length=64)
+    clientId: Optional[str] = Field(default=None, max_length=64)
+    sourceType: str = Field(default="mobile_bite", pattern="^(node|quiz|mobile_bite|manual)$")
+    sourceId: str = ""
     title: str = Field(min_length=1, max_length=300)
-    area: str = Field(min_length=1, max_length=80)
+    area: str = Field(default="", max_length=80)
     prompt: str = Field(min_length=1)
     answer: str = Field(min_length=1)
     hint: str = ""
@@ -214,6 +217,11 @@ class SyncPushBiteCardItem(BaseModel):
     questionType: str = "blank"
     optionsJson: str = "[]"
     status: str = "active"
+    lastReviewedAt: str = ""
+    reviewCount: int = Field(default=0, ge=0)
+    lastRating: str = Field(default="", pattern="^(|again|hard|good|easy)$")
+    nextReviewAt: str = ""
+    masteryScore: float = Field(default=0, ge=0, le=1)
     baseRevision: Optional[int] = None
     revision: int = 1
     tombstone: bool = False

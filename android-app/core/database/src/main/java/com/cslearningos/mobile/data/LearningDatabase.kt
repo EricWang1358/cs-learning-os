@@ -42,7 +42,7 @@ import com.cslearningos.mobile.feature.assistant.data.AssistantConversationEntit
         KgMasteryEventEntity::class,
         BiteCardEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -221,6 +221,7 @@ abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
                     """
                     CREATE TABLE IF NOT EXISTS `bite_cards` (
                         `id` INTEGER NOT NULL,
+                        `client_id` TEXT NOT NULL DEFAULT '',
                         `source_type` TEXT NOT NULL,
                         `source_id` TEXT NOT NULL,
                         `title` TEXT NOT NULL,
@@ -234,12 +235,29 @@ abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
                         `options_json` TEXT NOT NULL,
                         `status` TEXT NOT NULL,
                         `sync_status` TEXT NOT NULL DEFAULT 'clean',
+                        `last_reviewed_at` INTEGER NOT NULL DEFAULT 0,
+                        `review_count` INTEGER NOT NULL DEFAULT 0,
+                        `last_rating` TEXT NOT NULL DEFAULT '',
+                        `next_review_at` INTEGER NOT NULL DEFAULT 0,
+                        `mastery_score` REAL NOT NULL DEFAULT 0.0,
                         `created_at` INTEGER NOT NULL,
                         `updated_at` INTEGER NOT NULL,
                         PRIMARY KEY(`id`)
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        internal val Migration10To11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `client_id` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `last_reviewed_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `review_count` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `last_rating` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `next_review_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `bite_cards` ADD COLUMN `mastery_score` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("UPDATE `bite_cards` SET `area` = 'questions' WHERE TRIM(COALESCE(`area`, '')) = ''")
             }
         }
 
@@ -258,7 +276,8 @@ abstract class LearningDatabase : RoomDatabase(), KgDaoProvider {
                     Migration6To7,
                     Migration7To8,
                     MIGRATION_8_9,
-                    Migration9To10
+                    Migration9To10,
+                    Migration10To11
                 )
                 // Fresh installs (no migration path): Room auto-generates wrong
                 // full-unique indexes from the mirror annotations; this callback

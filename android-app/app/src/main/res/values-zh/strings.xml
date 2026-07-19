@@ -474,11 +474,13 @@
     <string name="more_section_daily_bite_title">每日一练</string>
     <string name="more_section_daily_bite_body">从桌面端同步的轻量复习卡片。点击翻转，评估记忆效果。</string>
     <string name="more_daily_bite_label">每日一练复习</string>
-    <string name="more_daily_bite_empty">还没有卡片。在桌面端从测验中提取卡片并同步到这里。</string>
+    <string name="more_daily_bite_empty">暂无复习卡。从桌面端同步或新建一张。</string>
     <string name="more_daily_bite_progress">第 %1$d 张 / 共 %2$d 张</string>
     <string name="more_daily_bite_reveal">显示答案</string>
     <string name="more_daily_bite_again">再来一次</string>
     <string name="more_daily_bite_good">会了</string>
+    <string name="more_daily_bite_done_title">已完成</string>
+    <string name="more_daily_bite_status_remaining">剩余 %1$d 题</string>
     <string name="sync_value_unpaired">未配对</string>
     <string name="sync_value_paired">已配对</string>
     <string name="sync_pair_title">配对桌面端</string>

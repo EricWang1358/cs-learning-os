@@ -162,6 +162,7 @@ data class QuizFtsEntity(
 data class BiteCardEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    @ColumnInfo(name = "client_id") val clientId: String = "",
     @ColumnInfo(name = "source_type") val sourceType: String,
     @ColumnInfo(name = "source_id") val sourceId: String,
     val title: String,
@@ -175,6 +176,11 @@ data class BiteCardEntity(
     @ColumnInfo(name = "options_json") val optionsJson: String,
     val status: String,
     @ColumnInfo(name = "sync_status") val syncStatus: String = "clean",
+    @ColumnInfo(name = "last_reviewed_at") val lastReviewedAt: Long = 0,
+    @ColumnInfo(name = "review_count") val reviewCount: Int = 0,
+    @ColumnInfo(name = "last_rating") val lastRating: String = "",
+    @ColumnInfo(name = "next_review_at") val nextReviewAt: Long = 0,
+    @ColumnInfo(name = "mastery_score") val masteryScore: Double = 0.0,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long
 )

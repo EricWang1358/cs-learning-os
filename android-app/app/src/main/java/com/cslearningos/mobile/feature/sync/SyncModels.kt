@@ -131,6 +131,7 @@ sealed interface SyncRecord {
 
     data class BiteCard(
         override val id: String,
+        val clientId: String,
         val sourceType: String,
         val sourceId: String,
         val title: String,
@@ -143,6 +144,11 @@ sealed interface SyncRecord {
         val status: String,
         val questionType: String,
         val optionsJson: String,
+        val lastReviewedAt: String,
+        val reviewCount: Int,
+        val lastRating: String,
+        val nextReviewAt: String,
+        val masteryScore: Double,
         val revision: Long,
         val hash: String
     ) : SyncRecord {
@@ -189,9 +195,10 @@ data class SyncPushReport(
     val uploadedQuestions: Int = 0,
     val uploadedNodes: Int = 0,
     val uploadedQuizzes: Int = 0,
+    val uploadedBiteCards: Int = 0,
     val rejected: Int = 0
 ) {
-    val totalUploaded: Int get() = uploadedAttempts + uploadedCaptures + uploadedQuestions + uploadedNodes + uploadedQuizzes
+    val totalUploaded: Int get() = uploadedAttempts + uploadedCaptures + uploadedQuestions + uploadedNodes + uploadedQuizzes + uploadedBiteCards
 }
 
 fun parseSyncReceipts(json: JSONObject): List<SyncReceipt> {
@@ -321,10 +328,11 @@ fun parseSyncRecord(json: JSONObject): SyncRecord? = when (json.optString("type"
 
     SyncRecord.BiteCard.TYPE -> SyncRecord.BiteCard(
         id = json.getString("id"),
+        clientId = json.optString("clientId"),
         sourceType = json.optString("sourceType", "quiz"),
         sourceId = json.optString("sourceId"),
         title = json.optString("title"),
-        area = json.optString("area"),
+        area = json.optString("area").ifBlank { "questions" },
         difficulty = json.optString("difficulty", "medium"),
         prompt = json.getString("prompt"),
         answer = json.getString("answer"),
@@ -333,6 +341,11 @@ fun parseSyncRecord(json: JSONObject): SyncRecord? = when (json.optString("type"
         status = json.optString("status", "active"),
         questionType = json.optString("questionType", "blank"),
         optionsJson = json.optString("optionsJson", "[]"),
+        lastReviewedAt = json.optString("lastReviewedAt"),
+        reviewCount = json.optInt("reviewCount", 0),
+        lastRating = json.optString("lastRating"),
+        nextReviewAt = json.optString("nextReviewAt"),
+        masteryScore = json.optDouble("masteryScore", 0.0),
         revision = json.optLong("revision"),
         hash = json.optString("hash")
     )

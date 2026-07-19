@@ -22,6 +22,7 @@ interface SyncTransport {
     suspend fun pushReaderQuestions(items: List<JSONObject>): List<SyncReceipt>
     suspend fun pushNodes(items: List<JSONObject>): List<SyncReceipt>
     suspend fun pushQuizzes(items: List<JSONObject>): List<SyncReceipt>
+    suspend fun pushBiteCards(items: List<JSONObject>): List<SyncReceipt>
     suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult
 }
 
@@ -78,6 +79,9 @@ class OkHttpSyncTransport(
 
     override suspend fun pushQuizzes(items: List<JSONObject>): List<SyncReceipt> =
         pushEvents("/api/sync/v1/push/quizzes", items)
+
+    override suspend fun pushBiteCards(items: List<JSONObject>): List<SyncReceipt> =
+        pushEvents("/api/sync/v1/push/bite-cards", items)
 
     override suspend fun pair(endpoint: String, token: String, deviceName: String): SyncPairing.PairResult =
         SyncPairing.parsePairResponse(

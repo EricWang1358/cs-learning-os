@@ -473,11 +473,27 @@ private fun DailyBiteContent(state: LearningUiState, viewModel: LearningViewMode
     val context = LocalContext.current
     val db = remember { Room.databaseBuilder(context, LearningDatabase::class.java, "learning-os.db").build() }
     val cards by db.learningDao().observeBiteCards().collectAsStateWithLifecycle(initialValue = emptyList())
-    var currentIndex by rememberSaveable { mutableStateOf(0) }
+
+    // In-memory today state (resets on app restart, acceptable for now)
+    val todayReviewed = remember { mutableStateOf(mutableSetOf<Long>()) }
+    val todaySeed = remember { java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR) }
+
+    val unreviewedCards = cards.filterNot { it.id in todayReviewed.value }
+    val totalCount = cards.size
+    val remainingCount = unreviewedCards.size
+    val currentCard = if (unreviewedCards.isNotEmpty()) {
+        unreviewedCards[kotlin.math.abs(todaySeed) % unreviewedCards.size]
+    } else null
+
     var showAnswer by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(cards.size) { if (cards.isNotEmpty() && currentIndex >= cards.size) currentIndex = 0 }
+    // Advance review: mark card as reviewed for today, reset answer
+    val advanceReview: (Long) -> Unit = { cardId ->
+        todayReviewed.value = todayReviewed.value.toMutableSet().apply { add(cardId) }
+        showAnswer = false
+    }
 
+    // --- Empty state: no bite cards in database ---
     if (cards.isEmpty()) {
         SettingsRow(label = stringResource(R.string.more_daily_bite_label)) {
             Text(
@@ -490,16 +506,48 @@ private fun DailyBiteContent(state: LearningUiState, viewModel: LearningViewMode
         return
     }
 
-    val card = cards.getOrNull(currentIndex)
-    if (card == null) return
+    // --- All cards reviewed today ---
+    if (remainingCount == 0) {
+        SettingsRow(label = stringResource(R.string.more_daily_bite_label)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "🟢", fontSize = 14.sp)
+                Text(
+                    text = stringResource(R.string.more_daily_bite_done_title),
+                    color = WorkbenchColors.InkStrong,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        return
+    }
+
+    val card = currentCard ?: return
 
     SettingsRow(label = stringResource(R.string.more_daily_bite_label)) {
-        Text(
-            text = stringResource(R.string.more_daily_bite_progress, currentIndex + 1, cards.size),
-            color = WorkbenchColors.Muted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-        )
+        // Status row: colored dot + remaining count
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "●",
+                color = WorkbenchColors.AccentStrong,
+                fontSize = 14.sp
+            )
+            Text(
+                text = stringResource(R.string.more_daily_bite_status_remaining, remainingCount),
+                color = WorkbenchColors.Muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         // Prompt card
         Column(
             modifier = Modifier
@@ -552,15 +600,12 @@ private fun DailyBiteContent(state: LearningUiState, viewModel: LearningViewMode
             } else {
                 WorkbenchButton(
                     text = stringResource(R.string.more_daily_bite_again),
-                    onClick = { showAnswer = false },
+                    onClick = { advanceReview(card.id) },
                     modifier = Modifier.weight(1f)
                 )
                 WorkbenchButton(
                     text = stringResource(R.string.more_daily_bite_good),
-                    onClick = {
-                        showAnswer = false
-                        currentIndex = (currentIndex + 1) % cards.size
-                    },
+                    onClick = { advanceReview(card.id) },
                     primary = true,
                     modifier = Modifier.weight(1f)
                 )

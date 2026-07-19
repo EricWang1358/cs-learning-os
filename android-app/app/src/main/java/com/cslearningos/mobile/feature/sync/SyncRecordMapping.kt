@@ -127,10 +127,11 @@ internal fun quizFtsOf(quiz: QuizItemEntity): QuizFtsEntity =
 internal fun SyncRecord.BiteCard.toBiteCardEntity(now: Long): BiteCardEntity =
     BiteCardEntity(
         id = id.toLongOrNull() ?: 0L,
+        clientId = clientId,
         sourceType = sourceType,
         sourceId = sourceId,
         title = title,
-        area = area,
+        area = area.ifBlank { "questions" },
         difficulty = difficulty,
         prompt = prompt,
         answer = answer,
@@ -140,6 +141,11 @@ internal fun SyncRecord.BiteCard.toBiteCardEntity(now: Long): BiteCardEntity =
         optionsJson = optionsJson,
         status = status,
         syncStatus = "clean",
+        lastReviewedAt = parseIsoMillis(lastReviewedAt) ?: 0L,
+        reviewCount = reviewCount,
+        lastRating = lastRating,
+        nextReviewAt = parseIsoMillis(nextReviewAt) ?: 0L,
+        masteryScore = masteryScore,
         createdAt = now,
         updatedAt = now
     )

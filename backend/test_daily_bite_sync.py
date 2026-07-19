@@ -12,6 +12,7 @@ from backend.sync_router import create_sync_router
 
 
 SCOPE_ALGORITHMS = {"areas": ["algorithms"], "includeDueReviews": False, "pinnedNodeIds": []}
+SCOPE_QUESTIONS = {"areas": ["questions"], "includeDueReviews": False, "pinnedNodeIds": []}
 
 
 def build_client(db_path: Path) -> TestClient:
@@ -212,3 +213,157 @@ def test_initialize_migrates_legacy_sync_changes_check_for_bite_cards(tmp_path: 
     assert rows[0]["entity_type"] == "node"
     assert rows[-1]["entity_type"] == "bite_card"
     assert rows[-1]["entity_id"] == str(card["card_id"])
+
+
+def test_blank_daily_bite_area_defaults_to_questions_scope(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    client = build_client(db_path)
+    headers = auth_headers(client)
+    with connect(db_path) as conn:
+        initialize(conn)
+        card = bite_service.create_bite_card(
+            conn,
+            {
+                "source_type": "quiz",
+                "source_id": "quiz-bite-blank-area",
+                "title": "Blank area card",
+                "area": "",
+                "difficulty": "easy",
+                "prompt": "Blank area cards belong to ____.",
+                "answer": "questions",
+                "hint": "",
+                "explanation": [],
+                "options": [],
+                "question_type": "blank",
+            },
+        )
+
+    manifest = client.post(
+        "/api/sync/v1/manifest",
+        json={"cursor": 0, "serverId": "", "scope": SCOPE_QUESTIONS},
+        headers=headers,
+    )
+    assert manifest.status_code == 200, manifest.text
+    changes = manifest.json()["changes"]
+    change = next(change for change in changes if change["type"] == "bite_card" and change["id"] == str(card["card_id"]))
+    assert change["area"] == "questions"
+
+    pulled = client.post(
+        "/api/sync/v1/pull",
+        json={"entityType": "bite_card", "ids": [str(card["card_id"])], "scope": SCOPE_QUESTIONS},
+        headers=headers,
+    )
+    assert pulled.status_code == 200, pulled.text
+    assert pulled.json()["records"][0]["area"] == "questions"
+
+
+def test_mobile_bite_card_push_creates_desktop_bite_not_quiz_and_tracks_progress(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    client = build_client(db_path)
+    headers = auth_headers(client)
+
+    pushed = client.post(
+        "/api/sync/v1/push/bite-cards",
+        json={
+            "items": [
+                {
+                    "changeId": "android-bite-change-1",
+                    "id": "android-bite-1",
+                    "clientId": "android-bite-1",
+                    "sourceType": "mobile_bite",
+                    "sourceId": "android-local-quiz-42",
+                    "title": "Phone-made bite",
+                    "area": "",
+                    "prompt": "Phone lightweight reviews sync into ____.",
+                    "answer": "bite_cards",
+                    "hint": "Not desktop quizzes.",
+                    "explanationJson": "[\"Mobile bites stay lightweight.\"]",
+                    "difficulty": "medium",
+                    "questionType": "blank",
+                    "optionsJson": "[]",
+                    "status": "active",
+                    "lastReviewedAt": "2026-07-19T09:30:00+00:00",
+                    "reviewCount": 3,
+                    "lastRating": "good",
+                    "nextReviewAt": "2026-07-20T09:30:00+00:00",
+                    "masteryScore": 0.72,
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert pushed.status_code == 200, pushed.text
+    receipts = pushed.json()["receipts"]
+    assert receipts == [{"id": "android-bite-1", "status": "accepted", "revision": 1}]
+
+    with connect(db_path) as conn:
+        initialize(conn)
+        quiz_count = conn.execute("SELECT COUNT(*) AS n FROM quizzes").fetchone()["n"]
+        row = conn.execute("SELECT * FROM bite_cards WHERE client_id = ?", ("android-bite-1",)).fetchone()
+
+    assert quiz_count == 0
+    assert row is not None
+    assert row["source_type"] == "mobile_bite"
+    assert row["source_id"] == "android-local-quiz-42"
+    assert row["area"] == "questions"
+    assert row["review_count"] == 3
+    assert row["last_rating"] == "good"
+    assert row["mastery_score"] == 0.72
+
+
+def test_mobile_bite_card_push_updates_existing_area_and_progress(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge.db"
+    client = build_client(db_path)
+    headers = auth_headers(client)
+    with connect(db_path) as conn:
+        initialize(conn)
+        card = bite_service.create_bite_card(
+            conn,
+            {
+                "source_type": "quiz",
+                "source_id": "quiz-bite-update",
+                "title": "Update me",
+                "area": "algorithms",
+                "difficulty": "easy",
+                "prompt": "Update ____",
+                "answer": "card",
+                "hint": "",
+                "explanation": [],
+                "options": [],
+                "question_type": "blank",
+            },
+        )
+
+    pushed = client.post(
+        "/api/sync/v1/push/bite-cards",
+        json={
+            "items": [
+                {
+                    "changeId": "android-bite-change-update-1",
+                    "id": str(card["card_id"]),
+                    "title": "Update me",
+                    "area": "systems",
+                    "prompt": "Update ____",
+                    "answer": "card",
+                    "status": "active",
+                    "lastReviewedAt": "2026-07-19T10:00:00+00:00",
+                    "reviewCount": 5,
+                    "lastRating": "easy",
+                    "nextReviewAt": "2026-07-22T10:00:00+00:00",
+                    "masteryScore": 0.9,
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert pushed.status_code == 200, pushed.text
+    assert pushed.json()["receipts"] == [{"id": str(card["card_id"]), "status": "accepted", "revision": 1}]
+
+    with connect(db_path) as conn:
+        initialize(conn)
+        row = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card["card_id"],)).fetchone()
+
+    assert row["area"] == "systems"
+    assert row["review_count"] == 5
+    assert row["last_rating"] == "easy"
+    assert row["mastery_score"] == 0.9

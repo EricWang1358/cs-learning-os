@@ -29,6 +29,7 @@ try:
     from .reader_question_service import delete_reader_questions_for_target
     from .sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_BITE_CARD,
         ENTITY_NODE,
         ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
@@ -53,6 +54,7 @@ except ImportError:  # pragma: no cover - script execution
     from reader_question_service import delete_reader_questions_for_target
     from sync_envelope import (
         ENTITY_CAPTURE_SLIP,
+        ENTITY_BITE_CARD,
         ENTITY_NODE,
         ENTITY_QUIZ,
         ENTITY_READER_QUESTION,
@@ -67,6 +69,11 @@ MANIFEST_PAGE_LIMIT = 500
 PULL_ID_LIMIT = 200
 
 ENTITY_TYPES = {"node", "quiz", "capture_slip", "reader_question", "review_attempt", "bite_card"}
+
+
+def _normalize_bite_area(area: str | None) -> str:
+    value = str(area or "").strip()
+    return value or "questions"
 
 
 @dataclass
@@ -158,7 +165,8 @@ def entity_in_scope(
         row = conn.execute("SELECT area FROM bite_cards WHERE id = ?", (entity_id,)).fetchone()
         if not row:
             return True, None
-        return (row["area"] in scope.areas), row["area"]
+        area = _normalize_bite_area(row["area"])
+        return (area in scope.areas), area
     return False, None
 
 
@@ -171,7 +179,7 @@ def _current_area(conn: sqlite3.Connection, entity_type: str, entity_id: str) ->
         return row["area"] if row else None
     if entity_type == "bite_card":
         row = conn.execute("SELECT area FROM bite_cards WHERE id = ?", (entity_id,)).fetchone()
-        return row["area"] if row else None
+        return _normalize_bite_area(row["area"]) if row else None
     return None
 
 
@@ -284,7 +292,8 @@ def _baseline_changes(
     for row in bite_rows:
         if ("bite_card", str(row["id"])) in seen:
             continue
-        if row["area"] not in scope.areas:
+        area = _normalize_bite_area(row["area"])
+        if area not in scope.areas:
             continue
         baseline.append(
             {
@@ -293,7 +302,7 @@ def _baseline_changes(
                 "revision": 1,
                 "hash": content_hash(row["prompt"] + row["answer"]),
                 "tombstone": row["status"] == "archive",
-                "area": row["area"],
+                "area": area,
             }
         )
     return baseline
@@ -400,7 +409,7 @@ def _record_for(conn: sqlite3.Connection, entity_type: str, entity_id: str) -> d
             "sourceType": row["source_type"],
             "sourceId": row["source_id"],
             "title": row["title"],
-            "area": row["area"],
+            "area": _normalize_bite_area(row["area"]),
             "difficulty": row["difficulty"],
             "prompt": row["prompt"],
             "answer": row["answer"],
@@ -409,6 +418,12 @@ def _record_for(conn: sqlite3.Connection, entity_type: str, entity_id: str) -> d
             "status": row["status"],
             "questionType": row["question_type"],
             "optionsJson": row["options_json"],
+            "clientId": row["client_id"] or "",
+            "lastReviewedAt": row["last_reviewed_at"],
+            "reviewCount": row["review_count"],
+            "lastRating": row["last_rating"],
+            "nextReviewAt": row["next_review_at"],
+            "masteryScore": row["mastery_score"],
             "revision": 1,
             "hash": content_hash(row["prompt"] + row["answer"]),
         }
@@ -529,7 +544,11 @@ def push_captures(conn: sqlite3.Connection, items: list[dict]) -> list[dict]:
 
 
 def push_bite_cards(conn: sqlite3.Connection, device_id: str, items: list[dict]) -> list[dict]:
-    """Accept bite card updates from mobile (status changes, edits)."""
+    """Accept lightweight bite-card creates/updates from mobile.
+
+    Mobile-created quiz-like study items remain ``bite_cards`` on desktop; they
+    are deliberately not promoted into the richer desktop ``quizzes`` table.
+    """
     _ensure_push_receipt_schema(conn)
     receipts: list[dict] = []
     for item in items:
@@ -538,36 +557,127 @@ def push_bite_cards(conn: sqlite3.Connection, device_id: str, items: list[dict])
         if replay is not None:
             receipts.append(replay)
             continue
-        card_id = str(item["id"])
-        existing = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (card_id,)).fetchone()
-        if existing is None:
-            receipts.append(_content_receipt(card_id, RECEIPT_REJECTED, "missing_card"))
-            continue
-        status = str(item.get("status") or "active")
+
+        client_record_id = str(item["id"])
+        client_id = str(item.get("clientId") or "").strip() or client_record_id
+        existing = None
+        if client_id:
+            existing = conn.execute("SELECT * FROM bite_cards WHERE client_id = ?", (client_id,)).fetchone()
+        if existing is None and client_record_id.isdigit():
+            existing = conn.execute("SELECT * FROM bite_cards WHERE id = ?", (client_record_id,)).fetchone()
+
+        status = "archive" if bool(item.get("tombstone")) else str(item.get("status") or "active")
         if status not in ("active", "archive"):
-            receipts.append(_content_receipt(card_id, RECEIPT_REJECTED, "invalid_status"))
+            receipts.append(_content_receipt(client_record_id, RECEIPT_REJECTED, "invalid_status"))
             continue
-        conn.execute(
-            "UPDATE bite_cards SET status = ?, title = ?, prompt = ?, answer = ?, "
-            "hint = ?, explanation_json = ?, difficulty = ?, updated_at = ? WHERE id = ?",
-            (
-                status,
-                str(item.get("title") or existing["title"]),
-                str(item.get("prompt") or existing["prompt"]),
-                str(item.get("answer") or existing["answer"]),
-                str(item.get("hint") or existing["hint"]),
-                str(item.get("explanationJson") or existing["explanation_json"]),
-                str(item.get("difficulty") or existing["difficulty"]),
-                utc_now(),
-                card_id,
-            ),
-        )
-        body_hash = content_hash(
-            str(item.get("prompt") or existing["prompt"])
-            + str(item.get("answer") or existing["answer"])
-        )
-        record_change(conn, ENTITY_BITE_CARD, card_id, 1, body_hash, tombstone=status == "archive")
-        receipt = _content_receipt(card_id, RECEIPT_ACCEPTED)
+        source_type = str(item.get("sourceType") or (existing["source_type"] if existing else "mobile_bite"))
+        if source_type not in ("node", "quiz", "mobile_bite", "manual"):
+            receipts.append(_content_receipt(client_record_id, RECEIPT_REJECTED, "invalid_source_type"))
+            continue
+
+        now = utc_now()
+        area = _normalize_bite_area(item.get("area") if item.get("area") is not None else (existing["area"] if existing else ""))
+        title = str(item.get("title") or (existing["title"] if existing else "Untitled Bite"))
+        prompt = str(item.get("prompt") or (existing["prompt"] if existing else ""))
+        answer = str(item.get("answer") or (existing["answer"] if existing else ""))
+        if not title.strip() or not prompt.strip() or not answer.strip():
+            receipts.append(_content_receipt(client_record_id, RECEIPT_REJECTED, "invalid_bite_card"))
+            continue
+        source_id = str(item.get("sourceId") or (existing["source_id"] if existing else client_id))
+        hint = str(item.get("hint") or (existing["hint"] if existing else ""))
+        explanation_json = str(item.get("explanationJson") or (existing["explanation_json"] if existing else "[]"))
+        difficulty = str(item.get("difficulty") or (existing["difficulty"] if existing else "medium"))
+        question_type = str(item.get("questionType") or (existing["question_type"] if existing else "blank"))
+        options_json = str(item.get("optionsJson") or (existing["options_json"] if existing else "[]"))
+        if question_type not in ("blank", "multiple_choice"):
+            receipts.append(_content_receipt(client_record_id, RECEIPT_REJECTED, "invalid_question_type"))
+            continue
+        last_rating = str(item.get("lastRating") or (existing["last_rating"] if existing else ""))
+        if last_rating not in ("", "again", "hard", "good", "easy"):
+            receipts.append(_content_receipt(client_record_id, RECEIPT_REJECTED, "invalid_last_rating"))
+            continue
+        review_count = int(item.get("reviewCount") or (existing["review_count"] if existing else 0))
+        mastery_score = float(item.get("masteryScore") if item.get("masteryScore") is not None else (existing["mastery_score"] if existing else 0))
+        mastery_score = max(0.0, min(1.0, mastery_score))
+        last_reviewed_at = str(item.get("lastReviewedAt") or (existing["last_reviewed_at"] if existing else ""))
+        next_review_at = str(item.get("nextReviewAt") or (existing["next_review_at"] if existing else ""))
+
+        if existing is None:
+            conn.execute(
+                """
+                INSERT INTO bite_cards (
+                    client_id, source_type, source_id, title, area, difficulty,
+                    question_type, prompt, answer, options_json, hint,
+                    explanation_json, status, last_reviewed_at, review_count,
+                    last_rating, next_review_at, mastery_score, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    client_id,
+                    source_type,
+                    source_id,
+                    title,
+                    area,
+                    difficulty,
+                    question_type,
+                    prompt,
+                    answer,
+                    options_json,
+                    hint,
+                    explanation_json,
+                    status,
+                    last_reviewed_at,
+                    review_count,
+                    last_rating,
+                    next_review_at,
+                    mastery_score,
+                    now,
+                    now,
+                ),
+            )
+            server_card_id = str(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+        else:
+            server_card_id = str(existing["id"])
+            conn.execute(
+                """
+                UPDATE bite_cards
+                SET client_id = COALESCE(NULLIF(?, ''), client_id),
+                    source_type = ?, source_id = ?, status = ?, title = ?,
+                    area = ?, prompt = ?, answer = ?, hint = ?,
+                    explanation_json = ?, difficulty = ?, question_type = ?,
+                    options_json = ?, last_reviewed_at = ?, review_count = ?,
+                    last_rating = ?, next_review_at = ?, mastery_score = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    client_id,
+                    source_type,
+                    source_id,
+                    status,
+                    title,
+                    area,
+                    prompt,
+                    answer,
+                    hint,
+                    explanation_json,
+                    difficulty,
+                    question_type,
+                    options_json,
+                    last_reviewed_at,
+                    review_count,
+                    last_rating,
+                    next_review_at,
+                    mastery_score,
+                    now,
+                    server_card_id,
+                ),
+            )
+
+        body_hash = content_hash(prompt + answer)
+        record_change(conn, ENTITY_BITE_CARD, server_card_id, 1, body_hash, tombstone=status == "archive")
+        receipt = _content_receipt(client_record_id, RECEIPT_ACCEPTED, revision=1)
         _save_push_receipt(conn, device_id, change_id, receipt)
         conn.commit()
         receipts.append(receipt)

@@ -120,6 +120,7 @@ class SyncRepository(
         var uploadedQuestions = 0
         var uploadedNodes = 0
         var uploadedQuizzes = 0
+        var uploadedBiteCards = 0
         var rejected = 0
 
         val pendingAttempts = dao.getAllAttempts()
@@ -244,13 +245,76 @@ class SyncRepository(
         val pendingQuizChanges = dao.getPendingQuizOutbox(MaxQuizPushChanges)
             .groupBy { it.aggregateId }
             .mapNotNull { (_, changes) -> changes.firstOrNull() }
-        val preparedQuizChanges = pendingQuizChanges.mapNotNull { change ->
+        val decodedQuizChanges = pendingQuizChanges.mapNotNull { change ->
             val quiz = runCatching { QuizOutboxCodec.decode(change.payloadJson) }.getOrNull()
             val localQuiz = dao.getQuiz(change.aggregateId)
             if (quiz == null || quiz.id != change.aggregateId || quiz.revision != change.newRevision) {
                 rejected += 1
                 null
             } else {
+                Triple(change, quiz, localQuiz)
+            }
+        }
+        val mobileQuizBites = decodedQuizChanges
+            .filter { (change, _, localQuiz) ->
+                localQuiz?.deletedAt == null &&
+                    (change.baseRevision == null || localQuiz?.sourceAnchor == MobileBiteSourceAnchor)
+            }
+            .map { (change, quiz, _) ->
+                change to JSONObject()
+                    .put("changeId", change.changeId)
+                    .put("id", quiz.id)
+                    .put("clientId", "android-quiz-${quiz.id}")
+                    .put("sourceType", "mobile_bite")
+                    .put("sourceId", quiz.id)
+                    .put("title", quiz.prompt.take(80).ifBlank { "Phone bite" })
+                    .put("area", quiz.area.ifBlank { "questions" })
+                    .put("prompt", quiz.prompt)
+                    .put("answer", quiz.answer)
+                    .put("hint", "")
+                    .put("explanationJson", org.json.JSONArray(listOf(quiz.explanation)).toString())
+                    .put("difficulty", "medium")
+                    .put("questionType", "blank")
+                    .put("optionsJson", "[]")
+                    .put("status", "active")
+                    .put("lastReviewedAt", "")
+                    .put("reviewCount", 0)
+                    .put("lastRating", "")
+                    .put("nextReviewAt", "")
+                    .put("masteryScore", 0.0)
+            }
+        if (mobileQuizBites.isNotEmpty()) {
+            val receiptsById = transport.pushBiteCards(mobileQuizBites.map { it.second })
+                .associateBy { it.id }
+            mobileQuizBites.forEach { (change, _) ->
+                val receipt = receiptsById[change.aggregateId]
+                val localQuiz = dao.getQuiz(change.aggregateId)
+                if (receipt?.accepted == true && localQuiz != null) {
+                    dao.acknowledgeQuizContentPush(
+                        changeId = change.changeId,
+                        quizId = change.aggregateId,
+                        localRevision = change.newRevision,
+                        serverRevision = change.newRevision
+                    )
+                    dao.upsertQuiz(
+                        localQuiz.copy(
+                            syncStatus = SyncStatus.clean,
+                            baseRevision = change.newRevision,
+                            sourceAnchor = MobileBiteSourceAnchor
+                        )
+                    )
+                    uploadedBiteCards += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+        val preparedQuizChanges = decodedQuizChanges
+            .filterNot { (change, _, localQuiz) ->
+                localQuiz?.deletedAt == null &&
+                    (change.baseRevision == null || localQuiz?.sourceAnchor == MobileBiteSourceAnchor)
+            }
+            .map { (change, quiz, localQuiz) ->
                 change to JSONObject()
                     .put("changeId", change.changeId)
                     .put("id", quiz.id)
@@ -261,7 +325,6 @@ class SyncRepository(
                     .put("revision", change.newRevision)
                     .put("tombstone", localQuiz?.revision == change.newRevision && localQuiz.deletedAt != null)
             }
-        }
         if (preparedQuizChanges.isNotEmpty()) {
             val receiptsById = transport.pushQuizzes(preparedQuizChanges.map { it.second })
                 .associateBy { it.id }
@@ -281,12 +344,63 @@ class SyncRepository(
             }
         }
 
+        val dirtyBiteCards = dao.getAllBiteCards()
+            .filter { it.syncStatus == "dirty" }
+        if (dirtyBiteCards.isNotEmpty()) {
+            val preparedBiteCards = dirtyBiteCards.map { card ->
+                val stableClientId = card.clientId.ifBlank {
+                    if (card.sourceType == "mobile_bite" || card.sourceType == "manual") "android-bite-${card.id}" else ""
+                }
+                card to JSONObject()
+                    .put("changeId", "bite-${stableClientId.ifBlank { card.id.toString() }}-${card.updatedAt}")
+                    .put("id", card.id.toString())
+                    .put("clientId", stableClientId)
+                    .put("sourceType", card.sourceType.ifBlank { "mobile_bite" })
+                    .put("sourceId", card.sourceId.ifBlank { stableClientId.ifBlank { card.id.toString() } })
+                    .put("title", card.title)
+                    .put("area", card.area.ifBlank { "questions" })
+                    .put("prompt", card.prompt)
+                    .put("answer", card.answer)
+                    .put("hint", card.hint)
+                    .put("explanationJson", card.explanationJson)
+                    .put("difficulty", card.difficulty.ifBlank { "medium" })
+                    .put("questionType", card.questionType.ifBlank { "blank" })
+                    .put("optionsJson", card.optionsJson.ifBlank { "[]" })
+                    .put("status", card.status.ifBlank { "active" })
+                    .put("lastReviewedAt", if (card.lastReviewedAt > 0) isoOfMillis(card.lastReviewedAt) else "")
+                    .put("reviewCount", card.reviewCount)
+                    .put("lastRating", card.lastRating)
+                    .put("nextReviewAt", if (card.nextReviewAt > 0) isoOfMillis(card.nextReviewAt) else "")
+                    .put("masteryScore", card.masteryScore)
+            }
+            val receiptsById = transport.pushBiteCards(preparedBiteCards.map { it.second })
+                .associateBy { it.id }
+            preparedBiteCards.forEach { (card, payload) ->
+                val receipt = receiptsById[card.id.toString()]
+                if (receipt?.accepted == true) {
+                    dao.upsertBiteCards(
+                        listOf(
+                            card.copy(
+                                clientId = payload.optString("clientId"),
+                                area = payload.optString("area", "questions"),
+                                syncStatus = "clean"
+                            )
+                        )
+                    )
+                    uploadedBiteCards += 1
+                } else {
+                    rejected += 1
+                }
+            }
+        }
+
         return SyncPushReport(
             uploadedAttempts = uploadedAttempts,
             uploadedCaptures = uploadedCaptures,
             uploadedQuestions = uploadedQuestions,
             uploadedNodes = uploadedNodes,
             uploadedQuizzes = uploadedQuizzes,
+            uploadedBiteCards = uploadedBiteCards,
             rejected = rejected
         )
     }
@@ -708,6 +822,7 @@ class SyncRepository(
         const val MaxQuizPushChanges = 100
         const val DefaultAreaOrder = 1000
         const val DefaultReviewEase = 2.5
+        const val MobileBiteSourceAnchor = "mobile_bite"
 
         /** Desktop's 4-grade scale collapses onto the Android 3-grade scheduler. */
         val DesktopGradeToReviewResult = mapOf(
