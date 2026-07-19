@@ -25,6 +25,8 @@ class AssistantReviewProtocolTest {
         assertTrue(prompt.contains("cs-review-answer"))
         assertTrue(prompt.contains("interviewer"))
         assertTrue(prompt.contains("editable review-card draft"))
+        assertTrue(prompt.contains("exactly ONE"))
         assertTrue(prompt.contains("must choose an Area and save"))
+        assertTrue(prompt.contains("Do not claim the card was saved"))
     }
 }

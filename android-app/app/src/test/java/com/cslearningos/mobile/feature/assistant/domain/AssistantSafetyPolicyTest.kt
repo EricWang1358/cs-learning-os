@@ -61,6 +61,8 @@ class AssistantSafetyPolicyTest {
         assertTrue(prompt.contains("cs-area-reason"))
         assertTrue(prompt.contains("cs-title"))
         assertTrue(prompt.contains("never invent an Area"))
+        assertTrue(prompt.contains("The `cs-area` value must match one Existing Area id exactly"))
+        assertTrue(prompt.contains("Do not emit unknown `cs-*` directives"))
         assertTrue(prompt.contains(":::quiz on its own line"))
     }
 }

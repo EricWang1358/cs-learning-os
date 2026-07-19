@@ -45,7 +45,7 @@ class KnowledgeAssistantPromptTest {
     }
 
     @Test
-    fun newNodeDraftPromptRequiresDetailedAuditableMarkdownInsteadOfSummary() {
+    fun newNodeDraftPromptRequiresLightSelfCheckAndStableOutputContract() {
         val prompt = buildKnowledgeAssistantSystemPrompt(
             mode = AssistantRequestMode.Draft,
             context = emptyList(),
@@ -59,8 +59,13 @@ class KnowledgeAssistantPromptTest {
             )
         )
 
+        assertTrue(prompt.contains("Output Contract"))
+        assertTrue(prompt.contains("Self-check silently before answering"))
+        assertTrue(prompt.contains("Allowed directives"))
+        assertTrue(prompt.contains("Do not emit unknown `cs-*` directives"))
+        assertTrue(prompt.contains("The `cs-area` value must match one Existing Area id exactly"))
         assertTrue(prompt.contains("Do not collapse the source into a short summary"))
-        assertTrue(prompt.contains("at least these sections"))
+        assertTrue(prompt.contains("Required node sections"))
         assertTrue(prompt.contains("Core concepts"))
         assertTrue(prompt.contains("Review cards"))
         assertTrue(prompt.contains(":::quiz"))
@@ -81,10 +86,51 @@ class KnowledgeAssistantPromptTest {
             )
         )
 
-        assertTrue(prompt.contains("Return Markdown only"))
-        assertTrue(prompt.contains("no preface"))
-        assertTrue(prompt.contains("no code fences"))
-        assertTrue(prompt.contains("complete revised Markdown"))
+        val normalizedPrompt = prompt.lowercase()
+        assertTrue(normalizedPrompt.contains("return markdown only"))
+        assertTrue(normalizedPrompt.contains("no preface"))
+        assertTrue(normalizedPrompt.contains("code fences"))
+        assertTrue(normalizedPrompt.contains("complete revised markdown"))
+        assertTrue(prompt.contains("Do not create a second node"))
         assertTrue(prompt.contains(":::quiz"))
+    }
+
+    @Test
+    fun quizAndCaptureEditPromptsUseExactDirectiveContracts() {
+        val quizPrompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            objectTarget = AssistantEditTarget.Quiz(
+                id = "quiz-1",
+                revision = 2L,
+                nodeId = "node-1",
+                prompt = "What is a TLB?",
+                answer = "A translation cache.",
+                explanation = "It caches translations."
+            )
+        )
+        assertTrue(quizPrompt.contains("Return exactly three complete directive blocks"))
+        assertTrue(quizPrompt.contains("No extra text before, between, or after"))
+        assertTrue(quizPrompt.contains("cs-quiz-prompt"))
+        assertTrue(quizPrompt.contains("cs-quiz-answer"))
+        assertTrue(quizPrompt.contains("cs-quiz-explanation"))
+
+        val capturePrompt = buildKnowledgeAssistantSystemPrompt(
+            mode = AssistantRequestMode.Draft,
+            context = emptyList(),
+            objectTarget = AssistantEditTarget.Capture(
+                id = "cap-1",
+                revision = 1L,
+                body = "TLB vs page fault",
+                topicHint = "VM",
+                sourceLabel = "phone",
+                type = com.cslearningos.mobile.data.CaptureSlipType.question
+            )
+        )
+        assertTrue(capturePrompt.contains("Return exactly four complete directive blocks"))
+        assertTrue(capturePrompt.contains("cs-capture-body"))
+        assertTrue(capturePrompt.contains("cs-capture-topic"))
+        assertTrue(capturePrompt.contains("cs-capture-source"))
+        assertTrue(capturePrompt.contains("cs-capture-type"))
     }
 }
